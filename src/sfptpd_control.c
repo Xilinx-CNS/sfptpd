@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2019 Xilinx, Inc. */
+/* (c) Copyright 2012-2022 Xilinx, Inc. */
 
 /**
  * @file   sfptpd_control.c
@@ -93,6 +93,11 @@ int sfptpd_control_socket_open(struct sfptpd_config *config)
 		      control_path);
 	        return errno;
 	}
+
+	/* Set ownership of socket. Defer error to any consequent failure. */
+	if (chown(control_path, general_config->uid, general_config->gid))
+		TRACE_L4("could not set control socket ownership, %s\n",
+			 strerror(errno));
 
 	return 0;
 }

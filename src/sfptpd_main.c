@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/prctl.h>
 #include <sys/utsname.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -32,6 +33,17 @@
 #include "sfptpd_thread.h"
 #include "sfptpd_control.h"
 
+#ifdef HAVE_CAPS
+#include <sys/capability.h>
+#endif
+
+
+/****************************************************************************
+ * Types and Defines
+ ****************************************************************************/
+
+#define  ARRAY_SIZE(a)   (sizeof (a) / sizeof (a [0]))
+
 
 /****************************************************************************
  * Local Data
@@ -39,6 +51,23 @@
 
 static const char *lock_filename = "/var/run/kernel_clock";
 static const mode_t lock_mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+
+#ifdef HAVE_CAPS
+static const cap_value_t caps_essential[] = {
+	CAP_SYS_TIME,
+	CAP_NET_BIND_SERVICE,
+	CAP_NET_ADMIN,
+	CAP_NET_RAW,
+};
+
+static const cap_value_t caps_for_root[] = {
+	CAP_SYS_TIME,
+	CAP_NET_BIND_SERVICE,
+	CAP_NET_ADMIN,
+	CAP_NET_RAW,
+	CAP_DAC_OVERRIDE, // Access devices
+};
+#endif
 
 static struct sfptpd_config *config = NULL;
 static struct sfptpd_engine *engine = NULL;
@@ -51,9 +80,128 @@ static struct sfptpd_engine *engine = NULL;
  */
 static pthread_mutex_t hardware_state_lock;
 
+
 /****************************************************************************
  * Local Functions
  ****************************************************************************/
+
+
+#ifdef HAVE_CAPS
+static int claim_drop_privilege(struct sfptpd_config *config, uid_t user)
+{
+	const cap_value_t *required;
+	int num_caps;
+	char *cap_str = NULL;
+	cap_t caps = NULL;
+	int ret = EACCES;
+	int rc;
+	int i;
+	sfptpd_config_general_t *gconf;
+
+	assert(config != NULL);
+
+	gconf = sfptpd_general_config_get(config);
+
+	/* If running as root we expect to be able to access devices owned
+	   by any user and to be able to read PCIe config space */
+	if (gconf->uid == 0 && user == 0) {
+		required = caps_for_root;
+		num_caps = ARRAY_SIZE(caps_for_root);
+	} else {
+		required = caps_essential;
+		num_caps = ARRAY_SIZE(caps_essential);
+	}
+
+	caps = cap_init();
+	if (caps == NULL) {
+		CRITICAL("could not allocate capabilities object: %s\n",
+			 strerror(errno));
+		return EACCES;
+	}
+
+	for (i = 0; i < num_caps; i++) {
+		rc = cap_set_flag(caps, CAP_EFFECTIVE, 1, &required[i], CAP_SET);
+		if (rc == -1) {
+			CRITICAL("could not set effective capability %d flag: %s\n",
+				 required[i], strerror(errno));
+			goto finish;
+		}
+		rc = cap_set_flag(caps, CAP_PERMITTED, 1, &required[i], CAP_SET);
+		if (rc == -1) {
+			CRITICAL("could not set permitted capability %d flag: %s\n",
+				 required[i], strerror(errno));
+			goto finish;
+		}
+	}
+
+	cap_str = cap_to_text(caps, NULL);
+	rc = cap_set_proc(caps);
+
+	if (rc == -1) {
+		CRITICAL("could not acquire necessary capabilities %s%s %s\n",
+			 cap_str ? cap_str : "?",
+			 user != 0 ? ". Try running sfptpd as root:" : ":",
+			 strerror(errno));
+	} else {
+		ret = 0;
+		TRACE_L3("%s capabilities %s\n",
+			 user == 0 ? "retained" : "acquired",
+			 cap_str ? cap_str : "?");
+	}
+
+finish:
+	if (cap_str != NULL)
+		cap_free(cap_str);
+
+	if (caps != NULL)
+		cap_free(caps);
+
+	return ret;
+}
+
+
+static int drop_user(struct sfptpd_config *config)
+{
+	int rc;
+	sfptpd_config_general_t *gconf;
+
+	assert(config != NULL);
+
+	gconf = sfptpd_general_config_get(config);
+
+	if (gconf->gid != 0 || gconf->uid != 0 ) {
+		rc = prctl(PR_SET_KEEPCAPS, 1);
+		if (rc == -1)
+			CRITICAL("failed to keep capabilities via prctl: %s\n",
+				 strerror(errno));
+	}
+
+	if (gconf->gid != 0) {
+		INFO("dropping to group %d\n", gconf->gid);
+		rc = setresgid(gconf->gid, gconf->gid, gconf->gid);
+		if (rc == -1) {
+			CRITICAL("could not drop group to gid %d: %s\n",
+				 gconf->gid, strerror(errno));
+			return errno;
+		}
+	}
+
+	if (gconf->uid != 0) {
+		INFO("dropping to user %d\n", gconf->uid);
+		NOTICE("/dev/ptpN and /dev/ppsN devices need to be accessible "
+		       "to the user or group running sfptpd\n");
+		rc = setresuid(gconf->uid, gconf->uid, gconf->uid);
+		if (rc == -1) {
+			CRITICAL("could not drop user to uid %d: %s\n",
+				 gconf->uid, strerror(errno));
+			return errno;
+		}
+	}
+
+	return 0;
+}
+#endif
+
 
 static int runtime_checks(struct sfptpd_config *config)
 {
@@ -79,8 +227,14 @@ static int runtime_checks(struct sfptpd_config *config)
 
 	/* sfptpd has to be run as root. */
 	if (geteuid() != 0) {
+#ifdef HAVE_CAPS
+		WARNING("sfptpd normally needs to be launched as root. "
+			"Attempting to run with available capabilities and "
+			"permissions.\n");
+#else
 		CRITICAL("sfptpd must be run as root\n");
 		return EACCES;
+#endif
 	}
 
 	if (sfptpd_general_config_get(config)->lock) {
@@ -131,13 +285,15 @@ static int lock_create(struct sfptpd_config *config, int *lock_fd)
 		.l_whence = SEEK_SET,
 		.l_len = 0
 	};
+	sfptpd_config_general_t *gconf;
 
 	assert(config != NULL);
 	assert(lock_fd != NULL);
 	*lock_fd = -1;
+	gconf = sfptpd_general_config_get(config);
 
 	/* If locking is disabled, return straight-away */
-	if (!sfptpd_general_config_get(config)->lock)
+	if (!gconf->lock)
 		return 0;
 
 	fd = open(lock_filename, O_CREAT | O_RDWR, lock_mode);
@@ -163,10 +319,14 @@ static int lock_create(struct sfptpd_config *config, int *lock_fd)
 		CRITICAL("failed to write to lock file: %s\n", strerror(errno));
 		close(fd);
 		return errno;
-	} else {
-		*lock_fd = fd;
-		return 0;
 	}
+
+	if (chown(lock_filename, gconf->uid, gconf->gid))
+		WARNING("could not set lock file to uid/gid %d/%d, %s\n",
+			gconf->uid, gconf->gid, strerror(errno));
+
+	*lock_fd = fd;
+	return 0;
 }
 
 
@@ -423,6 +583,9 @@ int main(int argc, char **argv)
 	int rc, i;
 	sigset_t signal_set;
 	int lock_fd = -1;
+#ifdef HAVE_CAPS
+	uid_t original_user;
+#endif
 
 	/* Ensure that both streams are line buffered before anything is
 	   output on them so that they behave effectively if they are
@@ -472,6 +635,19 @@ int main(int argc, char **argv)
 	rc = sfptpd_control_socket_open(config);
 	if (rc != 0)
 		goto exit;
+
+#ifdef HAVE_CAPS
+	/* Drop to non-root user/group if so configured */
+	original_user = geteuid();
+	rc = drop_user(config);
+	if (rc != 0)
+		goto fail;
+
+	/* Ensure suitable system privilege is gained or dropped */
+	rc = claim_drop_privilege(config, original_user);
+	if (rc != 0)
+		goto fail;
+#endif
 
 	/* Set up the hardware state lock */
 	rc = hardware_state_lock_init();

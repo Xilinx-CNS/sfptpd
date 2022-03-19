@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2019 Xilinx, Inc. */
+/* (c) Copyright 2012-2022 Xilinx, Inc. */
 
 /**
  * @file   sfptpd_logging.c
@@ -272,6 +272,9 @@ int sfptpd_log_open(struct sfptpd_config *config)
 
 	/* Make sure that the directory for saved clock state exists */
 	rc_dircreate = (mkdir(state_path, 0777) < 0) ? errno : 0;
+	if (chown(state_path, general_config->uid, general_config->gid))
+		TRACE_L4("could not set state directory ownership, %s\n",
+			 strerror(errno));
 
 	/* If messages are being logged to the syslog, open it */
 	if (message_log == SFPTPD_MSG_LOG_TO_SYSLOG)
@@ -319,6 +322,10 @@ int sfptpd_log_open(struct sfptpd_config *config)
 		ERROR("couldn't open %s/version\n", state_path);
 		return errno;
 	}
+	if (chown(path, general_config->uid, general_config->gid))
+		TRACE_L4("could not set version file ownership, %s\n",
+			 strerror(errno));
+
 	fputs(SFPTPD_VERSION_TEXT, file);
 	fclose(file);
 

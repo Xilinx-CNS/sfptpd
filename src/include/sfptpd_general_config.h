@@ -188,6 +188,8 @@ typedef struct sfptpd_config_general {
 	bool test_mode;
 	bool daemon;
 	bool lock;
+	uid_t uid;
+	gid_t gid;
 	char state_path[PATH_MAX];
 	char control_path[PATH_MAX];
 	sfptpd_config_timestamping_t timestamping;

@@ -10,6 +10,12 @@ SFPTPD_VERSION = $(shell grep SFPTPD_VERSION_TEXT src/include/sfptpd_version.h |
 PACKAGE_NAME = sfptpd
 PACKAGE_VERSION = $(SFPTPD_VERSION)
 
+### Definitions conditional on build environment
+if_header_then = echo "\#include <$1>" | $(CC) -E -x c - > /dev/null 2>&1 && echo $2
+
+CONDITIONAL_DEFS := $(shell $(call if_header_then,sys/capability.h,-DHAVE_CAPS))
+CONDITIONAL_LIBS := $(shell $(call if_header_then,sys/capability.h,-lcap))
+
 ### Unit testing
 FAST_TESTS = bic filters hash stats config
 TEST_CMD = valgrind --track-origins=yes --error-exitcode=1 build/sfptpd_test
@@ -18,7 +24,8 @@ TEST_CMD = valgrind --track-origins=yes --error-exitcode=1 build/sfptpd_test
 #
 CFLAGS += -MMD -MP -Wall -Werror -Wundef -Wstrict-prototypes \
 	 -Wnested-externs -g -pthread -fPIC -std=gnu99 \
-	 -D_ISOC99_SOURCE -D_BSD_SOURCE -D_DEFAULT_SOURCE -D_GNU_SOURCE\
+	 -D_ISOC99_SOURCE -D_BSD_SOURCE -D_DEFAULT_SOURCE -D_GNU_SOURCE \
+	 $(CONDITIONAL_DEFS) \
 	 -fstack-protector-all -Wstack-protector
 
 # Build flag to enable extra build-time checks e.g. formatting strings
@@ -26,7 +33,7 @@ CFLAGS += -MMD -MP -Wall -Werror -Wundef -Wstrict-prototypes \
 
 ARFLAGS = rcs
 LDFLAGS +=
-LDLIBS = -lm -lrt -lpthread
+LDLIBS = -lm -lrt -lpthread $(CONDITIONAL_LIBS)
 INCDIRS :=
 STATIC_LIBRARIES :=
 TARGETS :=
