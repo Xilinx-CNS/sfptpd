@@ -1,0 +1,19 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/* (c) Copyright 2017-2019 Xilinx, Inc. */
+
+/* task71437: MTIE_RESP_TLV: Meinberg "NetSync Monitor" v2 extension (rev 4, SF-118270-PS-1) */
+
+/* to use these definitions, #define OPERATE then #include this file in your source */
+OPERATE( tlvType, 2, Enumeration16)
+OPERATE( lengthField, 2, UInteger16)
+OPERATE( mtieValid, 1, UInteger8)
+OPERATE( reserved, 1, Octet)
+OPERATE( mtieWindowNumber, 2, UInteger16)
+OPERATE( mtieWindowDuration, 2, UInteger16)
+OPERATE( minOffsFromMaster, 8, TimeInterval)
+OPERATE( minOffsFromMasterAt, 10, Timestamp)
+OPERATE( maxOffsFromMaster, 8, TimeInterval)
+OPERATE( maxOffsFromMasterAt, 10, Timestamp)
+
+
+#undef OPERATE

@@ -1,0 +1,101 @@
+#!/bin/bash
+#
+# sfptpd	This shell script takes care of starting and stopping
+#		sfptpd (Solarflare Enhanced PTP daemon).
+#
+# SPDX-License-Identifier: BSD-3-Clause
+# (c) Copyright 2012-2019 Xilinx, Inc.
+#
+# TODO chkconfig values?
+# chkconfig: - 58 74
+# description: sfptpd is the Solarflare Enhanced PTP daemon. \
+# The Precision Time Protocol (PTP) is used to synchronize the time of \
+# a computer client or server to another server or reference time source, \
+# such as a GPS satellite receiver.
+# processname: sfptpd
+
+prog=sfptpd
+config=/etc/$prog.conf
+
+checkpid() {
+	local i
+	for i in $* ; do
+		[ -d "/proc/$i" ] && return 0
+	done
+	return 1
+}
+
+start() {
+	# Only allow root to start sfptpd
+	[ "$EUID" != "0" ] && exit 4
+	[ -x /usr/sbin/$prog ] || exit 5
+	[ -f $config ] || exit 6
+
+	# Start daemon.
+	echo -n $"Starting $prog: "
+	sfptpd -f $config
+	retval=$?
+	if [ $retval -eq 0 ]; then
+		echo "OK"
+	else
+		echo "Fail"
+	fi
+	return $retval
+}
+
+stop() {
+	# Only allow root to stop sfptpd
+	[ "$EUID" != "0" ] && exit 4
+	echo -n $"Shutting down $prog: "
+	pid=`pidof $prog`
+	if [ -n $pid ]; then
+		# Use TERM first, then KILL if not dead
+		kill -TERM $pid >/dev/null 2>&1
+		sleep 0.1
+		if checkpid $pid && sleep 1 &&
+		   checkpid $pid && sleep 1 &&
+		   checkpid $pid ; then
+			kill -KILL $pid >/dev/null 2>&1
+			usleep 100000
+		fi
+		retval=$?
+		if [ $retval -eq 0 ]; then
+			echo "OK"
+		else
+			echo "Fail"
+		fi
+	fi
+	return $retval
+}
+
+status() {
+	echo -n $"Checking $prog... "
+	pid=`pidof $prog`
+	if [ -n "$pid" ]; then
+	    echo "Running"
+	    return 0
+	else
+	    echo "Service not running"
+	    return 3
+	fi
+}
+
+# See how we were called.
+case "$1" in
+	start)
+		start
+		;;
+	stop)
+		stop
+		;;
+	status)
+		status
+		;;
+	restart)
+		stop
+		start
+		;;
+	*)
+		echo $"Usage: $0 {start|stop|status|restart}"
+		exit 2
+esac

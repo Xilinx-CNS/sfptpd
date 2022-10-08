@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<!--
+-- SPDX-License-Identifier: BSD-3-Clause
+--
+-- (c) Copyright 2012-2019 Xilinx, Inc.
+-->
+<html>
+<head><title>sfptpd JSON output demo parser</title>
+<meta charset="utf-8" />
+<script type="text/javascript">
+
+var chartColours = ['255, 99, 132',
+	'75, 192, 192',
+	'54, 162, 235',
+	'255, 159, 64',
+	'153, 102, 255',
+	'201, 203, 207',
+	'255, 205, 86'];
+</script>
+<style type="text/css">
+body {
+	font: 10pt Monospace;
+}
+table {
+	border: 1px solid black;
+	border-collapse: collapse;
+}
+tr, td {
+	border-top: 1px dotted black;
+	border-bottom: 1px dotted black;
+}
+td {
+	padding-top: 5px;
+	padding-bottom: 5px;
+	padding-left: 20px;
+	padding-right: 20px;
+}
+</style>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.2/Chart.bundle.min.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/0.6.3/chartjs-plugin-zoom.js"></script>
+<script type="text/javascript">
+
+var lineChart = null;
+var allTimes = [];
+var allDatasets = [];
+
+function processFile(input) {
+	var html = "<tr><th>Request time</th><th>Instance</th><th>Clocks</th><th>Clock times</th><th>Sync?</th><th>Statistics</th></tr>";
+	var reader = new FileReader();
+	reader.onload = function(progressEvent) {
+		var lines = this.result.split('\n');
+		var formatStats = function(stats, alarms) {
+			var out = "";
+			if (alarms.length > 0) {
+				out = '<span style="color:red;"><b>Alarms:</b><br/>';
+				Object.keys(alarms).forEach(function(k, i) {
+					out += "&bull; " + alarms[i] + "<br/>";
+				});
+				out += '</span>';
+			} else
+				Object.keys(stats).forEach(function(k, i) {
+					out += "<b>" + k + ":</b> " + stats[k] + "<br/>";
+				});
+			return out;
+		}
+
+		allTimes = [];
+		allDatasets = [];
+
+		// Each line contains a JSON object
+		for(var line = 0; line < lines.length; line++) {
+			try {
+				var log = JSON.parse(lines[line].replace(/'/g, '"'));
+				var clock = log["clock-master"]["name"]
+				          + (log["is-disciplining"] ? "->" : "--")
+				          + log["clock-slave"]["name"];
+				var times = log["clock-master"]["time"] || "<i>n/a</i>"
+				          + "<br/>" + log["clock-slave"]["time"];
+
+				// Table row
+				html += "<tr><td>" +
+					[log["time"], log.instance, clock, times,
+					 log['in-sync'], formatStats(log.stats, log.alarms)
+					].join("</td><td>")
+					+ "</td></tr>";
+
+				var keys = Object.keys(log.stats)
+				for (var i = 0; i < keys.length; i++) {
+					if (isFinite(log.stats[keys[i]])){
+						if (allTimes.indexOf(log["time"]) === -1) allTimes.push(log["time"]);
+						// use null value if there is an alarm as data may be of no valid significance
+						var name = log.instance+"."+keys[i];
+						if (!allDatasets[name]) allDatasets[name] = [];
+						allDatasets[name].push({x:log["time"], y:(log.alarms.length == 0 ? log.stats[keys[i]] : null)});
+					}
+				}
+			} catch(err) {
+				err.jsonLine = lines[line]; // makes it easy to inspect the line in console
+				console.log(err);
+			}
+		}
+		// Table contents
+		document.getElementById("outputTbl").innerHTML = html;
+
+		// Fill inputs selector
+		var keys = Object.keys(allDatasets);
+		html = '<table style="border: 0px;"><tr><td><b>Plot inputs:</b> </td><td>';
+		for (var i = 0; i < keys.length; i++) {
+			html += '<label><input type="checkbox" name="'+keys[i]+'"' + (/\.offset$/.test(keys[i]) ? ' checked="checked"':'') + '>' + keys[i] + '</label> &ndash; ';
+		}
+		html += '</td></tr><tr><td></td><td><button onClick="updateInputs();">Plot</button></td></tr></table>';
+		document.getElementById("inputs").innerHTML = html;
+		setTimeout(updateInputs, 0);
+	};
+
+	if (lineChart) lineChart.destroy();
+	lineChart = null;
+	showChart(false);
+	document.getElementById("outputTbl").innerHTML = "";
+
+	setTimeout(function(){reader.readAsText(input.files[0]);}, 0);
+}
+
+function updateInputs() {
+	showChart(false);
+	if (lineChart) lineChart.destroy();
+	lineChart = null;
+	var canvas = document.getElementById("chart");
+	var ctx = canvas.getContext('2d');
+
+	setTimeout(function() {
+		var chartData = { labels: allTimes, datasets: [] };
+		// Might be a good idea to pull in jQuery...
+		var labels = document.getElementById("inputs").children[0].children[0].children[0].children[1].children;
+		var d = 0;
+		for (var i = 0; i < labels.length; i++) {
+			if (labels[i].tagName == "LABEL" && labels[i].children[0].checked) {
+				var name = labels[i].children[0].name;
+				// use null value if there is an alarm as data may be of no valid significance
+				chartData.datasets.push({
+					label: name,
+					backgroundColor: 'rgba(' + chartColours[d] + ',0.1)',
+					borderColor: 'rgb(' + chartColours[d] + ')',
+					borderWidth: 1,
+					pointStyle: 'circle',
+					pointRadius: 2,
+					fill: true,
+					data: allDatasets[name]
+				});
+				d++;
+			}
+		}
+		showChart(true);
+		lineChart = new Chart(ctx, {
+			type: 'line',
+			data: chartData,
+			options: getChartOptions()
+		});
+		document.getElementById("zoomY").click();
+		document.getElementById("zoomNone").click();
+	}, 0);
+}
+
+function getChartOptions() {
+	return {
+		responsive: false,
+		tooltips: {
+			enabled: false, // tooltips make the display jump around
+			mode: 'nearest',
+			intersect: true,
+		},
+		scales: {
+			xAxes: [{
+				type: "time",
+			}],
+			yAxes: [{type: "linear"}]
+		},
+		pan: {
+			enabled: true,
+			mode: 'xy',
+		},
+		zoom: {
+			enabled: true,
+			drag: false,
+			mode: 'y',
+		}
+	};
+}
+
+function showChart(shown) {
+	document.getElementById("chartContainer").style["display"] = shown ? "block" : "none";
+}
+
+function changeZoom(radio) {
+	if (radio.value === "") {
+		lineChart.zoom.node.removeEventListener('wheel', lineChart.zoom._wheelHandler);
+		lineChart.options.zoom.enabled = false;
+	} else {
+		lineChart.zoom.node.addEventListener('wheel', lineChart.zoom._wheelHandler);
+		lineChart.options.zoom.enabled = true;
+		lineChart.options.zoom.mode = radio.value;
+	}
+}
+</script>
+</head>
+<body>
+<p>JSON stats file: <input type="file" onChange="processFile(this);" onClick="this.value=null;"/></p>
+<p id="inputs"></p>
+<div id="chartContainer" style="display:none;">
+<p style="margin-right: 50px;" align="center">Zoom
+	<input type="radio" name="zoom" value="" onClick="changeZoom(this);" id="zoomNone">none
+	<input type="radio" name="zoom" value="x" onClick="changeZoom(this);">X
+	<input type="radio" name="zoom" value="y" onClick="changeZoom(this);" id="zoomY">Y
+	<input type="radio" name="zoom" value="xy" onClick="changeZoom(this);">Both with mouse-wheel,
+	pan with click-and-drag &mdash; <button onClick="lineChart.resetZoom();">Reset</button>
+</p>
+<div style="float:left;">
+<canvas id="chart" width="1800" height="800"></canvas>
+</div>
+</div>
+<div style="float:left;">
+<table id="outputTbl">
+<!-- Results will go here -->
+</table></div>
+<br clear="all" />
+<p>Copyright &copy; 2017 Solarflare Communications Inc.</p>
+</body>
+</html>

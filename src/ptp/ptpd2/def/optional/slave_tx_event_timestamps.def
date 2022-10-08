@@ -1,0 +1,17 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/* (c) Copyright 2017-2019 Xilinx, Inc. */
+
+/* task71778: SLAVE_TX_EVENT_TIMESTAMPS TLV (IEEE1588-Rev draft 16.11.5.1) */
+
+/* to use these definitions, #define OPERATE then #include this file in your source */
+OPERATE( sourcePortIdentity, 10, PortIdentity)
+OPERATE( eventMessageType, 1, Enumeration4Lower)
+OPERATE( reserved0, 0, NibbleUpper)
+OPERATE( reserved1, 1, Octet)
+
+/* Manually packed:
+ *   OPERATE( elements, (data->lengthField - 16) / 12, SlaveTxEventTimestampsElement*)
+ */
+
+
+#undef OPERATE

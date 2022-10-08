@@ -1,0 +1,11 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/* (c) Copyright 2017-2019 Xilinx, Inc. */
+
+/* task71885: PORT_COMMUNICATION_AVAILABILITY TLV */
+
+/* to use these definitions, #define OPERATE then #include this file in your source */
+OPERATE( syncCapabilities, 1, Enumeration4Lower)
+OPERATE( delayRespCapabilities, 1, Enumeration4Lower)
+
+
+#undef OPERATE

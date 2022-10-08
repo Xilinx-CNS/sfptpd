@@ -1,0 +1,16 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/* From ptpd v2.3. See PTPD2_COPYRIGHT. */
+
+/* Spec 8.2.4 timePropertiesDS */
+
+/* to use these definitions, #define OPERATE then #include this file in your source */
+OPERATE( currentUtcOffset, 2, Integer16 )
+OPERATE( currentUtcOffsetValid, 1, Boolean )
+OPERATE( leap59, 1, Boolean )
+OPERATE( leap61, 1, Boolean )
+OPERATE( timeTraceable, 1, Boolean )
+OPERATE( frequencyTraceable, 1, Boolean )
+OPERATE( ptpTimescale, 1, Boolean )
+OPERATE( timeSource, 1, Enumeration8 )
+
+#undef OPERATE

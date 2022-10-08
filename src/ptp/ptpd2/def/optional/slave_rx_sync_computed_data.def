@@ -1,0 +1,16 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/* (c) Copyright 2017-2019 Xilinx, Inc. */
+
+/* task71778: SLAVE_RX_SYNC_COMPUTED_DATA TLV (IEEE1588-Rev draft 16.11.4.2) */
+
+/* to use these definitions, #define OPERATE then #include this file in your source */
+OPERATE( sourcePortIdentity, 10, PortIdentity)
+OPERATE( computedFlags, 1, UInteger8)
+OPERATE( reserved, 1, UInteger8)
+
+/* Manually packed:
+ *   OPERATE( elements, (data->lengthField - 16) / 22, SlaveRxSyncComputedDataElement*)
+ */
+
+
+#undef OPERATE

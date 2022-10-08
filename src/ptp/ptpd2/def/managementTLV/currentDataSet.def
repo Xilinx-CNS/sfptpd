@@ -1,0 +1,11 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/* From ptpd v2.3. See PTPD2_COPYRIGHT. */
+
+/* Spec Table 55 - CURRENT_DATA_SET management TLV data field */
+
+/* to use these definitions, #define OPERATE then #include this file in your source */
+OPERATE( stepsRemoved, 2, UInteger16)
+OPERATE( offsetFromMaster, 8, TimeInterval)
+OPERATE( meanPathDelay, 8, TimeInterval)
+
+#undef OPERATE

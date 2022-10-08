@@ -1,0 +1,15 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/* (c) Copyright 2017-2019 Xilinx, Inc. */
+
+/* @task65531: SLAVE_STATUS TLV */
+
+/* to use these definitions, #define OPERATE then #include this file in your source */
+OPERATE( grandmasterIdentity, 8, ClockIdentity)
+OPERATE( reportTimestamp, 10, Timestamp)
+OPERATE( missingMessageAlarms, 2, UInteger16)
+OPERATE( otherAlarms, 2, UInteger16)
+OPERATE( events, 2, UInteger16)
+OPERATE( flags, 2, UInteger16)
+OPERATE( portState, 1, Enumeration8)
+
+#undef OPERATE

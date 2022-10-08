@@ -1,0 +1,12 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/* (c) Copyright 2017 Xilinx, Inc. */
+
+/* repeated element of
+   task71778: SLAVE_TX_EVENT_TIMESTAMPS TLV (IEEE1588-Rev draft 16.11.5.1) */
+
+/* to use these definitions, #define OPERATE then #include this file in your source */
+OPERATE( sequenceId, 2, UInteger16)
+OPERATE( eventEgressTimestamp, 10, Timestamp)
+
+
+#undef OPERATE

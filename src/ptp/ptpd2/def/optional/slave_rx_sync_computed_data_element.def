@@ -1,0 +1,14 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/* (c) Copyright 2017-2019 Xilinx, Inc. */
+
+/* repeated element of
+   task71778: SLAVE_RX_SYNC_COMPUTED_DATA TLV (IEEE1588-Rev draft 16.11.4.2) */
+
+/* to use these definitions, #define OPERATE then #include this file in your source */
+OPERATE( sequenceId, 2, UInteger16)
+OPERATE( offsetFromMaster, 8, TimeInterval)
+OPERATE( meanPathDelay, 8, TimeInterval)
+OPERATE( scaledNeighbourRateRatio, 4, Integer32)
+
+
+#undef OPERATE

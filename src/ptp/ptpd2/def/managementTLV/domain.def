@@ -1,0 +1,10 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/* From ptpd v2.3. See PTPD2_COPYRIGHT. */
+
+/* Spec Table 53 - DOMAIN management TLV data field */
+
+/* to use these definitions, #define OPERATE then #include this file in your source */
+OPERATE( domainNumber, 1, UInteger8)
+OPERATE( reserved, 1, Octet)
+
+#undef OPERATE

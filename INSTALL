@@ -1,0 +1,21 @@
+Solarflare Enhanced PTP Daemon Installation Instructions
+========================================================
+
+The Solarflare Enhanced PTP Daemon works on Linux systems for 3.0 kernels and
+later.
+
+Building
+--------
+
+1) Change directory to the root of the sfptpd source repository or package
+2) Type "make all"
+3) The executable daemon is sfptpd in the build/ directory
+
+Execution
+---------
+
+The built sfptpd daemon does not require installation. However, it must be run
+as root.
+
+
+(c) Copyright 2013, 2022 Xilinx, Inc.

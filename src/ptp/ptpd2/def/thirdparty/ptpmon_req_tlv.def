@@ -1,0 +1,10 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/* (c) Copyright 2017-2019 Xilinx, Inc. */
+
+/* task70154: PTPMON_REQ_TLV: Meinberg "NetSync Monitor" v1 extension (rev 4, SF-118270-PS-1) */
+
+/* to use these definitions, #define OPERATE then #include this file in your source */
+OPERATE( tlvType, 2, Enumeration16)
+OPERATE( lengthField, 2, UInteger16)
+
+#undef OPERATE

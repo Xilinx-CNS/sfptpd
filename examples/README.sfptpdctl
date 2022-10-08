@@ -1,0 +1,84 @@
+Solarflare Enhanced PTP Daemon Control Mechanism
+================================================
+
+sfptpd offers a mechanism for external system scripts to trigger housekeeping operations in the daemon. These are traditionally offered via signals but the new preferred mechanism is using a simple control protocol over Unix Domain Sockets.
+
+Control commands
+
++-------------+---------------------+---------+----------------------------------------------+
+| Command     | String for ctrl     | equiv.  | Description                                  |
+|             | proto               | signal  |                                              |
++-------------+---------------------+---------+----------------------------------------------+
+| Rotate logs | logrotate           | SIGHUP  | Closes and reopens all log files             |
++-------------+---------------------+---------+----------------------------------------------+
+| Step clocks | stepclocks          | SIGUSR1 | Causes all clocks to be advanced or retarded |
+|             |                     |         | to the time of the parent clock              |
++-------------+---------------------+---------+----------------------------------------------+
+| Exit daemon | exit                | SIGINT  | Causes the application to exit without error |
+|             |                     | SIGTERM |                                              |
++-------------+---------------------+---------+----------------------------------------------+
+| Select      | selectinstance=<x>  |         | Selects a sync instance in manual selection  |
+| instance    |                     |         | mode                                         |
++-------------+---------------------+---------+----------------------------------------------+
+| Interface   | interfaceinsert=<x> |         | Cause an interface to be re-initialized      |
+| insert      |                     |         | following a hotplug insertion                |
++-------------+---------------------+---------+----------------------------------------------+
+| Interface   | interfaceremove=<x> |         | Cause an interface to be deleted prior to a  |
+| remove      |                     |         | hotplug removal                              |
++-------------+---------------------+---------+----------------------------------------------+
+
+
+Control Protocol
+================
+
+The client connects to the control server address. The version of the protocol is included in the address. The current version is 1 and the address is:
+
+/var/run/sfptpd-control-v1.sock
+
+The client will only succeed in connecting to the server if it has write permissions to the server socket and the server socket is created using the umask the server process inherited, therefore normally it will be necessary for the client to be run as root.
+
+A command is sent as plain text in a Unix Domain datagram, e.g.:
+
++--------------------------+
+| <command>[=<parameters>] |
++--------------------------+
+
+There is no return channel and it does not matter to what address, if any, the client's socket is bound.
+
+Two example implementations of the client are included, both of which are suitable to invoke from the command line or to incorporate in custom scripts or operations code.
+
+
+C Client
+========
+
+A standalone C implementation is supplied in the 'examples' directory as 'sfptpdctl.c'. To build, run 'make -f Makefile.sfptpdctl' in that directory.
+
+To run, invoke with the desired control command, e.g.:
+
+./sfptpdctl logrotate
+
+This command is also installed as a system binary alongside sfptpd.
+
+
+Python Client
+=============
+
+A simple Python implementation is supplied in the 'examples' directory as 'sfptpdctl.py'.
+
+To run, invoke with the desired control command, e.g.:
+
+./sfptpdctl.py logrotate
+
+
+System log rotation
+===================
+
+Either implementation could be called from the 'postrotate' section of a logrotate configuration, e.g.
+
+postrotate
+    /var/lib/sfptpd/examples/sfptpdctl logrotate || true
+endscript
+
+
+SPDX-License-Identifier: BSD-3-Clause
+(c) Copyright 2022 Xilinx, Inc.

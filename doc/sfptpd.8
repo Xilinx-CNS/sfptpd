@@ -1,0 +1,247 @@
+.Dd August 31, 2022
+.Os Linux
+.Dt SFPTPD 8 SMM
+.Sh NAME
+sfptpd \- Solarflare Enhanced PTP Daemon
+.Sh SYNOPSIS
+.Nm sfptpd
+.Op Fl h
+.Nm
+.Op Fl v
+.Op Fl i Ar interface
+.Op Fl f Ar sfptpd.conf
+.Sh DESCRIPTION
+Start the Solarflare Enhanced PTP Daemon to manage the synchronisation of
+system and PTP hardware clocks, remote PTP sources and sinks, external
+PPS time sources and locally-running NTP clients.
+.Pp
+Most of the configuration for sfptpd is provided in an ini-style
+configuration file.
+.Ss Theory of Operation
+.Pp
+A typical sfptpd topology looks as follows, where three network cards with PTP Hardware Clock devices and the system clock are synchronised to a remote time source such as via PTP.
+.Bd -literal
+              +---------+
+              |remote   | reference clock
+              |time     |
+              |source   |
+              +----+----+
+                   |
+                   v
+              +---------+
+              |NIC clock| local reference clock
+       +------+(phcA)   +-------+
+       |      +----+----+       |
+       |           |            |
+       v           v            v
+   +-------+  +---------+  +---------+
+   |system |  |NIC clock|  |NIC clock|
+   |clock  |  |(phcB)   |  |(phcC)   |
+   +-------+  +---------+  +---------+
+.Ed
+.Pp
+At startup
+.Nm
+constructs a sync network as shown above.
+The structure of this network adapts through the lifetime of the daemon and is based on the following factors:
+.Bl -bullet
+.It
+The configuration of
+.Sx "SYNC MODULES"
+and sync instances.
+.It
+The daemon's discovery of network interfaces with PTP hardware clock (phc) devices and hotplugging thereof.
+.It
+The daemon's selection of the best reference clock and therefore local reference clock, based on the configured selection policy.
+.El
+.Sh SYNC MODULES
+A subsystem within
+.Nm
+for a particular remote synchronisation method is known as a
+.Sq sync module
+.No .
+Sync modules must be instantiated as a
+.Sq sync instance
+or multiple sync instances where relevant to that type of sync module.
+These are declared in the general configuration section thus:
+.Pp
+.Bd -literal
+[general]
+sync_module ptp ptp1 ptp2
+sync_module freerun fr1
+.Ed
+.Pp
+Having been declared as above, sync instances may be configured with their own
+configuration section by name.
+Options which are global to a sync module or are to be repeated for each sync
+instance may be specified in a section under the name of the sync module itself.
+For example:
+.Pp
+.Bd -literal
+[ptp]
+transport ipv6
+
+[ptp1]
+interface eth0
+
+[ptp2]
+interface eth1
+.Ed
+.Ss The PTP sync module
+The PTP sync module can create one or more PTP Ports operating as
+Ordinary Clocks, each performing the role of a PTP Slave or PTP Master
+and participating in PTP Networks on different or the same network links
+or bonds and in different or the same PTP Domains, subject to
+constraints.
+
+.Ss The PPS sync module
+The PPS sync module synchonises the time on a local NIC clock to an
+external PPS source connected to the PPS input on that NIC.
+
+PPS provides sub-second synchronisation but requires an additional time source
+to define the time of day.
+This is typically provided by the NTP sync module but can also be source from
+a PTP sync instance using the
+.Sq time_of_day
+option.
+
+.Ss The Freerun sync module
+The Freerun sync module allows the system or a local NIC clock to be defined
+as an explicit time source.
+Use cases for the freerunning module include:
+.Bl -bullet -compact
+.It
+Pinning down fallback behaviour when an active sync source is not available.
+.It
+In combination with the
+.Sq clock_readonly
+and
+.Sq priority
+options to benefit from additional sfptpd functionality when another daemon is
+handling synchronisation to a remote clock.
+.El
+
+.Ss The NTP sync module
+The NTP sync module monitors and potentially controls an external NTP daemon
+either as a time-of-day source for PPS or, typically, a fallback time source
+should preferred PTP or PPS sources fail.
+
+.Sh FILES
+.Bl -tag -width /etc/sfptpd.conF
+.It Pa /etc/sfptpd.conf
+typical configuration file
+.It Pa /var/lib/sfptpd
+location of files giving instantaneous sfptpd status, long term
+statistics and diagnostics
+.El
+.Sh CONFORMING TO
+The PTP sync module implements IEEE Std 1588-2008 and IEEE Std 1588-2019.
+.Pp
+The following profiles are supported:
+.Bl -bullet -compact
+.It
+Delay Request-Response Default PTP Profile
+.It
+Peer-to-Peer Delay Request-Response Default PTP Profile
+.It
+Enterprise Profile (draft)
+.Aq https://datatracker.ietf.org/doc/html/draft-ietf-tictoc-ptp-enterprise-profile-22
+.El
+.Pp
+The following transports are supported:
+.Bl -bullet -compact
+.It
+Annex C, UDP over IPv4
+.It
+Annex D, UDP over IPv6
+.El
+.Sh BUGS
+Please raise bug reports at:
+.Aq https://github.com/Xilinx-CNS/sfptpd/issues
+.Pp
+Support for users of Xilinx NICs is available from:
+.Aq support-nic@xilinx.com
+.Pp
+It is advisabled to include an archive of
+.Pa /var/lib/sfptpd
+and the current daemon configuration in any support request.
+.Sh EXAMPLES
+A selection of use cases is covered here.
+An extensive set of examples may be found in
+.Pa /usr/share/doc/sfptpd/config
+.
+.Pp
+The examples below can be invoked by saving the given configuration in
+.Pa /etc/sfptpd.conf
+and running:
+.Dl $ sfptpd -f /etc/sfptpd.conf
+.Ss Simple PTP slave
+.Bd -literal
+[general]
+sync_module ptp ptp1
+message_log stderr
+stats_log stdout
+
+[ptp1]
+interface eth0
+.Ed
+.Ss PPS receiver
+In this example the clock characteristic of the PPS source are defined for
+sync instance selection purposes because this information is not transmitted
+on the wire.
+.Pp
+A freerunning interface is specified to be explicit about the intended fallback
+behaviour and given the same priority as the PPS instance, which will win when
+operating correctly due to its defined characteristics but a greater priority
+than the NTP instance.
+This is a choice preferring the stability of the NIC clock in holdover, which
+over a short period is likely to be more significant than the drift due to its
+holdover characteristics.
+.Bd -literal
+[general]
+sync_module pps pps1
+sync_module freerun fr1
+sync_module ntp ntp1
+
+[pps1]
+interface eth1
+master_clock_class locked
+master_time_source gps
+master_accuracy 100
+priority 10
+
+[fr1]
+interface eth1
+priority 10
+
+[ntp]
+ntp_key 8 MySharedKey
+priority 20
+.Ed
+.Sh AUTHORS
+Xilinx, Inc.
+
+.Nm
+is built around
+.Nm ptpd2
+version 2.3.0, which provides the core engine for the PTP sync module
+and has been substantially extended and modified.
+See
+.Xr ptpd2 8
+for authorship.
+.Sh SEE ALSO
+.Xr sfptpdctl 8 .
+.Pp
+This man page is a basic summary of the operation of
+.Nm
+.Pp
+A comprehensive summary of available
+.Nm
+configuration stanzas can be generated with:
+.D1 $ sfptpd -h
+
+Full documentation is available at:
+.Aq https://www.xilinx.com/download/drivers
+.Sh COPYRIGHT
+Copyright (c) 2022 Xilinx, Inc.
+

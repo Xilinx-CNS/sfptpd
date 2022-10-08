@@ -1,0 +1,19 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/* (c) Copyright 2017-2019 Xilinx, Inc. */
+
+/* task70154: PTPMON_RESP_TLV: Meinberg "NetSync Monitor" v1 extension (rev 4, SF-118270-PS-1) */
+
+/* to use these definitions, #define OPERATE then #include this file in your source */
+OPERATE( tlvType, 2, Enumeration16)
+OPERATE( lengthField, 2, UInteger16)
+OPERATE( portState, 1, Enumeration8)
+OPERATE( reserved, 1, Octet)
+OPERATE( parentPortAddress,
+	 4 + data->parentPortAddress.addressLength,
+	 PortAddress)
+OPERATE( parentDataSet, 32, IncParentDataSet)
+OPERATE( currentDataSet, 18, IncCurrentDataSet)
+OPERATE( timePropertiesDataSet, 4, IncTimePropertiesDataSet)
+OPERATE( lastSyncTimestamp, 10, Timestamp)
+
+#undef OPERATE

@@ -1,0 +1,14 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/* (c) Copyright 2017-2019 Xilinx, Inc. */
+
+/* task71778: SLAVE_RX_SYNC_TIMING_DATA TLV (IEEE1588-Rev draft 16.11.4.1) */
+
+/* to use these definitions, #define OPERATE then #include this file in your source */
+OPERATE( sourcePortIdentity, 10, PortIdentity)
+
+/* Manually packed:
+ *   OPERATE( elements, (data->lengthField - 14) / 34, SlaveRxSyncTimingDataElement*)
+ */
+
+
+#undef OPERATE

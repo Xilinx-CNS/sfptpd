@@ -1,0 +1,11 @@
+/* SPDX-License-Identifier: BSD-2-Clause */
+/* From ptpd v2.3. See PTPD2_COPYRIGHT. */
+
+/* Spec Table 43 - USER_DESCRIPTION management TLV data field */
+
+/* to use these definitions, #define OPERATE then #include this file in your source */
+OPERATE( userDescription,
+	1 + data->userDescription.lengthField,
+	PTPText)
+
+#undef OPERATE
