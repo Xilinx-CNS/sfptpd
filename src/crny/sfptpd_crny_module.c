@@ -1553,14 +1553,14 @@ static int do_clock_control(crny_module_t *ntp,
 	struct timespec now, delta;
 	enum chrony_clock_control_op op_do;
 	bool clock_control;
+	bool have_control = strlen(ntp->config->chronyd_script) != 0;
 	char *command;
 	char *action;
 	int len, total;
 	int status;
 	int rc;
 
-	if (ntp->config->chronyd_script == NULL ||
-	    strlen(ntp->config->chronyd_script) == 0)
+	if (!have_control)
 		return ENOSYS; /* Functionality not available */
 
 	clock_control = clock_control_at_launch();
@@ -1747,6 +1747,7 @@ static void ntp_on_get_status(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 static void ntp_on_control(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 {
 	sfptpd_sync_module_ctrl_flags_t flags;
+	bool have_control = strlen(ntp->config->chronyd_script) != 0;
 	int rc;
 
 	assert(ntp != NULL);
@@ -1763,8 +1764,7 @@ static void ntp_on_control(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 		bool clock_control = ((flags & SYNC_MODULE_CLOCK_CTRL) != 0);
 
 		/* Check if we can actually effect any control. */
-		if (ntp->config->chronyd_script == NULL ||
-		    strlen(ntp->config->chronyd_script) == 0) {
+		if (!have_control) {
 			WARNING("crny: cannot change control flags - no control script specified\n");
 			flags ^= SYNC_MODULE_CLOCK_CTRL;
 			// TODO @bug64228 provide a generic error code in messages.
@@ -2030,8 +2030,7 @@ static void ntp_on_run(crny_module_t *ntp)
 {
 	struct timespec interval;
 	int rc;
-	bool have_control = ntp->config->chronyd_script != NULL &&
-			    strlen(ntp->config->chronyd_script) != 0;
+	bool have_control = strlen(ntp->config->chronyd_script) != 0;
 
 	interval.tv_sec = 0;
 	interval.tv_nsec = NTP_POLL_INTERVAL;

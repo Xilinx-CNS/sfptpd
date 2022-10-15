@@ -728,8 +728,7 @@ netInitPort(PtpClock *ptpClock, RunTimeOpts *rtOpts)
 	struct addrinfo *result;
 
 	ptpClock->unicastAddrLen = 0;
-	if (rtOpts->unicastAddress != NULL &&
-	    rtOpts->unicastAddress[0] != '\0') {
+	if (rtOpts->unicastAddress[0] != '\0') {
 		rc = getaddrinfo(rtOpts->unicastAddress,
 				 NULL, &hints, &result);
 		if (rc == 0 && result != NULL) {
