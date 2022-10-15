@@ -146,17 +146,17 @@ static struct sfptpd_log *create_log(const char *type,
 	rc = construct_log_paths(log, filename_pattern, ap);
 	va_end(ap);
 	if (rc != 0) {
-		free(log);
 		ERROR("failed to construct %s log filename, %s\n",
 		      type, strerror(rc));
+		free(log);
 		return NULL;
 	}
 
 	log->stream = fopen(log->temp_path, "w");
 	if (log->stream == NULL) {
-		free(log);
 		ERROR("failed to open %s log file \"%s\", %s\n",
 		      type, log->temp_path, strerror(errno));
+		free(log);
 		return NULL;
 	}
 
