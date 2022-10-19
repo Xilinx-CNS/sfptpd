@@ -514,7 +514,7 @@ static bool interface_check_suitability(const char *sysfs_dir, const char *name,
 					sfptpd_interface_class_t *class)
 {
 	int type;
-	int vendor_id;
+	int vendor_id = 0;
 	int device_id;
 	int i;
 
@@ -577,7 +577,6 @@ static bool interface_check_suitability(const char *sysfs_dir, const char *name,
 	 * a Solarflare device or not */
 	if (!sysfs_read_int(sysfs_dir, name, "device/vendor", &vendor_id)) {
 		WARNING("interface %s: couldn't read sysfs vendor ID\n", name);
-		return false;
 	}
 
 	if (vendor_id == SFPTPD_SOLARFLARE_PCI_VENDOR_ID) {
