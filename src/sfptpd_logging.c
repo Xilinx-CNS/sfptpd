@@ -272,7 +272,7 @@ int sfptpd_log_open(struct sfptpd_config *config)
 		assert(rc < sizeof path);
 		rc = rename(sfptpd_config_log_tmpfile, path);
 		if (rc < 0)
-			ERROR("could not save a copy of the configuration\n",
+			ERROR("could not save a copy of the configuration, %s\n",
 			      strerror(errno));
 		config_log_tmp = NULL;
 	}
