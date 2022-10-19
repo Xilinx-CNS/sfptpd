@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2019 Xilinx, Inc. */
+/* (c) Copyright 2012-2022 Xilinx, Inc. */
 
 /**
  * @file   sfptpd_main.c
@@ -59,15 +59,15 @@ static int runtime_checks(struct sfptpd_config *config)
 {
 	FILE *clock_src;
 	char source[10] = "";
+	struct utsname name;
 	int rc = 0;
 
 	assert(config != NULL);
 
+	rc = uname(&name);
 #if defined(__i386__)
-	struct utsname name;
-
 	/* If this is a 32bit binary, check that we are running on a 32bit kernel */
-	if (uname(&name) < 0) {
+	if (rc == -1) {
 		CRITICAL("could not determine system characteristics with uname: %s\n",
 			 strerror(errno));
 		return ENOEXEC;
@@ -103,18 +103,20 @@ static int runtime_checks(struct sfptpd_config *config)
 		}
 	}
 
-	/* If the kernel isn't using TSC, print a warning but don't abort. */
-	clock_src = fopen("/sys/devices/system/clocksource/clocksource0/current_clocksource", "r");
-	if (clock_src == NULL ||
-	    fgets(source, sizeof source, clock_src) == NULL ||
-	    strcmp(source, "tsc\n") != 0) {
-		WARNING("system clock source should be set to TSC for stability; %s: %s\n",
-			source[0] ? "current source is" : "could not determine current source",
-			source[0] ? source : strerror(errno));
-		rc = ENOEXEC;
+	if (strcmp(name.machine, "x86_64") == 0) {
+		/* If the amd64 kernel isn't using TSC, print a warning but don't abort. */
+		clock_src = fopen("/sys/devices/system/clocksource/clocksource0/current_clocksource", "r");
+		if (clock_src == NULL ||
+		    fgets(source, sizeof source, clock_src) == NULL ||
+		    strcmp(source, "tsc\n") != 0) {
+			WARNING("system clock source should be set to TSC for stability; %s: %s\n",
+				source[0] ? "current source is" : "could not determine current source",
+				source[0] ? source : strerror(errno));
+			rc = ENOEXEC;
+		}
+		if (clock_src != NULL)
+			fclose(clock_src);
 	}
-	if (clock_src != NULL)
-		fclose(clock_src);
 
 	return rc;
 }
