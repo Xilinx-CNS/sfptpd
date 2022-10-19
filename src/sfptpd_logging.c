@@ -169,7 +169,6 @@ static void sfptpd_log_vmessage(int priority, const char * format, va_list ap)
 {
 	assert(priority >= 0);
 	assert(format != NULL);
-	assert(ap != NULL);
 
 	/* Syslog only has 8 message levels (3 bits) so saturate at level DEBUG.
 	 * Note that messages will only appear if "*.debug /var/log/debug" is
