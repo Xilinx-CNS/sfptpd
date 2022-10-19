@@ -214,6 +214,30 @@ static void log_topology_write_entry(FILE *stream, const char *field,
 }
 
 
+static void log_copy_file(const char *src, const char *dest)
+{
+	FILE *load;
+	FILE *save;
+	char buf[128];
+	char *str;
+
+	assert(dest);
+
+	if ((save = fopen(dest, "w"))) {
+		if ((load = fopen(src, "r"))) {
+			while ((str = fgets(buf, sizeof buf, load)) && fputs(str, save) >= 0);
+			fclose(load);
+		}
+		fclose(save);
+	}
+
+	if (!save || !load || (str == NULL && (ferror(load) || ferror(save)))) {
+		ERROR("could not save a copy of the configuration, %s\n",
+		      strerror(errno));
+	}
+}
+
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -267,14 +291,12 @@ int sfptpd_log_open(struct sfptpd_config *config)
 	/* Save the lexed config */
 	if (config_log_tmp) {
 		fclose(config_log_tmp);
+		config_log_tmp = NULL;
 		rc = snprintf(path, sizeof path, "%s/%s", state_path,
 			      sfptpd_config_log_file);
 		assert(rc < sizeof path);
-		rc = rename(sfptpd_config_log_tmpfile, path);
-		if (rc < 0)
-			ERROR("could not save a copy of the configuration, %s\n",
-			      strerror(errno));
-		config_log_tmp = NULL;
+		log_copy_file(sfptpd_config_log_tmpfile, path);
+		unlink(sfptpd_config_log_tmpfile);
 	}
 
 	/* Delete all state and stats files, interfaces and topology file before we begin */
