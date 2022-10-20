@@ -12,7 +12,7 @@ PACKAGE_VERSION = $(SFPTPD_VERSION)
 
 ### Build flags for all targets
 #
-CFLAGS = -MMD -MP -Wall -Werror -Wundef -Wstrict-prototypes \
+CFLAGS += -MMD -MP -Wall -Werror -Wundef -Wstrict-prototypes \
 	 -Wnested-externs -g -pthread -fPIC -std=gnu99 \
 	 -D_ISOC99_SOURCE -D_BSD_SOURCE -D_DEFAULT_SOURCE -D_GNU_SOURCE\
 	 -fstack-protector-all -Wstack-protector
@@ -21,7 +21,7 @@ CFLAGS = -MMD -MP -Wall -Werror -Wundef -Wstrict-prototypes \
 #	 -DSFPTPD_BUILDTIME_CHECKS
 
 ARFLAGS = rcs
-LDFLAGS =
+LDFLAGS +=
 LDLIBS = -lm -lrt -lpthread
 INCDIRS :=
 STATIC_LIBRARIES :=
