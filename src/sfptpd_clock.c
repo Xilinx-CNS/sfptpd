@@ -2056,7 +2056,7 @@ int sfptpd_clock_set_sync_status(struct sfptpd_clock *clock, bool in_sync,
 				 unsigned int timeout)
 {
 	struct efx_sock_ioctl sfc_req;
-	int rc;
+	int rc = 0;
 
 	clock_lock();
 

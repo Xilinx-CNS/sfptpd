@@ -308,7 +308,7 @@ static int parse_time_of_day(struct sfptpd_config_section *section, const char *
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
 	assert(num_params == 1);
 
-	if (strlen(params[0]) > SFPTPD_CONFIG_SECTION_NAME_MAX) {
+	if (strlen(params[0]) >= SFPTPD_CONFIG_SECTION_NAME_MAX) {
 		CFG_ERROR(section, "instance name %s too long\n",
 		          params[0]);
 		return ERANGE;

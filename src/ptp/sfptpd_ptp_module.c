@@ -1659,8 +1659,8 @@ int ptp_determine_timestamp_type(ptpd_timestamp_type_e *timestamp_type,
 	struct sfptpd_ptp_instance *instance;
 	bool must_be_hw = false;
 	bool must_be_sw = false;
-	const char *hw_instance;
-	const char *sw_instance;
+	const char *hw_instance = "(no-instnace)";
+	const char *sw_instance = "(no-instance)";
 
 	assert(logical_intf != NULL);
 
@@ -2792,8 +2792,8 @@ static void ptp_on_write_topology(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_m
 	int steps_removed;
 	ptpd_state_e state;
 	uint8_t *gm, *p;
-	bool boundary = false;
-	char *steps_format = NULL;
+	bool boundary;
+	char *steps_format;
 	sfptpd_time_t ofm_ns;
 	bool hw_ts;
 
@@ -2836,6 +2836,12 @@ static void ptp_on_write_topology(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_m
 		steps_format = (steps_removed >= 2)? "%d steps": NULL;
 		gm = instance->ptpd_port_snapshot.parent.grandmaster_id;
 		boundary = true;
+	} else {
+		/* This path is not necessary but placates -Werror=maybe-uninitialised */
+		steps_removed = 0;
+		steps_format = NULL;
+		gm = (uint8_t [8]) {0, 0, 0, 0, 0, 0, 0, 0};
+		boundary = false;
 	}
 
 	fprintf(stream, "====================\nstate: %s\n",
@@ -3227,7 +3233,7 @@ static bool ptp_measure_offset_from_discriminator(struct sfptpd_ptp_instance *in
 {
 	struct timespec discrim_to_instance_lrc;
 	bool discriminator_valid = false;
-	int rc;
+	int rc = 0;
 
 	/* Find in current time offset for the BMC discriminator
 	 * if one has been defined. */
@@ -3268,8 +3274,10 @@ static bool ptp_measure_offset_from_discriminator(struct sfptpd_ptp_instance *in
 			 discrim_to_instance_lrc.tv_nsec);
 		*result = sfptpd_time_timespec_to_float_ns(&discrim_to_instance_lrc);
 	} else if (instance->discriminator_type != DISC_NONE) {
-		TRACE_L4("ptp: could not measure offset from BMC discriminator for %s (rc=%d)\n",
-			 SFPTPD_CONFIG_GET_NAME(instance->config), rc);
+		TRACE_L4("ptp: could not measure offset from BMC discriminator for %s%s%s\n",
+			 SFPTPD_CONFIG_GET_NAME(instance->config),
+			 rc ? ", " : "",
+			 rc ? strerror(rc) : "");
 	}
 
 	return discriminator_valid;

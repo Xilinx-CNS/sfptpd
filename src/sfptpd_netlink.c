@@ -125,7 +125,7 @@ int netlink_buffer_event(struct sfptpd_engine *engine,
 	copy_to->if_index = if_index;
 	strncpy(copy_to->if_name,
 		if_name,
-		sizeof copy_to->if_name);
+		sizeof copy_to->if_name - 1);
 
 	/* If the copy pointer was at the event buffer write pointer position
 	   then the we have filled another slot in the event buffer so advance

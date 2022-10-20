@@ -2367,7 +2367,7 @@ void sfptpd_engine_select_instance(struct sfptpd_engine *engine, const char *new
 		SFPTPD_MSG_LOG_ALLOC_FAILED("global");
 		return;
 	}
-	strncpy(msg->u.select_instance.name, new_instance, sizeof (msg->u.select_instance.name));
+	strncpy(msg->u.select_instance.name, new_instance, sizeof (msg->u.select_instance.name) - 1);
 
 	(void)SFPTPD_MSG_SEND(msg, engine->thread,
 			      ENGINE_MSG_SELECT_INSTANCE, false);

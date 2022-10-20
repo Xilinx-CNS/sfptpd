@@ -114,7 +114,8 @@ int sfptpd_find_running_programs(struct sfptpd_prog *others)
 		pstat = fopen(path, "r");
 		if (pstat == NULL)
 			goto next_process;
-		fscanf(pstat, "%*d %*s %c", &status);
+		if (fscanf(pstat, "%*d %*s %c", &status) != 1)
+			goto next_process;
 		fclose(pstat);
 		if (strchr("ZXx", status))
 			goto next_process;

@@ -156,14 +156,18 @@ static int lock_create(struct sfptpd_config *config, int *lock_fd)
 	/* Truncating the file does not set the file offset so if the file
 	 * already existed (still not unlinked following during daemonize) then
 	 * the file offset will not be zero. Explicitly set the seek position
-	 * back to the start of the file. */
-	ftruncate(fd, 0);
-	lseek(fd, 0, SEEK_SET);
-	sprintf(pid, "%ld\n", (long)getpid());
-	write(fd, pid, strlen(pid)+1);
-
-	*lock_fd = fd;
-	return 0;
+	 * back to the start of the file. Ignore unlikely errors at this stage. */
+	if (-1 == ftruncate(fd, 0) ||
+	    -1 == lseek(fd, 0, SEEK_SET) ||
+	    -1 == sprintf(pid, "%ld\n", (long)getpid()) ||
+	    -1 == write(fd, pid, strlen(pid)+1)) {
+		CRITICAL("failed to write to lock file: %s\n", strerror(errno));
+		close(fd);
+		return errno;
+	} else {
+		*lock_fd = fd;
+		return 0;
+	}
 }
 
 

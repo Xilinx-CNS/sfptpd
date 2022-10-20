@@ -323,7 +323,7 @@ static int parse_sync_module(struct sfptpd_config_section *section, const char *
 	num_params--;
 
 	for ( ; num_params != 0; params++, num_params--) {
-		if (strlen(params[0]) > SFPTPD_CONFIG_SECTION_NAME_MAX) {
+		if (strlen(params[0]) >= SFPTPD_CONFIG_SECTION_NAME_MAX) {
 			CFG_ERROR(section, "instance name %s too long\n",
 				  params[0]);
 			return ERANGE;
@@ -377,7 +377,7 @@ static int parse_selection_policy(struct sfptpd_config_section *section, const c
 		if (num_params == 1) {
 			CFG_ERROR(section, "no initial instance name\n");
 			return ERANGE;
-		} else if (strlen(params[1]) > SFPTPD_CONFIG_SECTION_NAME_MAX) {
+		} else if (strlen(params[1]) >= SFPTPD_CONFIG_SECTION_NAME_MAX) {
 			CFG_ERROR(section, "instance name %s too long\n",
 				  params[1]);
 			return ERANGE;
@@ -1082,7 +1082,7 @@ static int parse_clustering(struct sfptpd_config_section *section, const char *o
 		return ERANGE;
 	}
 	general->clustering_mode = SFPTPD_CLUSTERING_MODE_DISCRIMINATOR;
-	if (strlen(params[1]) > SFPTPD_CONFIG_SECTION_NAME_MAX) {
+	if (strlen(params[1]) >= SFPTPD_CONFIG_SECTION_NAME_MAX) {
 		CFG_ERROR(section, "instance name %s too long\n",
 			  params[1]);
 		return ERANGE;

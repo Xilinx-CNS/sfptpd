@@ -1214,6 +1214,7 @@ int sfptpd_ntpclient_mode7_create(struct sfptpd_ntpclient_state **ntpclient,
 	new->key_id = key_id;
 	if ((key_id != 0) && (key_value == NULL)) {
 		ERROR("ntpclient: mode7: NTP key ID %d specified but key value is null\n", key_id);
+		rc = EINVAL;
 		goto fail1;
 	}
 

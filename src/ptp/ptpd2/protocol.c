@@ -3658,13 +3658,16 @@ issueDelayResp(TimeInternal *time,MsgHeader *header,RunTimeOpts *rtOpts, PtpCloc
 		normalizeTime(time);
 		INFO("ptp %s: set correction field of delay resp to %"PRIi64" ns\n",
 		     rtOpts->name, correction);
+	} else {
+		/* Correction not used otherwise but keep the compiler happy. */
+		correction = 0;
 	}
 
 	fromInternalTime(time, &requestReceiptTimestamp);
 
 	/* If the delay request sent in unicast and we are configured in hybrid
 	 * mode then respond with unicast. Otherwise, send a multicast response */
-	const struct sockaddr_storage *dst;
+	const struct sockaddr_storage *dst = NULL;
 	socklen_t dstLen = 0;
 
 	if (((header->flagField0 & PTPD_FLAG_UNICAST) != 0) &&

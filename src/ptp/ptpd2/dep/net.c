@@ -1745,6 +1745,7 @@ netSendGeneralImpl(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 		if (ptpClock->unicastAddrLen != 0) {
 			copyAddress(&addr, &addrLen, &ptpClock->unicastAddr, ptpClock->unicastAddrLen);
 		} else {
+			assert(altDst != NULL);
 			copyAddress(&addr, &addrLen, altDst, altDstLen);
 		}
 		copyPort(&addr, &transport->generalAddr);

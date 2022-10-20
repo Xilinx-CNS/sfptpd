@@ -371,7 +371,7 @@ struct varlist {
 } g_varlist[MAXLIST] = { { 0, 0 } };
 
 /* A list of peer variables required, read using ctl_read_var */
-struct varlist peervarlist[] = {
+struct varlist peervarlist[MAXLIST] = {
 	{ "srcadr",	0 },
 	{ "dstadr",	0 },
 	{ "stratum",	0 },
@@ -1133,6 +1133,7 @@ int sfptpd_ntpclient_mode6_create(struct sfptpd_ntpclient_state **ntpclient,
 	new->key_id = key_id;
 	if ((key_id != 0) && (key_value == NULL)) {
 		ERROR("ntpclient: mode6: NTP key ID %d specified but key value is null\n", key_id);
+		rc = EINVAL;
 		goto fail1;
 	}
 
@@ -1324,9 +1325,11 @@ static int mode6_get_peer_info(struct sfptpd_ntpclient_state *ntpclient,
 		return 0;
 	}
 
-	if (resp_size > NTPCLIENT_BUFFER_SIZE)
+	if (resp_size > NTPCLIENT_BUFFER_SIZE) {
 		ERROR("ntpclient: mode6: Server returned %zu octets, which does not fit in"
 		      "maximum buffer size", resp_size);
+		return ENOMEM;
+	}
 
 	/* copy associations from general ntpclient buffer to ntpclient assoc cache */
 	memcpy(ntpclient->assoc_cache, ntpclient->buffer, resp_size);
