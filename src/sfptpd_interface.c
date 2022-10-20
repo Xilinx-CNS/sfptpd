@@ -92,6 +92,14 @@ struct sfptpd_version_number {
 	uint32_t build;
 };
 
+
+struct nic_model_caps {
+	uint16_t vendor;
+	uint16_t device;
+	enum sfptpd_clock_stratum stratum;
+};
+
+
 /** Structure to hold details of interfaces.
  *
  * The objects are created, update and deleted in this module
@@ -151,11 +159,6 @@ struct sfptpd_interface {
 	char driver_version[SFPTPD_VERSION_STRING_MAX];
 	char fw_version[SFPTPD_VERSION_STRING_MAX];
 
-	/* NIC model and serial numbers */
-	char product[SFPTPD_NIC_PRODUCT_NAME_MAX];
-	char model[SFPTPD_NIC_MODEL_MAX];
-	char serial_num[SFPTPD_NIC_SERIAL_NUM_MAX];
-
 	/* Indicates that the associated PTP clock supports the PHC API */
 	bool clock_supports_phc;
 
@@ -183,6 +186,9 @@ struct sfptpd_interface {
 
 	/* Indicates the class of interface */
 	sfptpd_interface_class_t class;
+
+	/* Static capabilities of NIC model */
+	struct nic_model_caps static_caps;
 };
 
 
@@ -238,6 +244,11 @@ static const struct sfptpd_version_number siena_fw_version_min =
 
 static const uint16_t xilinx_ptp_nics[] = {
 	0x5084, /*!< X3522 */
+};
+
+static const struct nic_model_caps all_nic_models[] = {
+	/* Err on the safe side with all SFN7xxx NIC clocks */
+	{ SFPTPD_SOLARFLARE_PCI_VENDOR_ID , 0x0903, SFPTPD_NIC_XO_CLOCK_STRATUM },
 };
 
 
@@ -515,7 +526,7 @@ static bool interface_check_suitability(const char *sysfs_dir, const char *name,
 {
 	int type;
 	int vendor_id = 0;
-	int device_id;
+	int device_id = 0;
 	int i;
 
 	assert(sysfs_dir != NULL);
@@ -573,10 +584,12 @@ static bool interface_check_suitability(const char *sysfs_dir, const char *name,
 		return false;
 	}
 
-	/* Finally, get the vendor ID of the device and determine if it is
-	 * a Solarflare device or not */
+	/* Finally, get the vendor and device ID to determine if it is
+	 * a Solarflare device or not and other static properties */
 	if (!sysfs_read_int(sysfs_dir, name, "device/vendor", &vendor_id)) {
 		WARNING("interface %s: couldn't read sysfs vendor ID\n", name);
+	} else if (!sysfs_read_int(sysfs_dir, name, "device/device", &device_id)) {
+		WARNING("interface %s: couldn't read sysfs device ID\n", name);
 	}
 
 	if (vendor_id == SFPTPD_SOLARFLARE_PCI_VENDOR_ID) {
@@ -585,11 +598,6 @@ static bool interface_check_suitability(const char *sysfs_dir, const char *name,
 		*class = SFPTPD_INTERFACE_OTHER;
 
 		if (vendor_id == SFPTPD_XILINX_PCI_VENDOR_ID) {
-			if (!sysfs_read_int(sysfs_dir, name, "device/device", &device_id)) {
-				WARNING("interface %s: couldn't read sysfs vendor ID\n", name);
-				return false;
-			}
-
 			for (i = 0; i < sizeof xilinx_ptp_nics / sizeof *xilinx_ptp_nics; i++) {
 				if (xilinx_ptp_nics[i] == device_id)
 					*class = SFPTPD_INTERFACE_XNET;
@@ -730,6 +738,7 @@ static void interface_get_pci_ids(struct sfptpd_interface *interface,
 				  const char *sysfs_dir)
 {
 	int id;
+	int i;
 
 	assert(interface != NULL);
 	assert(sysfs_dir != NULL);
@@ -743,6 +752,15 @@ static void interface_get_pci_ids(struct sfptpd_interface *interface,
 	TRACE_L3("interface %s: PCI IDs vendor = 0x%hx, device = 0x%hx\n",
 		 interface->name, interface->pci_vendor_id,
 		 interface->pci_device_id);
+
+	for (i = 0; i < sizeof all_nic_models / sizeof *all_nic_models; i++) {
+		const struct nic_model_caps *model = all_nic_models + i;
+		if (interface->pci_vendor_id == model->vendor &&
+		    interface->pci_device_id == model->device) {
+			interface->static_caps = *model;
+			break;
+		}
+	}
 }
 
 
@@ -868,372 +886,6 @@ static void interface_check_efx_support(struct sfptpd_interface *interface)
 	TRACE_L2("interface %s: %s efx ioctl\n",
 		 interface->name,
 		 interface->driver_supports_efx ? "supports" : "does not support");
-}
-
-
-static int get_config_fd(struct sfptpd_interface *interface, int* fdp)
-{
-	char filename[128];
-
-	snprintf(filename, sizeof(filename), "/sys/class/net/%s/device/config", interface->name);
-
-	*fdp = open(filename, O_SYNC | O_RDWR);
-	if(*fdp < 0) {
-		ERROR("Failed to open %s, you may have insufficient permissions.\n", filename);
-		return errno;
-	}
-
-	if (flock(*fdp, LOCK_EX) < 0) {
-		close(*fdp);
-		return errno;
-	}
-
-	return 0;
-}
-
-static int read_pci_config(int fd, unsigned addr, void *ptr, unsigned bytes)
-{
-	off_t off;
-	ssize_t readlen;
-
-	off = lseek(fd, addr, SEEK_SET);
-	if (off < 0)
-		return errno;
-	readlen = read(fd, ptr, bytes);
-	if (readlen < 0)
-		return errno;
-
-	return 0;
-}
-
-static int write_pci_config(int fd, unsigned addr, void *ptr, unsigned bytes)
-{
-	off_t off;
-	ssize_t writelen;
-
-	off = lseek(fd, addr, SEEK_SET);
-	if (off < 0)
-		return errno;
-	writelen = write(fd, ptr, bytes);
-	if (writelen < 0)
-		return errno;
-
-	return 0;
-}
-
-static int find_vpd_offset_in_config(int fd, uint8_t* offset)
-{
-	int rc = 0;
-	uint16_t status;
-	uint8_t list_item[2];
-
-	rc = read_pci_config(fd, PCI_STATUS, &status, sizeof(status));
-	if (rc)
-		goto out;
-	if (!(status & PCI_STATUS_CAP_LIST)) {
-		rc = EOPNOTSUPP;
-		goto out;
-	}
-
-	rc = read_pci_config(fd, PCI_CAPABILITY_LIST, offset, 1);
-	if (rc)
-		goto out;
-
-	do {
-		rc = read_pci_config(fd, *offset, list_item, 2);
-		if (rc)
-			goto out;
-		if (list_item[0] == PCI_CAP_ID_VPD)
-			return 0;
-		*offset = list_item[1];
-	} while (*offset != 0);
-
-out:
-	return rc;
-}
-
-static int interface_get_vpd_info_from_pci(struct sfptpd_interface *interface, uint8_t *vpd_data,
-		size_t *vpd_len)
-{
-	int rc = 0;
-	uint8_t vpd_cap, tag;
-	uint16_t offset, vpd_ctrl, next_tag_at, len;
-	int fd;
-
-	rc = get_config_fd(interface, &fd);
-	if (rc)
-		return rc;
-
-	rc = find_vpd_offset_in_config(fd, &vpd_cap);
-	if (rc)
-		goto out;
-
-	next_tag_at = 0;
-	for (offset = 0; offset < *vpd_len; offset += 4) {
-		unsigned retries = 125; /* This roughly matches the kernel timeout. */
-		rc = write_pci_config(fd, vpd_cap + PCI_VPD_ADDR, &offset, sizeof(offset));
-		if (rc)
-			goto out;
-		do {
-			usleep(1000);
-			rc = read_pci_config(fd, vpd_cap + PCI_VPD_ADDR, &vpd_ctrl, sizeof(vpd_ctrl));
-			if (rc)
-				goto out;
-		} while (!(vpd_ctrl & PCI_VPD_ADDR_F) && retries--);
-
-		if (!(vpd_ctrl & PCI_VPD_ADDR_F)) {
-			rc = ETIMEDOUT;
-			goto out;
-		}
-
-		rc = read_pci_config(fd, vpd_cap + PCI_VPD_DATA, vpd_data + offset, 4);
-		if (rc)
-			goto out;
-
-		if (offset + 4 > next_tag_at) {
-			tag = vpd_data[next_tag_at];
-
-			/* If we have found the end tag then stop reading. */
-			if (tag == VPD_TAG_END) {
-				offset = next_tag_at + 1;
-				break;
-			}
-
-			if(tag & VPD_LARGE_TAG_MSK) {
-				/* If we have read enough data to contain the length field then process
-				 * it now, otherwise keep reading until we have enough data. */
-				if (offset + 4 > next_tag_at + 2) {
-					len = *(vpd_data + next_tag_at + 1);
-					len |= *(vpd_data + next_tag_at + 2) << 8;
-					next_tag_at += 3 + len;
-				}
-			}
-			else {
-				len = tag & VPD_SMALL_TAG_LEN_MSK;
-				next_tag_at += 1 + len;
-			}
-		}
-	}
-
-	*vpd_len = offset;
-out:
-	flock(fd, LOCK_UN);
-	close(fd);
-	return rc;
-}
-
-
-static void interface_get_vpd_info_from_sysfs(struct sfptpd_interface *interface,
-					      const char *sysfs_dir, uint8_t *vpd_ptr,
-					      size_t *vpd_len)
-{
-	char path[PATH_MAX];
-	FILE *file;
-
-	assert(interface != NULL);
-	assert(sysfs_dir != NULL);
-	assert(vpd_ptr != NULL);
-
-	/* Create the path name of the vital product data file */
-	snprintf(path, sizeof(path), "%s%s/device/vpd", sysfs_dir, interface->name);
-
-	file = fopen(path, "r");
-	if (file == NULL) {
-		TRACE_L3("interface %s: couldn't open %s\n",
-			 interface->name, path);
-		*vpd_len = 0;
-		return;
-	}
-
-	/* Just slurp it all up. */
-	*vpd_len = fread(vpd_ptr, sizeof(char), *vpd_len, file);
-	fclose(file);
-}
-
-static void interface_get_vpd_info(struct sfptpd_interface *interface,
-				   const char *sysfs_dir,
-				   sfptpd_interface_class_t class)
-{
-	size_t vpd_len = VPD_MAX_SIZE;
-	uint8_t *vpd_ptr = malloc(vpd_len);
-	if (vpd_ptr == NULL) {
-		CRITICAL("Out of memory!\n");
-		return;
-	}
-
-	int rc = interface_get_vpd_info_from_pci(interface, vpd_ptr, &vpd_len);
-	if (rc != 0) {
-		TRACE_L3("interface %s: failed to read VPD from PCIe config space (%d), trying sysfs instead\n",
-			 interface->name, rc);
-		interface_get_vpd_info_from_sysfs(interface, sysfs_dir, vpd_ptr, &vpd_len);
-		if (vpd_len == 0) {
-			goto fail;
-		}
-	}
-
-	size_t i = 0;
-	unsigned int desc_len, entry_len, idx, state;
-	uint8_t tag, keyword[2];
-	enum { VPD_TAG, VPD_LEN0, VPD_LEN1, VPD_DATA, VPD_OK };
-	enum { VPD_ENTRY_KEYWORD0, VPD_ENTRY_KEYWORD1, VPD_ENTRY_LEN, VPD_ENTRY_DATA };
-
-	/* First find the data section of the read only VPD descriptor */
-	state = VPD_TAG;
-	while ((state != VPD_OK) && (i < vpd_len)) {
-		char c = vpd_ptr[i++];
-		switch (state) {
-		case VPD_TAG:
-			tag = (uint8_t)c;
-			/* If we reach the end of the VPD without finding the
-			 * read-only descriptor then fail */
-			if (tag == VPD_TAG_END) {
-				TRACE_L3("interface %s: reached end of VPD",
-					 interface->name);
-				goto fail;
-			} else {
-				state = VPD_LEN0;
-			}
-			break;
-
-		case VPD_LEN0:
-			desc_len = (unsigned int)c;
-			state = VPD_LEN1;
-			break;
-
-		case VPD_LEN1:
-			desc_len |= ((unsigned int)c << 8);
-			state = VPD_DATA;
-			idx = 0;
-			/* If we have found the read-only descriptor move to the
-			 * next loop to parse the entries */
-			if (tag == VPD_TAG_RO)
-				state = VPD_OK;
-			break;
-
-		case VPD_DATA:
-			if (tag == VPD_TAG_STR) {
-				if (idx < sizeof(interface->product))
-					interface->product[idx] = c;
-
-				idx++;
-
-				if (idx == sizeof(interface->product)) {
-					interface->product[idx - 1] = '\0';
-					WARNING("interface %s: VPD product name too long (%d)\n",
-						interface->name, desc_len);
-				}
-
-				if (idx >= desc_len) {
-					state = VPD_TAG;
-					if (idx < sizeof(interface->product))
-						interface->product[idx] = '\0';
-					TRACE_L3("interface %s: NIC product name is %s\n",
-						 interface->name,
-						 interface->product);
-				}
-			} else {
-				idx++;
-				if (idx >= desc_len)
-					state = VPD_TAG;
-			}
-			break;
-		}
-	}
-
-	if (state != VPD_OK)
-		goto fail;
-
-	TRACE_L4("interface %s: VPD found read-only descriptor\n", interface->name);
-
-	/* Parse each entry in the descriptor looking for the model and serial
-	 * numbers */
-	state = VPD_ENTRY_KEYWORD0;
-	while ((desc_len != 0) && (i < vpd_len)) {
-		char c = vpd_ptr[i++];
-		switch (state) {
-		case VPD_ENTRY_KEYWORD0:
-			keyword[0] = (uint8_t)c;
-			state = VPD_ENTRY_KEYWORD1;
-			break;
-
-		case VPD_ENTRY_KEYWORD1:
-			keyword[1] = (uint8_t)c;
-			state = VPD_ENTRY_LEN;
-			break;
-
-		case VPD_ENTRY_LEN:
-			entry_len = (unsigned int)c;
-			idx = 0;
-			state = VPD_ENTRY_DATA;
-			break;
-
-		case VPD_ENTRY_DATA:
-			/* If the entry is the part number or serial number,
-			 * store the strings */
-			if ((keyword[0] == 'P') && (keyword[1] == 'N')) {
-				if (idx < sizeof(interface->model))
-					interface->model[idx] = c;
-
-				idx++;
-
-				if (idx == sizeof(interface->model)) {
-					interface->model[idx - 1] = '\0';
-					WARNING("interface %s: VPD part number too long (%d)\n",
-						interface->name, entry_len);
-				}
-
-				if (idx >= entry_len) {
-					state = VPD_ENTRY_KEYWORD0;
-					if (idx < sizeof(interface->model))
-						interface->model[idx] = '\0';
-					TRACE_L3("interface %s: NIC part number is %s\n",
-						 interface->name, interface->model);
-				}
-			} else if ((keyword[0] == 'S') && (keyword[1] == 'N')) {
-				if (idx < sizeof(interface->serial_num))
-					interface->serial_num[idx] = c;
-
-				idx++;
-
-				if (idx == sizeof(interface->serial_num)) {
-					interface->serial_num[idx - 1] = '\0';
-					WARNING("interface %s: VPD serial number too long (%d)\n",
-						interface->name, entry_len);
-				}
-
-				if (idx >= entry_len) {
-					state = VPD_ENTRY_KEYWORD0;
-					if (idx < sizeof(interface->serial_num))
-						interface->serial_num[idx] = '\0';
-					TRACE_L3("interface %s: NIC serial number is %s\n",
-						 interface->name, interface->serial_num);
-				}
-			} else {
-				idx++;
-				if (idx >= entry_len)
-					state = VPD_ENTRY_KEYWORD0;
-			}
-			break;
-		}
-
-		desc_len--;
-	}
-
-fail:
-	/* Check whether we got the product name, part and serial numbers */
-	if (class == SFPTPD_INTERFACE_SFC || class == SFPTPD_INTERFACE_XNET) {
-		if (interface->product[0] == '\0')
-			WARNING("interface %s: no product name found in VPD\n",
-				interface->name);
-		if (interface->model[0] == '\0')
-			WARNING("interface %s: no part number found in VPD\n",
-					interface->name);
-		if (interface->serial_num[0] == '\0')
-			WARNING("interface %s: no serial number found in VPD\n",
-				interface->name);
-	}
-
-	free(vpd_ptr);
 }
 
 
@@ -1392,6 +1044,7 @@ static int interface_init(const char *name, const char *sysfs_dir,
 	interface->if_index = if_index;
 	interface->deleted = false;
 	interface->suitable = true;
+	interface->static_caps.stratum = SFPTPD_CLOCK_STRATUM_MAX;
 
 	/* Get the permanent hardware address of the interface */
 	rc = interface_get_hw_address(interface);
@@ -1414,9 +1067,6 @@ static int interface_init(const char *name, const char *sysfs_dir,
 
 	/* Assign NIC ID */
 	interface_assign_nic_id(interface);
-
-	/* Get the model number and serial number of the NIC */
-	interface_get_vpd_info(interface, sysfs_dir, class);
 
 	return 0;
 }
@@ -1936,6 +1586,10 @@ const char *sfptpd_interface_get_mac_string(struct sfptpd_interface *interface)
 	return interface->mac_string;
 }
 
+enum sfptpd_clock_stratum sfptpd_interface_get_clock_stratum(struct sfptpd_interface *interface)
+{
+	return interface->static_caps.stratum;
+}
 
 const char *sfptpd_interface_get_name(struct sfptpd_interface *interface)
 {
@@ -1963,51 +1617,6 @@ void sfptpd_interface_get_mac_addr(struct sfptpd_interface *interface,
 	assert(mac != NULL);
 	memcpy(mac, &interface->mac_addr, sizeof(*mac));
 	interface_unlock();
-}
-
-
-const char *sfptpd_interface_get_product_name(struct sfptpd_interface *interface)
-{
-	const char *product;
-
-	if (interface_get_canonical_with_lock(&interface)) {
-		assert(interface->magic == SFPTPD_INTERFACE_MAGIC);
-		product = interface->product;
-		interface_unlock();
-	} else {
-		product = "(no-product-name)";
-	}
-	return product;
-}
-
-
-const char *sfptpd_interface_get_serial_no(struct sfptpd_interface *interface)
-{
-	const char *serial_num;
-
-	if (interface_get_canonical_with_lock(&interface)) {
-		assert(interface->magic == SFPTPD_INTERFACE_MAGIC);
-		serial_num = interface->serial_num;
-		interface_unlock();
-	} else {
-		serial_num = "(no-serial-num)";
-	}
-	return serial_num;
-}
-
-
-const char *sfptpd_interface_get_model(struct sfptpd_interface *interface)
-{
-	const char *model;
-
-	if (interface_get_canonical_with_lock(&interface)) {
-		assert(interface->magic == SFPTPD_INTERFACE_MAGIC);
-		model = interface->model;
-		interface_unlock();
-	} else {
-		model = "(no-model)";
-	}
-	return model;
 }
 
 

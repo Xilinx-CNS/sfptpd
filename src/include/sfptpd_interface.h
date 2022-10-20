@@ -86,24 +86,6 @@ const char *sfptpd_interface_get_name(struct sfptpd_interface *interface);
 void sfptpd_interface_get_mac_addr(struct sfptpd_interface *interface,
 				   sfptpd_mac_addr_t *mac);
 
-/** Get the product name of the NIC providing an interface
- * @param interface  Pointer to interface instance
- * @return The product name of the NIC or an empty string if not known.
- */
-const char *sfptpd_interface_get_product_name(struct sfptpd_interface *interface);
-
-/** Get the serial number of the NIC providing an interface
- * @param interface  Pointer to interface instance
- * @return The serial number of the NIC or an empty string if not known.
- */
-const char *sfptpd_interface_get_serial_no(struct sfptpd_interface *interface);
-
-/** Get the model number of the NIC providing an interface
- * @param interface  Pointer to interface instance
- * @return The model number of the NIC or an empty string if not known.
- */
-const char *sfptpd_interface_get_model(struct sfptpd_interface *interface);
-
 /** Get the firmware version of the NIC providing an interface
  * @param interface  Pointer to interface instance
  * @return The firmware version of the NIC or NULL in the case of an error.
@@ -299,6 +281,12 @@ int sfptpd_interface_get_nic_id(struct sfptpd_interface *interface);
  * @return The MAC address of the interface.
  */
 const char *sfptpd_interface_get_mac_string(struct sfptpd_interface *interface);
+
+/** Get the stratum of the interface's clock.
+ * @param interface Pointer to interface instance
+ * @return The clock stratum for the interface.
+ */
+enum sfptpd_clock_stratum sfptpd_interface_get_clock_stratum(struct sfptpd_interface *interface);
 
 /** Find the first interface with the given nic id, i.e. the one
  * with the lowest MAC address.

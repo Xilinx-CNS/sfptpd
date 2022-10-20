@@ -38,6 +38,9 @@
 #define SFPTPD_CLOCK_STRATUM_X_ACCURACY_PPB   (256000.0)
 #define SFPTPD_CLOCK_STRATUM_X_HOLDOVER_PPB   (256000.0)
 
+/* NIC clock accuracy and maximum frequency adjustment */
+#define SFPTPD_NIC_TCXO_CLOCK_STRATUM    (SFPTPD_CLOCK_STRATUM_3)
+#define SFPTPD_NIC_XO_CLOCK_STRATUM      (SFPTPD_CLOCK_STRATUM_4)
 
 /** Enumeration of leap second types */
 enum sfptpd_leap_second_type {

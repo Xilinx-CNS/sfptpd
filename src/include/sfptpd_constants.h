@@ -10,6 +10,9 @@
 /** Manufacturer string */
 #define SFPTPD_MANUFACTURER "Xilinx, Inc."
 
+/** Model string */
+#define SFPTPD_MODEL "sfptpd"
+
 /** Default user description */
 #define SFPTPD_USER_DESCRIPTION "Solarflare Enhanced PTP Daemon"
 

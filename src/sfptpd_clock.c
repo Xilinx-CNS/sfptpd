@@ -101,9 +101,6 @@ static const struct sfptpd_clock_spec sfptpd_clock_specifications[] =
 /* Paths */
 #define SFPTPD_SYSFS_MODULE_PARAMETERS_PATH "/sys/module/sfc/parameters"
 
-/* NIC clock accuracy and maximum frequency adjustment */
-#define SFPTPD_NIC_TCXO_CLOCK_STRATUM    (SFPTPD_CLOCK_STRATUM_3)
-#define SFPTPD_NIC_XO_CLOCK_STRATUM      (SFPTPD_CLOCK_STRATUM_4)
 /* Earlier drivers only supported a frequency range of +-1000000. Newer drivers
  * support a wider range and indicate the capibility using the sysfs file
  * "/sys/module/sfc/parameters/max_freq_adj" */
@@ -600,18 +597,22 @@ static void clock_determine_stratum(struct sfptpd_clock *clock)
 	/* Currently the only Solarflare adapter that does not have a TCXO is
 	 * the SFN7002. We assume that all non-Solarflare adapters have
 	 * standard crystals too. */
-	static const char *sfc_with_xo_crystal = "SFN7002F";
+	enum sfptpd_clock_stratum stratum;
 
 	assert(clock != NULL);
 
-	if ((clock->type == SFPTPD_CLOCK_TYPE_XNET) ||
-	    ((clock->type == SFPTPD_CLOCK_TYPE_SFC) &&
-	     (strcmp(sfptpd_interface_get_model(clock->u.nic.primary_if),
-		     sfc_with_xo_crystal) != 0))) {
-		clock->spec = &sfptpd_clock_specifications[SFPTPD_NIC_TCXO_CLOCK_STRATUM];
-	} else {
-		clock->spec = &sfptpd_clock_specifications[SFPTPD_NIC_XO_CLOCK_STRATUM];
+	stratum = sfptpd_interface_get_clock_stratum(clock->u.nic.primary_if);
+	if (stratum == SFPTPD_CLOCK_STRATUM_MAX) {
+		if (clock->type == SFPTPD_CLOCK_TYPE_XNET ||
+		    clock->type == SFPTPD_CLOCK_TYPE_SFC) {
+			stratum = SFPTPD_NIC_TCXO_CLOCK_STRATUM;
+		} else {
+			stratum = SFPTPD_NIC_XO_CLOCK_STRATUM;
+		}
 	}
+
+	assert(stratum < SFPTPD_CLOCK_STRATUM_MAX);
+	clock->spec = &sfptpd_clock_specifications[stratum];
 
 	TRACE_L3("clock %s: stratum %s, accuracy (ppb) %Lf, holdover (ppb) %Lf (ppb)\n",
 		 clock->short_name, clock->spec->name,

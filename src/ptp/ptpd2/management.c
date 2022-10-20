@@ -77,8 +77,8 @@ void managementInit(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	if (sfptpd_interface_get_class(interface) == SFPTPD_INTERFACE_SFC) {
 		snprintf(ptpClock->product_desc + len,
 			 sizeof(ptpClock->product_desc) - len, ";%s;%s",
-			 sfptpd_interface_get_model(interface),
-			 sfptpd_interface_get_serial_no(interface));
+			 SFPTPD_MODEL,
+			 sfptpd_interface_get_mac_string(interface));
 
 		/* Construct the revision data. This is the tuple of hardware
 		 * version, firmware version and software version. We don't

@@ -659,8 +659,8 @@ static void write_topology(struct sfptpd_engine *engine)
 
 static void write_interfaces(void)
 {
-	const char *format_interface_string = "| %12s | %8s | %21s | %70s |\n";
-	const char *format_interface_data = "| %12s | %8s | %21s | %70s |\n";
+	const char *format_interface_string = "| %12s | %8s | %21s | %17s |\n";
+	const char *format_interface_data = "| %12s | %8s | %21s | %17s |\n";
 	const char *ts_caps[4] = {"-", "sw", "hw", "hw & sw"};
 	struct sfptpd_log *log;
 	FILE *stream;
@@ -678,7 +678,7 @@ static void write_interfaces(void)
 			     "interface",
 			     "ptp-caps",
 			     "pkt-timestamping-caps",
-			     "product-name");
+			     "mac-address");
 
 	query_result = sfptpd_interface_get_all_snapshot();
 
@@ -697,7 +697,7 @@ static void write_interfaces(void)
 				     format_interface_data,
 				     sfptpd_interface_get_name(interface),
 				     ptp_caps, rx_ts_caps,
-				     sfptpd_interface_get_product_name(interface));
+				     sfptpd_interface_get_mac_string(interface));
 	}
 
 	query_result.free(&query_result);
