@@ -1032,6 +1032,10 @@ static void ptp_timestamp_filtering_reconfigure_all(struct sfptpd_ptp_intf *intf
 	for (i = 0; i < new_bond_info->num_physical_ifs; i++) {
 		candidate = new_bond_info->physical_ifs[i];
 
+		for (j = 0; j < old_bond_info->num_physical_ifs; j++) {
+			if (candidate == old_bond_info->physical_ifs[j])
+				break;
+		}
 		/* If the interface from the new config is not in the existing
 		 * configuration, then report this for symmetry when reading logs */
 		if (j >= old_bond_info->num_physical_ifs) {
