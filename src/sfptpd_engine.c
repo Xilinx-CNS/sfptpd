@@ -567,6 +567,24 @@ static int create_timers(struct sfptpd_engine *engine)
 		return rc;
 	}
 
+	/* If in manual-startup mode and the initial sync instance is not the
+	 * best by automatic selection, kick off the holdoff timer. */
+	if (engine->general_config->selection_holdoff_interval != 0 &&
+	    engine->general_config->selection_policy.strategy == SFPTPD_SELECTION_STRATEGY_MANUAL_STARTUP &&
+	    engine->candidate != engine->selected) {
+
+		interval.tv_sec = engine->general_config->selection_holdoff_interval;
+		interval.tv_nsec = 0;
+
+		rc = sfptpd_thread_timer_start(ENGINE_TIMER_SELECTION_HOLDOFF,
+					       false, false, &interval);
+		if (rc != 0) {
+			CRITICAL("failed to start selection holdoff timer, %s\n",
+				 strerror(rc));
+			return rc;
+		}
+	}
+
 	return 0;
 }
 
@@ -2107,18 +2125,6 @@ static int engine_on_startup(void *context)
 			engine->candidate = bic_instance;
 			INFO("sync instance %s is a candidate for selection\n",
 			     bic_instance->info.name);
-
-			/* Start the selection holdoff timer */
-			struct timespec interval;
-			interval.tv_sec = engine->general_config->selection_holdoff_interval;
-			interval.tv_nsec = 0;
-
-			rc = sfptpd_thread_timer_start(ENGINE_TIMER_SELECTION_HOLDOFF,
-						       false, false, &interval);
-			if (rc != 0) {
-				CRITICAL("failed to start selection holdoff timer, %s\n",
-					 strerror(rc));
-			}
 		}
 	}
 
