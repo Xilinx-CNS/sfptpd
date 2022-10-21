@@ -232,7 +232,7 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 			}
 			break;
 		case SELECTION_RULE_ALLAN_VARIANCE:
-			TRACE_L5("selection%s:   comparing %s: %Lf, %Lf\n",
+			TRACE_L5("selection%s:   comparing %s: %Lg, %Lg\n",
 				 phase, rule_name,
 				 status_a->master.allan_variance, status_b->master.allan_variance);
 
