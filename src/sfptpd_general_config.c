@@ -111,8 +111,9 @@ static const sfptpd_config_option_t config_general_options[] =
 		"Create instances of the specified sync module",
 		~1, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
 		parse_sync_module},
-	{"selection_policy", "<automatic | manual> [initial-manual-instance]",
-		"Use automatic (default) or manual sync instance switching",
+	{"selection_policy", "<automatic | manual | manual-startup> [initial-instance]",
+		"Use automatic (default), manual or manual followed by "
+		"automatic sync instance selection",
 		~1, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
 		parse_selection_policy},
 	{"selection_policy_rules", "<manual | state | no-alarms | user-priority | clustering | clock-class | total-accuracy | allan-variance | steps-removed>*",
