@@ -197,6 +197,9 @@ typedef struct sfptpd_crny_module {
 
 	/* Have currently blocked the system clock */
 	bool have_blocked_sys;
+
+	/* Whether we have entered the RUNning phase */
+	bool running_phase;
 } crny_module_t;
 
 
@@ -1760,22 +1763,26 @@ static void ntp_on_control(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 	flags |= (msg->u.control_req.flags & msg->u.control_req.mask);
 
 	/* For the NTP sync module, only the clock control flag has meaning. */
-	if ((flags ^ ntp->ctrl_flags) & SYNC_MODULE_CLOCK_CTRL) {
+	if (ntp->running_phase &&
+	    (flags ^ ntp->ctrl_flags) & SYNC_MODULE_CLOCK_CTRL) {
 		bool clock_control = ((flags & SYNC_MODULE_CLOCK_CTRL) != 0);
+		bool clock_controlling = clock_control_at_launch();
 
-		/* Check if we can actually effect any control. */
-		if (!have_control) {
-			WARNING("crny: cannot change control flags - no control script specified\n");
-			flags ^= SYNC_MODULE_CLOCK_CTRL;
-			// TODO @bug64228 provide a generic error code in messages.
-		} else {
-			rc = crny_clock_control(ntp, clock_control);
-			if (rc == 0) {
-				TRACE_L2("crny: successfully %sabled chronyd clock control\n",
-					 clock_control? "en": "dis");
+		if (!!clock_control != !!clock_controlling) {
+			/* Check if we can actually effect any control. */
+			if (!have_control) {
+				WARNING("crny: cannot change control flags - no control script specified\n");
+				flags ^= SYNC_MODULE_CLOCK_CTRL;
+				// TODO @bug64228 provide a generic error code in messages.
 			} else {
+				rc = crny_clock_control(ntp, clock_control);
+				if (rc == 0) {
+					TRACE_L2("crny: successfully %sabled chronyd clock control\n",
+						 clock_control? "en": "dis");
+				} else {
 				ERROR("crny: failed to change chronyd clock control, %s!\n",
 				      strerror(rc));
+				}
 			}
 		}
 	}
@@ -2032,6 +2039,9 @@ static void ntp_on_run(crny_module_t *ntp)
 	int rc;
 	bool have_control = strlen(ntp->config->chronyd_script) != 0;
 
+	assert(ntp);
+
+	ntp->running_phase = true;
 	interval.tv_sec = 0;
 	interval.tv_nsec = NTP_POLL_INTERVAL;
 
