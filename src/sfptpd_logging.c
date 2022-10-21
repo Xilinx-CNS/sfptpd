@@ -220,21 +220,22 @@ static void log_copy_file(const char *src, const char *dest)
 	FILE *save;
 	char buf[128];
 	char *str;
+	bool error = true;
 
 	assert(dest);
 
 	if ((save = fopen(dest, "w"))) {
 		if ((load = fopen(src, "r"))) {
 			while ((str = fgets(buf, sizeof buf, load)) && fputs(str, save) >= 0);
+			error = ferror(load) || ferror(save);
 			fclose(load);
 		}
 		fclose(save);
 	}
 
-	if (!save || !load || (str == NULL && (ferror(load) || ferror(save)))) {
+	if (error)
 		ERROR("could not save a copy of the configuration, %s\n",
 		      strerror(errno));
-	}
 }
 
 
