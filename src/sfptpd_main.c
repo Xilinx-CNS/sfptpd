@@ -112,7 +112,6 @@ static int runtime_checks(struct sfptpd_config *config)
 			WARNING("system clock source should be set to TSC for stability; %s: %s\n",
 				source[0] ? "current source is" : "could not determine current source",
 				source[0] ? source : strerror(errno));
-			rc = ENOEXEC;
 		}
 		if (clock_src != NULL)
 			fclose(clock_src);
