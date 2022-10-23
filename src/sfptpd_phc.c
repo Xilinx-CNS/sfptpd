@@ -48,18 +48,6 @@ int clock_adjtime(clockid_t clock, struct timex *timex_block)
 /* Essential interface definitions when building with earlier kernels.
  * https://github.com/torvalds/linux/blob/master/include/uapi/linux/ptp_clock.h */
 
-/* PTP_SYS_OFFSET was added in kernel 3.15.
- * See commit 215b13dd288c2e1e4461c1530a801f5f83e8cd90 */
-#ifndef PTP_SYS_OFFSET
-#define PTP_MAX_SAMPLES 25
-struct ptp_sys_offset {
-	unsigned int n_samples;
-	unsigned int rsv[3];
-	struct ptp_clock_time ts[2 * PTP_MAX_SAMPLES + 1];
-};
-#define PTP_SYS_OFFSET _IOW(PTP_CLK_MAGIC, 5, struct ptp_sys_offset)
-#endif
-
 /* PTP_SYS_OFFSET_EXTENDED was added in kernel 5.0.
  * See commit 361800876f80da3915c46e388fc682532228b2c3 */
 #ifndef PTP_SYS_OFFSET_EXTENDED
