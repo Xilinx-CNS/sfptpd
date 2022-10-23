@@ -45,48 +45,6 @@ int clock_adjtime(clockid_t clock, struct timex *timex_block)
 }
 
 
-/* Essential interface definitions when building with earlier kernels.
- * https://github.com/torvalds/linux/blob/master/include/uapi/linux/ptp_clock.h */
-
-/* PTP_SYS_OFFSET_EXTENDED was added in kernel 5.0.
- * See commit 361800876f80da3915c46e388fc682532228b2c3 */
-#ifndef PTP_SYS_OFFSET_EXTENDED
-struct ptp_sys_offset_extended {
-	unsigned int n_samples;
-	unsigned int rsv[3];
-	struct ptp_clock_time ts[PTP_MAX_SAMPLES][3];
-};
-#define PTP_SYS_OFFSET_EXTENDED _IOW(PTP_CLK_MAGIC, 9, struct ptp_sys_offset_extended)
-#endif
-
-/* Cross-timestamping was added in kernel 4.6.
- * See commit 719f1aa4a67199a3c4c68a03f94e5ec44d9d5f82 */
-#ifndef PTP_SYS_OFFSET_PRECISE
-struct ptp_sys_offset_precise {
-	struct ptp_clock_time device;
-	struct ptp_clock_time sys_realtime;
-	struct ptp_clock_time sys_monoraw;
-	unsigned int rsv[4];
-};
-
-#define PTP_SYS_OFFSET_PRECISE _IOWR(PTP_CLK_MAGIC, 8, struct ptp_sys_offset_precise)
-
-/* Access the struct member via reserved fields.
- * We could also do this :
- *     #define PTP_CAPS_XTSTAMP(pcc) ((int*)pcc)[6]
- */
-#ifdef PTP_PIN_GETFUNC
-#define PTP_CAPS_XTSTAMP(pcc) (pcc)->rsv[0]
-#else
-#define PTP_CAPS_XTSTAMP(pcc) (pcc)->rsv[1]
-#endif
-
-#else
-/* Access the struct member the way we're supposed to. */
-#define PTP_CAPS_XTSTAMP(pcc) (pcc)->cross_timestamping
-#endif
-
-
 /****************************************************************************
  * Types, Defines and Structures
  ****************************************************************************/
@@ -636,15 +594,17 @@ static int phc_compare_using_pps(struct sfptpd_phc *phc, struct timespec *diff)
 static int phc_compare_using_precise_offset(struct sfptpd_phc *phc,
 					    struct timespec *diff)
 {
-	int rc;
+	int rc = EOPNOTSUPP;
+
+#ifdef PTP_SYS_OFFSET_PRECISE
 	/* Kernel snapshot of {dev, real, mono} clock times */
 	struct ptp_sys_offset_precise ktimes;
-	memset(&ktimes, 0, sizeof(ktimes));
 
 	assert(phc != NULL);
 	assert(phc->phc_fd >= 0);
 	assert(diff != NULL);
 
+	memset(&ktimes, 0, sizeof(ktimes));
 	rc = ioctl(phc->phc_fd, PTP_SYS_OFFSET_PRECISE, &ktimes);
 	if (rc != 0)
 		return rc;
@@ -659,8 +619,9 @@ static int phc_compare_using_precise_offset(struct sfptpd_phc *phc,
 					   ktimes.sys_realtime.nsec);
 
 	phc->diff_prev = *diff;
+#endif
 
-	return 0;
+	return rc;
 }
 
 
@@ -668,7 +629,10 @@ static int phc_compare_using_extended_offset(struct sfptpd_phc *phc,
 					     int n_samples,
 					     struct timespec *diff)
 {
-	int rc, i;
+	int rc = EOPNOTSUPP;
+
+#ifdef PTP_SYS_OFFSET_EXTENDED
+	int i;
 	struct ptp_sys_offset_extended sysoff;
 	struct timespec ts, window;
 	sfptpd_time_t smallest_window;
@@ -714,9 +678,11 @@ static int phc_compare_using_extended_offset(struct sfptpd_phc *phc,
 
 	if (rc == 0)
 		phc->diff_prev = *diff;
+#endif
 
 	return rc;
 }
+
 
 static int phc_compare_using_kernel_readings(struct sfptpd_phc *phc,
 					     int n_samples,
@@ -777,12 +743,14 @@ static int phc_set_fallback_diff_method(struct sfptpd_phc *phc)
 		enum sfptpd_phc_diff_method method = phc_diff_methods[phc->diff_method_index++];
 		switch (method) {
 		case SFPTPD_DIFF_METHOD_SYS_OFFSET_PRECISE:
-			if (PTP_CAPS_XTSTAMP(&phc->caps) != 0) {
+#ifdef PTP_SYS_OFFSET_PRECISE
+			if (phc->caps.cross_timestamping != 0) {
 				/* Use PTP_SYS_OFFSET_PRECISE (cross-timestamping) */
 				phc->diff_method = SFPTPD_DIFF_METHOD_SYS_OFFSET_PRECISE;
 				INFO("phc%d: using diff method SYS_OFFSET_PRECISE\n", phc->phc_idx);
 				goto diff_method_selected;
 			}
+#endif
 			break;
 
 		case SFPTPD_DIFF_METHOD_SYS_OFFSET_EXTENDED:
