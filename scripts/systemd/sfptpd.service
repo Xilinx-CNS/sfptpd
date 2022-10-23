@@ -1,16 +1,15 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# (c) Copyright 2019,2021 Xilinx, Inc.
+# (c) Copyright 2019-2022 Xilinx, Inc.
 
 [Unit]
-Description=sfptpd
-DefaultDependencies=true
-Wants=network-online.target
+Description=Solarflare Enhanced PTP Daemon
+Documentation=man:sfptpd(8)
 After=network-online.target
 
 [Service]
+ExecStart=/usr/sbin/sfptpd -f /etc/sfptpd.conf
 # optionally set which CPU(s) to run sfptpd on e.g. limit CPU selection to cores 3 and 4:
 # CPUAffinity=3,4
-ExecStart=/usr/sbin/sfptpd -f /etc/sfptpd.conf
 
 [Install]
 WantedBy=multi-user.target
