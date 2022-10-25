@@ -17,6 +17,7 @@
 #include "sfptpd_config.h"
 #include "sfptpd_clock.h"
 #include "sfptpd_time.h"
+#include "sfptpd_link.h"
 
 
 /****************************************************************************
@@ -279,7 +280,9 @@ int sfptpd_sync_module_create(enum sfptpd_config_category type,
 			      struct sfptpd_engine *engine,
 			      struct sfptpd_thread **sync_module,
 			      struct sfptpd_sync_instance_info *instance_info_buffer,
-			      int instance_info_entries);
+			      int instance_info_entries,
+			      const struct sfptpd_link_table *link_table,
+			      bool *link_subscriber);
 
 /** Destroy a sync module
  * @param sync_module Pointer to sync module
@@ -382,10 +385,12 @@ void sfptpd_sync_module_test_mode(struct sfptpd_thread *sync_module,
 				  int param1, int param2);
 
 
-/** Save current state of the sync module to file
+/** Notify a sync module of a new link table
  * @param sync_module Pointer to sync module
+ * @param link_table Pointer to the link table
  */
-void sfptpd_sync_module_networking_reconfigured(struct sfptpd_thread *sync_module);
+void sfptpd_sync_module_link_table(struct sfptpd_thread *sync_module,
+				   const struct sfptpd_link_table *link_table);
 
 
 /****************************************************************************
@@ -517,10 +522,14 @@ struct sfptpd_sync_module_update_leap_second_req {
 };
 
 /** Message to notify a sync module that network interface state has changed.
- * This is sent as an asynchronous message to the sync module without an
- * associated reply.
+ * This is sent as an asynchronous message to the sync module. The recipient
+ * holds a reference-counted read lock on the link table which is released
+ * with a corresponding message to the sync engine.
  */
-#define SFPTPD_SYNC_MODULE_MSG_NETWORKING_RECONFIGURED SFPTPD_SYNC_MODULE_MSG(11)
+#define SFPTPD_SYNC_MODULE_MSG_LINK_TABLE SFPTPD_SYNC_MODULE_MSG(11)
+struct sfptpd_sync_module_link_table_req {
+	const struct sfptpd_link_table *link_table;
+};
 
 /** Union of all sync module messages
  * @hdr Standard message header
@@ -539,6 +548,7 @@ typedef struct sfptpd_sync_module_msg {
 		struct sfptpd_sync_module_test_mode_req test_mode_req;
 		struct sfptpd_sync_module_update_gm_info_req update_gm_info_req;
 		struct sfptpd_sync_module_update_leap_second_req update_leap_second_req;
+		struct sfptpd_sync_module_link_table_req link_table_req;
 	} u;
 } sfptpd_sync_module_msg_t;
 

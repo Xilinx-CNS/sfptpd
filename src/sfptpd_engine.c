@@ -16,6 +16,7 @@
 #include <math.h>
 #include <sys/time.h>
 #include <sys/stat.h>
+#include <sys/epoll.h>
 #include <pthread.h>
 
 #include "sfptpd_app.h"
@@ -107,18 +108,6 @@ struct engine_configure_test_mode
 	int params[3];
 };
 
-/* Configure a test mode - the exact behaviour varies accoriding to
- * the mode selected. This is an asynchronous message without a reply.
- * @mode Test mode to be configured
- * @params Test mode specific parameters
- */
-#define ENGINE_MSG_INTERFACE_EVENTS   ENGINE_MSG(7)
-struct engine_interface_events
-{
-	struct sfptpd_netlink_event events[SFPTPD_EVENT_BUFFER_SIZE];
-	int8_t num_events;
-};
-
 /* Request a realtime stats entry to be sent */
 #define ENGINE_MSG_RT_STATS_ENTRY ENGINE_MSG(8)
 
@@ -132,6 +121,14 @@ struct engine_interface_events
  */
 #define ENGINE_MSG_CLUSTERING_INPUT   ENGINE_MSG(10)
 
+/** Message to notify the release of a link table.
+ */
+#define ENGINE_MSG_LINK_TABLE_RELEASE ENGINE_MSG(11)
+struct engine_link_table_release {
+	const struct sfptpd_link_table *link_table;
+};
+
+
 /* Union of all engine messages
  * @hdr Standard message header
  * @u Union of message payloads
@@ -143,8 +140,8 @@ typedef struct engine_msg {
 		struct engine_schedule_leap_second schedule_leap_second;
 		struct engine_configure_test_mode configure_test_mode;
 		struct engine_select_instance select_instance;
-		struct engine_interface_events interface_events;
 		struct sfptpd_clustering_input clustering_input;
+		struct engine_link_table_release link_table_release;
 	} u;
 } engine_msg_t;
 
@@ -214,6 +211,7 @@ struct sfptpd_engine {
 
 	/* Sync modules (fixed-size array) */
 	struct sfptpd_thread *sync_modules[SFPTPD_CONFIG_CATEGORY_MAX];
+	struct sfptpd_thread *link_subscriber[SFPTPD_CONFIG_CATEGORY_MAX];
 
 	/* Sync instances (array dimensioned at startup) */
 	struct sync_instance_record *sync_instances;
@@ -241,6 +239,13 @@ struct sfptpd_engine {
 	/* Set of local clock servos used to slave clocks to the LRC */
 	struct sfptpd_servo **servos;
 	sfptpd_sync_module_alarms_t *servo_prev_alarms;
+
+	/* Netlink state */
+	struct sfptpd_nl_state *netlink_state;
+	const struct sfptpd_link_table *link_table_prev;
+	const struct sfptpd_link_table *link_table;
+	int link_subscribers;
+	bool netlink_xoff;
 };
 
 
@@ -1331,10 +1336,7 @@ static void on_leap_second_timer(void *user_context, unsigned int timer_id)
 
 static void on_interface_event_timer(void *user_context, unsigned int timer_id)
 {
-	struct sfptpd_engine *engine = (struct sfptpd_engine *)user_context;
-
 	TRACE_L3("netlink: processing coalesced interface change events on timer expiry\n");
-	netlink_flush_buffer(engine);
 }
 
 
@@ -1776,47 +1778,6 @@ static void on_configure_test_mode(struct sfptpd_engine *engine,
 }
 
 
-static void on_interface_events(struct sfptpd_engine *engine,
-				engine_msg_t *msg)
-{
-	struct sfptpd_netlink_event *events;
-	int num_events;
-	int i, rc;
-	bool reconfigure = false;
-
-	assert(engine != NULL);
-	assert(msg != NULL);
-
-	events = msg->u.interface_events.events;
-	num_events = msg->u.interface_events.num_events;
-
-	for (i = 0; i < num_events; i++) {
-		if (events[i].insert) {
-			rc = sfptpd_interface_hotplug_insert(events[i].if_index,
-							     events[i].if_name);
-		} else {
-			rc = sfptpd_interface_hotplug_remove(events[i].if_index,
-							     events[i].if_name);
-		}
-
-		if (rc == 0)
-			reconfigure = true;
-	}
-
-	if (reconfigure) {
-		TRACE_L3("engine: reconfiguring slave servos after interface hotplugging\n");
-		reconfigure_servos(engine, &(engine->selected->status));
-
-		/* Signal networking reconfiguration to sync modules */
-		for (i = 0; i < SFPTPD_CONFIG_CATEGORY_MAX; i++) {
-			if (engine->sync_modules[i] != NULL) {
-				sfptpd_sync_module_networking_reconfigured(engine->sync_modules[i]);
-			}
-		}
-	}
-}
-
-
 static void on_rt_stats_entry(struct sfptpd_engine *engine,
 			      struct rt_stats_msg *msg)
 {
@@ -1862,6 +1823,142 @@ static void on_clustering_input(struct sfptpd_engine *engine,
 }
 
 
+static int engine_set_netlink_polling(struct sfptpd_engine *engine, bool poll)
+{
+	int rc;
+	int fd;
+	int get_fd_state;
+
+	get_fd_state = 0;
+	do {
+		fd = sfptpd_netlink_get_fd(engine->netlink_state, &get_fd_state);
+		if (fd != -1) {
+			if (poll) {
+				if ((rc = sfptpd_thread_user_fd_add(fd, true, false)))
+					CRITICAL("engine: failed to add netlink socket to thread epoll set, %s\n",
+						 strerror(rc));
+			} else {
+				if ((rc = sfptpd_thread_user_fd_remove(fd)))
+					CRITICAL("engine: failed to remove netlink socket from thread epoll set, %s\n",
+						 strerror(rc));
+			}
+		}
+	} while (fd != -1 && (rc == 0 || !poll));
+
+	return rc;
+}
+
+
+static void engine_handle_new_link_table(struct sfptpd_engine *engine, int version)
+{
+	int rc, rows, i, j;
+	bool new_link_table = false;
+	bool reconfigure = false;
+
+	assert(engine != NULL);
+
+	while (version > 0) {
+		TRACE_L3("engine: link changes - new table version %d\n", version);
+
+		new_link_table = true;
+		engine->link_table_prev = engine->link_table;
+		rows = sfptpd_netlink_get_table(engine->netlink_state, version, &engine->link_table);
+		assert(rows == engine->link_table->count);
+
+		if (engine->link_table_prev == NULL)
+			return;
+
+		for (i = 0; i < engine->link_table->count; i++) {
+			const struct sfptpd_link *link = engine->link_table->rows + i;
+
+			assert(link->event != SFPTPD_LINK_DOWN);
+
+			if (link->event == SFPTPD_LINK_UP ||
+			    link->event == SFPTPD_LINK_CHANGE) {
+				rc = sfptpd_interface_hotplug_insert(link->if_index,
+								     link->if_name);
+
+				if (rc == 0) {
+					reconfigure = true;
+				}
+			}
+		}
+
+		for (i = 0; engine->link_table_prev &&
+		            i < engine->link_table_prev->count; i++) {
+			const struct sfptpd_link *link = engine->link_table_prev->rows + i;
+			int intf_i = link->if_index;
+			for (j = 0; j < engine->link_table->count; j++) {
+				int intf_j = engine->link_table->rows[j].if_index;
+				if (intf_i == intf_j)
+					break;
+			}
+			if (j == engine->link_table->count) {
+				rc = sfptpd_interface_hotplug_remove(link->if_index,
+								     link->if_name);
+
+				if (rc == 0) {
+					reconfigure = true;
+				}
+			}
+		}
+
+		version = sfptpd_netlink_release_table(engine->netlink_state,
+						       engine->link_table_prev->version,
+						       engine->link_subscribers + 1);
+		if (engine->netlink_xoff) {
+			NOTICE("engine: resuming netlink polling\n");
+			engine->netlink_xoff = false;
+			rc = engine_set_netlink_polling(engine, true);
+		}
+	}
+
+	if (version < 0)
+		ERROR("engine: servicing netlink responses, %s\n", strerror(rc));
+
+	if (reconfigure) {
+		TRACE_L3("engine: reconfiguring slave servos after interface hotplugging\n");
+		reconfigure_servos(engine, &(engine->selected->status));
+	}
+
+	if (new_link_table) {
+		/* Send new link table to subscribing sync modules */
+		for (i = 0; i < engine->link_subscribers; i++) {
+			assert(i < SFPTPD_CONFIG_CATEGORY_MAX);
+			assert(engine->link_subscriber[i] != NULL);
+
+			sfptpd_sync_module_link_table(engine->link_subscriber[i], engine->link_table);
+		}
+	}
+}
+
+
+static void on_link_table_release(struct sfptpd_engine *engine,
+				  engine_msg_t *msg)
+{
+	int rc;
+
+	assert(engine != NULL);
+	assert(engine->general_config != NULL);
+	assert(msg != NULL);
+
+	rc = sfptpd_netlink_release_table(engine->netlink_state,
+					  msg->u.link_table_release.link_table->version,
+					  engine->link_subscribers + 1);
+
+	if (rc > 0)
+		engine_handle_new_link_table(engine, rc);
+	else if (rc < 0)
+		ERROR("engine: releasing link table, %s\n", strerror(-rc));
+
+	if (engine->netlink_xoff) {
+		NOTICE("engine: resuming netlink polling\n");
+		engine->netlink_xoff = false;
+		rc = engine_set_netlink_polling(engine, true);
+	}
+}
+
+
 static void engine_on_shutdown(void *context)
 {
 	struct sfptpd_engine *engine = (struct sfptpd_engine *)context;
@@ -1882,6 +1979,10 @@ static void engine_on_shutdown(void *context)
 		engine->num_sync_instances = 0;
 	}
 	destroy_servos(engine);
+	if (engine->netlink_state) {
+		sfptpd_netlink_finish(engine->netlink_state);
+		engine->netlink_state = NULL;
+	}
 }
 
 /* Create a sync module. This is a helper function for engine_on_startup(),
@@ -1901,6 +2002,7 @@ static int create_sync_module(struct sfptpd_engine *engine,
 	int instances = sfptpd_config_category_count_instances(config, type);
 	int i;
 	int rc;
+	bool link_subscriber = false;
 
 	infos = NULL;
 	if (instances > 0) {
@@ -1910,7 +2012,9 @@ static int create_sync_module(struct sfptpd_engine *engine,
 	TRACE_L3("sync module %d, instances %d\n", type, instances);
 	rc = sfptpd_sync_module_create(type, config, engine,
 				       engine->sync_modules + type,
-				       infos, instances);
+				       infos, instances,
+				       engine->link_table,
+				       &link_subscriber);
 	if (rc == ENOENT) {
 		/* Not a sync module; nothing to do. */
 		rc = 0;
@@ -1924,6 +2028,12 @@ static int create_sync_module(struct sfptpd_engine *engine,
 	}
 
 	TRACE_L3("created sync module %s\n", sfptpd_sync_module_name(type));
+
+	if (link_subscriber) {
+		engine->link_subscriber[engine->link_subscribers++] = engine->sync_modules[type];
+		TRACE_L3("subscribed sync module %s to link table updates\n",
+			 sfptpd_sync_module_name(type));
+	}
 
 	/* Iterate through instances */
 	for (i = 0; i < instances; i++) {
@@ -1946,24 +2056,95 @@ fail:
 }
 
 
-static int engine_start_netlink(struct sfptpd_engine *engine) {
+static int engine_wait_for_first_link_table(struct sfptpd_engine *engine)
+{
 	int rc;
-	int nl_fd = -1;
+	int fd;
+	int get_fd_state;
+	#define max_events 5
+	struct epoll_event ev;
+	struct epoll_event events[max_events];
+	int nfds = 0;
+	int epollfd;
+	int ret = 0;
+
+	epollfd = epoll_create(max_events);
+	if (epollfd == -1) {
+		CRITICAL("creating epoll set for first link table\n", strerror(errno));
+		return errno;
+	}
+
+	get_fd_state = 0;
+	do {
+		fd = sfptpd_netlink_get_fd(engine->netlink_state, &get_fd_state);
+		if (fd != -1) {
+			ev.events = EPOLLIN;
+			ev.data.fd = fd;
+			if (epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev) == -1) {
+				CRITICAL("engine: initial link table: failed to set up epoll set, %s\n",
+					 strerror(errno));
+				return errno;
+			}
+		}
+	} while (fd != -1);
+
+	TRACE_L3("engine: waiting for first link table from netlink\n");
+	while (nfds <= 0) {
+		nfds = epoll_wait(epollfd, events, max_events, -1);
+		if (nfds == -1) {
+			if (errno == EINTR)
+				continue;
+			CRITICAL("engine: initial link table: failed in epoll_wait, %s\n",
+				 strerror(errno));
+			ret = errno;
+			goto finish;
+		} else if (nfds == 0) {
+			continue;
+		}
+		rc = sfptpd_netlink_service_fds(engine->netlink_state, NULL, 0, engine->link_subscribers + 1);
+		while (rc > 0) {
+			int rows;
+
+			TRACE_L3("engine: initial link table: new version %d\n", rc);
+
+			engine->link_table_prev = engine->link_table;
+			rows = sfptpd_netlink_get_table(engine->netlink_state, rc, &engine->link_table);
+			assert(rows == engine->link_table->count);
+
+			if (engine->link_table_prev == NULL)
+				rc = 0;
+			else
+				rc = sfptpd_netlink_release_table(engine->netlink_state,
+								  engine->link_table_prev->version,
+								  engine->link_subscribers + 1);
+		}
+	}
+
+	TRACE_L3("engine: initial link table: accepted version %d\n", engine->link_table->version);
+
+finish:
+	close(epollfd);
+	return ret;
+}
+
+
+static int engine_start_netlink(struct sfptpd_engine *engine)
+{
+	int rc;
 
 	/* Configure control socket handling */
-	rc = sfptpd_netlink_init(&nl_fd, ENGINE_TIMER_NETLINK_COALESCE);
-	if (rc != 0) {
+	engine->netlink_state = sfptpd_netlink_init();
+	if (!engine->netlink_state) {
 		CRITICAL("engine: could not start netlink\n");
-		return rc;
+		return 1;
 	}
-	assert(nl_fd != -1);
 
-	rc = sfptpd_thread_user_fd_add(nl_fd, true, false);
-	if (rc != 0) {
-		CRITICAL("control: failed to add netlink socket to thread epoll set, %s\n",
-			 strerror(rc));
-		return rc;
-	}
+	rc = sfptpd_netlink_scan(engine->netlink_state);
+
+	if (rc == 0)
+		rc = engine_wait_for_first_link_table(engine);
+
+	rc = engine_set_netlink_polling(engine, true);
 
 	return rc;
 }
@@ -2229,11 +2410,6 @@ static void engine_on_message(void *context, struct sfptpd_msg_hdr *hdr)
 		SFPTPD_MSG_FREE(msg);
 		break;
 
-	case ENGINE_MSG_INTERFACE_EVENTS:
-		on_interface_events(engine, msg);
-		SFPTPD_MSG_FREE(msg);
-		break;
-
 	case ENGINE_MSG_RT_STATS_ENTRY:
 		on_rt_stats_entry(engine, (struct rt_stats_msg*)hdr);
 		SFPTPD_MSG_FREE(msg);
@@ -2249,6 +2425,11 @@ static void engine_on_message(void *context, struct sfptpd_msg_hdr *hdr)
 		SFPTPD_MSG_FREE(msg);
 		break;
 
+	case ENGINE_MSG_LINK_TABLE_RELEASE:
+		on_link_table_release(engine, msg);
+		SFPTPD_MSG_FREE(msg);
+		break;
+
 	default:
 		WARNING("engine: received unexpected message, id %d\n",
 			sfptpd_msg_get_id(hdr));
@@ -2259,9 +2440,20 @@ static void engine_on_message(void *context, struct sfptpd_msg_hdr *hdr)
 static void engine_on_user_fds(void *context, unsigned int num_fds, int fd[])
 {
 	struct sfptpd_engine *engine = (struct sfptpd_engine *)context;
+	int rc;
 
-	while (num_fds-- != 0) {
-		sfptpd_netlink_service_fd(engine, fd[num_fds]);
+	assert(engine != NULL);
+
+	rc = sfptpd_netlink_service_fds(engine->netlink_state, fd, num_fds,
+				        engine->link_subscribers + 1);
+	if (rc > 0) {
+		engine_handle_new_link_table(engine, rc);
+	} else if (rc == -EAGAIN) {
+		NOTICE("engine: suspending netlink polling until table freed\n");
+		engine->netlink_xoff = true;
+		rc = engine_set_netlink_polling(engine, false);
+	} else if (rc < 0) {
+		ERROR("engine: servicing netlink fds, %s\n", strerror(rc));
 	}
 }
 
@@ -2273,7 +2465,6 @@ static const struct sfptpd_thread_ops engine_thread_ops =
 	engine_on_message,
 	engine_on_user_fds
 };
-
 
 
 /****************************************************************************
@@ -2408,6 +2599,23 @@ void sfptpd_engine_sync_instance_state_changed(struct sfptpd_engine *engine,
 			      ENGINE_MSG_SYNC_INSTANCE_STATE_CHANGED, false);
 }
 
+void sfptpd_engine_link_table_release(struct sfptpd_engine *engine, const struct sfptpd_link_table *link_table)
+{
+	engine_msg_t *msg;
+
+	assert(engine != NULL);
+
+	msg = (engine_msg_t *)sfptpd_msg_alloc(SFPTPD_MSG_POOL_GLOBAL, false);
+	if (msg == NULL) {
+		SFPTPD_MSG_LOG_ALLOC_FAILED("global");
+		return;
+	}
+
+	msg->u.link_table_release.link_table = link_table;
+
+	(void)SFPTPD_MSG_SEND(msg, engine->thread,
+			      ENGINE_MSG_LINK_TABLE_RELEASE, false);
+}
 
 static bool offset_valid(const struct timespec *offset_from_master)
 {
@@ -2571,28 +2779,6 @@ void sfptpd_engine_test_mode(struct sfptpd_engine *engine,
 	msg->u.configure_test_mode.params[2] = param2;
 	(void)SFPTPD_MSG_SEND(msg, engine->thread,
 			      ENGINE_MSG_CONFIGURE_TEST_MODE, false);
-}
-
-
-void sfptpd_engine_interface_events(struct sfptpd_engine *engine,
-				    struct sfptpd_netlink_event *events,
-				    int num_events)
-{
-	engine_msg_t *msg;
-
-	msg = (engine_msg_t *)sfptpd_msg_alloc(SFPTPD_MSG_POOL_GLOBAL, false);
-	if (msg == NULL) {
-		SFPTPD_MSG_LOG_ALLOC_FAILED("global");
-		return;
-	}
-
-	memcpy(msg->u.interface_events.events,
-	       events,
-	       sizeof msg->u.interface_events.events);
-
-	msg->u.interface_events.num_events = num_events;
-	(void)SFPTPD_MSG_SEND(msg, engine->thread,
-			      ENGINE_MSG_INTERFACE_EVENTS, false);
 }
 
 

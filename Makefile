@@ -33,7 +33,7 @@ CFLAGS += -MMD -MP -Wall -Werror -Wundef -Wstrict-prototypes \
 
 ARFLAGS = rcs
 LDFLAGS +=
-LDLIBS = -lm -lrt -lpthread $(CONDITIONAL_LIBS)
+LDLIBS = -lm -lrt -lpthread -lmnl $(CONDITIONAL_LIBS)
 INCDIRS :=
 STATIC_LIBRARIES :=
 TARGETS :=

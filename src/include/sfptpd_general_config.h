@@ -184,6 +184,7 @@ typedef struct sfptpd_config_general {
 	unsigned int trace_level;
 	unsigned int threading_trace_level;
 	unsigned int bic_trace_level;
+	unsigned int netlink_trace_level;
 	sfptpd_config_clocks_t clocks;
 	bool non_sfc_nics;
 	bool assume_one_phc_per_nic;

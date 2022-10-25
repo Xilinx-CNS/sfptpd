@@ -501,7 +501,6 @@ static void main_on_user_fds(void *not_used, unsigned int num_fds, int fds[])
 {
 	enum sfptpd_control_action action;
 	union sfptpd_control_action_parameters param;
-	struct sfptpd_netlink_event intf_event;
 
 	/* We only register a single user file descriptor in this thread. */
 	assert(num_fds == 1);
@@ -541,11 +540,7 @@ static void main_on_user_fds(void *not_used, unsigned int num_fds, int fds[])
 
 		if (sfptpd_general_config_get(config)->hotplug_detection &
 		    SFPTPD_HOTPLUG_DETECTION_MANUAL) {
-			intf_event.if_index = -1;
-			sfptpd_strncpy(intf_event.if_name, param.interface_event.if_name,
-					       sizeof(intf_event.if_name));
-			intf_event.insert = param.interface_event.insert;
-			sfptpd_engine_interface_events(engine, &intf_event, 1);
+			ERROR("manual interface insertion no longer available.\n");
 		} else {
 			ERROR("ignoring interface control command received when not "
 			      "in manual hotplug detection mode\n");

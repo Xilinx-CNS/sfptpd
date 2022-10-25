@@ -115,6 +115,7 @@ int sfptpd_test_filters(void);
 int sfptpd_test_threading(void);
 int sfptpd_test_bic(void);
 int sfptpd_test_fmds(void);
+int sfptpd_test_link(void);
 
 
 #endif /* _SFPTPD_TEST_H */

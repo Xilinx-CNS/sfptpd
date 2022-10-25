@@ -87,6 +87,7 @@ int main(int argc, char **argv)
 	register_unit_test("threading", sfptpd_test_threading);
 	register_unit_test("bic", sfptpd_test_bic);
 	register_unit_test("fmds", sfptpd_test_fmds);
+	register_unit_test("link", sfptpd_test_link);
 
 	/* If no arguments are specified, run all tests */
 	for (i = 0; i < num_unit_tests; i++) {

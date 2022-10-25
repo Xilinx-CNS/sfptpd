@@ -31,7 +31,9 @@
 typedef int (*sync_module_create_fn)(struct sfptpd_config *,
 				     struct sfptpd_engine *,
 				     struct sfptpd_thread **,
-				     struct sfptpd_sync_instance_info *, int);
+				     struct sfptpd_sync_instance_info *, int,
+				     const struct sfptpd_link_table *, bool *
+);
 
 struct sync_module_defn {
 	const char *name;
@@ -261,7 +263,9 @@ int sfptpd_sync_module_create(enum sfptpd_config_category type,
 			      struct sfptpd_engine *engine,
 			      struct sfptpd_thread **sync_module,
 			      struct sfptpd_sync_instance_info *instance_info_buffer,
-			      int instance_info_entries)
+			      int instance_info_entries,
+			      const struct sfptpd_link_table *link_table,
+			      bool *link_table_subscriber)
 {
 	int rc;
 
@@ -283,7 +287,9 @@ int sfptpd_sync_module_create(enum sfptpd_config_category type,
 							    engine,
 							    sync_module,
 							    instance_info_buffer,
-							    instance_info_entries);
+							    instance_info_entries,
+							    link_table,
+							    link_table_subscriber);
 		}
 	}
 
@@ -500,7 +506,8 @@ void sfptpd_sync_module_test_mode(struct sfptpd_thread *sync_module,
 }
 
 
-void sfptpd_sync_module_networking_reconfigured(struct sfptpd_thread *sync_module)
+void sfptpd_sync_module_link_table(struct sfptpd_thread *sync_module,
+				   const struct sfptpd_link_table *link_table)
 {
 	sfptpd_sync_module_msg_t *msg;
 
@@ -511,8 +518,10 @@ void sfptpd_sync_module_networking_reconfigured(struct sfptpd_thread *sync_modul
 		return;
 	}
 
+	msg->u.link_table_req.link_table = link_table;
+
 	(void)SFPTPD_MSG_SEND(msg, sync_module,
-			      SFPTPD_SYNC_MODULE_MSG_NETWORKING_RECONFIGURED, false);
+			      SFPTPD_SYNC_MODULE_MSG_LINK_TABLE, false);
 }
 
 

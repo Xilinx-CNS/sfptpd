@@ -35,6 +35,7 @@
 #include "sfptpd_misc.h"
 #include "sfptpd_thread.h"
 #include "sfptpd_pps_module.h"
+#include "sfptpd_link.h"
 
 #include "ptpd_lib.h"
 
@@ -81,13 +82,6 @@ enum ptp_stats_ids {
 	PTP_STATS_ID_PPS_OFFSET,
 	PTP_STATS_ID_PPS_PERIOD,
 	PTP_STATS_ID_NUM_PTP_NODES
-};
-
-enum ptp_bond_mode {
-	PTP_BOND_MODE_NONE,
-	PTP_BOND_MODE_ACTIVE_BACKUP,
-	PTP_BOND_MODE_LACP,
-	PTP_NUM_BOND_TYPES
 };
 
 typedef struct sfptpd_ptp_module sfptpd_ptp_module_t;
@@ -199,7 +193,7 @@ struct sfptpd_ptp_bond_info {
 	char bond_if[IF_NAMESIZE];
 
 	/* Type of bond detected including none for no bond */
-	enum ptp_bond_mode bond_mode;
+	enum sfptpd_bond_mode bond_mode;
 
 	/* Set of physical interfaces associated with the logical interface.
 	 * If no bond is involved this will be a set of 1. */
@@ -276,6 +270,9 @@ struct sfptpd_ptp_module {
 
 	/* Whether the timers have been started */
 	bool timers_started;
+
+	/* Copy of current link table */
+	struct sfptpd_link_table link_table;
 };
 
 struct sfptpd_ptp_accuracy_map {
@@ -1309,12 +1306,12 @@ static int parse_team(struct sfptpd_ptp_bond_info *bond_info, bool verbose)
 	}
 
 	if (strcmp(mode, "lacp") == 0) {
-		bond_info->bond_mode = PTP_BOND_MODE_LACP;
+		bond_info->bond_mode = SFPTPD_BOND_MODE_LACP;
 		if (verbose)
 			TRACE_L3("ptp %s: mode is 802.3ad (LACP)\n",
 				 bond_info->bond_if);
 	} else if (strcmp(mode, "activebackup") == 0) {
-		bond_info->bond_mode = PTP_BOND_MODE_ACTIVE_BACKUP;
+		bond_info->bond_mode = SFPTPD_BOND_MODE_ACTIVE_BACKUP;
 		if (verbose)
 			TRACE_L3("ptp %s: mode is active-backup\n",
 				 bond_info->bond_if);
@@ -1407,7 +1404,7 @@ static int parse_bond(struct sfptpd_ptp_bond_info *bond_info, bool verbose)
 		/*
 		 * Active-Backup Bond
 		 */
-		bond_info->bond_mode = PTP_BOND_MODE_ACTIVE_BACKUP;
+		bond_info->bond_mode = SFPTPD_BOND_MODE_ACTIVE_BACKUP;
 		if (verbose)
 			TRACE_L3("ptp %s: mode is active-backup\n",
 				 bond_info->bond_if);
@@ -1415,7 +1412,7 @@ static int parse_bond(struct sfptpd_ptp_bond_info *bond_info, bool verbose)
 		/*
 		 * 802.3ad LACP Bond
 		 */
-		bond_info->bond_mode = PTP_BOND_MODE_LACP;
+		bond_info->bond_mode = SFPTPD_BOND_MODE_LACP;
 		if (verbose)
 			TRACE_L3("ptp %s: mode is 802.3ad (LACP)\n",
 				 bond_info->bond_if);
@@ -1453,7 +1450,7 @@ static int ptp_probe_bonding(char *logical_if, struct sfptpd_ptp_bond_info *bond
 		sfptpd_strncpy(bond_info->bond_if, logical_if, sizeof(bond_info->bond_if));
 	bond_info->num_physical_ifs = 0;
 	bond_info->active_if = NULL;
-	bond_info->bond_mode = PTP_BOND_MODE_NONE;
+	bond_info->bond_mode = SFPTPD_BOND_MODE_NONE;
 
 	found_bond = true;
 	rc = 0;
@@ -1498,7 +1495,7 @@ static int ptp_probe_bonding(char *logical_if, struct sfptpd_ptp_bond_info *bond
 	}
 
 	/* Select active interface depending on bond type */
-	if (bond_info->bond_mode == PTP_BOND_MODE_ACTIVE_BACKUP) {
+	if (bond_info->bond_mode == SFPTPD_BOND_MODE_ACTIVE_BACKUP) {
 		/* For active-backup bonds we require an active interface and
 		 * expect to find it in the list of slave interfaces. */
 		if (bond_info->active_if == NULL) {
@@ -1521,7 +1518,7 @@ static int ptp_probe_bonding(char *logical_if, struct sfptpd_ptp_bond_info *bond
 				rc = ENOENT;
 			}
 		}
-	} else if (bond_info->bond_mode == PTP_BOND_MODE_LACP) {
+	} else if (bond_info->bond_mode == SFPTPD_BOND_MODE_LACP) {
 		/* For LACP all slave interfaces are active. We have to pick
 		 * one, so pick the first with link up. */
 		for (i = 0; i < bond_info->num_physical_ifs; i++) {
@@ -1550,7 +1547,7 @@ static int ptp_probe_bonding(char *logical_if, struct sfptpd_ptp_bond_info *bond
 			}
 		}
 	} else {
-		assert(bond_info->bond_mode == PTP_BOND_MODE_NONE);
+		assert(bond_info->bond_mode == SFPTPD_BOND_MODE_NONE);
 		TRACE_L1("ptp: interface %s is not a bond\n", logical_if);
 
 		interface = sfptpd_interface_find_by_name(logical_if);
@@ -2166,7 +2163,7 @@ static void ptp_update_interface_state(struct sfptpd_ptp_intf *interface)
 	state_changed = false;
 	/* If this is a bond, check for an interface change. If this fails it
 	 * is a fatal error and we have to exit. */
-	if (interface->bond_info.bond_mode != PTP_BOND_MODE_NONE) {
+	if (interface->bond_info.bond_mode != SFPTPD_BOND_MODE_NONE) {
 		general_cfg = sfptpd_general_config_get(SFPTPD_CONFIG_TOP_LEVEL(interface->representative_config));
 		assert(general_cfg != NULL);
 
@@ -2300,7 +2297,7 @@ static void ptp_send_instance_rt_stats_update(struct sfptpd_engine *engine,
 				STATS_KEY_PARENT_ID, parent_id,
 				STATS_KEY_GM_ID, gm_id,
 				STATS_KEY_ACTIVE_INTF, bond_info->active_if,
-				STATS_KEY_BOND_NAME, bond_info->bond_mode == PTP_BOND_MODE_NONE ? NULL : bond_info->bond_if,
+				STATS_KEY_BOND_NAME, bond_info->bond_mode == SFPTPD_BOND_MODE_NONE ? NULL : bond_info->bond_if,
 				STATS_KEY_PPS_OFFSET, (sfptpd_time_t)pps_stats.offset.last,
 				STATS_KEY_BAD_PERIOD, pps_stats.bad_period_count,
 				STATS_KEY_OVERFLOWS, pps_stats.overflow_count,
@@ -2321,7 +2318,7 @@ static void ptp_send_instance_rt_stats_update(struct sfptpd_engine *engine,
 				STATS_KEY_PARENT_ID, parent_id,
 				STATS_KEY_GM_ID, gm_id,
 				STATS_KEY_ACTIVE_INTF, bond_info->active_if,
-				STATS_KEY_BOND_NAME, bond_info->bond_mode == PTP_BOND_MODE_NONE ? NULL : bond_info->bond_if,
+				STATS_KEY_BOND_NAME, bond_info->bond_mode == SFPTPD_BOND_MODE_NONE ? NULL : bond_info->bond_if,
 				STATS_KEY_P_TERM, instance->ptpd_port_snapshot.current.servo_p_term,
 				STATS_KEY_I_TERM, instance->ptpd_port_snapshot.current.servo_i_term,
 				STATS_KEY_END);
@@ -3206,14 +3203,20 @@ fail:
 }
 
 
-static void ptp_on_networking_reconfigured(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t *msg)
+static void ptp_on_link_table(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t *msg)
 {
 	struct sfptpd_ptp_intf *interface;
+	const struct sfptpd_link_table *link_table;
 	bool bond_changed;
 	int rc;
 
 	assert(ptp != NULL);
 	assert(msg != NULL);
+
+	link_table = msg->u.link_table_req.link_table;
+	SFPTPD_MSG_FREE(msg);
+
+	ptp->link_table = *link_table;
 
 	for(interface = ptp->intf_list; interface; interface = interface->next) {
 
@@ -3231,7 +3234,7 @@ static void ptp_on_networking_reconfigured(sfptpd_ptp_module_t *ptp, sfptpd_sync
 		}
 	}
 
-	SFPTPD_MSG_FREE(msg);
+	sfptpd_engine_link_table_release(ptp->engine, link_table);
 }
 
 
@@ -4058,8 +4061,8 @@ static void ptp_on_message(void *context, struct sfptpd_msg_hdr *hdr)
 		ptp_on_test_mode(ptp, msg);
 		break;
 
-	case SFPTPD_SYNC_MODULE_MSG_NETWORKING_RECONFIGURED:
-		ptp_on_networking_reconfigured(ptp, msg);
+	case SFPTPD_SYNC_MODULE_MSG_LINK_TABLE:
+		ptp_on_link_table(ptp, msg);
 		break;
 
 	default:
@@ -4119,7 +4122,9 @@ int sfptpd_ptp_module_create(struct sfptpd_config *config,
 			     struct sfptpd_engine *engine,
 			     struct sfptpd_thread **sync_module,
 			     struct sfptpd_sync_instance_info *instances_info_buffer,
-			     int instances_info_entries)
+			     int instances_info_entries,
+			     const struct sfptpd_link_table *link_table,
+			     bool *link_table_subscriber)
 {
 	sfptpd_ptp_module_t *ptp;
 	struct sfptpd_ptp_instance *instance;
@@ -4140,6 +4145,10 @@ int sfptpd_ptp_module_create(struct sfptpd_config *config,
 
 	/* Keep a handle to the sync engine */
 	ptp->engine = engine;
+
+	/* Copy initial link table */
+	ptp->link_table = *link_table;
+	*link_table_subscriber = true;
 
 	/* Create all the sync instances */
 	rc = ptp_create_instances(config, ptp);

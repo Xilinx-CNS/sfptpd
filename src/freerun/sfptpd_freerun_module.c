@@ -601,11 +601,6 @@ static void freerun_on_message(void *context, struct sfptpd_msg_hdr *hdr)
 		SFPTPD_MSG_FREE(msg);
 		break;
 
-	case SFPTPD_SYNC_MODULE_MSG_NETWORKING_RECONFIGURED:
-		/* This module doesn't react to networking reconfiguration */
-		SFPTPD_MSG_FREE(msg);
-		break;
-
 	default:
 		WARNING("freerun: received unexpected message, id %d\n",
 			sfptpd_msg_get_id(hdr));
@@ -723,7 +718,9 @@ int sfptpd_freerun_module_create(struct sfptpd_config *config,
 				 struct sfptpd_engine *engine,
 				 struct sfptpd_thread **sync_module,
 				 struct sfptpd_sync_instance_info *instances_info_buffer,
-				 int instances_info_entries)
+				 int instances_info_entries,
+				 const struct sfptpd_link_table *link_table,
+				 bool *link_subscriber)
 {
 	freerun_module_t *fr;
 	freerun_instance_t *instance;

@@ -8,7 +8,7 @@
 
 #include "sfptpd_clock.h"
 #include "sfptpd_sync_module.h"
-#include "sfptpd_netlink.h"
+#include "sfptpd_link.h"
 #include "sfptpd_servo.h"
 
 
@@ -84,6 +84,12 @@ void sfptpd_engine_sync_instance_state_changed(struct sfptpd_engine *engine,
 					       struct sfptpd_sync_instance *sync_instance,
 					       struct sfptpd_sync_instance_status *status);
 
+/** Signal to the engine that a link table has been released.
+ * @param engine  Pointer to engine instance
+ * @param link_table  Pointer to link table
+ */
+void sfptpd_engine_link_table_release(struct sfptpd_engine *engine, const struct sfptpd_link_table *link_table);
+
 /** Calculates and returns the clustering score for the sync module
  * based on the mechanism specified in the config.
  * @param engine  Pointer to engine instance
@@ -127,20 +133,6 @@ void sfptpd_engine_cancel_leap_second(struct sfptpd_engine *engine);
 void sfptpd_engine_test_mode(struct sfptpd_engine *engine,
 			     enum sfptpd_test_id test_id,
 			     int param0, int param1, int param2);
-
-
-/** Signal to the engine that there is a set of network interface
- * change events to process and pass the events.
- * This will send an asynchronous message to the
- * engine thread so is safe to call from another thread context.
- * @param engine  Pointer to engine instance
- * @param events  Pointer to the events to copy
- * @param num_events  The number of events
- */
-void sfptpd_engine_interface_events(struct sfptpd_engine *engine,
-				    struct sfptpd_netlink_event *events,
-				    int num_events);
-
 
 /** Pack and send a realtime stats message to the engine.
  * This will send an asynchronous message to the

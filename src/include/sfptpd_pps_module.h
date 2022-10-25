@@ -143,13 +143,18 @@ sfptpd_time_t sfptpd_pps_module_config_get_propagation_delay(struct sfptpd_confi
  * @param sync_module Returned pointer to created sync module
  * @param instance_info_buffer To be populated by information on each sync instance
  * @param instance_info_entries Number of entries in instance_info_buffer
+ * @param link_table Pointer to initial link table
+ * @param link_table_subscriber To be set to true if the sync module wishes to
+ * subscribe to link table changes
  * @return 0 on success or an errno otherwise.
  */
 int sfptpd_pps_module_create(struct sfptpd_config *config,
 			     struct sfptpd_engine *engine,
 			     struct sfptpd_thread **sync_module,
 			     struct sfptpd_sync_instance_info *instances_info_buffer,
-			     int instances_info_entries);
+			     int instances_info_entries,
+			     const struct sfptpd_link_table *link_table,
+			     bool *link_table_subscriber);
 
 
 #endif /* _SFPTPD_PPS_MODULE_H */

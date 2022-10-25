@@ -79,15 +79,19 @@ void sfptpd_ntp_module_set_default_interface(struct sfptpd_config *config,
  * @param config  Pointer to configuration
  * @param engine  Pointer to sync engine
  * @param sync_module Returned pointer to created sync module
- * @param instance_info_buffer To be populated by information on each sync instance
- * @param instance_info_entries Number of entries in instance_info_buffer
+ * @param link_table Pointer to initial link table
+ * @param link_subscriber To be set to true if the sync module wishes to
+ * subscribe to link table changes
  * @return 0 on success or an errno otherwise.
  */
+
 int sfptpd_ntp_module_create(struct sfptpd_config *config,
 			     struct sfptpd_engine *engine,
 			     struct sfptpd_thread **sync_module,
 			     struct sfptpd_sync_instance_info *instances_info_buffer,
-			     int instances_info_entries);
+			     int instances_info_entries,
+			     const struct sfptpd_link_table *link_table,
+			     bool *link_subscriber);
 
 
 #endif /* _SFPTPD_NTP_MODULE_H */
