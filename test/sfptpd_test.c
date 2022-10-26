@@ -105,12 +105,14 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (!found)
+	if (!found) {
 		printf("unit test %s not found\n", argv[1]);
-	else if (result != 0)
+		result++;
+	} else if (result != 0) {
 		printf("unit tests failed, %s\n", strerror(result));
-	else
+	} else {
 		printf("unit tests passed\n");
+	}
 
 	return result;
 }
