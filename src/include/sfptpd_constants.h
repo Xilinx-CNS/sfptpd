@@ -33,7 +33,7 @@
 #define SFPTPD_XILINX_PCI_VENDOR_ID (0x10EE)
 
 /** Maximum length for a version string - daemon, driver or firmware */
-#define SFPTPD_VERSION_STRING_MAX (32)
+#define SFPTPD_VERSION_STRING_MAX (48)
 
 /** VPD NIC product name maximum length */
 #define SFPTPD_NIC_PRODUCT_NAME_MAX (128)
@@ -59,30 +59,6 @@
 
 /** Long-term statistics collection */
 #define SFPTPD_STATS_COLLECTION_INTERVAL (60)
-
-/** NIC firmware version number minimum */
-#define SFPTPD_SIENA_FW_VERSION_A (3)
-#define SFPTPD_SIENA_FW_VERSION_B (3)
-#define SFPTPD_SIENA_FW_VERSION_C (0)
-#define SFPTPD_SIENA_FW_VERSION_D (6247)
-
-/** NIC driver version number minimum */
-#define SFPTPD_SIENA_DRIVER_VERSION_A (3)
-#define SFPTPD_SIENA_DRIVER_VERSION_B (3)
-#define SFPTPD_SIENA_DRIVER_VERSION_C (0)
-#define SFPTPD_SIENA_DRIVER_VERSION_D (6246)
-
-/** NIC firmware version number minimum */
-#define SFPTPD_HUNT_FW_VERSION_A (4)
-#define SFPTPD_HUNT_FW_VERSION_B (0)
-#define SFPTPD_HUNT_FW_VERSION_C (6)
-#define SFPTPD_HUNT_FW_VERSION_D (6689)
-
-/** NIC driver version number minimum */
-#define SFPTPD_HUNT_DRIVER_VERSION_A (4)
-#define SFPTPD_HUNT_DRIVER_VERSION_B (0)
-#define SFPTPD_HUNT_DRIVER_VERSION_C (2)
-#define SFPTPD_HUNT_DRIVER_VERSION_D (6628)
 
 /* Siena PCI device ID */
 #define SFPTPD_SIENA_DEVID (0x0803)

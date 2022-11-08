@@ -69,9 +69,6 @@
  * Types, Defines and Structures
  ****************************************************************************/
 
-#define VERSION_DECL(n) { n ## _VERSION_A, n ## _VERSION_B, \
-			  n ## _VERSION_C, n ## _VERSION_D }
-
 #define SFPTPD_INTERFACE_MAGIC (0xFACED0CE)
 
 #define SFPTPD_SYSFS_NET_PATH "/sys/class/net/"
@@ -84,13 +81,6 @@
 #define VPD_LARGE_TAG_MSK (0x80)
 #define VPD_SMALL_TAG_LEN_MSK (0x07)
 #define VPD_MAX_SIZE (PCI_VPD_ADDR_MASK + 1)
-
-struct sfptpd_version_number {
-	uint32_t major;
-	uint32_t minor;
-	uint32_t revision;
-	uint32_t build;
-};
 
 
 struct nic_model_caps {
@@ -231,16 +221,6 @@ static const uint32_t so_timestamping_raw = SOF_TIMESTAMPING_TX_HARDWARE
 static const uint32_t so_timestamping_sw = SOF_TIMESTAMPING_TX_SOFTWARE
 					 | SOF_TIMESTAMPING_RX_SOFTWARE
 					 | SOF_TIMESTAMPING_SOFTWARE;
-
-static const struct sfptpd_version_number hunt_driver_version_min =
-	VERSION_DECL(SFPTPD_HUNT_DRIVER);
-static const struct sfptpd_version_number hunt_fw_version_min =
-	VERSION_DECL(SFPTPD_HUNT_FW);
-
-static const struct sfptpd_version_number siena_driver_version_min =
-	VERSION_DECL(SFPTPD_SIENA_DRIVER);
-static const struct sfptpd_version_number siena_fw_version_min =
-	VERSION_DECL(SFPTPD_SIENA_FW);
 
 static const uint16_t xilinx_ptp_nics[] = {
 	0x5084, /*!< X3522 */
@@ -650,56 +630,6 @@ static bool interface_is_ptp_capable(const char *name,
 	}
 
 	return true;
-}
-
-
-static void interface_check_versions(struct sfptpd_interface *interface)
-{
-	int tokens;
-	struct sfptpd_version_number have;
-	const struct sfptpd_version_number *want_driver, *want_fw;
-
-	assert(interface != NULL);
-
-	/* Check the minimum fw version according to whether this is a
-	 * Siena or Huntington/Medford based adapter. */
-	if (sfptpd_interface_is_siena(interface)) {
-		want_driver = &siena_driver_version_min;
-		want_fw = &siena_fw_version_min;
-	} else {
-		want_driver = &hunt_driver_version_min;
-		want_fw = &hunt_fw_version_min;
-	}
-
-	tokens = sscanf(interface->driver_version, "%u.%u.%u.%u", &have.major,
-			&have.minor, &have.revision, &have.build);
-	if (tokens != 4) {
-		ERROR("interface %s: unexpected driver version string, %s\n",
-		      interface->name, interface->driver_version);
-	} else {
-		if (memcmp(&have, want_driver, sizeof(have)) < 0) {
-			CRITICAL("### interface %s NIC driver is too old ###\n",
-				 interface->name);
-			INFO("require driver version %d.%d.%d.%d or later\n",
-			     want_driver->major, want_driver->minor,
-			     want_driver->revision, want_driver->build);
-		}
-	}
-
-	tokens = sscanf(interface->fw_version, "%u.%u.%u.%u", &have.major,
-			&have.minor, &have.revision, &have.build);
-	if (tokens != 4) {
-		ERROR("interface %s: unexpected firmware version string, %s\n",
-		      interface->name, interface->fw_version);
-	} else {
-		if (memcmp(&have, want_fw, sizeof(have)) < 0) {
-			CRITICAL("### interface %s NIC firmware is too old ###\n",
-				 interface->name);
-			INFO("require firmware version %d.%d.%d.%d or later\n",
-			     want_fw->major, want_fw->minor,
-			     want_fw->revision, want_fw->build);
-		}
-	}
 }
 
 
@@ -1293,15 +1223,6 @@ int sfptpd_interface_initialise(struct sfptpd_config *config, pthread_mutex_t *h
 			}
 		}
 
-		/* If this is one of our adapters then check the firmware
-		 * version and driver version and warn the user if too old.
-		 * Note that we do this whether or not the NIC appears to be
-		 * PTP-capable because the early versions of the driver do not
-		 * include the PTP capability indicator in sysfs (see bug
-		 * 34445) */
-		if (class == SFPTPD_INTERFACE_SFC)
-			(void)interface_check_versions(new);
-
 		if (!interface_is_ptp_capable(new->name, &new->ts_info))
 			TRACE_L3("interface %s: not PTP capable\n",
 				 new->name);
@@ -1503,9 +1424,6 @@ int sfptpd_interface_hotplug_insert(int if_index, const char *if_name) {
 		      if_name, strerror(rc));
 		goto finish;
 	}
-
-	if (class == SFPTPD_INTERFACE_SFC)
-		(void)interface_check_versions(interface);
 
 	if (!interface_is_ptp_capable(interface->name, &interface->ts_info))
 		TRACE_L3("interface %s: not PTP capable\n",
