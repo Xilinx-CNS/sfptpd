@@ -15,7 +15,9 @@
 # processname: sfptpd
 
 prog=sfptpd
-config=/etc/$prog.conf
+
+# Source command line options
+. /etc/sysconfig/$prog
 
 checkpid() {
 	local i
@@ -29,11 +31,10 @@ start() {
 	# Only allow root to start sfptpd
 	[ "$EUID" != "0" ] && exit 4
 	[ -x /usr/sbin/$prog ] || exit 5
-	[ -f $config ] || exit 6
 
 	# Start daemon.
 	echo -n $"Starting $prog: "
-	sfptpd -f $config
+	sfptpd $OPTIONS
 	retval=$?
 	if [ $retval -eq 0 ]; then
 		echo "OK"

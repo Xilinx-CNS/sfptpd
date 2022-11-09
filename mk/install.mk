@@ -8,14 +8,24 @@
 #   PACKAGE_VERSION
 # These are overriden by anything supplied by the packaging system
 
-# Default to /usr/local if not driven by a packaging tool
+ifdef PREFIX
+ifndef INST_PREFIX
+INST_PREFIX = $(PREFIX)
+endif
+endif
 
+# Default to /usr/local if not driven by a packaging tool
 ifndef DESTDIR
 ifndef INST_PREFIX
 INST_PREFIX = /usr/local
 INST_CONFDIR = $(INST_PREFIX)/etc
 endif
 endif
+
+# Defaults from OS detection
+
+#DEFAULT_DEFAULTSDIR := $(shell grep -q '^\s*ID_LIKE\s*=.*debian' /etc/os-release 2>/dev/null && echo default || echo sysconfig)
+DEFAULT_DEFAULTSDIR := sysconfig
 
 # Installation variables
 
@@ -27,6 +37,7 @@ INST_DOCDIR ?= $(INST_PREFIX)/share/doc
 INST_MANDIR ?= $(INST_PREFIX)/share/man
 INST_PKGDOCDIR ?= $(INST_DOCDIR)/$(PACKAGE_NAME)
 INST_PKGLICENSEDIR ?= $(INST_PKGDOCDIR)
+INST_DEFAULTSDIR ?= $(INST_CONFDIR)/$(DEFAULT_DEFAULTSDIR)
 
 # Installation customisation
 
