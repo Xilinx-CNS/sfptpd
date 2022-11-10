@@ -33,7 +33,7 @@ Some example installation recipes follow.
 ```
 ver="$(sed -n s,'^#define SFPTPD_VERSION_TEXT.*"\(.*\)"',\\1,gp < src/include/sfptpd_version.h)~$(date +%Y%M%d).git$(git rev-parse --short HEAD)"
 mkdir -p ~/rpmbuild/SOURCES
-git archive --prefix="sfptpd-$ver/" --format=tgz -o ~/rpmbuild/SOURCES/sfptpd-$ver.tgz
+git archive --prefix="sfptpd-$ver/" --format=tgz -o ~/rpmbuild/SOURCES/sfptpd-$ver.tgz HEAD
 curl https://raw.githubusercontent.com/Xilinx-CNS/sfptpd-rpm/generic/sfptpd.spec | sed -e "s/^\(Version: \).*/\1 $ver/g" -e "s/^\(Release: \).*/\1 1%{?dist}/g" > sfptpd.spec
 rpmbuild -bs sfptpd.spec
 ```
