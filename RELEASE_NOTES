@@ -1,6 +1,6 @@
 Solarflare Enhanced PTP Daemon (sfptpd) from Xilinx
 ===================================================
-Version: v3.6.0.1008
+Version: v3.6.0.1009
 
 
 Overview
@@ -89,7 +89,7 @@ Issue SWNETLINUX-4466
 Notice of Future Changes
 ------------------------
 
-As of v3.6.0.1008:
+As of v3.6.0.1009:
 
  * Future change to default for non_xilinx_nics
 
@@ -118,7 +118,7 @@ As of v3.6.0.1008:
 Changelog
 ---------
 
-### v3.6.0.1008 Feature Release
+### v3.6.0.1009 Feature Release
 
 Features:
  ~ Support Xilinx ALVEO X3522 NICs (SWPTP-1162)
@@ -164,6 +164,10 @@ Features:
 
  ~ Add 'manual-startup' selection policy to start with a configured sync
     instance before moving onto automatic selection. (SWPTP-823)
+
+Issue SWPTP-1264
+ ~ Drop check for ancient driver/fw versions, avoiding parse failures
+    for in-tree drivers in new kernels.
 
 
 ### v3.5.0.1004 Feature Release
