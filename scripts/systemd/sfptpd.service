@@ -8,7 +8,7 @@ After=network-online.target
 
 [Service]
 EnvironmentFile=-/etc/sysconfig/sfptpd
-ExecStart=/usr/sbin/sfptpd -f /etc/sfptpd.conf
+ExecStart=/usr/sbin/sfptpd $OPTIONS
 # optionally set which CPU(s) to run sfptpd on e.g. limit CPU selection to cores 3 and 4:
 # CPUAffinity=3,4
 
