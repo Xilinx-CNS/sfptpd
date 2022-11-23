@@ -27,7 +27,7 @@
  * Config File Options
  ****************************************************************************/
 
-static const char *command_line_options_short = "hf:i:v";
+static const char *command_line_options_short = "hf:i:vu:";
 
 static const struct option command_line_options_long[] = 
 {
@@ -35,6 +35,7 @@ static const struct option command_line_options_long[] =
 	{"config-file", 1, NULL, (int)'f'},
 	{"interface", 1, NULL, (int)'i'},
 	{"verbose", 0, NULL, (int)'v'},
+	{"user", 1, NULL, (int)'u'},
 	{NULL, 0, NULL, 0}
 };
 
@@ -80,6 +81,7 @@ static void config_display_help(void)
 		"-h, --help                   Display help information\n"
 		"-i, --interface=INTERFACE    Default interface that Synchronization Modules will use\n"
 		"-f, --config-file=FILE       Configure from a file\n"
+		"-u, --user=USER[:GROUP]      Run as user USER (and group GROUP)\n"
 		"-v, --verbose                Verbose: enable stats, trace and send output to stdout/stderr\n"
 		"\n"
 		"Runtime Signals:\n"
@@ -597,7 +599,8 @@ const char *sfptpd_config_get_name(struct sfptpd_config_section *section)
 int sfptpd_config_parse_command_line_pass1(struct sfptpd_config *config,
 					   int argc, char **argv)
 {
-	int chr, index;
+	int chr, index, rc = 0;
+	char *group;
 	assert(config != NULL);
 	assert(argv != NULL);
 
@@ -625,6 +628,13 @@ int sfptpd_config_parse_command_line_pass1(struct sfptpd_config *config,
 			sfptpd_sync_module_set_default_interface(config, optarg);
 			break;
 
+		case 'u':
+			if ((group = strchr(optarg, ':')))
+				*group++ = '\0';
+			if ((rc = sfptpd_config_general_set_user(config, optarg, group)))
+				return rc;
+			break;
+
 		case '?':
 		default:
 			/* Print out the offending command line option */
@@ -639,7 +649,7 @@ int sfptpd_config_parse_command_line_pass1(struct sfptpd_config *config,
 		return EINVAL;
 	}
 
-	return 0;
+	return rc;
 }
 
 
@@ -658,6 +668,7 @@ int sfptpd_config_parse_command_line_pass2(struct sfptpd_config *config,
 		case 'h':
 		case 'f':
 		case 'i':
+		case 'u':
 			/* We've already handled these- ignore them */
 			break;
 

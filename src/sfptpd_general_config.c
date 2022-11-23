@@ -614,6 +614,11 @@ static int parse_user(struct sfptpd_config_section *section, const char *option,
 	return EACCES;
 #endif
 
+	if (general->uid != 0 || general->gid != 0) {
+		CFG_ERROR(section, "non-root user or group already configured - not overwriting\n");
+		return EACCES;
+	}
+
 	buf_sz = MAX(sysconf(_SC_GETPW_R_SIZE_MAX), 1024);
 	buf = malloc(buf_sz);
 	assert(buf != NULL);
@@ -1456,6 +1461,18 @@ void sfptpd_config_general_set_verbose(struct sfptpd_config *config)
 		general->trace_level = 3;
 	sfptpd_log_set_trace_level(SFPTPD_COMPONENT_ID_SFPTPD,
 				   general->trace_level);
+}
+
+
+int sfptpd_config_general_set_user(struct sfptpd_config *config,
+				   const char *user, const char *group)
+{
+	struct sfptpd_config_section *general = (struct sfptpd_config_section *) sfptpd_general_config_get(config);
+	const char *options[2] = { user, group };
+
+	assert(user);
+
+	return parse_user(general, "user", group ? 2 : 1, options);
 }
 
 

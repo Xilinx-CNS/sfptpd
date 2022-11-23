@@ -251,5 +251,12 @@ void sfptpd_config_set_config_file(struct sfptpd_config *config,
  */
 void sfptpd_config_general_set_verbose(struct sfptpd_config *config);
 
+/** Specify a user and group to run sfptpd as.
+ * @param user  User to run as
+ * @param group  Group to run as or run as user's principle group if NULL.
+ * @return  An error code or 0 on success
+ */
+int sfptpd_config_general_set_user(struct sfptpd_config *config,
+				   const char *user, const char *group);
 
 #endif /* _SFPTPD_GENERAL_CONFIG_H */
