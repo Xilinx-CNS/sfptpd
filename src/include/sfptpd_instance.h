@@ -23,6 +23,7 @@
  * @clock_master Instance's master clock
  * @clock_slave Instance's slave clock
  * @is_disciplining Is the master disciplining the slave?
+ * @is_blocked Is the Master being blocked from disciplining the slave?
  * @is_in_sync Is the clock in sync?
  * @offset Clock offset from master
  * @freq_adj Current frequency adjustment
@@ -44,6 +45,7 @@ struct sfptpd_sync_instance_rt_stats_entry {
 	const struct sfptpd_clock *clock_master;
 	const struct sfptpd_clock *clock_slave;
 	bool is_disciplining;
+	bool is_blocked;
 	bool is_in_sync;
 	sfptpd_sync_module_alarms_t alarms;
 	uint32_t stat_present;

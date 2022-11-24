@@ -1513,7 +1513,7 @@ static void ntp_send_rt_stats_update(crny_module_t *ntp,
 					    &time,
 					    SFPTPD_CONFIG_GET_NAME(ntp->config),
 					    "ntp", NULL, sfptpd_clock_get_system_clock(),
-					    disciplining,
+					    disciplining, false,
 					    new_state->synchronized, new_state->alarms,
 					    STATS_KEY_OFFSET, offset,
 					    STATS_KEY_END);

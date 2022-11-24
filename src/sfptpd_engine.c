@@ -845,7 +845,8 @@ static void write_rt_stats_log(struct sfptpd_log_time *time,
 		       entry->instance_name ? entry->instance_name : "",
 		       entry->instance_name ? ":" : "",
 		       entry->clock_master ? sfptpd_clock_get_short_name(entry->clock_master) : entry->source,
-		       entry->is_disciplining ? "->" : "--");
+		       entry->is_blocked ? "-#" : (entry->is_disciplining ? "->" : "--")
+			);
 
 	if (entry->active_intf != NULL)
 		sfptpd_log_stats("%s(%s)", sfptpd_clock_get_short_name(entry->clock_slave),
@@ -1394,7 +1395,7 @@ void sfptpd_engine_post_rt_stats_simple(struct sfptpd_engine *engine, struct sfp
 					&logtime,
 					stats.servo_name,
 					"servo", stats.clock_master, stats.clock_slave,
-					stats.disciplining, stats.in_sync, stats.alarms,
+					stats.disciplining, stats.blocked, stats.in_sync, stats.alarms,
 					STATS_KEY_FREQ_ADJ, stats.freq_adj,
 					STATS_KEY_P_TERM, stats.p_term,
 					STATS_KEY_I_TERM, stats.i_term,
@@ -2598,6 +2599,7 @@ void sfptpd_engine_post_rt_stats(struct sfptpd_engine *engine,
 		const struct sfptpd_clock *clock_master,
 		const struct sfptpd_clock *clock_slave,
 		bool disciplining,
+		bool blocked,
 		bool in_sync,
 		sfptpd_sync_module_alarms_t alarms,
 		...)
@@ -2625,6 +2627,7 @@ void sfptpd_engine_post_rt_stats(struct sfptpd_engine *engine,
 	msg->stats.clock_master = clock_master;
 	msg->stats.clock_slave = clock_slave;
 	msg->stats.is_disciplining = disciplining;
+	msg->stats.is_blocked = blocked;
 	msg->stats.is_in_sync = in_sync;
 	msg->stats.alarms = alarms;
 	msg->stats.stat_present = 0;
