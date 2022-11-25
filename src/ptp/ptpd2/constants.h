@@ -93,7 +93,7 @@ section 7.6.2.4, page 55:
 
 /* PTP Protocol version number */
 #define PTPD_PROTOCOL_VERSION 2
-#define PTPD_PROTOCOL_VERSION_MINOR_DEFAULT 0
+#define PTPD_PROTOCOL_VERSION_MINOR_DEFAULT 1
 
 /* Physical layer protocol - text string reported in management message to
  * get clock description */

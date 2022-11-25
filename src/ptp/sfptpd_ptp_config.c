@@ -1278,7 +1278,7 @@ static const sfptpd_config_option_t ptp_config_options[] =
 		parse_ptp_profile},
 	{"ptp_version", "<2.0 | 2.1>",
 		"Specifies the PTP version, where 2.0 => IEEE1588-2008 and "
-		"2.1 => IEEE1588-2019. The default version is 2.0.",
+		"2.1 => IEEE1588-2019. The default version is 2.1.",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
 		parse_ptp_version},
 	{"ptp_mode", "<slave | master | monitor>",
