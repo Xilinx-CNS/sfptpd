@@ -267,7 +267,7 @@ static const sfptpd_config_option_t config_general_options[] =
 		"Limit NIC clock frequency adjustment to the lesser of "
 		"advertised capability and NUMBER ppb.",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, false, parse_limit_freq_adj},
-	{"ignore_critical", "<no-ptp-clock | no-ptp-subsystem>*",
+	{"ignore_critical", "<no-ptp-clock | no-ptp-subsystem | clock-control-conflict>*",
 		"Ignore certain critical warnings that would normally "
 		"terminate execution but may be expected in some niche "
 		"or diagnostic use cases.",
@@ -1170,6 +1170,8 @@ static int parse_ignore_critical(struct sfptpd_config_section *section, const ch
 			general->ignore_critical[SFPTPD_CRITICAL_NO_PTP_CLOCK] = true;
 		else if (!strcmp(params[i], "no-ptp-subsystem"))
 			general->ignore_critical[SFPTPD_CRITICAL_NO_PTP_SUBSYSTEM] = true;
+		else if (!strcmp(params[i], "clock-control-conflict"))
+			general->ignore_critical[SFPTPD_CRITICAL_CLOCK_CONTROL_CONFLICT] = true;
 		else
 			rc = EINVAL;
 	}

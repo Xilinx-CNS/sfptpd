@@ -29,6 +29,7 @@
 #include "sfptpd_sync_module.h"
 #include "sfptpd_logging.h"
 #include "sfptpd_config.h"
+#include "sfptpd_general_config.h"
 #include "sfptpd_constants.h"
 #include "sfptpd_clock.h"
 #include "sfptpd_thread.h"
@@ -2077,9 +2078,20 @@ static void ntp_on_run(crny_module_t *ntp)
 		    clock_control_at_launch()) {
 		if (have_control)
 			rc = crny_clock_control(ntp, false);
-		if (!have_control || rc != 0) {
-			WARNING("crny: no capability to disable clock control, %s\n",
-				strerror(rc));
+		if ((!have_control || rc != 0) &&
+		    sfptpd_clock_get_discipline(sfptpd_clock_get_system_clock())) {
+			struct sfptpd_config_general *gconf;
+
+			gconf = sfptpd_general_config_get(SFPTPD_CONFIG_TOP_LEVEL(ntp->config));
+			rc = rc == 0 ? EOPNOTSUPP : rc;
+			CRITICAL("crny: no capability to disable clock control, %s\n", strerror(rc));
+
+			if (gconf->ignore_critical[SFPTPD_CRITICAL_CLOCK_CONTROL_CONFLICT]) {
+				NOTICE("ptp: ignoring critical error by configuration\n");
+			} else {
+				NOTICE("configure \"ignore_critical: clock-control-conflict\" to allow sfptpd to start in spite of this condition\n");
+				sfptpd_thread_exit(rc);
+			}
 		}
 	}
 
