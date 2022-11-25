@@ -1192,7 +1192,7 @@ static int validate_config(struct sfptpd_config_section *parent)
 	assert(section->ops.create != NULL);
 
 	if ((((sfptpd_config_general_t *) parent)->declared_sync_modules & (1 << SFPTPD_CONFIG_CATEGORY_CRNY)) == 0) {
-		new = section->ops.create("crny0", SFPTPD_CONFIG_SCOPE_INSTANCE,
+		new = section->ops.create(NULL, SFPTPD_CONFIG_SCOPE_INSTANCE,
 					  false, section);
 		if (new == NULL) {
 			CFG_ERROR(parent, "failed to create implicit crny instance\n");
@@ -1200,7 +1200,7 @@ static int validate_config(struct sfptpd_config_section *parent)
 		}
 
 		sfptpd_config_section_add(config, new);
-		TRACE_L1("config: created crny implicit instance crny0\n");
+		TRACE_L1("config: created crny implicit instance %s\n", new->name);
 	}
 
 	return 0;
