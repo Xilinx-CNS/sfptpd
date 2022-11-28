@@ -391,22 +391,19 @@ static int phc_discover_devpps(struct sfptpd_phc *phc,
 			(void)fclose(file);
 
 			if ((tokens == 1)) {
-				if (state == STATE_SEARCHING) {
-					if (strcmp(candidate_name, phc_extname) == 0)
-						state = STATE_FOUND_EXTPPS;
-					else if (strcmp(candidate_name, phc_name) == 0)
+				if (strcmp(candidate_name, phc_extname) == 0) {
+					state = STATE_FOUND_EXTPPS;
+				} else if (state == STATE_SEARCHING) {
+					if (strcmp(candidate_name, phc_name) == 0)
 						state = STATE_FOUND_INTPPS;
-				} else if(state == STATE_FOUND_INTPPS) {
-					if (strcmp(candidate_name, phc_extname) == 0)
+				} else if (state == STATE_FOUND_INTPPS) {
+					if ((strcmp(candidate_name, "sfc") == 0) ||
+					    (strcmp(candidate_name, "xlnx") == 0)) {
 						state = STATE_FOUND_EXTPPS;
-					else if ((strcmp(candidate_name, "sfc") == 0) ||
-						 (strcmp(candidate_name, "xlnx") == 0)) {
-						state = STATE_FOUND_EXTPPS;
-					} else
-						state = STATE_NOTFOUND;
+					}
 				}
 			} else if(state == STATE_FOUND_INTPPS)
-				state = STATE_NOTFOUND;
+				state = STATE_SEARCHING;
 		}
 
 		if (state == STATE_FOUND_EXTPPS) {
