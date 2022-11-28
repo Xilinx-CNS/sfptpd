@@ -109,6 +109,7 @@ static int runtime_checks(struct sfptpd_config *config)
 		if (clock_src == NULL ||
 		    fgets(source, sizeof source, clock_src) == NULL ||
 		    strcmp(source, "tsc\n") != 0) {
+			*strchrnul(source, '\n') = '\0';
 			WARNING("system clock source should be set to TSC for stability; %s: %s\n",
 				source[0] ? "current source is" : "could not determine current source",
 				source[0] ? source : strerror(errno));
