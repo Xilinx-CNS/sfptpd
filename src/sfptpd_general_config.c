@@ -279,7 +279,7 @@ static const sfptpd_config_option_t config_general_options[] =
 		"Limit NIC clock frequency adjustment to the lesser of "
 		"advertised capability and NUMBER ppb.",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, false, parse_limit_freq_adj},
-	{"ignore_critical", "<no-ptp-clock | no-ptp-subsystem>*",
+	{"ignore_critical", "<no-ptp-clock | no-ptp-subsystem | clock-control-conflict>*",
 		"Ignore certain critical warnings that would normally "
 		"terminate execution but may be expected in some niche "
 		"or diagnostic use cases.",
@@ -1272,6 +1272,8 @@ static int parse_ignore_critical(struct sfptpd_config_section *section, const ch
 			general->ignore_critical[SFPTPD_CRITICAL_NO_PTP_CLOCK] = true;
 		else if (!strcmp(params[i], "no-ptp-subsystem"))
 			general->ignore_critical[SFPTPD_CRITICAL_NO_PTP_SUBSYSTEM] = true;
+		else if (!strcmp(params[i], "clock-control-conflict"))
+			general->ignore_critical[SFPTPD_CRITICAL_CLOCK_CONTROL_CONFLICT] = true;
 		else
 			rc = EINVAL;
 	}
@@ -1292,7 +1294,7 @@ static int validate_config(struct sfptpd_config_section *parent)
 	assert(section->ops.create != NULL);
 
 	if ((((sfptpd_config_general_t *) parent)->declared_sync_modules & (1 << SFPTPD_CONFIG_CATEGORY_CRNY)) == 0) {
-		new = section->ops.create("crny0", SFPTPD_CONFIG_SCOPE_INSTANCE,
+		new = section->ops.create(NULL, SFPTPD_CONFIG_SCOPE_INSTANCE,
 					  false, section);
 		if (new == NULL) {
 			CFG_ERROR(parent, "failed to create implicit crny instance\n");
@@ -1300,7 +1302,7 @@ static int validate_config(struct sfptpd_config_section *parent)
 		}
 
 		sfptpd_config_section_add(config, new);
-		TRACE_L1("config: created crny implicit instance crny0\n");
+		TRACE_L1("config: created crny implicit instance %s\n", new->name);
 	}
 
 	return 0;
