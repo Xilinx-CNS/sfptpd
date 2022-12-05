@@ -314,6 +314,10 @@ static int parse_control_script(struct sfptpd_config_section *section,
 {
 	sfptpd_crny_module_config_t *ntp = (sfptpd_crny_module_config_t *)section;
 	assert(num_params == 1);
+
+	if (access(params[0], X_OK) != 0)
+		return errno;
+
 	sfptpd_strncpy(ntp->chronyd_script, params[0],
 		       sizeof(ntp->chronyd_script));
 	return 0;
