@@ -429,7 +429,7 @@ bool sfptpd_clock_set_blocked(struct sfptpd_clock *clock, bool block);
 /** Is given clock currently blocked
  * @param clock the clock to check
  * @return true if the clock is currently blocked
- */ 
+ */
 bool sfptpd_clock_is_blocked(const struct sfptpd_clock *clock);
 
 /** Get the lrc_been_locked flag of a clock instance
