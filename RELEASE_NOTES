@@ -1,6 +1,6 @@
 Solarflare Enhanced PTP Daemon (sfptpd) from Xilinx
 ===================================================
-Version: v3.6.0.1009
+Version: v3.6.0.1010
 
 
 Overview
@@ -86,10 +86,8 @@ Issue SWNETLINUX-4466
     https://support.xilinx.com/s/article/PPS-not-detected-by-sfptpd-without-timestamping
 
 
-Notice of Future Changes
-------------------------
-
-As of v3.6.0.1009:
+Advanced notice of likely future changes after v3.6
+---------------------------------------------------
 
  * Future change to default for non_xilinx_nics
 
@@ -118,7 +116,7 @@ As of v3.6.0.1009:
 Changelog
 ---------
 
-### v3.6.0.1009 Feature Release
+### v3.6.0.1010 Feature Release
 
 Features:
  ~ Support Xilinx ALVEO X3522 NICs (SWPTP-1162)
@@ -151,8 +149,13 @@ Features:
     while chrony was operating as a clustering determinant (i.e. discriminator).
 
  ~ Allow operation but block system clock updates when an uncontrollable
-    chronyd service is running. It is, however, recommended in such situations
-    to configure sfptpd explicitly to treat the system clock as read only.
+    chronyd service is running, except when this condition holds at startup.
+    This is improved behaviour when the conflict is transient. It is, however,
+    recommended in such situations to configure sfptpd explicitly to treat
+    the system clock as read only. To disable this check at startup,
+    configure as follows. (SWPTP-1266)
+     [general]
+     ignore_critical clock-control-conflict
 
  ~ Allow operation in the absence of a kernel PTP subsystem or PTP and PPS
     without a PTP hardware clock. This change supports esoteric and diagnostic

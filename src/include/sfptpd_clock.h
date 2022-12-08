@@ -419,12 +419,18 @@ void sfptpd_clock_diagnostics(int trace_level);
  */
 bool sfptpd_clock_is_writable(struct sfptpd_clock *clock);
 
-/* Add or subtract from reference count of temporary blocks on
+/** Add or subtract from reference count of temporary blocks on
  * a clock. If blocked, a clock will not be adjusted by sfptpd.
  * @param block whether to block or unblock
  * @return true if the clock is now temporarily blocked
  */
 bool sfptpd_clock_set_blocked(struct sfptpd_clock *clock, bool block);
+
+/** Is given clock currently blocked
+ * @param clock the clock to check
+ * @return true if the clock is currently blocked
+ */
+bool sfptpd_clock_is_blocked(const struct sfptpd_clock *clock);
 
 /** Get the lrc_been_locked flag of a clock instance
  * @param clock  Pointer to clock instance

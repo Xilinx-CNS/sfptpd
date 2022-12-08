@@ -314,6 +314,10 @@ static int parse_control_script(struct sfptpd_config_section *section,
 {
 	sfptpd_crny_module_config_t *ntp = (sfptpd_crny_module_config_t *)section;
 	assert(num_params == 1);
+
+	if (access(params[0], X_OK) != 0)
+		return errno;
+
 	sfptpd_strncpy(ntp->chronyd_script, params[0],
 		       sizeof(ntp->chronyd_script));
 	return 0;
@@ -1509,7 +1513,7 @@ static void ntp_send_rt_stats_update(crny_module_t *ntp,
 					    &time,
 					    SFPTPD_CONFIG_GET_NAME(ntp->config),
 					    "ntp", NULL, sfptpd_clock_get_system_clock(),
-					    disciplining,
+					    disciplining, false,
 					    new_state->synchronized, new_state->alarms,
 					    STATS_KEY_OFFSET, offset,
 					    STATS_KEY_END);

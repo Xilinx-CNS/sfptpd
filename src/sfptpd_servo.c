@@ -579,6 +579,7 @@ struct sfptpd_servo_stats sfptpd_servo_get_stats(struct sfptpd_servo *servo)
 	stats.clock_master = servo->master;
 	stats.clock_slave = servo->slave;
 	stats.disciplining = sfptpd_clock_is_writable(servo->slave);
+	stats.blocked = sfptpd_clock_is_blocked(servo->slave);
 	stats.offset = servo->offset_from_master_ns;
 	stats.freq_adj = servo->freq_adjust_ppb;
 	stats.in_sync = servo->synchronized;

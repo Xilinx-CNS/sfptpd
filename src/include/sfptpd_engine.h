@@ -152,6 +152,7 @@ void sfptpd_engine_interface_events(struct sfptpd_engine *engine,
  * @param clock_master Master clock, may be null
  * @param clock_slave Slave clock, may not be null
  * @param disciplining True if master is disciplining slave clock
+ * @param blocked True if master is blocked from disciplining slave clock
  * @param in_sync True if the clocks are in sync
  * @param va_args Pairs of STATS_KEY_x and associated values
  */
@@ -162,6 +163,7 @@ void sfptpd_engine_post_rt_stats(struct sfptpd_engine *engine,
 		const struct sfptpd_clock *clock_master,
 		const struct sfptpd_clock *clock_slave,
 		bool disciplining,
+		bool blocked,
 		bool in_sync,
 		sfptpd_sync_module_alarms_t alarms,
 		...);

@@ -23,7 +23,8 @@ struct sfptpd_servo_stats {
 	char *servo_name;
 	struct sfptpd_clock *clock_master;
 	struct sfptpd_clock *clock_slave;
-	bool disciplining;
+	bool disciplining:1;
+	bool blocked:1;
 	sfptpd_time_t offset;
 	sfptpd_time_t freq_adj;
 	bool in_sync;

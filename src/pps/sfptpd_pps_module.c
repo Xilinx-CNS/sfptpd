@@ -1411,6 +1411,7 @@ static void pps_send_rt_stats_update(pps_module_t *pps, struct sfptpd_log_time t
 				NULL,
 				instance->clock,
 				(instance->ctrl_flags & SYNC_MODULE_SELECTED),
+				false,
 				instance->synchronized,
 				instance->alarms,
 				STATS_KEY_OFFSET, instance->offset_from_master_ns,

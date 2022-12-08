@@ -1416,6 +1416,11 @@ bool sfptpd_clock_set_blocked(struct sfptpd_clock *clock, bool block)
 	return (clock->blocked_count += block ? 1 : -1) > 0;
 }
 
+bool sfptpd_clock_is_blocked(const struct sfptpd_clock *clock)
+{
+	return clock->blocked_count > 0;
+}
+
 
 /****************************************************************************/
 

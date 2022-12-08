@@ -823,7 +823,7 @@ static void ntp_send_rt_stats_update(ntp_module_t *ntp, struct sfptpd_log_time t
 		                     &time,
 		                     SFPTPD_CONFIG_GET_NAME(ntp->config),
 		                     "ntp", NULL, sfptpd_clock_get_system_clock(),
-				     disciplining,
+		                     disciplining, false,
 		                     ntp->synchronized, ntp->state.alarms,
 		                     STATS_KEY_OFFSET, offset,
 		                     STATS_KEY_END);
