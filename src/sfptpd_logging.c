@@ -300,6 +300,8 @@ int sfptpd_log_open(struct sfptpd_config *config)
 			      sfptpd_config_log_file);
 		assert(rc < sizeof path);
 		log_copy_file(sfptpd_config_log_tmpfile, path);
+		if (chown(path, general_config->uid, general_config->gid))
+			TRACE_L4("could not set config copy ownership, %s\n", strerror(errno));
 		unlink(sfptpd_config_log_tmpfile);
 	}
 
@@ -378,6 +380,9 @@ int sfptpd_log_rotate(struct sfptpd_config *config)
 			      general_config->message_log_filename, strerror(errno));
 			rc = errno;
 		} else {
+			if (chown(general_config->message_log_filename, general_config->uid, general_config->gid))
+				TRACE_L4("could not set message log ownership, %s\n", strerror(errno));
+
 			/* Redirect stderr to the log file */
 			dup2(message_log_fd, STDERR_FILENO);
 		}
@@ -400,6 +405,9 @@ int sfptpd_log_rotate(struct sfptpd_config *config)
 			      general_config->stats_log_filename, strerror(errno));
 			rc = errno;
 		} else {
+			if (chown(general_config->stats_log_filename, general_config->uid, general_config->gid))
+				TRACE_L4("could not set stats log ownership, %s\n", strerror(errno));
+
 			/* Redirect stdout to the log file */
 			dup2(stats_log_fd, STDOUT_FILENO);
 		}
