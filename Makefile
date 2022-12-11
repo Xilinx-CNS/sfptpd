@@ -4,7 +4,7 @@
 # Top-level makefile for sfptpd
 
 # Scrape the constants file for the version number
-SFPTPD_VERSION = $(shell grep SFPTPD_VERSION_TEXT src/include/sfptpd_version.h | sed -e 's/[^"]*"//' -e 's/".*//')
+SFPTPD_VERSION = $(shell scripts/sfptpd_versioning read)
 
 ### Global configuration
 PACKAGE_NAME = sfptpd
@@ -76,6 +76,11 @@ test_%: build/sfptpd_test
 
 .PHONY: fast_test
 fast_test: $(addprefix test_,$(FAST_TESTS))
+
+# Target to update the version string with divergence from tag in git archive
+.PHONY: patch_version
+patch_version:
+	scripts/sfptpd_versioning patch
 
 .PHONY: install
 install: sfptpd sfptpdctl

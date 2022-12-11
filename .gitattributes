@@ -11,3 +11,7 @@ src/include/sfptpd_version.h merge=ours
 
 .git* export-ignore
 ci export-ignore
+
+# Substitutions
+
+scripts/vcs-vars export-subst

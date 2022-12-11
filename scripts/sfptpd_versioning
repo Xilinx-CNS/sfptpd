@@ -1,0 +1,121 @@
+#!/bin/sh -eu
+#
+##############################################################################
+# SPDX-License-Identifier: BSD-3-Clause
+# (c) Copyright 2022 Xilinx, Inc.
+#
+# Functions to manipulate embedded version number
+#
+# Run from root of sfptpd source tree
+#
+##############################################################################
+
+me=$(basename "$0")
+
+err()  { echo >&2 "$*"; }
+log()  { err "$me: $*"; }
+fail() { log "$*"; exit 1; }
+try()  { "$@" || fail "FAILED: $*"; }
+
+usage() {
+  err
+  err "usage:"
+  err "  $me read         - read embedded version string from source"
+  err "  $me write <ver>  - write <ver> into version string in source"
+  err "  $me derive       - derive a version string from version control"
+  err "  $me patch        - patch derived version string into source"
+  err
+  exit 1
+}
+
+##############################################################################
+
+# param 1: field name to search from expanded vcs-vars
+# stdin: vcs-vars stream
+field () {
+  sed -n "s,^$1\s\s*\(.*\),\1,gp"
+}
+
+# cwd: root of source tree
+read_version () {
+  try sed -n s,'^#define SFPTPD_VERSION_TEXT.*"\(.*\)"',\\1,gp < src/include/sfptpd_version.h
+}
+
+# param 1: version to write
+# cwd: root of source tree
+write_version () {
+  try sed -i 's,^\(#define SFPTPD_VERSION_TEXT *"\).*",\1'"$1\"",g src/include/sfptpd_version.h
+}
+
+# param 1: path to vcs-vars
+derive_version () {
+  src_version=$(read_version)
+  version=$src_version
+
+  if grep -q '$Format:' $1
+  then
+    if ! { vcs_tag=$(git describe --tags) && \
+           vcs_date=$(git log -1 --pretty=format:%cs) && \
+           vcs_id=$(git log -1 --pretty=format:%h); }
+    then
+      log "No VCS substitutions or clone, using encoded version: $src_version" >&2
+      echo $src_version
+      return 0
+    fi
+  else
+    vcs_tag=$(field vcs-tag < $1)
+    vcs_date=$(field vcs-date < $1)
+    vcs_id=$(field vcs-id < $1)
+  fi
+
+  if [ "v$src_version" = "$vcs_tag" ]
+  then
+    echo -n "Encoded version is tagged: " >&2
+  elif echo $vcs_tag | grep -q "^v$src_version-"
+  then
+    echo -n "Post-release version: " >&2
+    version="$src_version^$(echo $vcs_date | sed s,-,,g).git$vcs_id"
+  else
+    echo -n "Pre-release version: " >&2
+    version="$src_version~$(echo $vcs_date | sed s,-,,g).git$vcs_id"
+  fi
+
+  echo $version >&2
+  echo $version
+}
+
+
+######################################################################
+# main
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -*)  usage;;
+    *)   break;;
+  esac
+  shift
+done
+
+[ $# -ge 1 ] || usage
+
+cmd="$1"
+shift
+
+case "$cmd" in
+  read)
+    read_version
+    ;;
+  write)
+    write_version "$@"
+    ;;
+  derive)
+    derive_version scripts/vcs-vars
+    ;;
+  patch)
+    write_version $(derive_version scripts/vcs-vars)
+    ;;
+  *)
+    usage
+    ;;
+esac
+

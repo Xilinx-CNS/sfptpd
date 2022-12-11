@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# (c) Copyright 2022 Xilinx, Inc.
+#
+# Keys to be expanded by 'git archive' and consumed by scripts which
+# derive an extended version number based on relationsip to git tags
+
+vcs-tag $Format:%(describe:tags=true)$
+vcs-date $Format:%cs$
+vcs-id $Format:%h$
