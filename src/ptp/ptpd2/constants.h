@@ -110,7 +110,7 @@ section 7.6.2.4, page 55:
 
 /* Maximum length of various management strings */
 #define PTPD_MGMT_PRODUCT_DESC_MAX 64
-#define PTPD_MGMT_REVISION_DATA_MAX 32
+#define PTPD_MGMT_REVISION_DATA_MAX (SFPTPD_VERSION_STRING_MAX)
 #define PTPD_MGMT_USER_DESCRIPTION_MAX 128
 
 /**
