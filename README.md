@@ -3,7 +3,7 @@
 The Solarflare Enhanced PTP Daemon works on Linux systems for 3.0 kernels and
 later.
 
-(c) Copyright 2013, 2022 Xilinx, Inc.
+(c) Copyright 2013-2022 Xilinx, Inc.
 
 ## Building
 
@@ -20,19 +20,21 @@ as root.
 
 Some example installation recipes follow.
 
-### Default (to `/usr/local`)
-``` sudo make install ```
+### For most recent distributions
+``` sudo make PREFIX=/usr install ```
 
-### RHEL 6
+### For distributions with sysv init, e.g. RHEL6
 ``` sudo make PREFIX=/usr INST_INITS=sysv install ```
 
-### Other distributions
-``` sudo make PREFIX=/usr install ```
+### Default operation
+Installs to /usr/local
+
+``` sudo make install ```
 
 ### Building a source RPM
 ```
-ver="$(sed -n s,'^#define SFPTPD_VERSION_TEXT.*"\(.*\)"',\\1,gp < src/include/sfptpd_version.h)~$(date +%Y%m%d).git$(git rev-parse --short HEAD)"
 mkdir -p ~/rpmbuild/SOURCES
+ver="$(scripts/sfptpd_versioning derive)"
 git archive --prefix="sfptpd-$ver/" --format=tgz -o ~/rpmbuild/SOURCES/sfptpd-$ver.tgz HEAD
 curl https://raw.githubusercontent.com/Xilinx-CNS/sfptpd-rpm/generic/sfptpd.spec | sed -e "s/^\(Version: \).*/\1 $ver/g" -e "s/^\(Release: \).*/\1 1%{?dist}/g" > sfptpd.spec
 rpmbuild -bs sfptpd.spec
