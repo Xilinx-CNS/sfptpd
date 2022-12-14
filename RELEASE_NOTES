@@ -1,6 +1,6 @@
 Solarflare Enhanced PTP Daemon (sfptpd) from Xilinx
 ===================================================
-Version: v3.6.0.1010
+Version: v3.6.0.1011
 
 
 Overview
@@ -116,7 +116,7 @@ Advanced notice of likely future changes after v3.6
 Changelog
 ---------
 
-### v3.6.0.1010 Feature Release
+### v3.6.0.1011 Feature Release
 
 Features:
  ~ Support Xilinx ALVEO X3522 NICs (SWPTP-1162)
