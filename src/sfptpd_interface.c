@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2021 Xilinx, Inc. */
+/* (c) Copyright 2012-2022 Xilinx, Inc. */
 
 /**
  * @file   sfptpd_interface.c
@@ -83,12 +83,35 @@
 #define VPD_MAX_SIZE (PCI_VPD_ADDR_MASK + 1)
 
 
+/** Structure to hold known NIC capabilities */
 struct nic_model_caps {
 	uint16_t vendor;
 	uint16_t device;
 	enum sfptpd_clock_stratum stratum;
 };
 
+/** Methods for retrieving driver stats */
+enum drv_stat_method {
+	DRV_STAT_NOT_AVAILABLE,
+	DRV_STAT_ETHTOOL,
+	DRV_STAT_SYSFS,
+};
+
+
+/** Structure describing a driver statistic type */
+struct drv_stat_type {
+	const char *ethtool_name;
+	const char *sysfs_name;
+	bool counter;
+};
+
+/** Structure governing how to obtain driver statistics for an interface */
+struct drv_stat_access {
+	enum drv_stat_method method;
+	union {
+		int ethtool_stat_index;
+	} detail;
+};
 
 /** Structure to hold details of interfaces.
  *
@@ -145,9 +168,11 @@ struct sfptpd_interface {
 	/* Portion of bus address identifying the NIC */
 	char bus_addr_nic[ETHTOOL_BUSINFO_LEN];
 
-	/* Firmware and driver versions */
+	/* Firmware and driver versions and other driver info */
 	char driver_version[SFPTPD_VERSION_STRING_MAX];
 	char fw_version[SFPTPD_VERSION_STRING_MAX];
+	char driver[32];
+	char n_stats;
 
 	/* Indicates that the associated PTP clock supports the PHC API */
 	bool clock_supports_phc;
@@ -179,6 +204,18 @@ struct sfptpd_interface {
 
 	/* Static capabilities of NIC model */
 	struct nic_model_caps static_caps;
+
+	/* Methods for driver statistic recovery */
+	struct drv_stat_access drv_stat[SFPTPD_DRVSTAT_MAX];
+
+	/* Bitfield of methods needed for driver stats */
+	int drv_stat_methods;
+
+	/* Raw driver stats buffer */
+	struct ethtool_stats *ethtool_stats;
+
+	/* Zero adjustment for driver counters */
+	int64_t ethtool_stat_zero_adjustment[SFPTPD_DRVSTAT_MAX];
 };
 
 
@@ -229,6 +266,20 @@ static const uint16_t xilinx_ptp_nics[] = {
 static const struct nic_model_caps all_nic_models[] = {
 	/* Err on the safe side with all SFN7xxx NIC clocks */
 	{ SFPTPD_SOLARFLARE_PCI_VENDOR_ID , 0x0903, SFPTPD_NIC_XO_CLOCK_STRATUM },
+};
+
+/* Must be in same order as enum drv_stat */
+static const struct drv_stat_type drv_stats [] = {
+	{ "pps_in_oflow", "pps_stats/pps_oflow", true },
+	{ "pps_in_bad", "pps_stats/pps_bad", true },
+	{ "pps_in_offset_last", "pps_stats/pps_off_last", false },
+	{ "pps_in_offset_mean", "pps_stats/pps_off_mean", false },
+	{ "pps_in_offset_min", "pps_stats/pps_off_min", false },
+	{ "pps_in_offset_max", "pps_stats/pps_off_max", false },
+	{ "pps_in_period_last", "pps_stats/pps_per_last", false },
+	{ "pps_in_period_mean", "pps_stats/pps_per_mean", false },
+	{ "pps_in_period_min", "pps_stats/pps_per_min", false },
+	{ "pps_in_period_max", "pps_stats/pps_per_max", false },
 };
 
 
@@ -718,11 +769,14 @@ static void interface_get_versions(struct sfptpd_interface *interface)
 		       sizeof(interface->fw_version));
 	sfptpd_strncpy(interface->bus_addr, drv_info.bus_info,
 		       sizeof(interface->bus_addr));
+	sfptpd_strncpy(interface->driver, drv_info.driver,
+		       sizeof(interface->driver));
+	interface->n_stats = drv_info.n_stats;
 
 	TRACE_L3("interface %s: driver version %s, firmware version %s\n",
 		 interface->name, interface->driver_version, interface->fw_version);
-	TRACE_L3("interface %s: bus address %s\n",
-		 interface->name, interface->bus_addr);
+	TRACE_L3("interface %s: bus address %s, driver %s\n",
+		 interface->name, interface->bus_addr, interface->driver);
 }
 
 
@@ -816,6 +870,82 @@ static void interface_check_efx_support(struct sfptpd_interface *interface)
 	TRACE_L2("interface %s: %s efx ioctl\n",
 		 interface->name,
 		 interface->driver_supports_efx ? "supports" : "does not support");
+}
+
+
+/* Must be called after interface_get_versions to populate driver info */
+static void interface_driver_stats_init(struct sfptpd_interface *interface)
+{
+	int rc;
+	struct ethtool_gstrings *gstrings;
+	int i, j;
+	char path[PATH_MAX];
+
+	assert(interface != NULL);
+
+	TRACE_L4("interface %s: initialising driver stats-getting via ethtool\n",
+		 interface->name);
+
+	gstrings = malloc(ETH_GSTRING_LEN * interface->n_stats + sizeof *gstrings);
+	if (gstrings == NULL) {
+		ERROR("interface %s: could not allocate ethtool stat strings buffer, %s\n",
+		      interface->name, strerror(errno));
+		goto no_ethtool;
+	}
+
+	gstrings->cmd = ETHTOOL_GSTRINGS;
+	gstrings->string_set = ETH_SS_STATS;
+	gstrings->len = interface->n_stats;
+
+	rc = sfptpd_interface_ioctl(interface, SIOCETHTOOL, gstrings);
+	if (rc != 0) {
+		WARNING("interface %s: failed to obtain ethtool stat strings, %s\n",
+			interface->name, strerror(errno));
+		interface->n_stats = 0;
+	}
+
+	for (i = 0; i < interface->n_stats; i++) {
+		const char *name = (char *) gstrings->data + i * ETH_GSTRING_LEN;
+
+		for (j = 0; j < SFPTPD_DRVSTAT_MAX; j++) {
+			if (drv_stats[j].ethtool_name &&
+			    !strncmp(name, drv_stats[j].ethtool_name,
+				     ETH_GSTRING_LEN))
+				break;
+		}
+
+		if (j != SFPTPD_DRVSTAT_MAX) {
+			interface->drv_stat[j].method = DRV_STAT_ETHTOOL;
+			interface->drv_stat[j].detail.ethtool_stat_index = i;
+			interface->drv_stat_methods |= 1 << DRV_STAT_ETHTOOL;
+		}
+	}
+
+no_ethtool:
+	for (j = 0; j < SFPTPD_DRVSTAT_MAX; j++) {
+		if (interface->drv_stat[i].method == DRV_STAT_NOT_AVAILABLE) {
+
+			snprintf(path, sizeof path, "/sys/class/net/%s/device/%s",
+				 interface->name, drv_stats[j].sysfs_name);
+
+			if (!access(path, R_OK)) {
+				interface->drv_stat[j].method = DRV_STAT_SYSFS;
+				interface->drv_stat_methods |= 1 << DRV_STAT_SYSFS;
+			}
+		}
+
+		TRACE_L4("interface %s: driver stat %s available by %s\n",
+			 interface->name, drv_stats[j].ethtool_name,
+			 interface->drv_stat[j].method == DRV_STAT_ETHTOOL ? "ethtool" :
+			 (interface->drv_stat[j].method == DRV_STAT_SYSFS ? "sysfs" :
+			 "no method"));
+	}
+
+	if (gstrings)
+		free(gstrings);
+
+	if (interface->drv_stat_methods & (1 << DRV_STAT_ETHTOOL))
+		interface->ethtool_stats = (struct ethtool_stats *) malloc(sizeof(struct ethtool_stats) + interface->n_stats * 8);
 }
 
 
@@ -997,6 +1127,9 @@ static int interface_init(const char *name, const char *sysfs_dir,
 
 	/* Assign NIC ID */
 	interface_assign_nic_id(interface);
+
+	/* Initialise stat-getting capability */
+	interface_driver_stats_init(interface);
 
 	return 0;
 }
@@ -1296,6 +1429,8 @@ static void interface_record_delete_fn(void *record, void *context) {
 static void interface_record_free_fn(void *record, void *context) {
 	struct sfptpd_interface *interface = *((struct sfptpd_interface **) record);
 	assert(interface->magic == SFPTPD_INTERFACE_MAGIC);
+	if (interface->ethtool_stats)
+		free(interface->ethtool_stats);
 	interface_free(interface);
 }
 
@@ -2112,6 +2247,104 @@ bool sfptpd_interface_get_sysfs_max_freq_adj(struct sfptpd_interface *interface,
 	rc =  sysfs_read_int(SFPTPD_SYSFS_NET_PATH, interface->name,
 			     "device/max_adjfreq", max_freq_adj);
 	interface_unlock();
+	return rc;
+}
+
+int sfptpd_interface_driver_stats_read(struct sfptpd_interface *interface,
+				       uint64_t stats[SFPTPD_DRVSTAT_MAX])
+{
+	int rc;
+	int i;
+	char path[PATH_MAX];
+	FILE *file;
+	struct ethtool_stats *estats;
+	int sysfs_stat_value;
+
+	assert(interface != NULL);
+
+	if (interface->drv_stat_methods == 0)
+		return ENODATA;
+
+	estats = interface->ethtool_stats;
+
+	if (interface->drv_stat_methods & (1 << DRV_STAT_ETHTOOL)) {
+		assert(estats);
+
+		estats->cmd = ETHTOOL_GSTATS;
+		estats->n_stats = interface->n_stats;
+
+		rc = sfptpd_interface_ioctl(interface, SIOCETHTOOL, estats);
+		if (rc != 0) {
+			WARNING("interface %s: failed to obtain ethtool stats, %s\n",
+				interface->name, strerror(errno));
+			return errno;
+		}
+	}
+
+	for (i = 0; i < SFPTPD_DRVSTAT_MAX; i++) {
+		struct drv_stat_access *stat = interface->drv_stat + i;
+		switch (stat->method) {
+		case DRV_STAT_ETHTOOL:
+			stats[i] = estats->data[stat->detail.ethtool_stat_index] +
+				   interface->ethtool_stat_zero_adjustment[i];
+			break;
+		case DRV_STAT_SYSFS:
+			snprintf(path, sizeof path, "/sys/class/net/%s/device/%s",
+				 interface->name, drv_stats[i].sysfs_name);
+			file = fopen(path, "r");
+			if (file == NULL) {
+				TRACE_L1("failed to open PPS stats file %s\n", path);
+				return ENOENT;
+			}
+			if (fscanf(file, "%d", &sysfs_stat_value) != 1) {
+				ERROR("couldn't read statistic from %s\n", path);
+				fclose(file);
+				return EIO;
+			}
+			stats[i] = sysfs_stat_value;
+			fclose(file);
+			break;
+		case DRV_STAT_NOT_AVAILABLE:
+			TRACE_L4("no method available to collect %s stat\n",
+				 drv_stats[i].ethtool_name);
+		}
+	}
+
+	return 0;
+}
+
+int sfptpd_interface_driver_stats_reset(struct sfptpd_interface *interface)
+{
+	FILE *file;
+	char path[128];
+	int rc = 0;
+	uint64_t sample[SFPTPD_DRVSTAT_MAX];
+	int i;
+
+	assert(interface != NULL);
+
+	if (interface->drv_stat_methods & (1 << DRV_STAT_ETHTOOL)) {
+		rc = sfptpd_interface_driver_stats_read(interface, sample);
+		if (rc != 0)
+			return rc;
+		for (i = 0; i < SFPTPD_DRVSTAT_MAX; i++) {
+			if (drv_stats[i].counter)
+				interface->ethtool_stat_zero_adjustment[i] -= sample[i];
+		}
+	}
+
+	if (interface->drv_stat_methods & (1 << DRV_STAT_SYSFS)) {
+		rc = snprintf(path, sizeof(path), "/sys/class/net/%s/device/ptp_stats",
+			      sfptpd_interface_get_name(interface));
+		if (rc > 0 && rc < sizeof(path)) {
+			file = fopen(path, "w");
+			if (file) {
+				fputs("1\n", file);
+					fclose(file);
+			}
+		}
+	}
+
 	return rc;
 }
 
