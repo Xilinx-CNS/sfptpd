@@ -925,8 +925,9 @@ no_ethtool:
 	for (j = 0; j < SFPTPD_DRVSTAT_MAX; j++) {
 		if (interface->drv_stat[i].method == DRV_STAT_NOT_AVAILABLE) {
 
-			snprintf(path, sizeof path, "/sys/class/net/%s/device/%s",
-				 interface->name, drv_stats[j].sysfs_name);
+			rc = snprintf(path, sizeof path, "/sys/class/net/%s/device/%s",
+				      interface->name, drv_stats[j].sysfs_name);
+			assert(rc > 0 && rc < sizeof path);
 
 			if (!access(path, R_OK)) {
 				interface->drv_stat[j].method = DRV_STAT_SYSFS;
@@ -2268,7 +2269,7 @@ int sfptpd_interface_driver_stats_read(struct sfptpd_interface *interface,
 	estats = interface->ethtool_stats;
 
 	if (interface->drv_stat_methods & (1 << DRV_STAT_ETHTOOL)) {
-		assert(estats);
+		assert(estats != NULL);
 
 		estats->cmd = ETHTOOL_GSTATS;
 		estats->n_stats = interface->n_stats;
@@ -2289,12 +2290,15 @@ int sfptpd_interface_driver_stats_read(struct sfptpd_interface *interface,
 				   interface->ethtool_stat_zero_adjustment[i];
 			break;
 		case DRV_STAT_SYSFS:
-			snprintf(path, sizeof path, "/sys/class/net/%s/device/%s",
-				 interface->name, drv_stats[i].sysfs_name);
+			rc = snprintf(path, sizeof path, "/sys/class/net/%s/device/%s",
+				      interface->name, drv_stats[i].sysfs_name);
+			if (rc < 0 || rc >= sizeof path)
+				return ENAMETOOLONG;
 			file = fopen(path, "r");
 			if (file == NULL) {
-				TRACE_L1("failed to open PPS stats file %s\n", path);
-				return ENOENT;
+				TRACE_L1("failed to open PPS stats file %s, %s\n",
+					 path, errno);
+				return errno;
 			}
 			if (fscanf(file, "%d", &sysfs_stat_value) != 1) {
 				ERROR("couldn't read statistic from %s\n", path);
@@ -2339,9 +2343,13 @@ int sfptpd_interface_driver_stats_reset(struct sfptpd_interface *interface)
 		if (rc > 0 && rc < sizeof(path)) {
 			file = fopen(path, "w");
 			if (file) {
-				fputs("1\n", file);
-					fclose(file);
+				rc = fputs("1\n", file) >= 0 ? 0 : errno;
+				fclose(file);
+			} else {
+				rc = errno;
 			}
+		} else {
+			rc = errno;
 		}
 	}
 

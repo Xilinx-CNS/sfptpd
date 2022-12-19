@@ -329,6 +329,8 @@ bool sfptpd_interface_get_sysfs_max_freq_adj(struct sfptpd_interface *interface,
 					     int *max_freq_adj);
 
 /** Read driver stats for an interface.
+ * If an error occurs trying to read any of the statistics, other statistics
+ * may be updated, resulting in a partial update of the given array.
  * @param interface Pointer to interface instance
  * @param stats array to store driver stats in
  * @return 0 on success, otherwise errno.
