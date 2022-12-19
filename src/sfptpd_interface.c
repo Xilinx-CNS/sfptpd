@@ -172,7 +172,7 @@ struct sfptpd_interface {
 	char driver_version[SFPTPD_VERSION_STRING_MAX];
 	char fw_version[SFPTPD_VERSION_STRING_MAX];
 	char driver[32];
-	char n_stats;
+	uint32_t n_stats;
 
 	/* Indicates that the associated PTP clock supports the PHC API */
 	bool clock_supports_phc;
