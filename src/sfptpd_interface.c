@@ -923,7 +923,7 @@ static void interface_driver_stats_init(struct sfptpd_interface *interface)
 
 no_ethtool:
 	for (j = 0; j < SFPTPD_DRVSTAT_MAX; j++) {
-		if (interface->drv_stat[i].method == DRV_STAT_NOT_AVAILABLE) {
+		if (interface->drv_stat[j].method == DRV_STAT_NOT_AVAILABLE) {
 
 			rc = snprintf(path, sizeof path, "/sys/class/net/%s/device/%s",
 				      interface->name, drv_stats[j].sysfs_name);
