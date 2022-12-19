@@ -23,6 +23,19 @@
 
 
 /****************************************************************************
+ * Macros
+ ****************************************************************************/
+
+/* BIC component specific trace */
+#define DBG_L1(x, ...)  TRACE(SFPTPD_COMPONENT_ID_BIC, 1, x, ##__VA_ARGS__)
+#define DBG_L2(x, ...)  TRACE(SFPTPD_COMPONENT_ID_BIC, 2, x, ##__VA_ARGS__)
+#define DBG_L3(x, ...)  TRACE(SFPTPD_COMPONENT_ID_BIC, 3, x, ##__VA_ARGS__)
+#define DBG_L4(x, ...)  TRACE(SFPTPD_COMPONENT_ID_BIC, 4, x, ##__VA_ARGS__)
+#define DBG_L5(x, ...)  TRACE(SFPTPD_COMPONENT_ID_BIC, 5, x, ##__VA_ARGS__)
+#define DBG_L6(x, ...)  TRACE(SFPTPD_COMPONENT_ID_BIC, 6, x, ##__VA_ARGS__)
+
+
+/****************************************************************************
  * Types and Structures
  ****************************************************************************/
 
@@ -137,10 +150,10 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 
 	choice = NULL;
 
-	TRACE_L5("selection%s: comparing %s and %s\n",
-		 phase,
-		 instance_record_a->info.name,
-		 instance_record_b->info.name);
+	DBG_L3("selection%s: comparing %s and %s\n",
+	       phase,
+	       instance_record_a->info.name,
+	       instance_record_b->info.name);
 
 	for (rule_idx = 0; choice == NULL; rule_idx++) {
 		enum sfptpd_selection_rule rule = policy->rules[rule_idx];
@@ -148,10 +161,10 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 
 		switch (policy->rules[rule_idx]) {
 		case SELECTION_RULE_MANUAL:
-			TRACE_L5("selection%s:   comparing %s: %s, %s\n",
-				 phase, rule_name,
-				 instance_record_a->selected ? "manually-selected" : "not-manually-selected",
-				 instance_record_b->selected ? "manually-selected" : "not-manually-selected");
+			DBG_L3("selection%s:   comparing %s: %s, %s\n",
+			       phase, rule_name,
+			       instance_record_a->selected ? "manually-selected" : "not-manually-selected",
+			       instance_record_b->selected ? "manually-selected" : "not-manually-selected");
 
 			if (instance_record_a->selected)
 				choice = instance_record_a;
@@ -162,9 +175,9 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 			state_priority_a = state_priorities[status_a->state];
 			state_priority_b = state_priorities[status_b->state];
 
-			TRACE_L5("selection%s:   comparing %s: %d, %d\n",
-				 phase, rule_name,
-				 state_priority_a, state_priority_b);
+			DBG_L3("selection%s:   comparing %s: %d, %d\n",
+			       phase, rule_name,
+			       state_priority_a, state_priority_b);
 
 			if (state_priority_a < state_priority_b) {
 				choice = instance_record_a;
@@ -173,10 +186,10 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 			}
 			break;
 		case SELECTION_RULE_NO_ALARMS:
-			TRACE_L5("selection%s:   comparing %s: %s, %s\n",
-				 phase, rule_name,
-				 status_a->alarms == 0 ? "no-alarms" : "alarms",
-				 status_b->alarms == 0 ? "no-alarms" : "alarms");
+			DBG_L3("selection%s:   comparing %s: %s, %s\n",
+			       phase, rule_name,
+			       status_a->alarms == 0 ? "no-alarms" : "alarms",
+			       status_b->alarms == 0 ? "no-alarms" : "alarms");
 
 			if ((status_a->alarms == 0) && (status_b->alarms != 0)) {
 				choice = instance_record_a;
@@ -185,9 +198,9 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 			}
 			break;
 		case SELECTION_RULE_USER_PRIORITY:
-			TRACE_L5("selection%s:   comparing %s: %d, %d\n",
-				 phase, rule_name,
-				 status_a->user_priority, status_b->user_priority);
+			DBG_L3("selection%s:   comparing %s: %d, %d\n",
+			       phase, rule_name,
+			       status_a->user_priority, status_b->user_priority);
 
 			if (status_a->user_priority < status_b->user_priority) {
 				choice = instance_record_a;
@@ -196,9 +209,9 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 			}
 			break;
 		case SELECTION_RULE_CLUSTERING:
-			TRACE_L5("selection%s:   comparing %s: %d, %d\n",
-				 phase, rule_name,
-				 status_a->clustering_score, status_b->clustering_score);
+			DBG_L3("selection%s:   comparing %s: %d, %d\n",
+			       phase, rule_name,
+			       status_a->clustering_score, status_b->clustering_score);
 
 			if (status_a->clustering_score > status_b->clustering_score) {
 				choice = instance_record_a;
@@ -207,9 +220,9 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 			}
 			break;
 		case SELECTION_RULE_CLOCK_CLASS:
-			TRACE_L5("selection%s:   comparing %s: %d, %d\n",
-				 phase, rule_name,
-				 status_a->master.clock_class, status_b->master.clock_class);
+			DBG_L3("selection%s:   comparing %s: %d, %d\n",
+			       phase, rule_name,
+			       status_a->master.clock_class, status_b->master.clock_class);
 
 			if (status_a->master.clock_class < status_b->master.clock_class) {
 				choice = instance_record_a;
@@ -221,9 +234,9 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 			total_accuracy_a = status_a->master.accuracy + status_a->local_accuracy;
 			total_accuracy_b = status_b->master.accuracy + status_b->local_accuracy;
 
-			TRACE_L5("selection%s:   comparing %s: %lf, %lf\n",
-				 phase, rule_name,
-				 total_accuracy_a, total_accuracy_b);
+			DBG_L3("selection%s:   comparing %s: %lf, %lf\n",
+			       phase, rule_name,
+			       total_accuracy_a, total_accuracy_b);
 
 			if (total_accuracy_a < total_accuracy_b) {
 				choice = instance_record_a;
@@ -232,9 +245,9 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 			}
 			break;
 		case SELECTION_RULE_ALLAN_VARIANCE:
-			TRACE_L5("selection%s:   comparing %s: %Lg, %Lg\n",
-				 phase, rule_name,
-				 status_a->master.allan_variance, status_b->master.allan_variance);
+			DBG_L3("selection%s:   comparing %s: %Lg, %Lg\n",
+			       phase, rule_name,
+			       status_a->master.allan_variance, status_b->master.allan_variance);
 
 			if (status_a->master.allan_variance < status_b->master.allan_variance) {
 				choice = instance_record_a;
@@ -243,9 +256,9 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 			}
 			break;
 		case SELECTION_RULE_STEPS_REMOVED:
-			TRACE_L5("selection%s:   comparing %s: %d, %d\n",
-				 phase, rule_name,
-				 status_a->master.steps_removed, status_b->master.steps_removed);
+			DBG_L3("selection%s:   comparing %s: %d, %d\n",
+			       phase, rule_name,
+			       status_a->master.steps_removed, status_b->master.steps_removed);
 
 			if (status_a->master.steps_removed < status_b->master.steps_removed) {
 				choice = instance_record_a;
@@ -255,11 +268,11 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 			break;
 		case SELECTION_RULE_TIE_BREAK:
 			/* Indeterminate but need a deterministic answer: choose lowest pointer. */
-			TRACE_L5("selection%s: can't decide between instance clocks %s and %s: settling with %s\n",
-			     phase,
-			     instance_record_a->info.name,
-			     instance_record_b->info.name,
-			     instance_record_a->info.name);
+			DBG_L3("selection%s: can't decide between instance clocks %s and %s: settling with %s\n",
+			       phase,
+			       instance_record_a->info.name,
+			       instance_record_b->info.name,
+			       instance_record_a->info.name);
 
 			/* Assigning to 'choice' breaks the loop. */
 			choice = instance_record_a < instance_record_b ? instance_record_a : instance_record_b;
@@ -279,12 +292,12 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 		*decisive_rule_index = rule_idx;
 	}
 
-	TRACE_L4("selection%s: in comparison, preferring %s to %s by rule %s (%d)\n",
-		 phase,
-		 choice->info.name,
-		 choice == instance_record_a ? instance_record_b->info.name : instance_record_a->info.name,
-		 get_selection_rule_name(policy->rules[rule_idx]),
-		 rule_idx);
+	DBG_L2("selection%s: in comparison, preferring %s to %s by rule %s (%d)\n",
+	       phase,
+	       choice->info.name,
+	       choice == instance_record_a ? instance_record_b->info.name : instance_record_a->info.name,
+	       get_selection_rule_name(policy->rules[rule_idx]),
+	       rule_idx);
 
 	return choice;
 }

@@ -228,7 +228,7 @@ static const sfptpd_config_option_t config_general_options[] =
 		STRINGIFY(SFPTPD_DEFAULT_SERVO_K_INTEGRAL) ".",
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
 		parse_pid_filter_ki},
-	{"trace_level", "[<general | threading>] NUMBER",
+	{"trace_level", "[<general | threading | bic>] NUMBER",
 		"Specifies a module trace level, if built with trace enabled. If module name is omitted, will set the 'general' module trace level. Default is 0 - no trace",
 		~1, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
 		parse_trace_level},
@@ -986,6 +986,8 @@ static int parse_trace_level(struct sfptpd_config_section *section, const char *
 			general->trace_level = trace_level;
 		else if (strcmp(module_name, "threading") == 0)
 			general->threading_trace_level = trace_level;
+		else if (strcmp(module_name, "bic") == 0)
+			general->bic_trace_level = trace_level;
 		else {
 			ERROR("Unknown <module> argument for `trace_level`: '%s'\n", module_name);
 			return EINVAL;
