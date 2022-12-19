@@ -31,6 +31,9 @@ Installs to /usr/local
 
 ``` sudo make install ```
 
+### Into a container image
+``` make DESTDIR=../staging INST_INITS= install```
+
 ### Building a source RPM
 ```
 mkdir -p ~/rpmbuild/SOURCES

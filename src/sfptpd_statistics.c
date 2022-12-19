@@ -92,34 +92,6 @@ static const char *stats_count_format_data   = "%-16s %14d %14d %24s %24s\n";
  * Local Functions
  ****************************************************************************/
 
-int pps_get_statistics(const char *interface, const char *stat_name,
-		       int *stat_value)
-{
-	char path[PATH_MAX];
-	FILE *file;
-	assert(interface != NULL);
-	assert(stat_value != NULL);
-	
-	/* Put together the pathname of statistic */
-	snprintf(path, sizeof(path), "/sys/class/net/%s/device/pps_stats/%s",
-		 interface, stat_name);
-
-	file = fopen(path, "r");
-	if (file == NULL) {
-		TRACE_L1("failed to open PPS stats file %s\n", path);
-		return ENOENT;
-	}
-	
-	if (fscanf(file, "%d", stat_value) != 1) {
-		ERROR("couldn't read statistic from %s\n", path);
-		fclose(file);
-		return EIO;
-	}
-	
-	fclose(file);
-	return 0;
-}
-
 
 /****************************************************************************
  * Convergence Measure
@@ -259,43 +231,27 @@ int sfptpd_stats_get_pps_statistics(struct sfptpd_interface *interface,
 				    struct sfptpd_stats_pps *pps_stats)
 {
 	int rc;
-	const char *name;
+	uint64_t stats[SFPTPD_DRVSTAT_MAX];
 
 	if (interface == NULL) {
 		ERROR("stats: pps statistics requested without an interface\n");
 		return EINVAL;
 	}
 
-	name = sfptpd_interface_get_name(interface);
+	rc = sfptpd_interface_driver_stats_read(interface, stats);
+	if (rc != 0)
+		return rc;
 
-	rc = pps_get_statistics(name, "pps_oflow", &pps_stats->overflow_count);
-	if (rc != 0)
-		return rc;
-	rc = pps_get_statistics(name, "pps_bad", &pps_stats->bad_period_count);
-	if (rc != 0)
-		return rc;
-	rc = pps_get_statistics(name, "pps_off_last", &pps_stats->offset.last);
-	if (rc != 0)
-		return rc;
-	rc = pps_get_statistics(name, "pps_off_mean", &pps_stats->offset.mean);
-	if (rc != 0)
-		return rc;
-	rc = pps_get_statistics(name, "pps_off_min", &pps_stats->offset.min);
-	if (rc != 0)
-		return rc;
-	rc = pps_get_statistics(name, "pps_off_max", &pps_stats->offset.max);
-	if (rc != 0)
-		return rc;
-	rc = pps_get_statistics(name, "pps_per_last", &pps_stats->period.last);
-	if (rc != 0)
-		return rc;
-	rc = pps_get_statistics(name, "pps_per_mean", &pps_stats->period.mean);
-	if (rc != 0)
-		return rc;
-	rc = pps_get_statistics(name, "pps_per_min", &pps_stats->period.min);
-	if (rc != 0)
-		return rc;
-	rc = pps_get_statistics(name, "pps_per_max", &pps_stats->period.max);
+	pps_stats->overflow_count = stats[SFPTPD_DRVSTAT_PPS_OFLOW];
+	pps_stats->bad_period_count = stats[SFPTPD_DRVSTAT_PPS_BAD];
+	pps_stats->offset.last = stats[SFPTPD_DRVSTAT_PPS_OFF_LAST];
+	pps_stats->offset.mean = stats[SFPTPD_DRVSTAT_PPS_OFF_MEAN];
+	pps_stats->offset.min = stats[SFPTPD_DRVSTAT_PPS_OFF_MIN];
+	pps_stats->offset.max = stats[SFPTPD_DRVSTAT_PPS_OFF_MAX];
+	pps_stats->period.last = stats[SFPTPD_DRVSTAT_PPS_PER_LAST];
+	pps_stats->period.mean = stats[SFPTPD_DRVSTAT_PPS_PER_MEAN];
+	pps_stats->period.min = stats[SFPTPD_DRVSTAT_PPS_PER_MIN];
+	pps_stats->period.max = stats[SFPTPD_DRVSTAT_PPS_PER_MAX];
 
 	return rc;
 }
@@ -303,21 +259,11 @@ int sfptpd_stats_get_pps_statistics(struct sfptpd_interface *interface,
 
 void sfptpd_stats_reset_pps_statistics(struct sfptpd_interface *interface)
 {
-	FILE *file;
-	char path[128];
 	int rc;
 
-	assert(interface != NULL);
-
-	/* Put together the pathname of statistic */
-	rc = snprintf(path, sizeof(path), "/sys/class/net/%s/device/ptp_stats",
-		      sfptpd_interface_get_name(interface));
-	if (rc > 0 && rc < sizeof(path)) {
-		file = fopen(path, "w");
-		if (file) {
-			fputs("1\n", file);
-			fclose(file);
-		}
+	rc = sfptpd_interface_driver_stats_reset(interface);
+	if (rc != 0) {
+		ERROR("stats: reset failed\n", strerror(rc));
 	}
 }
 
