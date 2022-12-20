@@ -182,6 +182,7 @@ typedef struct sfptpd_config_general {
 	char stats_log_filename[PATH_MAX];
 	unsigned int trace_level;
 	unsigned int threading_trace_level;
+	unsigned int bic_trace_level;
 	sfptpd_config_clocks_t clocks;
 	bool non_sfc_nics;
 	bool assume_one_phc_per_nic;

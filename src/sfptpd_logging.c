@@ -269,6 +269,7 @@ int sfptpd_log_open(struct sfptpd_config *config)
 	stats_log = general_config->stats_log;
 	trace_levels[SFPTPD_COMPONENT_ID_SFPTPD] = general_config->trace_level;
 	trace_levels[SFPTPD_COMPONENT_ID_THREADING] = general_config->threading_trace_level;
+	trace_levels[SFPTPD_COMPONENT_ID_BIC] = general_config->bic_trace_level;
 
 	/* Make sure that the directory for saved clock state exists */
 	rc_dircreate = (mkdir(state_path, 0777) < 0) ? errno : 0;
