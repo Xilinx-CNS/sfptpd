@@ -85,6 +85,20 @@ const struct sync_module_bitmask_to_text_map alarm_texts[] = {
 
 STATIC_ASSERT(1 << (sizeof(alarm_texts) / sizeof(*alarm_texts)) == SYNC_MODULE_ALARM_MAX);
 
+
+const char *sync_module_state_text[] = {
+    "listening",        /* SYNC_MODULE_STATE_LISTENING */
+    "slave",            /* SYNC_MODULE_STATE_SLAVE */
+    "master",           /* SYNC_MODULE_STATE_MASTER */
+    "passive",          /* SYNC_MODULE_STATE_PASSIVE */
+    "disabled",         /* SYNC_MODULE_STATE_DISABLED */
+    "faulty",           /* SYNC_MODULE_STATE_FAULTY */
+    "selection",        /* SYNC_MODULE_STATE_SELECTION */
+};
+
+STATIC_ASSERT(sizeof(sync_module_state_text) / sizeof(*sync_module_state_text) == SYNC_MODULE_STATE_MAX);
+
+
 /****************************************************************************
  * Private functions
  ****************************************************************************/
