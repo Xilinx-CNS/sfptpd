@@ -396,7 +396,7 @@ static void freerun_on_get_status(freerun_module_t *fr,
 	status->master.clock_class = instance->config->clock_class;
 	status->master.time_source = SFPTPD_TIME_SOURCE_INTERNAL_OSCILLATOR;
 	status->master.accuracy = instance->config->clock_accuracy;
-	status->master.allan_variance = 0.0;
+	status->master.allan_variance = NAN;
 	status->master.steps_removed = 0;
 	status->master.time_traceable = instance->config->clock_time_traceable;
 	status->master.freq_traceable = instance->config->clock_freq_traceable;

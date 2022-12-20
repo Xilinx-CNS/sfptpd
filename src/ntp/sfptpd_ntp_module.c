@@ -780,7 +780,7 @@ static void ntp_handle_state_change(ntp_module_t *ntp, struct ntp_state *new_sta
 
 		status.master.clock_id = SFPTPD_CLOCK_ID_UNINITIALISED;
 		status.master.accuracy = new_state->root_dispersion;
-		status.master.allan_variance = 0.0;
+		status.master.allan_variance = NAN;
 		status.master.time_traceable = false;
 		status.master.freq_traceable = false;
 
@@ -928,7 +928,7 @@ static void ntp_on_get_status(ntp_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 		status->master.clock_class = SFPTPD_CLOCK_CLASS_LOCKED;
 		status->master.time_source = SFPTPD_TIME_SOURCE_NTP;
 		status->master.accuracy = ntp->state.root_dispersion;
-		status->master.allan_variance = 0.0;
+		status->master.allan_variance = NAN;
 		status->master.time_traceable = false;
 		status->master.freq_traceable = false;
 		status->master.steps_removed = ntp->state.stratum;
@@ -937,7 +937,7 @@ static void ntp_on_get_status(ntp_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 		status->master.clock_class = SFPTPD_CLOCK_CLASS_FREERUNNING;
 		status->master.time_source = SFPTPD_TIME_SOURCE_INTERNAL_OSCILLATOR;
 		status->master.accuracy = INFINITY;
-		status->master.allan_variance = 0.0;
+		status->master.allan_variance = NAN;
 		status->master.time_traceable = false;
 		status->master.freq_traceable = false;
 		status->master.steps_removed = 0;

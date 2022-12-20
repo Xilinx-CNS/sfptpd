@@ -513,7 +513,7 @@ static void ptp_translate_master_characteristics(struct sfptpd_ptp_instance *ins
 	status->master.clock_class = ptp_translate_clock_class_from_ieee1588(clock_class);
 	status->master.time_source = instance->ptpd_port_snapshot.parent.grandmaster_time_source;
 	status->master.accuracy = ptp_translate_accuracy_to_float(accuracy);
-	status->master.allan_variance = ptp_translate_allan_variance_from_ieee1588(variance);
+	status->master.allan_variance = status->master.remote_clock ? ptp_translate_allan_variance_from_ieee1588(variance) : NAN;
 	status->master.time_traceable = instance->ptpd_port_snapshot.time.time_traceable;
 	status->master.freq_traceable = instance->ptpd_port_snapshot.time.freq_traceable;
 	status->master.steps_removed = instance->ptpd_port_snapshot.current.steps_removed;

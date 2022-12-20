@@ -1756,7 +1756,7 @@ static int pps_do_poll(pps_module_t *pps, struct sfptpd_pps_instance *instance)
 			status.master.clock_class = config->master_clock_class;
 			status.master.time_source = config->master_time_source;
 			status.master.accuracy = config->master_accuracy;
-			status.master.allan_variance = 0.0;
+			status.master.allan_variance = NAN;
 			status.master.time_traceable = config->master_time_traceable;
 			status.master.freq_traceable = config->master_freq_traceable;
 			status.master.steps_removed = config->steps_removed;
@@ -1768,7 +1768,7 @@ static int pps_do_poll(pps_module_t *pps, struct sfptpd_pps_instance *instance)
 			status.master.clock_class = SFPTPD_CLOCK_CLASS_FREERUNNING;
 			status.master.time_source = SFPTPD_TIME_SOURCE_INTERNAL_OSCILLATOR;
 			status.master.accuracy = INFINITY;
-			status.master.allan_variance = 0.0;
+			status.master.allan_variance = NAN;
 			status.master.time_traceable = false;
 			status.master.freq_traceable = false;
 			status.master.steps_removed = 0;
@@ -1880,7 +1880,7 @@ static void pps_on_get_status(pps_module_t *pps, sfptpd_sync_module_msg_t *msg)
 		status->master.clock_class = instance->config->master_clock_class;
 		status->master.time_source = instance->config->master_time_source;
 		status->master.accuracy = instance->config->master_accuracy;
-		status->master.allan_variance = 0.0;
+		status->master.allan_variance = NAN;
 		status->master.time_traceable = instance->config->master_time_traceable;
 		status->master.freq_traceable = instance->config->master_freq_traceable;
 		status->master.steps_removed = instance->config->steps_removed;
@@ -1892,7 +1892,7 @@ static void pps_on_get_status(pps_module_t *pps, sfptpd_sync_module_msg_t *msg)
 		status->master.clock_class = SFPTPD_CLOCK_CLASS_FREERUNNING;
 		status->master.time_source = SFPTPD_TIME_SOURCE_INTERNAL_OSCILLATOR;
 		status->master.accuracy = INFINITY;
-		status->master.allan_variance = 0.0;
+		status->master.allan_variance = NAN;
 		status->master.time_traceable = false;
 		status->master.freq_traceable = false;
 		status->master.steps_removed = 0;

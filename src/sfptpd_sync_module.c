@@ -246,7 +246,8 @@ bool sfptpd_sync_module_gm_info_equal(struct sfptpd_grandmaster_info *gm1,
 	       (gm1->clock_class == gm2->clock_class) &&
 	       (gm1->time_source == gm2->time_source) &&
 	       (gm1->accuracy == gm2->accuracy) &&
-	       (gm1->allan_variance == gm2->allan_variance) &&
+	       (gm1->allan_variance == gm2->allan_variance ||
+		(isnan(gm1->allan_variance) && isnan(gm2->allan_variance))) &&
 	       (gm1->steps_removed == gm2->steps_removed);
 }
 
