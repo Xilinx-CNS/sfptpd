@@ -363,9 +363,9 @@ static int freerun_select_clock(freerun_module_t *fr,
 	/* Step the slave clock to the master's time */
 	sfptpd_clock_adjust_time(instance->clock, &diff);
 
-	INFO("freerun %s: selected clock %s as reference\n",
-	     SFPTPD_CONFIG_GET_NAME(config),
-	     sfptpd_clock_get_long_name(instance->clock));
+	TRACE_L4("freerun %s: selected clock %s as reference\n",
+		 SFPTPD_CONFIG_GET_NAME(config),
+		 sfptpd_clock_get_long_name(instance->clock));
 	return 0;
 }
 
