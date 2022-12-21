@@ -139,8 +139,8 @@ int sfptpd_ntpclient_create(struct sfptpd_ntpclient **container,
 	rc = select_protocol(new);
 	if (rc != 0) {
 		if (rc == ENOPROTOOPT)
-			WARNING("ntpclient: could not communicate with NTP "
-				"daemon over any known protocol.\n");
+			TRACE_L5("ntpclient: could not communicate with NTP "
+				 "daemon over any known protocol.\n");
 	}
 
 	/* Success */

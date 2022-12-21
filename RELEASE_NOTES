@@ -1,6 +1,6 @@
 Solarflare Enhanced PTP Daemon (sfptpd) from Xilinx
 ===================================================
-Version: v3.6.0.1011
+Version: v3.6.0.1012
 
 
 Overview
@@ -116,7 +116,7 @@ Advanced notice of likely future changes after v3.6
 Changelog
 ---------
 
-### v3.6.0.1011 Feature Release
+### v3.6.0.1012 Feature Release
 
 Features:
  ~ Support Xilinx ALVEO X3522 NICs (SWPTP-1162)
@@ -168,9 +168,23 @@ Features:
  ~ Add 'manual-startup' selection policy to start with a configured sync
     instance before moving onto automatic selection. (SWPTP-823)
 
+ ~ Add separate trace component to help understand the detailed reason for
+    changes in sync instance selection. Disable in normal use to avoid excessive
+    logging.
+     [general]
+     trace_level bic 3
+
+Issue SWPTP-1257
+ ~ It is not fatal for the system clock not to be using the superior TSC.
 Issue SWPTP-1264
  ~ Drop check for ancient driver/fw versions, avoiding parse failures
     for in-tree drivers in new kernels.
+Issue SWPTP-1280
+ ~ Only use Allan Variance in clock source comparisons when measured by
+    both sources, otherwise fall through to next selection criterion.
+Issue SWPTP-1281
+ ~ Allow for delayed first sample when using PPS clock diff method; helps
+    when using in-tree sfc driver.
 
 
 ### v3.5.0.1004 Feature Release

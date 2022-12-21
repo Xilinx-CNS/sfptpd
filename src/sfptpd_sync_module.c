@@ -85,6 +85,20 @@ const struct sync_module_bitmask_to_text_map alarm_texts[] = {
 
 STATIC_ASSERT(1 << (sizeof(alarm_texts) / sizeof(*alarm_texts)) == SYNC_MODULE_ALARM_MAX);
 
+
+const char *sync_module_state_text[] = {
+    "listening",        /* SYNC_MODULE_STATE_LISTENING */
+    "slave",            /* SYNC_MODULE_STATE_SLAVE */
+    "master",           /* SYNC_MODULE_STATE_MASTER */
+    "passive",          /* SYNC_MODULE_STATE_PASSIVE */
+    "disabled",         /* SYNC_MODULE_STATE_DISABLED */
+    "faulty",           /* SYNC_MODULE_STATE_FAULTY */
+    "selection",        /* SYNC_MODULE_STATE_SELECTION */
+};
+
+STATIC_ASSERT(sizeof(sync_module_state_text) / sizeof(*sync_module_state_text) == SYNC_MODULE_STATE_MAX);
+
+
 /****************************************************************************
  * Private functions
  ****************************************************************************/
@@ -232,7 +246,8 @@ bool sfptpd_sync_module_gm_info_equal(struct sfptpd_grandmaster_info *gm1,
 	       (gm1->clock_class == gm2->clock_class) &&
 	       (gm1->time_source == gm2->time_source) &&
 	       (gm1->accuracy == gm2->accuracy) &&
-	       (gm1->allan_variance == gm2->allan_variance) &&
+	       (gm1->allan_variance == gm2->allan_variance ||
+		(isnan(gm1->allan_variance) && isnan(gm2->allan_variance))) &&
 	       (gm1->steps_removed == gm2->steps_removed);
 }
 

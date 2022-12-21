@@ -79,6 +79,9 @@ typedef enum sfptpd_sync_module_state {
 	SYNC_MODULE_STATE_MAX
 } sfptpd_sync_module_state_t;
 
+/** Array of names in the same order as enum sfptpd_sync_module_state */
+extern const char *sync_module_state_text[];
+
 /** PTP: Indicates that Sync packets are not being received */
 #define SYNC_MODULE_ALARM_NO_SYNC_PKTS               (1<<0)
 /** PTP: Indicates that FollowUp packets are not being received */

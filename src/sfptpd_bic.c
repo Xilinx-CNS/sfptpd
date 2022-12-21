@@ -175,9 +175,10 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 			state_priority_a = state_priorities[status_a->state];
 			state_priority_b = state_priorities[status_b->state];
 
-			DBG_L3("selection%s:   comparing %s: %d, %d\n",
+			DBG_L3("selection%s:   comparing %s: %s (%d), %s (%d)\n",
 			       phase, rule_name,
-			       state_priority_a, state_priority_b);
+			       sync_module_state_text[status_a->state], state_priority_a,
+			       sync_module_state_text[status_b->state], state_priority_b);
 
 			if (state_priority_a < state_priority_b) {
 				choice = instance_record_a;
@@ -220,10 +221,10 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 			}
 			break;
 		case SELECTION_RULE_CLOCK_CLASS:
-			DBG_L3("selection%s:   comparing %s: %d, %d\n",
+			DBG_L3("selection%s:   comparing %s: %s (%d), %s (%d)\n",
 			       phase, rule_name,
-			       status_a->master.clock_class, status_b->master.clock_class);
-
+			       sfptpd_clock_class_text(status_a->master.clock_class), status_a->master.clock_class,
+			       sfptpd_clock_class_text(status_b->master.clock_class), status_b->master.clock_class);
 			if (status_a->master.clock_class < status_b->master.clock_class) {
 				choice = instance_record_a;
 			} else if (status_a->master.clock_class > status_b->master.clock_class) {

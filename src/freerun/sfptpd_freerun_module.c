@@ -363,9 +363,9 @@ static int freerun_select_clock(freerun_module_t *fr,
 	/* Step the slave clock to the master's time */
 	sfptpd_clock_adjust_time(instance->clock, &diff);
 
-	INFO("freerun %s: selected clock %s as reference\n",
-	     SFPTPD_CONFIG_GET_NAME(config),
-	     sfptpd_clock_get_long_name(instance->clock));
+	TRACE_L4("freerun %s: selected clock %s as reference\n",
+		 SFPTPD_CONFIG_GET_NAME(config),
+		 sfptpd_clock_get_long_name(instance->clock));
 	return 0;
 }
 
@@ -396,7 +396,7 @@ static void freerun_on_get_status(freerun_module_t *fr,
 	status->master.clock_class = instance->config->clock_class;
 	status->master.time_source = SFPTPD_TIME_SOURCE_INTERNAL_OSCILLATOR;
 	status->master.accuracy = instance->config->clock_accuracy;
-	status->master.allan_variance = 0.0;
+	status->master.allan_variance = NAN;
 	status->master.steps_removed = 0;
 	status->master.time_traceable = instance->config->clock_time_traceable;
 	status->master.freq_traceable = instance->config->clock_freq_traceable;

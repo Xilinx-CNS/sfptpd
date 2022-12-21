@@ -67,6 +67,8 @@ int clock_adjtime(clockid_t clock, struct timex *timex_block)
 /* Number of samples to take when comparing with PTP_SYS_OFFSET (1-25) */
 #define SYS_OFFSET_NUM_SAMPLES             (4)
 
+/* How long to allow for first successful PPS attempt */
+#define PPS_FIRST_ATTEMPT_TIMEOUT_NS       (ONE_BILLION * 1.2)
 
 const char *sfptpd_phc_diff_method_text[] = {
 	"sys-offset-precise",
@@ -140,6 +142,9 @@ struct sfptpd_phc {
 
 	/* Last PPS event time - used to avoid spamming the ioctl */
 	struct timespec pps_prev_monotime;
+
+	/* First PPS read attempt */
+	struct timespec pps_first_attempt;
 
 	/* Last calculated diff value */
 	struct timespec diff_prev;
@@ -308,6 +313,10 @@ static int phc_configure_pps(struct sfptpd_phc *phc)
 	phc->pps_prev.sec = 0;
 	phc->pps_prev.nsec = 0;
 
+	/* Reset first attempt time */
+	phc->pps_first_attempt.tv_sec = 0;
+	phc->pps_first_attempt.tv_nsec = 0;
+
 	TRACE_L3("phc%d: successfully configured %s\n",
 		 phc->phc_idx, fts_entry->fts_name);
 	fts_close(fts);
@@ -415,8 +424,8 @@ static int phc_discover_devpps(struct sfptpd_phc *phc,
 
 	/* If we didn't find the PPS device, abandon ship */
 	if (state != STATE_FOUND_EXTPPS) {
-		ERROR("phc%d: failed to find corresponding external PPS device\n",
-		      phc->phc_idx);
+		TRACE_L6("phc%d: failed to find corresponding external PPS device\n",
+			 phc->phc_idx);
 		rc = ENOENT;
 		goto fail1;
 	}
@@ -498,6 +507,8 @@ static int phc_compare_using_pps(struct sfptpd_phc *phc, struct timespec *diff)
 	struct pps_fdata pps;
 	int rc;
 	struct timespec approx, mono_now;
+	sfptpd_time_t since_read;
+	sfptpd_time_t since_attempt;
 
 	assert(phc != NULL);
 	assert(diff != NULL);
@@ -505,13 +516,18 @@ static int phc_compare_using_pps(struct sfptpd_phc *phc, struct timespec *diff)
 	/* By definition, PPS events only happen once per second.
 	 * So we only start calling the ioctl when it's close to happening. */
 	clock_gettime(CLOCK_MONOTONIC, &mono_now);
-	sfptpd_time_t ns_diff = sfptpd_time_timespec_to_float_ns(&mono_now) -
+	since_read = sfptpd_time_timespec_to_float_ns(&mono_now) -
 			sfptpd_time_timespec_to_float_ns(&phc->pps_prev_monotime);
 
+	if (phc->pps_first_attempt.tv_sec == 0 && phc->pps_first_attempt.tv_nsec == 0)
+		phc->pps_first_attempt = mono_now;
+	since_attempt = sfptpd_time_timespec_to_float_ns(&mono_now) -
+			sfptpd_time_timespec_to_float_ns(&phc->pps_first_attempt);
+
 	/* >900 ms elapsed since last PPS event? */
-	if (ns_diff < (ONE_BILLION * 0.9)) {
+	if (since_read < (ONE_BILLION * 0.9)) {
 		TRACE_L6("phc%d: returning previous PPS sample due to short elapsed time %Lf\n",
-				 phc->phc_idx, ns_diff);
+				 phc->phc_idx, since_read);
 		*diff = phc->diff_prev;
 		return phc->stepped_since_sample ? EAGAIN : 0;
 	}
@@ -536,12 +552,20 @@ static int phc_compare_using_pps(struct sfptpd_phc *phc, struct timespec *diff)
 		/* Some adapters (e.g. ixgbe X540) never produce any PPS data.
 		 * In this case we fall back to another diff method. */
 		if (pps.info.assert_tu.sec == 0 && pps.info.assert_tu.nsec == 0) {
-			WARNING("phc%d: no pps data, changing diff method\n",
-				phc->phc_idx);
+			WARNING("phc%d: no initial pps data, changing diff method in %0.1fs\n",
+				phc->phc_idx, ((double) (PPS_FIRST_ATTEMPT_TIMEOUT_NS - since_attempt)) / ONE_BILLION);
+
+			if (since_attempt < PPS_FIRST_ATTEMPT_TIMEOUT_NS)
+				return EAGAIN;
 
 			rc = phc_set_fallback_diff_method(phc);
 			if (rc != 0)
 				return rc;
+
+			NOTICE("phc%d: changed diff method from %s to %s\n",
+			       phc->phc_idx,
+			       sfptpd_phc_diff_method_text[SFPTPD_DIFF_METHOD_PPS],
+			       sfptpd_phc_get_diff_method_name(phc));
 
 			/* Make sure we don't go into infinite recursion. */
 			assert(phc->diff_method != SFPTPD_DIFF_METHOD_PPS);
