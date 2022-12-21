@@ -469,8 +469,8 @@ static int phc_discover_devpps(struct sfptpd_phc *phc,
 
 	/* If we didn't find the PPS device, abandon ship */
 	if (state != STATE_FOUND_EXTPPS) {
-		ERROR("phc%d: failed to find corresponding external PPS device\n",
-		      phc->phc_idx);
+		TRACE_L6("phc%d: failed to find corresponding external PPS device\n",
+			 phc->phc_idx);
 		rc = ENOENT;
 		goto fail1;
 	}
