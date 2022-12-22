@@ -102,6 +102,9 @@ static int parse_phc_pps_methods(struct sfptpd_config_section *section, const ch
 				 unsigned int num_params, const char * const params[]);
 static int parse_ignore_critical(struct sfptpd_config_section *section, const char *option,
 				 unsigned int num_params, const char * const params[]);
+static int parse_rtc_adjust(struct sfptpd_config_section *section, const char *option,
+			    unsigned int num_params, const char * const params[]);
+
 static int validate_config(struct sfptpd_config_section *parent);
 
 static const sfptpd_config_option_t config_general_options[] =
@@ -272,6 +275,11 @@ static const sfptpd_config_option_t config_general_options[] =
 		"terminate execution but may be expected in some niche "
 		"or diagnostic use cases.",
 		~1, SFPTPD_CONFIG_SCOPE_GLOBAL, false, parse_ignore_critical},
+	{"rtc_adjust", "<off | on>",
+		"Specify whether to let the kernel adjust sync the RTC clock. "
+		"Enabled by default",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL, true,
+		parse_rtc_adjust},
 };
 
 static const sfptpd_config_option_set_t config_general_option_set =
@@ -1182,6 +1190,24 @@ static int parse_ignore_critical(struct sfptpd_config_section *section, const ch
 }
 
 
+static int parse_rtc_adjust(struct sfptpd_config_section *section, const char *option,
+			    unsigned int num_params, const char * const params[])
+{
+	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+	assert(num_params == 1);
+
+	if (strcmp(params[0], "off") == 0) {
+		general->rtc_adjust = false;
+	} else if (strcmp(params[0], "on") == 0) {
+		general->rtc_adjust = true;
+	} else {
+		return EINVAL;
+	}
+
+	return 0;
+}
+
+
 static int validate_config(struct sfptpd_config_section *parent)
 {
 	struct sfptpd_config *config = parent->config;
@@ -1261,6 +1287,7 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		new->test_mode = false;
 		new->daemon = false;
 		new->lock = true;
+		new->rtc_adjust = SFPTPD_DEFAULT_RTC_ADJUST;
 
 		new->timestamping.all = false;
 		new->timestamping.disable_on_exit = true;

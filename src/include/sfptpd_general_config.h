@@ -36,6 +36,7 @@
 #define SFPTPD_DEFAULT_NON_SFC_NICS                (false)
 #define SFPTPD_DEFAULT_ASSUME_ONE_PHC_PER_NIC      (true)
 #define SFPTPD_DEFAULT_TEST_MODE                   (false)
+#define SFPTPD_DEFAULT_RTC_ADJUST                  (true)
 #define SFPTPD_DEFAULT_SELECTION_HOLDOFF_INTERVAL  10
 #define SFPTPD_DEFAULT_SERVO_K_PROPORTIONAL        0.4
 #define SFPTPD_DEFAULT_SERVO_K_INTEGRAL            0.03
@@ -190,6 +191,7 @@ typedef struct sfptpd_config_general {
 	bool test_mode;
 	bool daemon;
 	bool lock;
+	bool rtc_adjust;
 	char state_path[PATH_MAX];
 	char control_path[PATH_MAX];
 	sfptpd_config_timestamping_t timestamping;
