@@ -592,16 +592,14 @@ struct sfptpd_servo_stats sfptpd_servo_get_stats(struct sfptpd_servo *servo)
 
 void sfptpd_servo_update_sync_status(struct sfptpd_servo *servo)
 {
-	struct sfptpd_clock *clock;
 	/* Update the NIC with the current sync status. If the slave clock is
 	 * system clock, update the NIC clock that is the master to this. If the
 	 * slave clock is a NIC clock, just update the NIC clock */
 	if (servo->slave == sfptpd_clock_get_system_clock())
-		clock = servo->master;
-	else
-		clock = servo->slave;
+		sfptpd_clock_set_sync_status(servo->master, servo->synchronized,
+					     SFPTPD_STATS_CONVERGENCE_MIN_PERIOD_DEFAULT);
 
-	sfptpd_clock_set_sync_status(clock, servo->synchronized,
+	sfptpd_clock_set_sync_status(servo->slave, servo->synchronized,
 				     SFPTPD_STATS_CONVERGENCE_MIN_PERIOD_DEFAULT);
 }
 

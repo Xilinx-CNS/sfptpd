@@ -175,6 +175,9 @@ struct sfptpd_clock_system {
 	/* Maximum and minimum tick lengths */
 	long double min_tick;
 	long double max_tick;
+
+	/* Master copy of kernel status flags */
+	int kernel_status;
 };
 
 
@@ -236,6 +239,7 @@ struct sfptpd_clock {
 
 	bool cfg_non_sfc_nics;
 	bool cfg_avoid_efx;
+	bool cfg_rtc_adjust;
 
         bool lrc_been_locked;
 };
@@ -368,6 +372,7 @@ static int clock_init_common(struct sfptpd_clock *clock,
 	/* Copy the configuration's non_sfc_nics into the clock */
 	clock->cfg_non_sfc_nics = config->non_sfc_nics;
 	clock->cfg_avoid_efx = config->avoid_efx;
+	clock->cfg_rtc_adjust = config->rtc_adjust;
 
 	/* Record whether to use saved clock corrections */
 	clock->use_clock_correction = config->clocks.persistent_correction;
@@ -570,6 +575,7 @@ static int new_system_clock(struct sfptpd_config_general *config,
 	new->u.system.tick_resolution_ppb = new->u.system.tick_freq_hz * 1000.0;
 	new->u.system.min_tick = -100000.0 / new->u.system.tick_freq_hz;
 	new->u.system.max_tick = 100000.0 / new->u.system.tick_freq_hz;
+	new->u.system.kernel_status = t.status;
 
 	/* Set a nominal value for the NIC clock accuracy and maximum frequency
 	 * adjustment */
@@ -1623,6 +1629,12 @@ int sfptpd_clock_adjust_time(struct sfptpd_clock *clock, struct timespec *offset
 		t.time.tv_sec  = offset->tv_sec;
 		t.time.tv_usec = offset->tv_nsec;
 
+		if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM &&
+		    clock->cfg_rtc_adjust) {
+			t.modes |= ADJ_STATUS;
+			t.status = clock->u.system.kernel_status;
+		}
+
 		rc = clock_adjtime(clock->posix_id, &t);
 		if (rc < 0) {
 			WARNING("clock %s: failed to step clock using clock_adjtime(), %s\n",
@@ -1740,6 +1752,11 @@ int sfptpd_clock_adjust_frequency(struct sfptpd_clock *clock, long double freq_a
 
 			t.modes |= ADJ_TICK;
 			t.tick = (long)roundl(tick + (1000000.0 / system->tick_freq_hz));
+
+			if (clock->cfg_rtc_adjust) {
+				t.modes |= ADJ_STATUS;
+				t.status = clock->u.system.kernel_status;
+			}
 		}
 
 		/* The 'freq' field in the 'struct timex' is in parts per
@@ -1806,33 +1823,30 @@ int sfptpd_clock_schedule_leap_second(enum sfptpd_leap_second_type type)
 		 (type == SFPTPD_LEAP_SECOND_NONE)? "no":
 			(type == SFPTPD_LEAP_SECOND_59)? "59": "61");
 
-	/* Read the adjtimex flags */
-	t.modes = ADJ_STATUS;
-	t.status = 0;
-	rc = adjtimex(&t);
-	if (rc < 0) {
-		ERROR("couldn't clear adjtimex status, %s\n", strerror(errno));
-		rc = errno;
-		goto finish;
+	/* Adjust master copy of status flags */
+	clock->u.system.kernel_status &= ~(STA_DEL | STA_INS);
+	switch (type) {
+	case SFPTPD_LEAP_SECOND_NONE:
+		/* Cancelled leap second */
+		break;
+	case SFPTPD_LEAP_SECOND_59:
+		clock->u.system.kernel_status |= STA_DEL;
+		break;
+	case SFPTPD_LEAP_SECOND_61:
+		clock->u.system.kernel_status |= STA_INS;
+		break;
+	default:
+		assert(!"missing case");
 	}
 
-	/* If we're cancelling a leap second, the work is done. Return */
-	if (type == SFPTPD_LEAP_SECOND_NONE)
-		goto finish;
-
-	/* Clear the leap second flag */
+	/* Write the adjtimex flags */
 	t.modes = ADJ_STATUS;
-	t.status = 0;
-	if (type == SFPTPD_LEAP_SECOND_59)
-		t.status |= STA_DEL;
-	else if (type == SFPTPD_LEAP_SECOND_61)
-		t.status |= STA_INS;
-
+	t.status = clock->u.system.kernel_status;
 	rc = adjtimex(&t);
-	if (adjtimex(&t) < 0) {
-		ERROR("couldn't set adjtimex leap second flags, %s\n",
-		      strerror(errno));
+	if (rc < 0) {
+		ERROR("couldn't set/clear adjtimex status, %s\n", strerror(errno));
 		rc = errno;
+		goto finish;
 	}
 
  finish:
@@ -2072,6 +2086,15 @@ int sfptpd_clock_set_sync_status(struct sfptpd_clock *clock, bool in_sync,
 	if (clock->read_only) {
 		TRACE_L4("clock %s: set sync status blocked by \"clock-control no-adjust\" or \"clock-readonly\"\n",
 			 clock->long_name);
+		goto finish;
+	}
+
+	if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM &&
+	    clock->cfg_rtc_adjust) {
+		if (in_sync)
+			clock->u.system.kernel_status &= ~STA_UNSYNC;
+		else
+			clock->u.system.kernel_status |= STA_UNSYNC;
 		goto finish;
 	}
 
