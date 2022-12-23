@@ -1,6 +1,6 @@
 Solarflare Enhanced PTP Daemon (sfptpd) from Xilinx
 ===================================================
-Version: v3.6.0.1012
+Version: v3.6.0.1013
 
 
 Overview
@@ -51,7 +51,7 @@ This package is supported on:
 - Canonical Ubuntu Server 21.10
 - Debian 10 "Buster"
 - Debian 11 "Bullseye"
-- Linux kernels 3.0 - 5.15
+- Linux kernels 3.0 - 6.0
 
 
 Documentation
@@ -116,7 +116,7 @@ Advanced notice of likely future changes after v3.6
 Changelog
 ---------
 
-### v3.6.0.1012 Feature Release
+### v3.6.0.1013 Feature Release
 
 Features:
  ~ Support Xilinx ALVEO X3522 NICs (SWPTP-1162)
