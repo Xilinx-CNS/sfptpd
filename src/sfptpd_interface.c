@@ -1613,6 +1613,16 @@ int sfptpd_interface_hotplug_remove(int if_index, const char *if_name) {
 /****************************************************************************/
 
 
+struct sfptpd_interface *sfptpd_interface_find_by_if_index(int if_index)
+{
+	struct sfptpd_interface *interface;
+
+	interface = interface_find_by_if_index(if_index);
+
+	return interface;
+}
+
+
 struct sfptpd_interface *sfptpd_interface_find_by_name(const char *name)
 {
 	struct sfptpd_interface *interface;

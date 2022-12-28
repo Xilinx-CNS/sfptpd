@@ -75,6 +75,12 @@ int sfptpd_interface_initialise(struct sfptpd_config *config, pthread_mutex_t *h
  */
 void sfptpd_interface_shutdown(struct sfptpd_config *config);
 
+/** Find an interface by if_index
+ * @param if_index  The if_index for an interface
+ * @return A pointer to the interface or NULL if not found.
+ */
+struct sfptpd_interface *sfptpd_interface_find_by_if_index(int if_index);
+
 /** Find an interface by name 
  * @param name  Textual name of interface
  * @return A pointer to the interface or NULL if not found.

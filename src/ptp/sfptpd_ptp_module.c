@@ -1212,180 +1212,48 @@ static int ptp_is_interface_vlan(char *logical_if, bool *is_vlan,
 
 
 /* Wrapper for strcmp so that it can be used with qsort */
-int qsort_strcmp(const void *p1, const void *p2)
+int qsort_intfnamecmp(const void *p1, const void *p2)
 {
-	/* The actual arguments to this function are "pointers to 
-	 * pointers to char", but strcmp(3) arguments are "pointers 
-	 * to char", hence the following cast plus dereference */
-	return strcmp(*(char * const *)p1, *(char * const *)p2);
+	return strcmp(sfptpd_interface_get_name(*(struct sfptpd_interface * const *) p1),
+		      sfptpd_interface_get_name(*(struct sfptpd_interface * const *) p2));
 }
 
 
-static int parse_team(struct sfptpd_ptp_bond_info *bond_info, bool verbose)
+static int parse_bond(struct sfptpd_ptp_bond_info *bond_info, bool verbose,
+		      const struct sfptpd_link_table *link_table,
+		      const struct sfptpd_link *logical_link)
 {
-	FILE *fp;
-	char teamcmd[256], line[256], mode[64], if_name[64];
-	char *if_names[PTP_MAX_PHYSICAL_IFS];
-	int rc, i;
-	bool in_port_cfg, found_mode;
+	int rc;
 	struct sfptpd_interface *interface;
+	int row;
 
-	in_port_cfg = false;
-	found_mode = false;
 	rc = 0;
 
-	snprintf(teamcmd, sizeof(teamcmd), "teamdctl %s state", bond_info->bond_if);
+	bond_info->bond_mode = logical_link->bond.bond_mode;
+	bond_info->active_if = NULL;
 
-	/* Check for bond created with teaming driver by parsing
-	 * through config dump. Expecting Json format
-	 * config with only one bracket per line.
-	 * Associated interfaces are called ports and lowest
-	 * priority one will be used preferentially unless
-	 * a sticky interface is already in use. The bond
-	 * type is the runner type. */
-	fp = popen(teamcmd, "r");
-	if (fp != NULL) {
-		while (fgets(line, sizeof(line), fp) != NULL) {
-			if (strstr(line, "ports:")) {
-				in_port_cfg = 1;
-			}
-			if (strstr(line, "runner:") && (line[0] != ' ')) {
-				in_port_cfg = 0;
-			}
-
-			if ((line[0] == ' ') && (line[1] == ' ') && (line[2] != ' ')
-				&& in_port_cfg) {
-				if (sscanf(line, "  %64s", if_name)) {
-					if (verbose)
-						TRACE_L3("ptp %s: slave interface %s\n",
-							 bond_info->bond_if, if_name);
-					if_names[bond_info->num_physical_ifs] = (char *)calloc(IF_NAMESIZE, sizeof(char));
-					strcpy(if_names[bond_info->num_physical_ifs], if_name);
-					bond_info->num_physical_ifs++;
-				}
-			}
-
-			if (sscanf(line, "  active port: %64s", if_name)) {
-				if (verbose)
-					TRACE_L3("ptp %s: found active slave %s\n",
-						 bond_info->bond_if, if_name);
-				interface = sfptpd_interface_find_by_name(if_name);
-				if (interface == NULL) {
-					ERROR("ptp: couldn't find interface object for %s\n",
-					      if_name);
-					rc = ENOENT;
-				}
-
-				bond_info->active_if = interface;
-			}
-
-			if (sscanf(line, "  runner: %64s", mode)) {
-				found_mode = true;
-				if (verbose)
-					TRACE_L3("ptp %s: found runner type %s\n",
-						 bond_info->bond_if, mode);
-			}
-		}
-		pclose(fp);
-	} else {
-		ERROR("ptp %s: failed to read config from teamdctl\n", bond_info->bond_if);
-		rc = ESRCH;
-	}
-
-	/* Teamdctl reorders the interfaces it finds so need to sort them
-	 * to make sure they're always stored in the same order */
-	qsort(&if_names, bond_info->num_physical_ifs, sizeof(char *), qsort_strcmp);
-	for (i = 0; i < bond_info->num_physical_ifs; i++) {
-		interface = sfptpd_interface_find_by_name(if_names[i]);
-		if (interface == NULL) {
-			ERROR("ptp: couldn't find interface object for %s\n", if_name);
-			rc = ENOENT;
-		}
-		bond_info->physical_ifs[i] = interface;
-		free(if_names[i]);
-	}
-
-	if (strcmp(mode, "lacp") == 0) {
-		bond_info->bond_mode = SFPTPD_BOND_MODE_LACP;
+	if (bond_info->bond_mode == SFPTPD_BOND_MODE_ACTIVE_BACKUP &&
+	    logical_link->bond.active_slave != -1) {
+		bond_info->active_if = sfptpd_interface_find_by_if_index(logical_link->bond.active_slave);
 		if (verbose)
-			TRACE_L3("ptp %s: mode is 802.3ad (LACP)\n",
-				 bond_info->bond_if);
-	} else if (strcmp(mode, "activebackup") == 0) {
-		bond_info->bond_mode = SFPTPD_BOND_MODE_ACTIVE_BACKUP;
-		if (verbose)
-			TRACE_L3("ptp %s: mode is active-backup\n",
-				 bond_info->bond_if);
-	} else {
-		if (found_mode)
-			ERROR("ptp %s: found unsupported bond type %s\n",
-			      bond_info->bond_if, mode);
-		else
-			ERROR("ptp %s: could not find bond type in team state\n",
-			      bond_info->bond_if);
-		rc = EINVAL;
+			TRACE_L3("%s: active slave %s\n",
+				 bond_info->bond_if, sfptpd_interface_get_name(bond_info->active_if));
 	}
 
-	return rc;
-}
+	for (row = 0; row < link_table->count &&
+		      (bond_info->num_physical_ifs <
+		       sizeof(bond_info->physical_ifs)/sizeof(bond_info->physical_ifs[0]))
+	     ; row++) {
+		const struct sfptpd_link *link = link_table->rows + row;
 
-
-static int parse_bond(struct sfptpd_ptp_bond_info *bond_info, bool verbose)
-{
-	FILE *file;
-	char path[PATH_MAX], line[256], mode_part1[64], mode_part2[64], if_name[64];
-	int have_mode, rc;
-	struct sfptpd_interface *interface;
-
-	rc = 0;
-	have_mode = 0;
-	snprintf(path, sizeof(path), "/proc/net/bonding/%s", bond_info->bond_if);
-	file = fopen(path, "r");
-
-	/* Search through the file for a lines with the format:
-	 *     "Bonding Mode: fault-tolerance (active-backup)"
-	 *     "Currently Active Slave: eth2"
-	 *     "Slave Interface: ethX"
-	 */
-	while ((fgets(line, sizeof(line), file) != NULL) &&
-		   (bond_info->num_physical_ifs <
-		   sizeof(bond_info->physical_ifs)/sizeof(bond_info->physical_ifs[0]))) {
-		/* If we haven't got it, look for the bonding mode. This is
-		 * the 2nd token after the a line that starts with the string
-		 * " Bonding Mode: " */
-		if (have_mode <= 0) {
-			have_mode = sscanf(line, " Bonding Mode: %64s %64s ",
-					   mode_part1, mode_part2);
-		}
-
-		/* Look for the active interface. Note that this only applies
-		 * to active-backup type bonds */
-		if ((sscanf(line, " Currently Active Slave: %64s ", if_name) == 1) &&
-			(strcmp(if_name, "None") != 0)) {
-			if (verbose)
-				TRACE_L3("%s: active slave %s\n",
-					 bond_info->bond_if, if_name);
-
-			interface = sfptpd_interface_find_by_name(if_name);
-			if (interface == NULL) {
-				ERROR("ptp: couldn't find interface object for %s\n",
-				      if_name);
-				rc = EINVAL;
-			}
-
-			bond_info->active_if = interface;
-		}
-
-		/* Look for slave interfaces. These are the first token in lines
-		 * that start with the string " Slave Interface: " */
-		if (sscanf(line, " Slave Interface: %64s ", if_name) == 1) {
+		if (link->is_slave && link->bond.if_master == logical_link->if_index) {
 			if (verbose)
 				TRACE_L3("ptp %s: slave interface %s\n",
-					 bond_info->bond_if, if_name);
-
-			interface = sfptpd_interface_find_by_name(if_name);
+					 bond_info->bond_if, link->if_name);
+			interface = sfptpd_interface_find_by_if_index(link->if_index);
 			if (interface == NULL) {
 				ERROR("ptp: couldn't find interface object for %s\n",
-				      if_name);
+				      link->if_name);
 				rc = EINVAL;
 			} else {
 				bond_info->physical_ifs[bond_info->num_physical_ifs] = interface;
@@ -1393,49 +1261,53 @@ static int parse_bond(struct sfptpd_ptp_bond_info *bond_info, bool verbose)
 			}
 		}
 	}
-	fclose(file);
 
 	/* Check whether we support the bond mode */
-	if (have_mode < 2) {
-		ERROR("ptp: couldn't find \"Bonding Mode: X\" line in /proc/net/bonding/%s\n",
-		      bond_info->bond_if);
-		rc = EINVAL;
-	} else if (strcmp(mode_part2, "(active-backup)") == 0) {
-		/*
-		 * Active-Backup Bond
-		 */
-		bond_info->bond_mode = SFPTPD_BOND_MODE_ACTIVE_BACKUP;
+	if (bond_info->bond_mode == SFPTPD_BOND_MODE_ACTIVE_BACKUP) {
 		if (verbose)
 			TRACE_L3("ptp %s: mode is active-backup\n",
 				 bond_info->bond_if);
-	} else if (strcmp(mode_part2, "802.3ad") == 0) {
-		/*
-		 * 802.3ad LACP Bond
-		 */
-		bond_info->bond_mode = SFPTPD_BOND_MODE_LACP;
+	} else if (bond_info->bond_mode == SFPTPD_BOND_MODE_LACP) {
 		if (verbose)
 			TRACE_L3("ptp %s: mode is 802.3ad (LACP)\n",
 				 bond_info->bond_if);
 	} else {
-		ERROR("ptp %s: Found bond of unsupported type %s\n",
-			  bond_info->bond_if, mode_part2);
+		ERROR("ptp %s: Found bond of unsupported type\n");
 		rc = EINVAL;
 	}
 
 	return rc;
 }
 
+
+static int parse_team(struct sfptpd_ptp_bond_info *bond_info, bool verbose,
+		      const struct sfptpd_link_table *link_table,
+		      const struct sfptpd_link *logical_link)
+{
+	int rc;
+
+	rc = parse_bond(bond_info, verbose, link_table, logical_link);
+
+	/* Teamdctl reorders the interfaces it finds so need to sort them
+	 * to make sure they're always stored in the same order */
+	if (rc == 0)
+		qsort(bond_info->physical_ifs, bond_info->num_physical_ifs, sizeof(struct sfptpd_interface *), qsort_intfnamecmp);
+
+	return rc;
+}
+
+
 /* Examine a logical interface. If a bond, probe for slaves etc.
  * Returns ENOENT for no active slaves, ENODEV if the logical
  * interface doesn't exist or is invalid. */
-static int ptp_probe_bonding(char *logical_if, struct sfptpd_ptp_bond_info *bond_info, bool verbose)
+static int ptp_probe_bonding(char *logical_if, struct sfptpd_ptp_bond_info *bond_info, bool verbose,
+			     const struct sfptpd_link_table *link_table)
 {
-	char path[PATH_MAX], teamcmd[256];
-	struct stat buf;
 	struct sfptpd_interface *interface;
 	bool link_detected, found_bond;
 	unsigned int i;
 	int rc;
+	const struct sfptpd_link *logical_link = NULL;
 
 	assert(logical_if != NULL);
 	assert(bond_info != NULL);
@@ -1455,25 +1327,29 @@ static int ptp_probe_bonding(char *logical_if, struct sfptpd_ptp_bond_info *bond
 	found_bond = true;
 	rc = 0;
 
-	/* Create the path name of the bond config file for this interface.
-	 * If it doesn't exist, this is not a bonded interface. */
-	snprintf(path, sizeof(path), "/proc/net/bonding/%s", logical_if);
+	/* Find logical link in link table */
+	for (i = 0; i < link_table->count; i++) {
+		if (strncmp(link_table->rows[i].if_name, logical_if, IFNAMSIZ) == 0) {
+			TRACE_L4("ptp %s: found link table entry\n", logical_if);
+			logical_link = link_table->rows + i;
+		}
+	}
+	if (logical_link == NULL) {
+		ERROR("ptp %s: no entry in link table for logical interface\n");
+		return ENOENT;
+	}
 
-	/* Create the teaming command to get the team config */
-	snprintf(teamcmd, sizeof(teamcmd), "teamd -t %s -e 2> /dev/null", logical_if);
-
-	if (stat(path, &buf) == 0) {
+	if (logical_link->type == SFPTPD_LINK_BOND) {
 		/* Bond created with bonding module */
 		if (verbose)
-			TRACE_L3("ptp %s: parsing %s for bond config\n",
-				 bond_info->bond_if, path);
-		rc = parse_bond(bond_info, verbose);
-	} else if (system(teamcmd) == 0) {
+			TRACE_L3("ptp %s: parsing bond config\n");
+		rc = parse_bond(bond_info, verbose, link_table, logical_link);
+	} else if (logical_link->type == SFPTPD_LINK_TEAM) {
 		/* Bond created with teaming module */
 		if (verbose)
-			TRACE_L3("ptp %s: uses teaming driver, parsing teamdctl\n",
+			TRACE_L3("ptp %s: uses teaming driver, parsing team\n",
 				 bond_info->bond_if);
-		rc = parse_team(bond_info, verbose);
+		rc = parse_team(bond_info, verbose, link_table, logical_link);
 	} else {
 		found_bond = false;
 	}
@@ -1568,7 +1444,8 @@ static int ptp_probe_bonding(char *logical_if, struct sfptpd_ptp_bond_info *bond
 
 
 static int ptp_parse_interface_topology(struct sfptpd_ptp_bond_info *bond_info,
-					const char *interface_name)
+					const char *interface_name,
+					const struct sfptpd_link_table *link_table)
 {
 	int rc;
 	uint16_t vlan_tag;
@@ -1619,7 +1496,7 @@ static int ptp_parse_interface_topology(struct sfptpd_ptp_bond_info *bond_info,
 	/* Work out if the 'bond' interface is a bond and if so parse the
 	 * bond configuration. Note that at this point we've parsed all the VLANs
 	 * so target_if points at either a physical interface or a bond. */
-	rc = ptp_probe_bonding(target_if, bond_info, true);
+	rc = ptp_probe_bonding(target_if, bond_info, true, link_table);
 
 	return rc == ENOENT ? 0 : rc;
 }
@@ -1835,7 +1712,7 @@ static int ptp_handle_bonding_interface_change(struct sfptpd_ptp_intf *intf,
 	/* Take a copy of the interface configuration and reparse the bond
 	 * configuration into it */
 	new_bond_info = intf->bond_info;
-	rc = ptp_probe_bonding(new_bond_info.bond_if, &new_bond_info, false);
+	rc = ptp_probe_bonding(new_bond_info.bond_if, &new_bond_info, false, &intf->module->link_table);
 	if (rc != 0 && rc != ENOENT && rc != ENODEV) {
 		CRITICAL("ptp: interface %s error parsing bond configuration\n",
 			 intf->bond_info.bond_if);
@@ -3674,7 +3551,7 @@ static int ptp_ensure_interface_started(sfptpd_ptp_module_t *ptp,
 	
 	/* Parse the interface topology to work out if we are using VLANs and/or
 	 * bonds */
-	rc = ptp_parse_interface_topology(&interface->bond_info, interface->defined_name);
+	rc = ptp_parse_interface_topology(&interface->bond_info, interface->defined_name, &ptp->link_table);
 	if (rc != 0) {
 		CRITICAL("ptp: error parsing interface topology for %s (configured logical interface must exist), %s\n",
 			 interface->defined_name, strerror(rc));
