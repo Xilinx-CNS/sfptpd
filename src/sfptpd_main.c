@@ -32,6 +32,8 @@
 #include "sfptpd_message.h"
 #include "sfptpd_thread.h"
 #include "sfptpd_control.h"
+#include "sfptpd_link.h"
+#include "sfptpd_netlink.h"
 
 #ifdef HAVE_CAPS
 #include <sys/capability.h>
@@ -71,6 +73,8 @@ static const cap_value_t caps_for_root[] = {
 
 static struct sfptpd_config *config = NULL;
 static struct sfptpd_engine *engine = NULL;
+static struct sfptpd_nl_state *netlink = NULL;
+const static struct sfptpd_link_table *initial_link_table = NULL;
 
 /* The hardware state lock protects data structures that shadow
    the state of the hardware so that they are internally consistent.
@@ -364,6 +368,34 @@ static void hardware_state_lock_destroy(void) {
 }
 
 
+static int netlink_start(void) {
+	int rc;
+
+	/* Configure control socket handling */
+	netlink = sfptpd_netlink_init();
+	if (netlink == NULL) {
+		CRITICAL("could not start netlink\n");
+		return EINVAL;
+	}
+
+	rc = sfptpd_netlink_scan(netlink);
+	if (rc != 0) {
+		CRITICAL("scanning with netlink\n",
+			 strerror(rc));
+		return rc;
+	}
+
+	initial_link_table = sfptpd_netlink_table_wait(netlink, 1);
+	if (initial_link_table == NULL) {
+		CRITICAL("could not get initial link table, %s\n",
+			 strerror(errno));
+		return errno;
+	}
+
+	return 0;
+}
+
+
 static int daemonize(struct sfptpd_config *config, int *lock_fd)
 {
 	assert(config != NULL);
@@ -426,7 +458,7 @@ static int main_on_startup(void *not_used)
 	}
 
 	/* Create an instance of the sync-engine using the configuration */
-	rc = sfptpd_engine_create(config, &engine);
+	rc = sfptpd_engine_create(config, &engine, netlink, initial_link_table);
 
 	return rc; 
 }
@@ -644,6 +676,11 @@ int main(int argc, char **argv)
 	if (rc != 0)
 		goto fail;
 #endif
+
+	/* Start netlink client */
+	rc = netlink_start();
+	if (rc != 0)
+		goto fail;
 
 	/* Set up the hardware state lock */
 	rc = hardware_state_lock_init();

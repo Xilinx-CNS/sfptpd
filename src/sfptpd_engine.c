@@ -2055,40 +2055,6 @@ fail:
 }
 
 
-static int engine_start_netlink(struct sfptpd_engine *engine)
-{
-	int rc;
-	const struct sfptpd_link_table *link_table;
-
-	/* Configure control socket handling */
-	engine->netlink_state = sfptpd_netlink_init();
-	if (!engine->netlink_state) {
-		CRITICAL("engine: could not start netlink\n");
-		return EINVAL;
-	}
-
-	rc = sfptpd_netlink_scan(engine->netlink_state);
-	if (rc != 0) {
-		CRITICAL("engine: scanning with netlink\n",
-			 strerror(rc));
-		return rc;
-	}
-
-	link_table = sfptpd_netlink_table_wait(engine->netlink_state, 1);
-	if (link_table == NULL) {
-		CRITICAL("engine: could not get initial link table, %s\n",
-			 strerror(errno));
-		return errno;
-	}
-
-	engine->link_table = link_table;
-	engine->link_table_prev = NULL;
-
-	rc = engine_set_netlink_polling(engine, true);
-	return rc;
-}
-
-
 static int engine_on_startup(void *context)
 {
 	struct sfptpd_engine *engine = (struct sfptpd_engine *)context;
@@ -2105,9 +2071,9 @@ static int engine_on_startup(void *context)
 	config = engine->config;
 
 	if (engine->general_config->hotplug_detection & SFPTPD_HOTPLUG_DETECTION_NETLINK) {
-		rc = engine_start_netlink(engine);
+		rc = engine_set_netlink_polling(engine, true);
 		if (rc != 0) {
-			CRITICAL("could not start netlink event receiver\n");
+			CRITICAL("could not start netlink polling\n");
 			goto fail;
 		}
 	}
@@ -2411,7 +2377,9 @@ static const struct sfptpd_thread_ops engine_thread_ops =
  ****************************************************************************/
 
 int sfptpd_engine_create(struct sfptpd_config *config,
-			 struct sfptpd_engine **engine)
+			 struct sfptpd_engine **engine,
+			 struct sfptpd_nl_state *netlink,
+			 const struct sfptpd_link_table *initial_link_table)
 {
 	struct sfptpd_engine *new;
 	int rc;
@@ -2429,6 +2397,8 @@ int sfptpd_engine_create(struct sfptpd_config *config,
 	/* Store pointers to the config for use by the engine thread */
 	new->config = config;
 	new->general_config = sfptpd_general_config_get(config);
+	new->netlink_state = netlink;
+	new->link_table = initial_link_table;
 
 	rc = sfptpd_thread_create("engine", &engine_thread_ops, new, &new->thread);
 	if (rc != 0) {

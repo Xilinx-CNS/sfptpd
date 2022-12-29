@@ -9,6 +9,7 @@
 #include "sfptpd_clock.h"
 #include "sfptpd_sync_module.h"
 #include "sfptpd_link.h"
+#include "sfptpd_netlink.h"
 #include "sfptpd_servo.h"
 
 
@@ -29,10 +30,14 @@ struct sfptpd_engine;
 /** Create an sfptpd engine based on the specified configuration
  * @param config  Pointer to configuration structure
  * @param engine  Returned handle to the engine
+ * @param netlink  Handle to the netlink client state
+ * @param initial_link_table  The initial link table
  * @return 0 on success or an errno otherwise
  */
 int sfptpd_engine_create(struct sfptpd_config *config,
-			 struct sfptpd_engine **engine);
+			 struct sfptpd_engine **engine,
+			 struct sfptpd_nl_state *netlink,
+			 const struct sfptpd_link_table *initial_link_table);
 
 /** Destroy sfptpd engine and release resources. The function will
  * send a signal to the engine and wait for it to exit.
