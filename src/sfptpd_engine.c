@@ -16,7 +16,6 @@
 #include <math.h>
 #include <sys/time.h>
 #include <sys/stat.h>
-#include <sys/epoll.h>
 #include <pthread.h>
 
 #include "sfptpd_app.h"
@@ -2056,96 +2055,36 @@ fail:
 }
 
 
-static int engine_wait_for_first_link_table(struct sfptpd_engine *engine)
-{
-	int rc;
-	int fd;
-	int get_fd_state;
-	#define max_events 5
-	struct epoll_event ev;
-	struct epoll_event events[max_events];
-	int nfds = 0;
-	int epollfd;
-	int ret = 0;
-
-	epollfd = epoll_create(max_events);
-	if (epollfd == -1) {
-		CRITICAL("creating epoll set for first link table\n", strerror(errno));
-		return errno;
-	}
-
-	get_fd_state = 0;
-	do {
-		fd = sfptpd_netlink_get_fd(engine->netlink_state, &get_fd_state);
-		if (fd != -1) {
-			ev.events = EPOLLIN;
-			ev.data.fd = fd;
-			if (epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev) == -1) {
-				CRITICAL("engine: initial link table: failed to set up epoll set, %s\n",
-					 strerror(errno));
-				return errno;
-			}
-		}
-	} while (fd != -1);
-
-	TRACE_L3("engine: waiting for first link table from netlink\n");
-	while (nfds <= 0) {
-		nfds = epoll_wait(epollfd, events, max_events, -1);
-		if (nfds == -1) {
-			if (errno == EINTR)
-				continue;
-			CRITICAL("engine: initial link table: failed in epoll_wait, %s\n",
-				 strerror(errno));
-			ret = errno;
-			goto finish;
-		} else if (nfds == 0) {
-			continue;
-		}
-		rc = sfptpd_netlink_service_fds(engine->netlink_state, NULL, 0, engine->link_subscribers + 1);
-		while (rc > 0) {
-			int rows;
-
-			TRACE_L3("engine: initial link table: new version %d\n", rc);
-
-			engine->link_table_prev = engine->link_table;
-			rows = sfptpd_netlink_get_table(engine->netlink_state, rc, &engine->link_table);
-			assert(rows == engine->link_table->count);
-
-			if (engine->link_table_prev == NULL)
-				rc = 0;
-			else
-				rc = sfptpd_netlink_release_table(engine->netlink_state,
-								  engine->link_table_prev->version,
-								  engine->link_subscribers + 1);
-		}
-	}
-
-	TRACE_L3("engine: initial link table: accepted version %d\n", engine->link_table->version);
-
-finish:
-	close(epollfd);
-	return ret;
-}
-
-
 static int engine_start_netlink(struct sfptpd_engine *engine)
 {
 	int rc;
+	const struct sfptpd_link_table *link_table;
 
 	/* Configure control socket handling */
 	engine->netlink_state = sfptpd_netlink_init();
 	if (!engine->netlink_state) {
 		CRITICAL("engine: could not start netlink\n");
-		return 1;
+		return EINVAL;
 	}
 
 	rc = sfptpd_netlink_scan(engine->netlink_state);
+	if (rc != 0) {
+		CRITICAL("engine: scanning with netlink\n",
+			 strerror(rc));
+		return rc;
+	}
 
-	if (rc == 0)
-		rc = engine_wait_for_first_link_table(engine);
+	link_table = sfptpd_netlink_table_wait(engine->netlink_state, 1);
+	if (link_table == NULL) {
+		CRITICAL("engine: could not get initial link table, %s\n",
+			 strerror(errno));
+		return errno;
+	}
+
+	engine->link_table = link_table;
+	engine->link_table_prev = NULL;
 
 	rc = engine_set_netlink_polling(engine, true);
-
 	return rc;
 }
 

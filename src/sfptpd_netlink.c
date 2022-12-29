@@ -27,6 +27,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/epoll.h>
 #include <linux/genetlink.h>
 #include <linux/rtnetlink.h>
 #include <linux/if_team.h>
@@ -1411,5 +1412,72 @@ void sfptpd_netlink_finish(struct sfptpd_nl_state *state)
 	free(state);
 }
 
+const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state *state, int consumers)
+{
+	int rc;
+	int fd;
+	int get_fd_state;
+	#define max_events 5
+	struct epoll_event ev;
+	struct epoll_event events[max_events];
+	int nfds = 0;
+	int epollfd;
+	const struct sfptpd_link_table *link_table = NULL;
 
+	epollfd = epoll_create(max_events);
+	if (epollfd == -1) {
+		CRITICAL("netlink: creating epoll set to wait for link table\n", strerror(errno));
+		return NULL;
+	}
+
+	get_fd_state = 0;
+	do {
+		fd = sfptpd_netlink_get_fd(state, &get_fd_state);
+		if (fd != -1) {
+			ev.events = EPOLLIN;
+			ev.data.fd = fd;
+			if (epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev) == -1) {
+				CRITICAL("netlink: failed to set up epoll set, %s\n",
+					 strerror(errno));
+				return NULL;
+			}
+		}
+	} while (fd != -1);
+
+	TRACE_L3("netlink: waiting for link table\n");
+	while (nfds <= 0) {
+		nfds = epoll_wait(epollfd, events, max_events, -1);
+		if (nfds < 0) {
+			if (errno == EINTR)
+				continue;
+			CRITICAL("netlink: failed in epoll_wait, %s\n",
+				 strerror(errno));
+			goto finish;
+		} else if (nfds == 0) {
+			continue;
+		}
+		rc = sfptpd_netlink_service_fds(state, NULL, 0, consumers);
+		if (rc > 0) {
+			int rows;
+
+			TRACE_L3("netlink: wait: new link table version %d\n",
+				 rc);
+
+			rows = sfptpd_netlink_get_table(state,
+							rc, &link_table);
+			assert(rows == link_table->count);
+		} else if (rc < 0) {
+			TRACE_L3("netlink: wait: failed to create link table\n",
+				 -rc);
+			errno = -rc;
+			goto finish;
+		}
+	}
+
+	TRACE_L3("netlink: wait: accepted version %d\n", link_table->version);
+
+finish:
+	close(epollfd);
+	return link_table;
+}
 /* fin */

@@ -48,5 +48,6 @@ int sfptpd_netlink_get_fd(struct sfptpd_nl_state *state,
 			  int *get_fd_state);
 int sfptpd_netlink_get_table(struct sfptpd_nl_state *state, int version, const struct sfptpd_link_table **table);
 int sfptpd_netlink_release_table(struct sfptpd_nl_state *state, int version, int consumers);
+const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state *state, int consumers);
 
 #endif /* SFPTPD_NETLINK_H */
