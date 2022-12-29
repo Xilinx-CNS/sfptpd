@@ -5,7 +5,8 @@
 #define _SFPTPD_LINK_H
 
 #include <stdbool.h>
-
+#include <stdint.h>
+#include <net/if.h>
 
 /****************************************************************************
  * Structures, Types, Defines
@@ -50,7 +51,7 @@ struct sfptpd_link {
 	int if_type;
 	int if_family;
 	int if_flags;
-	char if_name[IFNAMSIZ];
+	char if_name[IF_NAMESIZE];
 	char if_kind[16];
 	int if_link;
 
@@ -68,5 +69,17 @@ struct sfptpd_link_table {
 	int count;
 	int version;
 };
+
+
+/****************************************************************************
+ * Functions
+ ****************************************************************************/
+
+const struct sfptpd_link *sfptpd_link_by_name(const struct sfptpd_link_table *link_table,
+					      const char *link_name);
+
+
+const struct sfptpd_link *sfptpd_link_by_if_index(const struct sfptpd_link_table *link_table,
+						  int if_index);
 
 #endif

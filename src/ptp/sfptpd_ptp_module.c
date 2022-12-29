@@ -1156,11 +1156,10 @@ static void ptp_log_pps_stats(struct sfptpd_engine *engine,
 }
 
 
-static int ptp_is_interface_vlan(char *logical_if, bool *is_vlan,
-				 char *physical_if, uint16_t *vlan_tag)
+static int ptp_is_interface_vlan(const struct sfptpd_link *logical_if, bool *is_vlan,
+				 const struct sfptpd_link **physical_if, uint16_t *vlan_tag,
+				 const struct sfptpd_link_table *link_table)
 {
-	FILE *file;
-	char path[PATH_MAX], line[256];
 	bool have_physical_if, have_vlan_tag;
 
 	assert(logical_if != NULL);
@@ -1168,45 +1167,40 @@ static int ptp_is_interface_vlan(char *logical_if, bool *is_vlan,
 	assert(physical_if != NULL);
 	assert(vlan_tag != NULL);
 
-	/* Create the path name of the VLAN file for this interface. If it
-	 * doesn't exist, this is not a VLAN interface. */
-	snprintf(path, sizeof(path), "/proc/net/vlan/%s", logical_if);
-
-	file = fopen(path, "r");
-	if (file == NULL) {
-		TRACE_L1("ptp: interface %s is not a VLAN\n", path);
+	if (logical_if->type != SFPTPD_LINK_VLAN) {
+		TRACE_L1("ptp: interface %s is not a VLAN\n", logical_if->if_name);
 		*is_vlan = false;
 		return 0;
 	}
 
-	/* Search through the file for a line with the format:
-	 *    "* VID: x"
-	 *    "Device: ethX"
-	 */
 	have_physical_if = false;
 	have_vlan_tag = false;
-	while (fgets(line, sizeof(line), file) != NULL) {
-		if (sscanf(line, "%*s VID: %hd ", vlan_tag) == 1)
-			have_vlan_tag = true;
+	if (logical_if->vlan_id != 0) {
+		*vlan_tag = logical_if->vlan_id;
+		have_vlan_tag = true;
+	}
+	if (logical_if->if_link > 0) {
+		const struct sfptpd_link *physical_link;
 
-		if (sscanf(line, " Device: %16s ", physical_if) == 1)
+		physical_link = sfptpd_link_by_if_index(link_table, logical_if->if_link);
+		if (physical_link != NULL) {
+			*physical_if = physical_link;
 			have_physical_if = true;
-
-		if (have_vlan_tag & have_physical_if) {
-			TRACE_L1("ptp: interface is a VLAN. underlying if %s, vid %d\n",
-				 physical_if, *vlan_tag);
-			fclose(file);
-			*is_vlan = true;
-			return 0;
 		}
 	}
 
+	if (have_vlan_tag & have_physical_if) {
+		TRACE_L1("ptp: interface %s is a VLAN. underlying if %s, vid %d\n",
+			  logical_if->if_name, (*physical_if)->if_name, *vlan_tag);
+		*is_vlan = true;
+		return 0;
+	}
+
 	if (!have_vlan_tag) 
-		ERROR("ptp: couldn't find \"VID: X\" line in %s\n", path);
+		ERROR("ptp: couldn't find vlan tag for %s\n", logical_if->if_name);
 	if (!have_physical_if) 
-		ERROR("ptp: couldn't find \"Device: ethX\" line in %s\n", path);
+		ERROR("ptp: couldn't find physical link for %s\n", logical_if->if_name);
 	
-	fclose(file);
 	return EINVAL;
 }
 
@@ -1300,26 +1294,23 @@ static int parse_team(struct sfptpd_ptp_bond_info *bond_info, bool verbose,
 /* Examine a logical interface. If a bond, probe for slaves etc.
  * Returns ENOENT for no active slaves, ENODEV if the logical
  * interface doesn't exist or is invalid. */
-static int ptp_probe_bonding(char *logical_if, struct sfptpd_ptp_bond_info *bond_info, bool verbose,
+static int ptp_probe_bonding(const struct sfptpd_link *logical_link,
+			     struct sfptpd_ptp_bond_info *bond_info, bool verbose,
 			     const struct sfptpd_link_table *link_table)
 {
 	struct sfptpd_interface *interface;
 	bool link_detected, found_bond;
 	unsigned int i;
 	int rc;
-	const struct sfptpd_link *logical_link = NULL;
+	const char *logical_if = logical_link->if_name;
 
-	assert(logical_if != NULL);
+	assert(logical_link != NULL);
 	assert(bond_info != NULL);
 
 	const unsigned int max_physical_ifs =
 		sizeof(bond_info->physical_ifs)/sizeof(bond_info->physical_ifs[0]);
 
-	/* Defaults. Note that we don't copy the logical interface into the bond_if
-	 * if they are the same pointer. It is probably be benign to do so but
-	 * valgrind isn't impressed with the overlapping string copy. */
-	if (bond_info->bond_if != logical_if)
-		sfptpd_strncpy(bond_info->bond_if, logical_if, sizeof(bond_info->bond_if));
+	sfptpd_strncpy(bond_info->bond_if, logical_if, sizeof(bond_info->bond_if));
 	bond_info->num_physical_ifs = 0;
 	bond_info->active_if = NULL;
 	bond_info->bond_mode = SFPTPD_BOND_MODE_NONE;
@@ -1327,22 +1318,10 @@ static int ptp_probe_bonding(char *logical_if, struct sfptpd_ptp_bond_info *bond
 	found_bond = true;
 	rc = 0;
 
-	/* Find logical link in link table */
-	for (i = 0; i < link_table->count; i++) {
-		if (strncmp(link_table->rows[i].if_name, logical_if, IFNAMSIZ) == 0) {
-			TRACE_L4("ptp %s: found link table entry\n", logical_if);
-			logical_link = link_table->rows + i;
-		}
-	}
-	if (logical_link == NULL) {
-		ERROR("ptp %s: no entry in link table for logical interface\n");
-		return ENOENT;
-	}
-
 	if (logical_link->type == SFPTPD_LINK_BOND) {
 		/* Bond created with bonding module */
 		if (verbose)
-			TRACE_L3("ptp %s: parsing bond config\n");
+			TRACE_L3("ptp %s: parsing bond config\n", logical_if);
 		rc = parse_bond(bond_info, verbose, link_table, logical_link);
 	} else if (logical_link->type == SFPTPD_LINK_TEAM) {
 		/* Bond created with teaming module */
@@ -1450,7 +1429,8 @@ static int ptp_parse_interface_topology(struct sfptpd_ptp_bond_info *bond_info,
 	int rc;
 	uint16_t vlan_tag;
 	bool is_vlan;
-	char target_if[IF_NAMESIZE];
+	const struct sfptpd_link *logical_link = NULL;
+	const struct sfptpd_link *target_if = NULL;
 
 	assert(bond_info != NULL);
 	assert(interface_name != NULL);
@@ -1459,6 +1439,13 @@ static int ptp_parse_interface_topology(struct sfptpd_ptp_bond_info *bond_info,
 	if (interface_name[0] == '\0') {
 		ERROR("ptp: no interface specified\n");
 		return ENODEV;
+	}
+
+	logical_link = sfptpd_link_by_name(link_table, interface_name);
+	if (logical_link == NULL) {
+		ERROR("ptp: could not find interface %s in link table\n",
+		      interface_name, strerror(errno));
+		return errno;
 	}
 
 	/* Determine the underlying interface based on the interface name that
@@ -1473,11 +1460,12 @@ static int ptp_parse_interface_topology(struct sfptpd_ptp_bond_info *bond_info,
 	 * string here to hold the current interface we are investigating,
 	 * over-writing it each time round the loop as we dig through any nested
 	 * VLANs. */
-	sfptpd_strncpy(target_if, bond_info->logical_if, sizeof(target_if));
+	target_if = logical_link;
 	bond_info->num_vlan_tags = 0;
 	do {
 		rc = ptp_is_interface_vlan(target_if, &is_vlan,
-					   target_if, &vlan_tag);
+					   &target_if, &vlan_tag,
+					   link_table);
 		if (rc != 0)
 			return rc;
 
@@ -1689,6 +1677,7 @@ static int ptp_handle_bonding_interface_change(struct sfptpd_ptp_intf *intf,
 	struct sfptpd_clock *new_clock;
 	struct sfptpd_ptp_bond_info new_bond_info;
 	struct sfptpd_ptp_instance *instance;
+	const struct sfptpd_link *logical_link;
 	ptpd_timestamp_type_e timestamp_type;
 	int rc;
 
@@ -1709,10 +1698,17 @@ static int ptp_handle_bonding_interface_change(struct sfptpd_ptp_intf *intf,
 	 *       warn and continue anyway
 	 */
 
+	logical_link = sfptpd_link_by_name(&intf->module->link_table, intf->bond_info.bond_if);
+	if (logical_link == NULL) {
+		ERROR("ptp: could not find interface %s in link table\n",
+		      intf->bond_info.bond_if, strerror(errno));
+		return errno;
+	}
+
 	/* Take a copy of the interface configuration and reparse the bond
 	 * configuration into it */
 	new_bond_info = intf->bond_info;
-	rc = ptp_probe_bonding(new_bond_info.bond_if, &new_bond_info, false, &intf->module->link_table);
+	rc = ptp_probe_bonding(logical_link, &new_bond_info, false, &intf->module->link_table);
 	if (rc != 0 && rc != ENOENT && rc != ENODEV) {
 		CRITICAL("ptp: interface %s error parsing bond configuration\n",
 			 intf->bond_info.bond_if);
