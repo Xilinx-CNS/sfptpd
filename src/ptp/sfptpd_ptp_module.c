@@ -195,6 +195,9 @@ struct sfptpd_ptp_bond_info {
 	/* Type of bond detected including none for no bond */
 	enum sfptpd_bond_mode bond_mode;
 
+	/* Is a bridge */
+	bool is_bridge;
+
 	/* Set of physical interfaces associated with the logical interface.
 	 * If no bond is involved this will be a set of 1. */
 	unsigned int num_physical_ifs;
@@ -1265,6 +1268,10 @@ static int parse_bond(struct sfptpd_ptp_bond_info *bond_info, bool verbose,
 		if (verbose)
 			TRACE_L3("ptp %s: mode is 802.3ad (LACP)\n",
 				 bond_info->bond_if);
+	} else if (bond_info->is_bridge) {
+		if (verbose)
+			TRACE_L3("ptp %s: mode is bridge\n",
+				 bond_info->bond_if);
 	} else {
 		ERROR("ptp %s: Found bond of unsupported type\n");
 		rc = EINVAL;
@@ -1314,6 +1321,7 @@ static int ptp_probe_bonding(const struct sfptpd_link *logical_link,
 	bond_info->num_physical_ifs = 0;
 	bond_info->active_if = NULL;
 	bond_info->bond_mode = SFPTPD_BOND_MODE_NONE;
+	bond_info->is_bridge = false;
 
 	found_bond = true;
 	rc = 0;
@@ -1329,6 +1337,12 @@ static int ptp_probe_bonding(const struct sfptpd_link *logical_link,
 			TRACE_L3("ptp %s: uses teaming driver, parsing team\n",
 				 bond_info->bond_if);
 		rc = parse_team(bond_info, verbose, link_table, logical_link);
+	} else if (logical_link->type == SFPTPD_LINK_BRIDGE) {
+		/* Bridge */
+		if (verbose)
+			TRACE_L3("ptp %s: parsing bridge config\n", logical_if);
+		bond_info->is_bridge = true;
+		rc = parse_bond(bond_info, verbose, link_table, logical_link);
 	} else {
 		found_bond = false;
 	}
@@ -1373,9 +1387,11 @@ static int ptp_probe_bonding(const struct sfptpd_link *logical_link,
 				rc = ENOENT;
 			}
 		}
-	} else if (bond_info->bond_mode == SFPTPD_BOND_MODE_LACP) {
+	} else if (bond_info->bond_mode == SFPTPD_BOND_MODE_LACP ||
+		   bond_info->is_bridge) {
 		/* For LACP all slave interfaces are active. We have to pick
-		 * one, so pick the first with link up. */
+		 * one, so pick the first with link up.
+		 * Bridges have the same problem so treat as LACP */
 		for (i = 0; i < bond_info->num_physical_ifs; i++) {
 			rc = sfptpd_interface_is_link_detected(bond_info->physical_ifs[i],
 							       &link_detected);
