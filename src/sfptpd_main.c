@@ -693,7 +693,8 @@ int main(int argc, char **argv)
 		goto exit;
 
 	/* Start interface management */
-	rc = sfptpd_interface_initialise(config, &hardware_state_lock);
+	rc = sfptpd_interface_initialise(config, &hardware_state_lock,
+					 initial_link_table);
 	if (rc != 0)
 		goto exit;
 

@@ -1874,8 +1874,7 @@ static void engine_handle_new_link_table(struct sfptpd_engine *engine, int versi
 
 			if (link->event == SFPTPD_LINK_UP ||
 			    link->event == SFPTPD_LINK_CHANGE) {
-				rc = sfptpd_interface_hotplug_insert(link->if_index,
-								     link->if_name);
+				rc = sfptpd_interface_hotplug_insert(link);
 
 				if (rc == 0) {
 					reconfigure = true;
@@ -1893,8 +1892,7 @@ static void engine_handle_new_link_table(struct sfptpd_engine *engine, int versi
 					break;
 			}
 			if (j == engine->link_table->count) {
-				rc = sfptpd_interface_hotplug_remove(link->if_index,
-								     link->if_name);
+				rc = sfptpd_interface_hotplug_remove(link);
 
 				if (rc == 0) {
 					reconfigure = true;

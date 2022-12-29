@@ -500,23 +500,6 @@ static bool sysfs_file_exists(const char *base, const char *interface,
 	return (stat(path, &stat_buf) == 0);
 }
 
-
-static bool sysfs_path_exists(const char *base, const char *interface)
-{
-	char path[PATH_MAX];
-	struct stat stat_buf;
-
-	assert(base != NULL);
-	assert(interface != NULL);
-
-	/* Create the path name of the file */
-	snprintf(path, sizeof(path), "%s%s", base, interface);
-
-	/* Check whether the file exists */
-	return (stat(path, &stat_buf) == 0) && (S_ISDIR(stat_buf.st_mode));
-}
-
-
 static bool sysfs_read_int(const char *base, const char *interface,
 			   const char *filename, int *value)
 {
@@ -552,67 +535,66 @@ static bool sysfs_read_int(const char *base, const char *interface,
 }
 
 
-static bool interface_check_suitability(const char *sysfs_dir, const char *name,
+static bool interface_check_suitability(const struct sfptpd_link *link,
+					const char *sysfs_dir,
 					sfptpd_interface_class_t *class)
 {
-	int type;
 	int vendor_id = 0;
 	int device_id = 0;
 	int i;
+	const char *name;
 
 	assert(sysfs_dir != NULL);
-	assert(name != NULL);
+	assert(link != NULL);
 	assert(class != NULL);
 
-	/* If the interface name isn't a directory then ignore it */
-	if (!sysfs_path_exists(sysfs_dir, name))
-		return false;
+	name = link->if_name;
 
-	/* First, check what type of interface this is i.e. ethernet, ppp,
-	 * infiniband etc and ignore all non-ethernet types. */
-	if (!sysfs_read_int(sysfs_dir, name, "type", &type)) {
-		WARNING("interface %s: couldn't read sysfs type file\n", name);
-		return false;
-	}
+	/* Check what type of interface this is i.e. ethernet, ppp,
+	 * infiniband etc and ignore all non-ethernet types.
+	 *
+	 * Even if the interface is ethernet type but we want to exclude
+	 * devices that are wireless, bridges, vlan interfaces, bonds,
+	 * tap devices and virtual interfaces */
 
-	if (type != ARPHRD_ETHER) {
-               TRACE_L2("interface %s: not ethernet (type %d) - ignoring\n",
-                         name, type);
-		return false;
-	}
-
-	/* The interface is ethernet type but we want to exclude devices that are
-	 * wireless, bridges, vlan interfaces, bonds, tap devices and virtual
-	 * interfaces */
-	if (sysfs_file_exists(sysfs_dir, name, "wireless") ||
-	    sysfs_file_exists(sysfs_dir, name, "phy80211")) {
-		TRACE_L2("interface %s: is wireless - ignoring\n", name);
-		return false;
-	}
-
-	if (sysfs_file_exists(sysfs_dir, name, "bridge")) {
+	switch(link->type) {
+	case SFPTPD_LINK_BRIDGE:
 		TRACE_L2("interface %s: is a bridge - ignoring\n", name);
 		return false;
-	}
-
-	if (sysfs_file_exists(sysfs_dir, name, "bonding")) {
+	case SFPTPD_LINK_BOND:
 		TRACE_L2("interface %s: is a bond - ignoring\n", name);
 		return false;
-	}
-
-	if (sysfs_file_exists(sysfs_dir, name, "tun_flags")) {
-		TRACE_L2("interface %s: is a tap interface - ignoring\n", name);
+	case SFPTPD_LINK_TEAM:
+		TRACE_L2("interface %s: is a team - ignoring\n", name);
 		return false;
-	}
-
-	if (sysfs_file_exists(SFPTPD_PROC_VLAN_PATH, "", name)) {
+	case SFPTPD_LINK_TUNNEL:
+		TRACE_L2("interface %s: is a tunnel or tap interface - ignoring\n", name);
+		return false;
+	case SFPTPD_LINK_VLAN:
 		TRACE_L2("interface %s: is a VLAN - ignoring\n", name);
 		return false;
-	}
-
-	if (sysfs_file_exists(SFPTPD_SYSFS_VIRTUAL_NET_PATH, "", name)) {
-		TRACE_L2("interface %s: is virtual - ignoring\n", name);
+	case SFPTPD_LINK_MACVLAN:
+	case SFPTPD_LINK_IPVLAN:
+	case SFPTPD_LINK_VETH:
+	case SFPTPD_LINK_DUMMY:
+	case SFPTPD_LINK_OTHER:
+		TRACE_L2("interface %s: is virtual/other - ignoring\n", name);
 		return false;
+	case SFPTPD_LINK_PHYSICAL:
+		if (sysfs_file_exists(sysfs_dir, name, "wireless") ||
+		    sysfs_file_exists(sysfs_dir, name, "phy80211")) {
+			TRACE_L2("interface %s: is wireless - ignoring\n", name);
+			return false;
+		}
+		if (sysfs_file_exists(SFPTPD_SYSFS_VIRTUAL_NET_PATH, "", name)) {
+			TRACE_L2("interface %s: is virtual - ignoring\n", name);
+			return false;
+		}
+		if (link->if_type != ARPHRD_ETHER) {
+			TRACE_L2("interface %s: not ethernet (type %d) - ignoring\n",
+				 name, link->if_type);
+			return false;
+		}
 	}
 
 	/* Finally, get the vendor and device ID to determine if it is
@@ -1075,17 +1057,21 @@ static int interface_assign_nic_id(struct sfptpd_interface *interface)
 	return 0;
 }
 
-static int interface_init(const char *name, const char *sysfs_dir,
+static int interface_init(const struct sfptpd_link *link, const char *sysfs_dir,
 			  struct sfptpd_interface *interface,
-			  sfptpd_interface_class_t class,
-			  int if_index)
+			  sfptpd_interface_class_t class)
 {
 	int rc;
+	const char *name;
+	int if_index;
 
-	assert(name != NULL);
+	assert(link != NULL);
 	assert(sysfs_dir != NULL);
 	assert(interface != NULL);
 	assert(interface->magic == SFPTPD_INTERFACE_MAGIC);
+
+	name = link->if_name;
+	if_index = link->if_index;
 
 	interface->ts_enabled = false;
 	interface->class = class;
@@ -1095,14 +1081,6 @@ static int interface_init(const char *name, const char *sysfs_dir,
 
 	/* Take a copy of the interface name */
 	sfptpd_strncpy(interface->name, name, sizeof(interface->name));
-
-	/* Get the ifindex for this interface */
-	if (if_index < 0) {
-		if (!sysfs_read_int(sysfs_dir, name, "ifindex", &if_index)) {
-			ERROR("interface %s: couldn't read sysfs ifindex file\n", name);
-			return EINVAL;
-		}
-	}
 
 	interface->if_index = if_index;
 	interface->deleted = false;
@@ -1256,15 +1234,16 @@ struct sfptpd_interface *sfptpd_interface_find_first_by_nic(int nic_id)
  * Public Functions
  ****************************************************************************/
 
-int sfptpd_interface_initialise(struct sfptpd_config *config, pthread_mutex_t *hardware_state_lock)
+int sfptpd_interface_initialise(struct sfptpd_config *config,
+				pthread_mutex_t *hardware_state_lock,
+				const struct sfptpd_link_table *link_table)
 {
 	struct sfptpd_interface *new, *interface;
-	FTS *fts;
-	FTSENT *fts_entry;
 	int rc, i, flags;
 	sfptpd_config_timestamping_t *ts;
 	sfptpd_interface_class_t class;
-	char * const search_path[] = {SFPTPD_SYSFS_NET_PATH, NULL};
+	int row;
+	const struct sfptpd_link *link;
 
 	assert(config != NULL);
 
@@ -1300,61 +1279,32 @@ int sfptpd_interface_initialise(struct sfptpd_config *config, pthread_mutex_t *h
 	}
 
 	/* Iterate through the interfaces in the system */
-	fts = fts_open(search_path, FTS_COMFOLLOW, NULL);
-	if (fts == NULL) {
-		CRITICAL("failed to open sysfs net devices directory, %s\n",
-			 strerror(errno));
-		sfptpd_interface_shutdown(config);
-		return errno;
-	}
-
-	fts_entry = fts_read(fts);
-	if (fts_entry == NULL) {
-		CRITICAL("failed to read sysfs directory, %s\n",
-			 strerror(errno));
-		fts_close(fts);
-		sfptpd_interface_shutdown(config);
-		return errno;
-	}
-
-	fts_entry = fts_children(fts, 0);
-	if (fts_entry == NULL) {
-		CRITICAL("failed to get sysfs directory listing, %s\n",
-			 strerror(errno));
-		fts_close(fts);
-		sfptpd_interface_shutdown(config);
-		return errno;
-	}
-
-	/* Iterate through the linked list of files within the directory... */
-	for ( ; fts_entry != NULL; fts_entry = fts_entry->fts_link) {
+	for (row = 0; row < link_table->count; row++) {
+		link = link_table->rows + row;
 
 		/* Check that the interface is suitable i.e. an ethernet device
 		 * that isn't wireless or a bridge or virtual etc */
-		if (!interface_check_suitability(fts_entry->fts_path,
-						 fts_entry->fts_name, &class))
+		if (!interface_check_suitability(link, SFPTPD_SYSFS_NET_PATH, &class))
 			continue;
 
 		/* Create a new interface */
 		rc = interface_alloc(&new);
 		if (rc != 0) {
 			ERROR("failed to allocate interface object for %s, %s\n",
-			      fts_entry->fts_name, strerror(rc));
-			fts_close(fts);
+			      link->if_name, strerror(rc));
 			return rc;
 		}
 
-		rc = interface_init(fts_entry->fts_name, fts_entry->fts_path, new, class, -1);
+		rc = interface_init(link, SFPTPD_SYSFS_NET_PATH, new, class);
 		if (rc != 0) {
 			if (rc == ENOTSUP || rc == EOPNOTSUPP) {
 				WARNING("skipping over insufficiently capable interface %s\n",
-					fts_entry->fts_name);
+					link->if_name);
 				interface_free(new);
 				continue;
 			} else {
 				ERROR("failed to create interface instance for %s, %s\n",
-				      fts_entry->fts_name, strerror(rc));
-				fts_close(fts);
+				      link->if_name, strerror(rc));
 				return rc;
 			}
 		}
@@ -1371,8 +1321,6 @@ int sfptpd_interface_initialise(struct sfptpd_config *config, pthread_mutex_t *h
 
 		rescan_interfaces();
 	}
-
-	fts_close(fts);
 
 	fixup_readonly_and_clock_lists();
 
@@ -1470,10 +1418,13 @@ void sfptpd_interface_shutdown(struct sfptpd_config *config)
 }
 
 
-int sfptpd_interface_hotplug_insert(int if_index, const char *if_name) {
+int sfptpd_interface_hotplug_insert(const struct sfptpd_link *link)
+{
 	struct sfptpd_interface *interface;
 	int rc = 0;
 	sfptpd_interface_class_t class;
+	const char *if_name = link->if_name;
+	const int if_index = link->if_index;
 
 	interface_lock();
 
@@ -1535,7 +1486,7 @@ int sfptpd_interface_hotplug_insert(int if_index, const char *if_name) {
 
 	/* Check that the interface is suitable i.e. an ethernet device
 	 * that isn't wireless or a bridge or virtual etc */
-	if (!interface_check_suitability(SFPTPD_SYSFS_NET_PATH, if_name, &class)) {
+	if (!interface_check_suitability(link, SFPTPD_SYSFS_NET_PATH, &class)) {
 		TRACE_L4("interface: ignoring interface %s of irrelevant type\n", if_name);
 		sfptpd_strncpy(interface->name, if_name, sizeof(interface->name));
 		interface->if_index = if_index;
@@ -1544,7 +1495,7 @@ int sfptpd_interface_hotplug_insert(int if_index, const char *if_name) {
 		goto finish;
 	}
 
-	rc = interface_init(if_name, SFPTPD_SYSFS_NET_PATH, interface, class, if_index);
+	rc = interface_init(link, SFPTPD_SYSFS_NET_PATH, interface, class);
 
 	rescan_interfaces();
 
@@ -1576,13 +1527,16 @@ int sfptpd_interface_hotplug_insert(int if_index, const char *if_name) {
 }
 
 
-int sfptpd_interface_hotplug_remove(int if_index, const char *if_name) {
+int sfptpd_interface_hotplug_remove(const struct sfptpd_link *link)
+{
 	struct sfptpd_interface *interface;
 	int rc = 0;
+	const char *if_name = link->if_name;
+	const int if_index = link->if_index;
 
 	interface_lock();
 
-	INFO("interface: hotplug remove for %s (%d)\n", if_name, if_index);
+	INFO("interface: hotplug remove for %s (%d)\n", link->if_name, if_index);
 
 	/* If the ifindex has been provided, find the interface by index. If not,
 	 * try to find the interface by name. */

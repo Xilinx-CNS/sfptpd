@@ -11,6 +11,7 @@
 #include <linux/if_ether.h>
 
 #include "sfptpd_constants.h"
+#include "sfptpd_link.h"
 #include "sfptpd_db.h"
 
 
@@ -65,10 +66,13 @@ enum sfptpd_interface_drv_stat {
 
 /** Initialise interface subcomponent.
  * @param config Pointer to configuration structure
- * @return 0 for success or an errno on failure.
  * @param hardware_state_lock Pointer to shared hardware mutex
+ * @param link_table Pointer to link table from netlink
+ * @return 0 for success or an errno on failure.
  */
-int sfptpd_interface_initialise(struct sfptpd_config *config, pthread_mutex_t *hardware_state_lock);
+int sfptpd_interface_initialise(struct sfptpd_config *config,
+				pthread_mutex_t *hardware_state_lock,
+				const struct sfptpd_link_table *link_table);
 
 /** Release resources associated with the interface subcomponent
  * @param config Pointer to configuration structure
@@ -254,20 +258,18 @@ int sfptpd_interface_ptp_set_domain_filter(struct sfptpd_interface *interface,
 /** Triggers handling by the interface module of a netlink
  * interface hotplug event designating the insertion or modification
  * of a logical interface.
- * @param if_index the OS index for this interface
- * @param if_name the newest name for this interface
+ * @param link link object for the new or modified interface
  * @return 0 on success else an error from errno.h
  */
-int sfptpd_interface_hotplug_insert(int if_index, const char *if_name);
+int sfptpd_interface_hotplug_insert(const struct sfptpd_link *link);
 
 /** Triggers handling by the interface module of a netlink
  * interface hotplug event designating the removal
  * of a logical interface.
- * @param if_index the OS index for this interface
- * @param if_name the last name for this interface
+ * @param link link object for the removed interface
  * @return 0 on success else an error from errno.h
  */
-int sfptpd_interface_hotplug_remove(int if_index, const char *if_name);
+int sfptpd_interface_hotplug_remove(const struct sfptpd_link *link);
 
 /** Take a snapshot of an index over the interfaces list.
  * The copied index is an array of pointers to interface objects.
