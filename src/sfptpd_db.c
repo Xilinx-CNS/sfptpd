@@ -656,6 +656,8 @@ void sfptpd_db_table_free(struct sfptpd_db_table *table)
 	sfptpd_db_table_delete(table);
 
 	table->store->ops->free(table->store);
+
+	free(table);
 }
 
 struct sfptpd_db_record_ref sfptpd_db_table_insert(struct sfptpd_db_table *table,
@@ -1062,6 +1064,7 @@ void sfptpd_db_table_dump_impl(int trace_level,
 
 	sz = all_cols_width + num_cols * 3 + 1 + 2;
 	str = malloc(sz);
+	assert(str != NULL);
 
 	/* Print headings */
 	i = 0;
@@ -1126,6 +1129,9 @@ void sfptpd_db_table_dump_impl(int trace_level,
 		assert(rc >= 0 && rc < sz - i);
 		sfptpd_log_trace(SFPTPD_COMPONENT_ID_SFPTPD, trace_level, "%s\n", str);
 	}
+
+	free(str);
+	query_result_free(&result);
 }
 
 

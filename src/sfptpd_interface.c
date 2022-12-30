@@ -997,6 +997,8 @@ static int interface_assign_nic_id(struct sfptpd_interface *interface)
 				interface->bus_addr + matches[0].rm_so,
 				matches[0].rm_eo - matches[0].rm_so);
 		}
+
+		regfree(&regex);
 	}
 
 	/* If there is no PHC number then there is no purpose for the
