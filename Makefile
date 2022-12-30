@@ -13,8 +13,11 @@ PACKAGE_VERSION = $(SFPTPD_VERSION)
 ### Definitions conditional on build environment
 if_header_then = echo "\#include <$1>" | $(CC) -E -x c - > /dev/null 2>&1 && echo $2
 
-CONDITIONAL_DEFS := $(shell $(call if_header_then,sys/capability.h,-DHAVE_CAPS))
-CONDITIONAL_LIBS := $(shell $(call if_header_then,sys/capability.h,-lcap))
+CONDITIONAL_DEFS := \
+ $(shell $(call if_header_then,sys/capability.h,-DHAVE_CAPS)) \
+ $(shell $(call if_header_then,linux/if_team.h,-DHAVE_TEAMING))
+CONDITIONAL_LIBS := \
+ $(shell $(call if_header_then,sys/capability.h,-lcap))
 
 ### Unit testing
 FAST_TESTS = bic filters hash stats config

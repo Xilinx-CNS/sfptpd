@@ -30,7 +30,9 @@
 #include <sys/epoll.h>
 #include <linux/genetlink.h>
 #include <linux/rtnetlink.h>
+#ifdef HAVE_TEAMING
 #include <linux/if_team.h>
+#endif
 #include <linux/netlink.h>
 #include <libmnl/libmnl.h>
 
@@ -65,9 +67,11 @@
 #define DBG_L5(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NETLINK, 5, x, ##__VA_ARGS__)
 #define DBG_L6(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NETLINK, 6, x, ##__VA_ARGS__)
 
+#ifdef HAVE_TEAMING
 #define NUM_GROUPS 2
 #define GRP_CTRL 0
 #define GRP_TEAM 1
+#endif
 
 struct link_db {
 	struct sfptpd_link_table table;
@@ -76,8 +80,10 @@ struct link_db {
 
 enum nl_conn {
 	NL_CONN_RT,
+#ifdef HAVE_TEAMING
 	NL_CONN_TEAM_DUMP,
 	NL_CONN_TEAM_NOTIFY, /* required to follow _DUMP */
+#endif
 	NL_CONN_MAX,
 };
 
@@ -114,10 +120,12 @@ struct nl_ge_group {
 	int family;
 };
 
+#ifdef HAVE_TEAMING
 static struct nl_ge_group nl_ge_groups[NUM_GROUPS] = {
 	{ "nlctrl", 0, 0 },
 	{ TEAM_GENL_NAME, 0, 0 },
 };
+#endif
 
 
 /****************************************************************************
@@ -129,9 +137,11 @@ static struct nl_ge_group nl_ge_groups[NUM_GROUPS] = {
  * Forward function declarations
  ****************************************************************************/
 
+#ifdef HAVE_TEAMING
 static struct nlmsghdr *netlink_create_team_query(struct nl_conn_state *conn,
 						  char *buf, size_t space,
 						  int team_ifindex);
+#endif
 
 
 /****************************************************************************
@@ -273,6 +283,7 @@ static int link_attr_info_vlan_cb(const struct nlattr *attr, void *data)
 	return rc;
 }
 
+#ifdef HAVE_TEAMING
 static bool netlink_send_team_query(struct sfptpd_nl_state *state, struct sfptpd_link *link)
 {
 	struct nlmsghdr *new_hdr;
@@ -301,6 +312,7 @@ static bool netlink_send_team_query(struct sfptpd_nl_state *state, struct sfptpd
 
 	return query_requested;
 }
+#endif
 
 static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr *nh)
 {
@@ -405,9 +417,19 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 			}
 		}
 
+#ifdef HAVE_TEAMING
 		if (nested[IFLA_INFO_SLAVE_KIND])
 			link->is_slave = true;
+#endif
 	}
+
+#ifndef HAVE_TEAMING
+	/* Using the lack of teaming support as a proxy for the
+	 * IFLA_INFO_SLAVE_KIND tag being available, use the interface
+	 * flags to determine if this is a slave interface.
+	 */
+	link->is_slave = (link->if_flags & IFF_SLAVE) ? true : false;
+#endif
 
 	for (row = 0; row < db->table.count; row++) {
 		if (db->table.rows[row].if_index == link->if_index) {
@@ -437,15 +459,18 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 	db->table.rows[row] = *link;
 	db->table.count++;
 
+#ifdef HAVE_TEAMING
 	/* If a team interface is in a dump then we need to request team
            details explicitly. */
 	if (link->type == SFPTPD_LINK_TEAM)
 		if (!netlink_send_team_query(conn->state, link))
 			conn->state->need_rescan = true;
+#endif
 
 	return 0;
 }
 
+#ifdef HAVE_TEAMING
 static void netlink_rescan_teams(struct sfptpd_nl_state *state)
 {
 	int row;
@@ -865,6 +890,7 @@ static int netlink_handle_genl_team(struct nl_conn_state *conn,
 
 	return 0;
 }
+#endif
 
 static int netlink_rt_cb(const struct nlmsghdr *nh, void *context)
 {
@@ -890,6 +916,7 @@ static int netlink_rt_cb(const struct nlmsghdr *nh, void *context)
 	return MNL_CB_OK;
 }
 
+#ifdef HAVE_TEAMING
 static int netlink_ge1_cb(const struct nlmsghdr *nh, void *context)
 {
 	struct nl_conn_state *conn = (struct nl_conn_state *) context;
@@ -935,6 +962,7 @@ static int netlink_ge2_cb(const struct nlmsghdr *nh, void *context)
 
 	return MNL_CB_OK;
 }
+#endif
 
 static struct nlmsghdr *netlink_create_interface_query(struct nl_conn_state *conn,
 						       char *buf, size_t space)
@@ -955,6 +983,7 @@ static struct nlmsghdr *netlink_create_interface_query(struct nl_conn_state *con
 	return nh;
 }
 
+#ifdef HAVE_TEAMING
 static struct nlmsghdr *netlink_create_team_ctrl_query(struct nl_conn_state *conn,
 						  char *buf, size_t space)
 {
@@ -995,6 +1024,7 @@ static struct nlmsghdr *netlink_create_team_query(struct nl_conn_state *conn,
 
 	return nh;
 }
+#endif
 
 static int netlink_open_conn(struct nl_conn_state *conn,
 			     const char *name,
@@ -1098,7 +1128,6 @@ static struct link_db *netlink_find_version(struct sfptpd_nl_state *state,
 
 struct sfptpd_nl_state *sfptpd_netlink_init(void)
 {
-	struct nlmsghdr *hdr;
 	int rc;
 
 	struct sfptpd_nl_state *state = calloc(1, sizeof *state);
@@ -1107,6 +1136,10 @@ struct sfptpd_nl_state *sfptpd_netlink_init(void)
 		      strerror(errno));
 		goto fail0;
 	}
+
+	state->db_ver_next = 1;
+	state->db_hist_count = 1;
+	state->db_hist[0].table.version = state->db_ver_next++;
 
 	state->buf_sz = MNL_SOCKET_BUFFER_SIZE;
 	state->buf = malloc(state->buf_sz);
@@ -1122,6 +1155,9 @@ struct sfptpd_nl_state *sfptpd_netlink_init(void)
 	state->conn[NL_CONN_RT].cb = netlink_rt_cb;
 	state->conn[NL_CONN_RT].state = state;
 
+#ifdef HAVE_TEAMING
+	struct nlmsghdr *hdr;
+
 	rc = netlink_open_conn(state->conn + NL_CONN_TEAM_DUMP,
 			       "genetlink1", NETLINK_GENERIC, 0);
 	if (rc < 0) goto fail3;
@@ -1134,10 +1170,6 @@ struct sfptpd_nl_state *sfptpd_netlink_init(void)
 	state->conn[NL_CONN_TEAM_NOTIFY].cb = netlink_ge2_cb;
 	state->conn[NL_CONN_TEAM_NOTIFY].state = state;
 
-	state->db_ver_next = 1;
-	state->db_hist_count = 1;
-	state->db_hist[0].table.version = state->db_ver_next++;
-
 	hdr = netlink_create_team_ctrl_query(state->conn + NL_CONN_TEAM_DUMP,
 					state->buf,
 					state->buf_sz);
@@ -1147,14 +1179,17 @@ struct sfptpd_nl_state *sfptpd_netlink_init(void)
 		ERROR("netlink: sending team control query, %s\n", strerror(errno));
 		goto fail5;
 	}
+#endif
 
 	return state;
 
+#ifdef HAVE_TEAMING
 fail5:
 	mnl_socket_close(state->conn[NL_CONN_TEAM_NOTIFY].mnl);
 fail4:
 	mnl_socket_close(state->conn[NL_CONN_TEAM_DUMP].mnl);
 fail3:
+#endif
 	mnl_socket_close(state->conn[NL_CONN_RT].mnl);
 fail2:
 	free(state->buf);
@@ -1212,13 +1247,19 @@ int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 	cur->refcnt = consumers;
 
 	do {
+#ifdef HAVE_TEAMING
 		if (state->need_rescan && nl_ge_groups[GRP_TEAM].family > 0)
 			netlink_rescan_teams(state);
+#endif
 
 		serviced = netlink_service_fds(state);
 		if (serviced > 0)
 			any_data = true;
-	} while (serviced > 0 || (serviced == 0 && state->need_rescan && nl_ge_groups[GRP_TEAM].family > 0));
+	} while (serviced > 0
+#ifdef HAVE_TEAMING
+		 || (serviced == 0 && state->need_rescan && nl_ge_groups[GRP_TEAM].family > 0)
+#endif
+		);
 
 
 	if (any_data) {
