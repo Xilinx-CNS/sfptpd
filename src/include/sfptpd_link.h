@@ -12,8 +12,6 @@
  * Structures, Types, Defines
  ****************************************************************************/
 
-#define SFPTPD_LINK_TABLE_SIZE 128
-
 enum sfptpd_link_type {
 	SFPTPD_LINK_PHYSICAL,
 	SFPTPD_LINK_BOND,
@@ -65,7 +63,7 @@ struct sfptpd_link {
 };
 
 struct sfptpd_link_table {
-	struct sfptpd_link rows[SFPTPD_LINK_TABLE_SIZE];
+	struct sfptpd_link *rows;
 	int count;
 	int version;
 };
@@ -81,5 +79,10 @@ const struct sfptpd_link *sfptpd_link_by_name(const struct sfptpd_link_table *li
 
 const struct sfptpd_link *sfptpd_link_by_if_index(const struct sfptpd_link_table *link_table,
 						  int if_index);
+
+int sfptpd_link_table_copy(const struct sfptpd_link_table *src,
+			   struct sfptpd_link_table *dest);
+
+void sfptpd_link_table_free_copy(struct sfptpd_link_table *copy);
 
 #endif

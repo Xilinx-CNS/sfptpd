@@ -3105,7 +3105,11 @@ static void ptp_on_link_table(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 	link_table = msg->u.link_table_req.link_table;
 	SFPTPD_MSG_FREE(msg);
 
-	ptp->link_table = *link_table;
+	sfptpd_link_table_free_copy(&ptp->link_table);
+	if ((rc = sfptpd_link_table_copy(link_table, &ptp->link_table)) != 0) {
+		sfptpd_thread_exit(rc);
+		return;
+	}
 
 	for(interface = ptp->intf_list; interface; interface = interface->next) {
 
@@ -3115,6 +3119,7 @@ static void ptp_on_link_table(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 		if (rc != 0) {
 			/* We can't carry on in this case */
 			sfptpd_thread_exit(rc);
+			return;
 		}
 
 		/* Set the flag to be picked up by the timer tick */
@@ -3891,6 +3896,9 @@ static void ptp_on_shutdown(void *context)
 	 * above) there should only be the global context left to free. */
 	ptpd_destroy(ptp->ptpd_global_private);
 
+	/* Free copy of link table */
+	sfptpd_link_table_free_copy(&ptp->link_table);
+
 	/* Delete the sync module memory */
 	free(ptp);
 }
@@ -4036,19 +4044,20 @@ int sfptpd_ptp_module_create(struct sfptpd_config *config,
 	ptp->engine = engine;
 
 	/* Copy initial link table */
-	ptp->link_table = *link_table;
 	*link_table_subscriber = true;
+	if (sfptpd_link_table_copy(link_table, &ptp->link_table) != 0)
+		goto fail1;
 
 	/* Create all the sync instances */
 	rc = ptp_create_instances(config, ptp);
 	if (rc != 0)
-		goto fail1;
+		goto fail2;
 
 	/* Create the sync module thread- the thread start up routine will
 	 * carry out the rest of the initialisation. */
 	rc = sfptpd_thread_create("ptp", &ptp_thread_ops, ptp, sync_module);
 	if (rc != 0)
-		goto fail2;
+		goto fail3;
 
 	/* If a buffer has been provided, populate the instance information */
 	if (instances_info_buffer != NULL) {
@@ -4068,8 +4077,10 @@ int sfptpd_ptp_module_create(struct sfptpd_config *config,
 
 	return 0;
 
-fail2:
+fail3:
 	ptp_destroy_instances(ptp);
+fail2:
+	sfptpd_link_table_free_copy(&ptp->link_table);
 fail1:
 	free(ptp);
 

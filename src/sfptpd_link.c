@@ -47,7 +47,8 @@
  ****************************************************************************/
 
 const struct sfptpd_link *sfptpd_link_by_name(const struct sfptpd_link_table *link_table,
-					      const char *link_name) {
+					      const char *link_name)
+{
 	const struct sfptpd_link *link;
 	int row;
 
@@ -68,7 +69,8 @@ const struct sfptpd_link *sfptpd_link_by_name(const struct sfptpd_link_table *li
 
 
 const struct sfptpd_link *sfptpd_link_by_if_index(const struct sfptpd_link_table *link_table,
-					          int if_index) {
+					          int if_index)
+{
 	const struct sfptpd_link *link;
 	int row;
 
@@ -85,4 +87,33 @@ const struct sfptpd_link *sfptpd_link_by_if_index(const struct sfptpd_link_table
 		errno = ENOENT;
 	}
 	return link;
+}
+
+
+int sfptpd_link_table_copy(const struct sfptpd_link_table *src,
+			   struct sfptpd_link_table *dest)
+{
+	assert(src != NULL);
+	assert(dest != NULL);
+
+	*dest = *src;
+
+	dest->rows = malloc(dest->count * sizeof *dest->rows);
+	if (dest->rows == NULL)
+		return errno;
+
+	memcpy(dest->rows, src->rows, dest->count * sizeof *dest->rows);
+	return 0;
+}
+
+
+void sfptpd_link_table_free_copy(struct sfptpd_link_table *copy)
+{
+	assert(copy != NULL);
+
+	free(copy->rows);
+
+	copy->rows = NULL;
+	copy->count = 0;
+	copy->version = -1;
 }

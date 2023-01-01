@@ -59,6 +59,8 @@
  * Defines & Constants
  ****************************************************************************/
 
+#define INITIAL_LINK_TABLE_SIZE 32
+
 /* Module-specific trace */
 #define DBG_L1(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NETLINK, 1, x, ##__VA_ARGS__)
 #define DBG_L2(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NETLINK, 2, x, ##__VA_ARGS__)
@@ -75,6 +77,7 @@
 
 struct link_db {
 	struct sfptpd_link_table table;
+	size_t capacity;
 	int refcnt;
 };
 
@@ -431,6 +434,28 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 	link->is_slave = (link->if_flags & IFF_SLAVE) ? true : false;
 #endif
 
+	if (link->event != SFPTPD_LINK_DOWN &&
+	    db->table.count + 1 >= db->capacity) {
+		size_t new_capacity;
+
+		if (db->capacity == 0)
+			new_capacity = INITIAL_LINK_TABLE_SIZE;
+		else
+			new_capacity = db->capacity << 1;
+
+		DBG_L5("link: expanding link table %d from %d to %d rows\n",
+		       db->table.version, db->capacity, new_capacity);
+
+		db->capacity = new_capacity;
+		db->table.rows = realloc(db->table.rows,
+					 db->capacity * sizeof *db->table.rows);
+		if (db->table.rows == NULL) {
+			CRITICAL("link: expanding link table, %s\n",
+				 strerror(errno));
+			return errno;
+		}
+	}
+
 	for (row = 0; row < db->table.count; row++) {
 		if (db->table.rows[row].if_index == link->if_index) {
 			if (link->event == SFPTPD_LINK_DOWN) {
@@ -450,11 +475,7 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 	}
 
 	assert(link->event != SFPTPD_LINK_DOWN);
-
-	if (row >= SFPTPD_LINK_TABLE_SIZE) {
-		CRITICAL("link: link table full\n");
-		return ENOSPC;
-	}
+	assert(row < db->capacity);
 
 	db->table.rows[row] = *link;
 	db->table.count++;
@@ -1277,10 +1298,15 @@ int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 	/* Rotate history and compare state */
 	DBG_L4("comparing ver %d -> %d\n", prev->table.version, cur->table.version);
 
+	/* Handle changes and additions */
 	for (row = 0; row < cur->table.count; row++) {
 		enum sfptpd_link_event event = SFPTPD_LINK_NONE;
 
-		for (old_row = 0; old_row < prev->table.count && cur->table.rows[row].if_index != prev->table.rows[old_row].if_index; old_row++);
+		/* Look for this link in the old table */
+		for (old_row = 0; old_row < prev->table.count &&
+				  cur->table.rows[row].if_index != prev->table.rows[old_row].if_index;
+		     old_row++);
+
 		if (old_row == prev->table.count) {
 			event = SFPTPD_LINK_UP;
 			DBG_L1("added new if_index %d %s\n", cur->table.rows[row].if_index, cur->table.rows[row].if_name);
@@ -1340,6 +1366,8 @@ int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 
 		cur->table.rows[row].event = event;
 	}
+
+	/* Handle deletions */
 	for (old_row = 0; old_row < prev->table.count; old_row++) {
 		for (row = 0; row < cur->table.count && cur->table.rows[row].if_index != prev->table.rows[old_row].if_index; row++);
 		if (row == cur->table.count) {
@@ -1348,6 +1376,7 @@ int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 		}
 	}
 
+	/* Rotate through table history */
 	if (state->db_hist_count == MAX_LINK_DB_VERSIONS) {
 		if (state->db_hist[(state->db_hist_next + 1) % MAX_LINK_DB_VERSIONS].refcnt > 0) {
 			CRITICAL("cannot rotate link db history, ref count > 0 on oldest version\n");
@@ -1359,8 +1388,24 @@ int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 
 	if (change) {
 		assert(next->refcnt == 0);
+
+		/* Copy current table into next one */
+		if (next->capacity < cur->capacity) {
+			DBG_L5("link: expanding link table %d from %d to %d rows\n",
+			       state->db_ver_next, next->capacity, cur->capacity);
+			next->capacity = cur->capacity;
+			next->table.rows = realloc(next->table.rows,
+						   next->capacity * sizeof *next->table.rows);
+			if (next->table.rows == NULL)
+				return -errno;
+		}
+		next->refcnt = cur->refcnt;
+		next->table.count = cur->table.count;
+		memcpy(next->table.rows, cur->table.rows,
+		       next->table.count * sizeof *next->table.rows);
+
+		/* Rotate versions */
 		state->db_hist_next = (state->db_hist_next + 1) % MAX_LINK_DB_VERSIONS;
-		memcpy(next, cur, sizeof *cur);
 		next->table.version = state->db_ver_next++;
 		DBG_L4("netlink: table %d, refcnt = %d\n", cur->table.version, cur->refcnt);
 		return cur->table.version;
@@ -1387,6 +1432,7 @@ int sfptpd_netlink_get_table(struct sfptpd_nl_state *state, int version, const s
 			return db->table.count;
 		}
 	} else {
+		ERROR("netlink: cannot find link table version %d\n", version);
 		return -ENOENT;
 	}
 }
@@ -1445,6 +1491,12 @@ void sfptpd_netlink_finish(struct sfptpd_nl_state *state)
 	assert(state);
 	assert(state->buf);
 
+	for (i = 0; i < MAX_LINK_DB_VERSIONS; i++) {
+		struct sfptpd_link_table *table = &state->db_hist[i].table;
+		if (table->rows != NULL)
+			free(table->rows);
+	}
+
 	for (i = 0; i < NL_CONN_MAX; i++) {
 		mnl_socket_close(state->conn[i].mnl);
 	}
@@ -1497,6 +1549,9 @@ const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state
 		} else if (nfds == 0) {
 			continue;
 		}
+
+		assert(nfds > 0);
+
 		rc = sfptpd_netlink_service_fds(state, NULL, 0, consumers);
 		if (rc > 0) {
 			int rows;
@@ -1506,7 +1561,10 @@ const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state
 
 			rows = sfptpd_netlink_get_table(state,
 							rc, &link_table);
-			assert(rows == link_table->count);
+			if (rows < 0)
+				errno = -rows;
+			else
+				assert(rows == link_table->count);
 		} else if (rc < 0) {
 			TRACE_L3("netlink: wait: failed to create link table\n",
 				 -rc);
@@ -1515,7 +1573,8 @@ const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state
 		}
 	}
 
-	TRACE_L3("netlink: wait: accepted version %d\n", link_table->version);
+	if (link_table != NULL)
+		TRACE_L3("netlink: wait: accepted version %d\n", link_table->version);
 
 finish:
 	close(epollfd);
