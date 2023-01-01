@@ -446,6 +446,10 @@ static void destroy_servos(struct sfptpd_engine *engine)
 		free(engine->servos);
 		engine->servos = NULL;
 	}
+	if (engine->servo_prev_alarms != NULL) {
+		free(engine->servo_prev_alarms);
+		engine->servo_prev_alarms = NULL;
+	}
 
 	engine->total_servos = 0;
 	engine->active_servos = 0;
