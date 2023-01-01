@@ -1547,12 +1547,12 @@ int sfptpd_interface_hotplug_remove(const struct sfptpd_link *link)
 	}
 
 	if (interface == NULL) {
-		WARNING("interface: could not find interface to be deleted\n");
-		rc = ENOENT;
+		TRACE_L3("interface: could not find interface to be deleted\n");
+		/* No need for rc = ENOENT as we only record relevant links */;
 	} else {
 		if (interface->deleted) {
-			WARNING("interface: interface %s already deleted\n", if_name);
-			rc = ENOENT;
+			TRACE_L3("interface: interface %s already deleted\n", if_name);
+			/* No need for rc = ENOENT as we only record relevant links */;
 		} else {
 			interface_delete(interface, false);
 			rescan_interfaces();
