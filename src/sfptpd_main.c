@@ -380,7 +380,7 @@ static int netlink_start(void) {
 
 	rc = sfptpd_netlink_scan(netlink);
 	if (rc != 0) {
-		CRITICAL("scanning with netlink\n",
+		CRITICAL("scanning with netlink, %s\n",
 			 strerror(rc));
 		return rc;
 	}

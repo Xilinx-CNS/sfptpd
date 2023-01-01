@@ -1479,7 +1479,8 @@ int sfptpd_netlink_scan(struct sfptpd_nl_state *state)
 	rc = mnl_socket_sendto(state->conn[NL_CONN_RT].mnl, hdr, hdr->nlmsg_len);
 	if (rc < 0)
 		ERROR("netlink: sending interface query, %s\n", strerror(errno));
-
+	else
+		DBG_L4("netlink: issued rescan\n");
 
 	return rc >= 0 ? 0 : errno;
 }
@@ -1537,7 +1538,7 @@ const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state
 		}
 	} while (fd != -1);
 
-	TRACE_L3("netlink: waiting for link table\n");
+	DBG_L3("netlink: waiting for link table\n");
 	while (nfds <= 0) {
 		nfds = epoll_wait(epollfd, events, max_events, -1);
 		if (nfds < 0) {
@@ -1556,7 +1557,7 @@ const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state
 		if (rc > 0) {
 			int rows;
 
-			TRACE_L3("netlink: wait: new link table version %d\n",
+			DBG_L3("netlink: wait: new link table version %d\n",
 				 rc);
 
 			rows = sfptpd_netlink_get_table(state,
@@ -1566,7 +1567,7 @@ const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state
 			else
 				assert(rows == link_table->count);
 		} else if (rc < 0) {
-			TRACE_L3("netlink: wait: failed to create link table\n",
+			DBG_L3("netlink: wait: failed to create link table\n",
 				 -rc);
 			errno = -rc;
 			goto finish;
@@ -1574,7 +1575,7 @@ const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state
 	}
 
 	if (link_table != NULL)
-		TRACE_L3("netlink: wait: accepted version %d\n", link_table->version);
+		DBG_L3("netlink: wait: accepted version %d\n", link_table->version);
 
 finish:
 	close(epollfd);

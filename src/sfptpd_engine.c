@@ -173,7 +173,7 @@ enum engine_timer_ids {
 	ENGINE_TIMER_SAVE_STATE,
 	ENGINE_TIMER_LEAP_SECOND,
 	ENGINE_TIMER_SELECTION_HOLDOFF,
-	ENGINE_TIMER_NETLINK_COALESCE,
+	ENGINE_TIMER_NETLINK_RESCAN,
 };
 
 /* Leap second states */
@@ -276,7 +276,7 @@ static void on_save_state(void *user_context, unsigned int timer_id);
 static void on_stats_period_end(void *user_context, unsigned int timer_id);
 static void on_leap_second_timer(void *user_context, unsigned int timer_id);
 static void on_selection_holdoff_timer(void *user_context, unsigned int timer_id);
-static void on_interface_event_timer(void *user_context, unsigned int timer_id);
+static void on_netlink_rescan_timer(void *user_context, unsigned int timer_id);
 
 struct engine_timer_defn {
 	enum engine_timer_ids timer_id;
@@ -292,7 +292,7 @@ static const struct engine_timer_defn engine_timer_defns[] =
 	{ENGINE_TIMER_STATS_PERIOD_END,  CLOCK_MONOTONIC, on_stats_period_end},
 	{ENGINE_TIMER_LEAP_SECOND,       CLOCK_REALTIME,  on_leap_second_timer},
 	{ENGINE_TIMER_SELECTION_HOLDOFF, CLOCK_MONOTONIC, on_selection_holdoff_timer},
-	{ENGINE_TIMER_NETLINK_COALESCE,  CLOCK_MONOTONIC, on_interface_event_timer}
+	{ENGINE_TIMER_NETLINK_RESCAN,    CLOCK_MONOTONIC, on_netlink_rescan_timer}
 };
 
 
@@ -588,6 +588,21 @@ static int create_timers(struct sfptpd_engine *engine)
 					       false, false, &interval);
 		if (rc != 0) {
 			CRITICAL("failed to start selection holdoff timer, %s\n",
+				 strerror(rc));
+			return rc;
+		}
+	}
+
+	/* Create the netlink rescan timer */
+	if (engine->general_config->netlink_rescan_interval != 0) {
+
+		interval.tv_sec = engine->general_config->netlink_rescan_interval;
+		interval.tv_nsec = 0;
+
+		rc = sfptpd_thread_timer_start(ENGINE_TIMER_NETLINK_RESCAN,
+					       true, false, &interval);
+		if (rc != 0) {
+			CRITICAL("failed to start netlink rescan timer, %s\n",
 				 strerror(rc));
 			return rc;
 		}
@@ -1333,9 +1348,16 @@ static void on_leap_second_timer(void *user_context, unsigned int timer_id)
 }
 
 
-static void on_interface_event_timer(void *user_context, unsigned int timer_id)
+static void on_netlink_rescan_timer(void *user_context, unsigned int timer_id)
 {
-	TRACE_L3("netlink: processing coalesced interface change events on timer expiry\n");
+	struct sfptpd_engine *engine = (struct sfptpd_engine *)user_context;
+	int rc;
+
+	rc = sfptpd_netlink_scan(engine->netlink_state);
+	if (rc != 0) {
+		ERROR("engine: netlink rescan, %s\n",
+		      strerror(rc));
+	}
 }
 
 
