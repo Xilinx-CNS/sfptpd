@@ -575,7 +575,7 @@ static int new_system_clock(struct sfptpd_config_general *config,
 	new->u.system.tick_resolution_ppb = new->u.system.tick_freq_hz * 1000.0;
 	new->u.system.min_tick = -100000.0 / new->u.system.tick_freq_hz;
 	new->u.system.max_tick = 100000.0 / new->u.system.tick_freq_hz;
-	new->u.system.kernel_status = t.status;
+	new->u.system.kernel_status = STA_UNSYNC;
 
 	/* Set a nominal value for the NIC clock accuracy and maximum frequency
 	 * adjustment */

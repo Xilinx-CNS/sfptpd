@@ -1,6 +1,6 @@
 Solarflare Enhanced PTP Daemon (sfptpd) from Xilinx
 ===================================================
-Version: v3.6.0.1013
+Version: v3.6.0.1014
 
 
 Overview
@@ -116,7 +116,7 @@ Advanced notice of likely future changes after v3.6
 Changelog
 ---------
 
-### v3.6.0.1013 Feature Release
+### v3.6.0.1014 Feature Release
 
 Features:
  ~ Support Xilinx ALVEO X3522 NICs (SWPTP-1162)
@@ -164,6 +164,8 @@ Features:
      ignore_critical no-ptp-subsystem no-ptp-clock
 
  ~ Write running configuration into state directory as a diagnostic. (SWPTP-198)
+
+ ~ Control system clock flags to let kernel set RTC when in sync. (SWPTP-216)
 
  ~ Add 'manual-startup' selection policy to start with a configured sync
     instance before moving onto automatic selection. (SWPTP-823)

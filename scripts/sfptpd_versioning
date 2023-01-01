@@ -54,14 +54,14 @@ derive_version () {
 
   if grep -q '$Format:' $1
   then
-    if ! { vcs_tag=$(git describe --tags) && \
-           vcs_date=$(git log -1 --pretty=format:%cs) && \
+    if ! { vcs_date=$(git log -1 --pretty=format:%cs) && \
            vcs_id=$(git log -1 --pretty=format:%h); }
     then
       log "No VCS substitutions or clone, using encoded version: $src_version" >&2
       echo $src_version
       return 0
     fi
+    vcs_tag=$(git describe --tags)
   else
     vcs_tag=$(field vcs-tag < $1)
     vcs_date=$(field vcs-date < $1)
