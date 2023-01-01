@@ -24,16 +24,11 @@ enum sfptpd_control_action {
 	CONTROL_LOGROTATE,
 	CONTROL_STEPCLOCKS,
 	CONTROL_SELECTINSTANCE,
-	CONTROL_INTERFACEEVENT,
 	CONTROL_TESTMODE,
 };
 
 union sfptpd_control_action_parameters {
 	char selected_instance[64];
-	struct {
-		bool insert;
-		char if_name[IFNAMSIZ];
-	} interface_event;
 	struct {
 		enum sfptpd_test_id id;
 		int params[3];

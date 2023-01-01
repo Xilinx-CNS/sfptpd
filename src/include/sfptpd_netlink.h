@@ -19,14 +19,6 @@ struct sfptpd_nl_state;
  * Structures, Types, Defines
  ****************************************************************************/
 
-struct sfptpd_netlink_event {
-	int32_t if_index;
-	char if_name[IFNAMSIZ];
-	int8_t insert;
-} __attribute__ ((packed));
-
-#define SFPTPD_EVENT_BUFFER_SIZE 8
-
 
 /****************************************************************************
  * Function Prototypes

@@ -1270,14 +1270,6 @@ int sfptpd_interface_initialise(struct sfptpd_config *config,
 		return errno;
 	}
 
-	/* If we are operating with hotplug detect mode set to manual, we don't
-	 * scan any interfaces- the user must add them explicitly using the
-	 * sfptpdctl hotpluginsert=ethX command. */
-	if ((sfptpd_general_config_get(config)->hotplug_detection & SFPTPD_HOTPLUG_DETECTION_INITIAL_SCAN) == 0) {
-		INFO("hotplug detection set to manual - not scanning interfaces\n");
-		return 0;
-	}
-
 	/* Iterate through the interfaces in the system */
 	for (row = 0; row < link_table->count; row++) {
 		link = link_table->rows + row;

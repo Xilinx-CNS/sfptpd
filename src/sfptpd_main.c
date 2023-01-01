@@ -371,7 +371,6 @@ static void hardware_state_lock_destroy(void) {
 static int netlink_start(void) {
 	int rc;
 
-	/* Configure control socket handling */
 	netlink = sfptpd_netlink_init();
 	if (netlink == NULL) {
 		CRITICAL("could not start netlink\n");
@@ -563,20 +562,6 @@ static void main_on_user_fds(void *not_used, unsigned int num_fds, int fds[])
 		/* Choose a particular sync instance */
 		NOTICE("received 'selectinstance' control command: choosing instance\n");
 		sfptpd_engine_select_instance(engine, param.selected_instance);
-		break;
-	case CONTROL_INTERFACEEVENT:
-		/* Notify the engine that something has happened to an interface */
-		NOTICE("received 'interface%s' control command for interface %s\n",
-			   param.interface_event.insert? "insert": "remove",
-			   param.interface_event.if_name);
-
-		if (sfptpd_general_config_get(config)->hotplug_detection &
-		    SFPTPD_HOTPLUG_DETECTION_MANUAL) {
-			ERROR("manual interface insertion no longer available.\n");
-		} else {
-			ERROR("ignoring interface control command received when not "
-			      "in manual hotplug detection mode\n");
-		}
 		break;
 	case CONTROL_TESTMODE:
 		/* Configurate a test mode */

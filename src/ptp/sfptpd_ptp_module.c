@@ -344,11 +344,6 @@ static const struct sfptpd_ptp_accuracy_map ptp_accuracy_map[] =
 	{PTPD_ACCURACY_MORE_THAN_10S, INFINITY}
 };
 
-static const struct timespec min_bond_update_interval =
-{
-	.tv_sec = 0,
-	.tv_nsec = MIN_BOND_UPDATE_INTERVAL_NS
-};
 
 /****************************************************************************
  * Function prototypes
@@ -2040,44 +2035,23 @@ static bool ptp_update_instance_state(struct sfptpd_ptp_instance *instance,
 
 static void ptp_update_interface_state(struct sfptpd_ptp_intf *interface)
 {
-	struct sfptpd_config_general *general_cfg;
 	struct sfptpd_ptp_instance *instance;
 	struct ptpd_intf_fds fds;
 	bool state_changed;
-	bool bond_changed;
 	int rc;
 
 	assert(interface != NULL);
 
 	state_changed = false;
-	/* If this is a bond, check for an interface change. If this fails it
-	 * is a fatal error and we have to exit. */
-	if (interface->bond_info.bond_mode != SFPTPD_BOND_MODE_NONE) {
-		general_cfg = sfptpd_general_config_get(SFPTPD_CONFIG_TOP_LEVEL(interface->representative_config));
-		assert(general_cfg != NULL);
 
-		if (general_cfg->hotplug_detection & SFPTPD_HOTPLUG_DETECTION_PROBE) {
-			/* Checking for changes on team is relatively expensive so we
-			 * rate limit this check. */
-			struct timespec now;
-			clock_gettime(CLOCK_MONOTONIC, &now);
-			if (sfptpd_time_cmp(&now, &interface->next_bond_refresh_time) >= 0) {
-				rc = ptp_handle_bonding_interface_change(interface, &bond_changed);
-				if (rc != 0) {
-					/* We can't carry on in this case */
-					sfptpd_thread_exit(rc);
-					return;
-				}
+	/* Bond changes are checked when a new link table becomes
+	 * available and there is no other type of probing performed.
+	 *
+	 * Conceivably we could defer that handling to here, storing
+	 * the new table and then for bonds calling
+	 *   ptp_handle_bonding_interface_change(interface, &bond_changed)
+	 */
 
-				sfptpd_time_add(&interface->next_bond_refresh_time, &now,
-						&min_bond_update_interval);
-
-				/* OR with bond changes detected on hotplug events */
-				if (bond_changed)
-					interface->bond_changed = true;
-			}
-		}
-	}
 	/* Get a snapshot of PTPD interface's fds */
 	rc = ptpd_get_intf_fds(interface->ptpd_intf_private, &fds);
 	if (rc != 0) {

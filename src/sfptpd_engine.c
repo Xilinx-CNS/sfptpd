@@ -2090,12 +2090,10 @@ static int engine_on_startup(void *context)
 
 	config = engine->config;
 
-	if (engine->general_config->hotplug_detection & SFPTPD_HOTPLUG_DETECTION_NETLINK) {
-		rc = engine_set_netlink_polling(engine, true);
-		if (rc != 0) {
-			CRITICAL("could not start netlink polling\n");
-			goto fail;
-		}
+	rc = engine_set_netlink_polling(engine, true);
+	if (rc != 0) {
+		CRITICAL("could not start netlink polling\n");
+		goto fail;
 	}
 
 	/* Count potential sync instances, create storage for them and

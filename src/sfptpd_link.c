@@ -53,7 +53,7 @@ const struct sfptpd_link *sfptpd_link_by_name(const struct sfptpd_link_table *li
 	int row;
 
 	for (row = 0; row < link_table->count; row++) {
-		if (strncmp(link_table->rows[row].if_name, link_name, IFNAMSIZ) == 0) {
+		if (strncmp(link_table->rows[row].if_name, link_name, IF_NAMESIZE) == 0) {
 			TRACE_L4("link: table %d: found link table entry for %s\n",
 				 link_table->version, link_name);
 			link = link_table->rows + row;

@@ -39,8 +39,6 @@ static const char *COMMAND_EXIT = "exit";
 static const char *COMMAND_LOGROTATE = "logrotate";
 static const char *COMMAND_STEPCLOCKS = "stepclocks";
 static const char *COMMAND_SELECTINSTANCE = "selectinstance=";
-static const char *COMMAND_INTERFACEINSERT = "interfaceinsert=";
-static const char *COMMAND_INTERFACEREMOVE = "interfaceremove=";
 static const char *COMMAND_TESTMODE = "testmode=";
 
 static const struct sfptpd_test_mode_descriptor test_modes[] = SFPTPD_TESTS_ARRAY;
@@ -137,18 +135,6 @@ enum sfptpd_control_action sfptpd_control_socket_get_action(union sfptpd_control
 			       &buf[strlen(COMMAND_SELECTINSTANCE)],
 			       sizeof(param->selected_instance));
 		return CONTROL_SELECTINSTANCE;
-	} else if (!strncmp(buf, COMMAND_INTERFACEINSERT, strlen(COMMAND_INTERFACEINSERT))) {
-		param->interface_event.insert = true;
-		sfptpd_strncpy(param->interface_event.if_name,
-			       &buf[strlen(COMMAND_INTERFACEINSERT)],
-			       sizeof(param->interface_event.if_name));
-		return CONTROL_INTERFACEEVENT;
-	} else if (!strncmp(buf, COMMAND_INTERFACEREMOVE, strlen(COMMAND_INTERFACEREMOVE))) {
-		param->interface_event.insert = false;
-		sfptpd_strncpy(param->interface_event.if_name,
-			       &buf[strlen(COMMAND_INTERFACEREMOVE)],
-			       sizeof(param->interface_event.if_name));
-		return CONTROL_INTERFACEEVENT;
 	} else if (!strncmp(buf, COMMAND_TESTMODE, strlen(COMMAND_TESTMODE))) {
 		char *save;
 		char *token;

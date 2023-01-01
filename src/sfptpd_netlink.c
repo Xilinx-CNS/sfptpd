@@ -42,9 +42,6 @@
  * https://bugzilla.redhat.com/show_bug.cgi?id=1300256 &c.
  * #include <linux/if_bonding.h>
  */
-#ifndef IFNAMSIZ
-#define IFNAMSIZ 16
-#endif
 #define BOND_MODE_ACTIVEBACKUP 1
 #define BOND_MODE_8023AD 4
 /* End of workaround */

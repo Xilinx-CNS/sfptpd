@@ -42,9 +42,6 @@
 #define SFPTPD_DEFAULT_SERVO_K_PROPORTIONAL        0.4
 #define SFPTPD_DEFAULT_SERVO_K_INTEGRAL            0.03
 #define SFPTPD_DEFAULT_SERVO_K_DIFFERENTIAL        0.0
-#define SFPTPD_DEFAULT_HOTPLUG_DETECTION	   (SFPTPD_HOTPLUG_DETECTION_INITIAL_SCAN \
-						    | SFPTPD_HOTPLUG_DETECTION_NETLINK \
-						    | SFPTPD_HOTPLUG_DETECTION_PROBE)
 
 
 /** Maximum size of MAC address string */
@@ -83,14 +80,6 @@ enum sfptpd_epoch_guard_config {
 	SFPTPD_EPOCH_GUARD_ALARM_ONLY,
 	SFPTPD_EPOCH_GUARD_PREVENT_SYNC,
 	SFPTPD_EPOCH_GUARD_CORRECT_CLOCK
-};
-
-/** Hotplug detection mode bitfield */
-enum sfptpd_hotplug_detection {
-	SFPTPD_HOTPLUG_DETECTION_MANUAL = 001,
-	SFPTPD_HOTPLUG_DETECTION_INITIAL_SCAN = 002,
-	SFPTPD_HOTPLUG_DETECTION_NETLINK = 004,
-	SFPTPD_HOTPLUG_DETECTION_PROBE = 010,
 };
 
 enum clock_config_state {
@@ -170,9 +159,9 @@ typedef struct sfptpd_config_timestamping {
  * @initial_sync_instance: When selecting instances manually, the name of the initial sync instance
  * @selection_holdoff_interval: Interval to wait after detecting a better instance
  * before selecting it
+ * @netlink_rescan_interval: Interval between rescanning interface with netlink
  * @pid_filter.kp: Secondary servo PID filter proportional term coefficient
  * @pid_filter.ki: Secondary servo PID filter integral term coefficient
- * @hotplug_detection: Specifies whether to use Netlink for hotplug detection or
  * rely on a signal from an external entity via sfptpdctl.
  */
 typedef struct sfptpd_config_general {
@@ -212,7 +201,6 @@ typedef struct sfptpd_config_general {
 	char json_stats_filename[PATH_MAX];
 	char json_remote_monitor_filename[PATH_MAX];
 	enum sfptpd_epoch_guard_config epoch_guard;
-	enum sfptpd_hotplug_detection hotplug_detection;
 	enum sfptpd_clustering_mode clustering_mode;
 	enum sfptpd_phc_diff_method phc_diff_methods[SFPTPD_DIFF_METHOD_MAX+1];
 	char clustering_discriminator_name[SFPTPD_CONFIG_SECTION_NAME_MAX];

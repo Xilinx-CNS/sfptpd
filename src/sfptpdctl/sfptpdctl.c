@@ -35,11 +35,7 @@ int main(int argc, char *argv[])
 			"    exit                 cause sfptpd to exit\n"
 			"    logrotate            cause the log files to be closed and reopened\n"
 			"    stepclocks           cause the clocks to be stepped\n"
-			"    selectinstance=name  select specific sync instance\n"
-			"    interfaceinsert=name cause sfptpd to re-initialise an interface "
-				"following a hotplug insertion\n"
-			"    interfaceremove=name cause sfptpd to stop using an interface prior "
-				"to a hotplug removal\n",
+			"    selectinstance=name  select specific sync instance\n",
 			argv[0]);
 		return 1;
 	}

@@ -259,15 +259,11 @@ static const sfptpd_config_option_t config_general_options[] =
 	{"json_remote_monitor", "<filename>",
 		"Output realtime information collected by the PTP remote monitor in JSON-lines format to this file (http://jsonlines.org). Disabled by default.",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, false, parse_json_remote_monitor},
-	{"hotplug_detection_mode", "<netlink-and-probe | netlink | probe | manual "
-		"| manual-with-scan>",
-		"Configure how the daemon should detect hotplug insertion and "
-		"removal of interfaces and bond changes. In manual mode the "
-		"sfptpdctl control tool must be used to tell sfptpdctl which "
-		"interfaces to use (with initial scan with -with-scan). "
-		"In netlink mode changes are detected by "
-		"Netlink events. In probe mode changes are detected by probing. "
-		"The default mode, netlink-and-probe combines both these techniques.",
+	{"hotplug_detection_mode", "<netlink | auto>",
+		"Deprecated option to configure how the daemon should detect "
+		"hotplug insertion and removal of interfaces and bond changes. "
+		"Netlink is used exclusively for this now and any other option "
+		"is ignored.",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, false, parse_hotplug_detection_mode},
 	{"netlink_rescan_interval", "NUMBER",
 		"Specifies period between rescanning the link table with netlink. "
@@ -1164,29 +1160,13 @@ static int parse_json_remote_monitor(struct sfptpd_config_section *section, cons
 static int parse_hotplug_detection_mode(struct sfptpd_config_section *section, const char *option,
 					unsigned int num_params, const char * const params[])
 {
-	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
 
-	if (strcmp(params[0], "auto") == 0 ||
-	    strcmp(params[0], "netlink-and-probe") == 0) {
-		general->hotplug_detection = SFPTPD_HOTPLUG_DETECTION_INITIAL_SCAN
-					   | SFPTPD_HOTPLUG_DETECTION_NETLINK
-					   | SFPTPD_HOTPLUG_DETECTION_PROBE;
-	} else if (strcmp(params[0], "manual") == 0) {
-		general->hotplug_detection = SFPTPD_HOTPLUG_DETECTION_MANUAL;
-	} else if (strcmp(params[0], "manual-with-scan") == 0) {
-		general->hotplug_detection = SFPTPD_HOTPLUG_DETECTION_MANUAL
-					   | SFPTPD_HOTPLUG_DETECTION_INITIAL_SCAN;
-	} else if (strcmp(params[0], "netlink") == 0) {
-		general->hotplug_detection = SFPTPD_HOTPLUG_DETECTION_INITIAL_SCAN
-					   | SFPTPD_HOTPLUG_DETECTION_NETLINK;
-	} else if (strcmp(params[0], "probe") == 0) {
-		general->hotplug_detection = SFPTPD_HOTPLUG_DETECTION_INITIAL_SCAN
-					   | SFPTPD_HOTPLUG_DETECTION_PROBE;
-	} else {
-		return EINVAL;
-	}
-
+	if (strcmp(params[0], "auto") != 0 &&
+	    strcmp(params[0], "netlink") != 0)
+		NOTICE("only the 'netlink' hotplug detection mode is supported, "
+		       "other modes are ignored; the hotplug_detection_mode "
+		       "is deprecated and may be removed in a future version.\n");
 	return 0;
 }
 
@@ -1443,8 +1423,6 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 
 		new->json_stats_filename[0] = '\0';
 		new->json_remote_monitor_filename[0] = '\0';
-
-		new->hotplug_detection = SFPTPD_DEFAULT_HOTPLUG_DETECTION;
 
 		new->clustering_mode = SFPTPD_DEFAULT_CLUSTERING_MODE;
                 new->clustering_guard_enabled = SFPTPD_DEFAULT_CLUSTERING_GUARD;
