@@ -24,6 +24,7 @@ usage() {
   err "  $me write <ver>  - write <ver> into version string in source"
   err "  $me derive       - derive a version string from version control"
   err "  $me patch        - patch derived version string into source"
+  err "  $me clean        - restore base version in source"
   err
   exit 1
 }
@@ -47,9 +48,16 @@ write_version () {
   try sed -i 's,^\(#define SFPTPD_VERSION_TEXT *"\).*",\1'"$1\"",g src/include/sfptpd_version.h
 }
 
+# param 1: version string
+base_of () {
+  base=${1%%~*}
+  echo ${base%%^*}
+}
+
 # param 1: path to vcs-vars
 derive_version () {
   src_version=$(read_version)
+  base_version=$(base_of $src_version)
   version=$src_version
 
   if grep -q '$Format:' $1
@@ -71,13 +79,13 @@ derive_version () {
   if [ "v$src_version" = "$vcs_tag" ]
   then
     echo -n "Encoded version is tagged: " >&2
-  elif echo $vcs_tag | grep -q "^v$src_version-"
+  elif echo $vcs_tag | grep -q "^v$base_version-"
   then
     echo -n "Post-release version: " >&2
-    version="$src_version^$(echo $vcs_date | sed s,-,,g).git$vcs_id"
+    version="$base_version^$(echo $vcs_date | sed s,-,,g).git$vcs_id"
   else
     echo -n "Pre-release version: " >&2
-    version="$src_version~$(echo $vcs_date | sed s,-,,g).git$vcs_id"
+    version="$base_version~$(echo $vcs_date | sed s,-,,g).git$vcs_id"
   fi
 
   echo $version >&2
@@ -113,6 +121,9 @@ case "$cmd" in
     ;;
   patch)
     write_version $(derive_version scripts/vcs-vars)
+    ;;
+  clean)
+    write_version $(base_of $(read_version))
     ;;
   *)
     usage
