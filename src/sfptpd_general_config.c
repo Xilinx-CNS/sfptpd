@@ -185,7 +185,7 @@ static const sfptpd_config_option_t config_general_options[] =
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
 		parse_clock_control},
 	{"epoch_guard", "<alarm-only | prevent-sync | correct-clock>",
-		"Guards against propagation of times near the epoch. The default is prevent-sync",
+		"Guards against propagation of times near the epoch. The default is correct-clock",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
 		parse_epoch_guard},
 	{"clock_list", "[<name | mac-address | clock-id | ifname>]*",

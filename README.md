@@ -39,6 +39,6 @@ Installs to /usr/local
 mkdir -p ~/rpmbuild/SOURCES
 ver="$(scripts/sfptpd_versioning derive)"
 git archive --prefix="sfptpd-$ver/" --format=tgz -o ~/rpmbuild/SOURCES/sfptpd-$ver.tgz HEAD
-curl https://raw.githubusercontent.com/Xilinx-CNS/sfptpd-rpm/generic/sfptpd.spec | sed -e "s/^\(Version: \).*/\1 $ver/g" -e "s/^\(Release: \).*/\1 1%{?dist}/g" > sfptpd.spec
+curl https://raw.githubusercontent.com/Xilinx-CNS/sfptpd-rpm/generic/sfptpd.spec | sed "s/^\(Version: \).*/\1 $ver/g" > sfptpd.spec
 rpmbuild -bs sfptpd.spec
 ```
