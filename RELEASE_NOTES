@@ -1,6 +1,6 @@
 Solarflare Enhanced PTP Daemon (sfptpd) from Xilinx
 ===================================================
-Version: v3.6.0.1014
+Version: v3.6.0.1015
 
 
 Overview
@@ -116,7 +116,7 @@ Advanced notice of likely future changes after v3.6
 Changelog
 ---------
 
-### v3.6.0.1014 Feature Release
+### v3.6.0.1015 Feature Release
 
 Features:
  ~ Support Xilinx ALVEO X3522 NICs (SWPTP-1162)
@@ -169,6 +169,9 @@ Features:
 
  ~ Add 'manual-startup' selection policy to start with a configured sync
     instance before moving onto automatic selection. (SWPTP-823)
+
+ ~ Make 'correct-clock' the default mode for the epoch guard. This option has
+    proven effective and reliable since its introduction. (SWPTP-1283)
 
  ~ Add separate trace component to help understand the detailed reason for
     changes in sync instance selection. Disable in normal use to avoid excessive
