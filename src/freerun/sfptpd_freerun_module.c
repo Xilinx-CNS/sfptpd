@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2022 Xilinx, Inc. */
+/* (c) Copyright 2012-2023 Xilinx, Inc. */
 
 /**
  * @file   sfptpd_freerun_module.c
@@ -42,6 +42,9 @@ typedef struct freerun_instance freerun_instance_t;
 typedef struct freerun_module {
 	/* Handle of engine */
 	struct sfptpd_engine *engine;
+
+	/* Initial link table */
+	struct sfptpd_link_table link_table;
 
 	/* Linked list of instances */
 	freerun_instance_t *instances;
@@ -284,16 +287,90 @@ static int freerun_create_instances(struct sfptpd_config *config,
 	return 0;
 }
 
+
+struct phy_search_result {
+	const struct sfptpd_link *link;
+	struct sfptpd_interface *interface;
+	struct sfptpd_clock *clock;
+	long double holdover;
+	long double accuracy;
+	enum sfptpd_clock_stratum stratum;
+};
+
+struct phy_search_result freerun_find_physical_link(freerun_module_t *fr,
+						    const struct sfptpd_link *link)
+{
+	struct phy_search_result best = { NULL, NULL, NULL, INFINITY, INFINITY,
+					  SFPTPD_CLOCK_STRATUM_X };
+	struct phy_search_result candidate = best;
+	struct sfptpd_clock *system_clock = sfptpd_clock_get_system_clock();
+	const struct sfptpd_link *other;
+	int row;
+
+	if (link == NULL)
+		return best;
+
+	candidate.link = link;
+	candidate.interface = sfptpd_interface_find_by_if_index(candidate.link->if_index);
+	if (candidate.interface != NULL) {
+		candidate.clock = sfptpd_interface_get_clock(candidate.interface);
+		if (candidate.clock != NULL && candidate.clock != system_clock) {
+			sfptpd_clock_get_accuracy(candidate.clock,
+						  &candidate.stratum,
+						  &candidate.accuracy,
+						  &candidate.holdover);
+			return candidate;
+		} else {
+			TRACE_L4("freerun: %s: candidate physical interface %s does not have a hw clock\n",
+				 link->if_name, candidate.link->if_name);
+		}
+	} else {
+		TRACE_L4("freerun: %s: candidate physical interface %s does not have an interface object\n",
+			 link->if_name, candidate.link->if_name);
+	}
+
+	/* Do a depth-first search of tree from this logical interface,
+	 * trying the physical interfaces we come across. */
+	for (row = 0; row < fr->link_table.count; row++) {
+		other = fr->link_table.rows + row;
+
+		if (other->bond.if_master == link->if_index) {
+			candidate = freerun_find_physical_link(fr, other);
+			if (candidate.link != NULL) {
+				TRACE_L4("freerun: candidate physical interface %s\n",
+					 candidate.link->if_name);
+				if (candidate.holdover < best.holdover ||
+				    (candidate.holdover == best.holdover &&
+				     candidate.accuracy < best.accuracy) ||
+				    (candidate.holdover == best.holdover &&
+				     candidate.accuracy == best.accuracy &&
+				     candidate.stratum < best.stratum) ||
+				    (candidate.clock != NULL &&
+				     best.clock == NULL)) {
+					best = candidate;
+					TRACE_L4("freerun: ... is new best!\n");
+				}
+			}
+		}
+	}
+
+	if (best.clock != NULL)
+		TRACE_L4("freerun: %s chosen %s\n",
+			 link->if_name, best.link->if_name);
+
+	return best;
+}
+
+
 static int freerun_select_clock(freerun_module_t *fr,
 				freerun_instance_t *instance)
 {
-	struct sfptpd_clock *candidate_clock;
+	struct phy_search_result candidate = { NULL, NULL };
 	struct sfptpd_clock *system_clock;
-	struct sfptpd_interface *interface;
 	struct sfptpd_freerun_module_config *config;
 	struct freerun_instance *other_instance;
-	int rc;
 	struct timespec diff;
+	int rc;
 
 	assert(fr != NULL);
 	config = instance->config;
@@ -302,7 +379,7 @@ static int freerun_select_clock(freerun_module_t *fr,
 	system_clock = sfptpd_clock_get_system_clock();
 
 	if (strcmp(config->interface_name, "system") == 0) {
-		candidate_clock = system_clock;
+		candidate.clock = system_clock;
 	} else {
 		/* A NIC must be specified and it must have a hardware clock */
 		if (config->interface_name[0] == '\0') {
@@ -311,28 +388,21 @@ static int freerun_select_clock(freerun_module_t *fr,
 			return EINVAL;
 		}
 
-		interface = sfptpd_interface_find_by_name(config->interface_name);
-		if (interface == NULL) {
-			ERROR("freerun %s: couldn't find interface %s\n",
-			SFPTPD_CONFIG_GET_NAME(config),
-			config->interface_name);
-			return ENODEV;
-		}
+		candidate = freerun_find_physical_link(fr,
+						       sfptpd_link_by_name(&fr->link_table,
+									   config->interface_name));
+	}
 
-		candidate_clock = sfptpd_interface_get_clock(interface);
-		assert(candidate_clock != NULL);
-
-		/* Check that the NIC has its own hardware clock */
-		if (candidate_clock == system_clock) {
-			ERROR("freerun %s: interface %s does not have a hw clock\n",
-			SFPTPD_CONFIG_GET_NAME(config),
-			config->interface_name);
-			return EINVAL;
-		}
+	/* Check that we have found a physical clock corresponding to logical
+	 * interface specified. */
+	if (candidate.clock == NULL) {
+		ERROR("freerun %s: no hardware clock found for %s\n",
+		      SFPTPD_CONFIG_GET_NAME(config), config->interface_name);
+		return ENODEV;
 	}
 
 	/* Check if the clock is in use in another instance */
-	other_instance = freerun_find_instance_by_clock(fr, candidate_clock);
+	other_instance = freerun_find_instance_by_clock(fr, candidate.clock);
 	if (other_instance) {
 		ERROR("freerun %s: clock on nic %s is already in use for instance %s\n",
 		      SFPTPD_CONFIG_GET_NAME(config),
@@ -347,7 +417,7 @@ static int freerun_select_clock(freerun_module_t *fr,
 	instance->ctrl_flags = SYNC_MODULE_CTRL_FLAGS_DEFAULT;
 
 	/* Sanity checks complete: save the clock. */
-	instance->clock = candidate_clock;
+	instance->clock = candidate.clock;
 
 	/* Set the NIC clock based on the system clock to ensure
 	   it has a sensible initial value */
@@ -535,6 +605,7 @@ static void freerun_on_shutdown(void *context)
 	freerun_module_t *fr = (freerun_module_t *)context;
 	assert(fr != NULL);
 
+	sfptpd_link_table_free_copy(&fr->link_table);
 	freerun_destroy_instances(fr);
 
 	/* Free the sync module memory */
@@ -741,17 +812,23 @@ int sfptpd_freerun_module_create(struct sfptpd_config *config,
 
 	fr->engine = engine;
 
+	/* Take a copy of link table for resolving interfaces in thread */
+	rc = sfptpd_link_table_copy(link_table, &fr->link_table);
+	if (rc != 0) {
+		goto fail1;
+	}
+
 	/* Create all the sync instances */
 	rc = freerun_create_instances(config, fr);
 	if (rc != 0) {
-		goto fail;
+		goto fail2;
 	}
 
 	/* Create the sync module thread- the thread start up routine will
 	 * carry out the rest of the initialisation. */
 	rc = sfptpd_thread_create("freerun", &freerun_thread_ops, fr, sync_module);
 	if (rc != 0) {
-		goto fail;
+		goto fail2;
 	}
 
 	/* If a buffer has been provided, populate the instance information */
@@ -772,7 +849,9 @@ int sfptpd_freerun_module_create(struct sfptpd_config *config,
 
 	return 0;
 
- fail:
+ fail2:
+	sfptpd_link_table_free_copy(&fr->link_table);
+ fail1:
 	free(fr);
 	return rc;
 }
