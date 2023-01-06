@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2019 Xilinx, Inc. */
+/* (c) Copyright 2022 Xilinx, Inc. */
 
 #ifndef _SFPTPD_LINK_H
 #define _SFPTPD_LINK_H
