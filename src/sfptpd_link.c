@@ -46,6 +46,23 @@
  * Public Functions
  ****************************************************************************/
 
+const char *sfptpd_link_event_str(enum sfptpd_link_event event)
+{
+	switch (event) {
+	case SFPTPD_LINK_NONE:
+		return "no-event";
+	case SFPTPD_LINK_DOWN:
+		return "down";
+	case SFPTPD_LINK_UP:
+		return "up";
+	case SFPTPD_LINK_CHANGE:
+		return "change";
+	default:
+		return "bad-link-event";
+	}
+}
+
+
 const struct sfptpd_link *sfptpd_link_by_name(const struct sfptpd_link_table *link_table,
 					      const char *link_name)
 {

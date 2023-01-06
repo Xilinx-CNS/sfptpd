@@ -73,6 +73,8 @@ struct sfptpd_link_table {
  * Functions
  ****************************************************************************/
 
+const char *sfptpd_link_event_str(enum sfptpd_link_event event);
+
 const struct sfptpd_link *sfptpd_link_by_name(const struct sfptpd_link_table *link_table,
 					      const char *link_name);
 

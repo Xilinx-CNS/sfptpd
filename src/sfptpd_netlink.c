@@ -148,27 +148,14 @@ static struct nlmsghdr *netlink_create_team_query(struct nl_conn_state *conn,
  * Local Functions
  ****************************************************************************/
 
-const char *sfptpd_link_event_str(enum sfptpd_link_event event)
-{
-	switch (event) {
-	case SFPTPD_LINK_NONE:
-		return "no-event";
-	case SFPTPD_LINK_DOWN:
-		return "down";
-	case SFPTPD_LINK_UP:
-		return "up";
-	case SFPTPD_LINK_CHANGE:
-		return "change";
-	default:
-		return "bad-link-event";
-	}
-}
-
 static void print_link(struct sfptpd_link *link)
 {
-	DBG_L4("if %d link %d kind %s type %d flags %x family %d name %s master %d type %d bond_mode %d active_slave %d is_slave %d vlan %d\n",
-	     link->if_index, link->if_link, link->if_kind, link->if_type, link->if_flags, link->if_family, link->if_name, link->bond.if_master, link->type,
-	     link->bond.bond_mode, link->bond.active_slave, link->is_slave, link->vlan_id);
+	DBG_L4("if %d name %s event %s link %d kind %s type %d flags %x family %d master %d type %d bond_mode %d active_slave %d is_slave %d vlan %d\n",
+	       link->if_index, link->if_name, sfptpd_link_event_str(link->event),
+           link->if_link, link->if_kind, link->if_type, link->if_flags,
+           link->if_family, link->bond.if_master, link->type,
+           link->bond.bond_mode, link->bond.active_slave, link->is_slave,
+           link->vlan_id);
 }
 
 static int link_attr_cb(const struct nlattr *attr, void *data)
@@ -1066,18 +1053,24 @@ static int netlink_open_conn(struct nl_conn_state *conn,
 	if (rc < 0) {
 		ERROR("netlink: %s: could not bind mnl socket, %s\n",
 		      conn->name, strerror(errno));
-		return rc;
+		goto fail;
 	}
 
 	conn->fd = mnl_socket_get_fd(conn->mnl);
+	assert(conn->fd != -1);
 
 	flags = fcntl(conn->fd, F_GETFL);
 	rc = fcntl(conn->fd, F_SETFL, flags | O_NONBLOCK);
-	if (rc < 0)
-		ERROR("netlink: %s: setting socket to non-blocking, %s\n",
-		      conn->name, strerror(errno));
+	if (rc >= 0)
+		return 0;
 
-	return 0;
+	ERROR("netlink: %s: setting socket to non-blocking, %s\n",
+	      conn->name, strerror(errno));
+
+fail:
+	mnl_socket_close(conn->mnl);
+
+	return rc;
 }
 
 static int netlink_service_fds(struct sfptpd_nl_state *state)
@@ -1221,11 +1214,12 @@ int sfptpd_netlink_get_fd(struct sfptpd_nl_state *state,
 			  int *get_fd_state)
 {
 	int fd;
-	int i = *get_fd_state;
+	int i;
 
 	assert(get_fd_state);
-	assert(i <= NL_CONN_MAX);
+	i = *get_fd_state;
 
+	assert(i <= NL_CONN_MAX);
 	if (i == NL_CONN_MAX) {
 		return -1;
 	} else {
@@ -1503,7 +1497,9 @@ void sfptpd_netlink_finish(struct sfptpd_nl_state *state)
 	free(state);
 }
 
-const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state *state, int consumers)
+const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state *state,
+							  int consumers,
+							  int timeout_ms)
 {
 	int rc;
 	int fd;
@@ -1517,7 +1513,8 @@ const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state
 
 	epollfd = epoll_create(max_events);
 	if (epollfd == -1) {
-		CRITICAL("netlink: creating epoll set to wait for link table\n", strerror(errno));
+		CRITICAL("netlink: creating epoll set to wait for link table, %s\n",
+			 strerror(errno));
 		return NULL;
 	}
 
@@ -1537,7 +1534,7 @@ const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state
 
 	DBG_L3("netlink: waiting for link table\n");
 	while (nfds <= 0) {
-		nfds = epoll_wait(epollfd, events, max_events, -1);
+		nfds = epoll_wait(epollfd, events, max_events, timeout_ms);
 		if (nfds < 0) {
 			if (errno == EINTR)
 				continue;
@@ -1545,7 +1542,8 @@ const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state
 				 strerror(errno));
 			goto finish;
 		} else if (nfds == 0) {
-			continue;
+			errno = EAGAIN;
+			goto finish;
 		}
 
 		assert(nfds > 0);

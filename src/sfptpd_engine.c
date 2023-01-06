@@ -1998,10 +1998,8 @@ static void engine_on_shutdown(void *context)
 		engine->num_sync_instances = 0;
 	}
 	destroy_servos(engine);
-	if (engine->netlink_state) {
-		sfptpd_netlink_finish(engine->netlink_state);
-		engine->netlink_state = NULL;
-	}
+
+	/* Ownership of netlink state reverts to main */
 }
 
 /* Create a sync module. This is a helper function for engine_on_startup(),

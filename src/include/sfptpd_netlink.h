@@ -107,8 +107,11 @@ int sfptpd_netlink_release_table(struct sfptpd_nl_state *state, int version, int
  *  10. sfptpd_netlink_finish()
  * @param state the netlink client state
  * @param consumers the initial ref count for the first table. Should be >0.
- * @return the link table
+ * @param timeout_ms the timeout (or -1) according to epoll_wait(2) semantics.
+ * @return the link table or NULL with errno set on error or to EAGAIN on timeout.
  */
-const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state *state, int consumers);
+const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state *state,
+							  int consumers,
+							  int timeout_ms);
 
 #endif /* SFPTPD_NETLINK_H */

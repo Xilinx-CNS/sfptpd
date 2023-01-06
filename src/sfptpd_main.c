@@ -384,7 +384,8 @@ static int netlink_start(void) {
 		return rc;
 	}
 
-	initial_link_table = sfptpd_netlink_table_wait(netlink, 1);
+	/* Wait 5 seconds for initial link table */
+	initial_link_table = sfptpd_netlink_table_wait(netlink, 1, 5000);
 	if (initial_link_table == NULL) {
 		CRITICAL("could not get initial link table, %s\n",
 			 strerror(errno));
@@ -714,6 +715,7 @@ exit:
 	sfptpd_control_socket_close();
 	sfptpd_log_close();
 	lock_delete(lock_fd);
+	sfptpd_netlink_finish(netlink);
 fail:
 	sfptpd_log_config_abandon();
 	sfptpd_config_destroy(config);

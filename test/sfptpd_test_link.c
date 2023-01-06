@@ -126,6 +126,7 @@ static int test_link(void)
 		}
 	} while (continuous);
 
+	close(epollfd);
 	sfptpd_netlink_finish(nl_state);
 
 	return rc;
