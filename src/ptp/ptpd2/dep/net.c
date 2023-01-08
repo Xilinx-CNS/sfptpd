@@ -684,10 +684,10 @@ netInitMulticast(struct ptpd_transport * transport,  InterfaceOpts * ifOpts)
 	assert(result != NULL);
 	copyAddress(&transport->multicastAddr, &transport->multicastAddrLen,
 		    (struct sockaddr_storage *) result->ai_addr, result->ai_addrlen);
+	freeaddrinfo(result);
 	if (!netSetMulticastOptions(transport, &transport->multicastAddr)) {
 		return FALSE;
 	}
-	freeaddrinfo(result);
 	address_display("general/non-peer event multicast address",
 			&transport->multicastAddr, transport->multicastAddrLen, TRUE);
 	/* End of General multicast Ip address init */
@@ -707,10 +707,10 @@ netInitMulticast(struct ptpd_transport * transport,  InterfaceOpts * ifOpts)
 	assert(result != NULL);
 	copyAddress(&transport->peerMulticastAddr, &transport->peerMulticastAddrLen,
 		    (struct sockaddr_storage *) result->ai_addr, result->ai_addrlen);
+	freeaddrinfo(result);
 	if (!netSetMulticastOptions(transport, &transport->peerMulticastAddr)) {
 		return FALSE;
 	}
-	freeaddrinfo(result);
 	address_display("peer event multicast address",
 			&transport->peerMulticastAddr, transport->peerMulticastAddrLen, TRUE);
 	/* End of Peer multicast Ip address init */
