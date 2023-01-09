@@ -1211,6 +1211,61 @@ int qsort_intfnamecmp(const void *p1, const void *p2)
 }
 
 
+/* Parse a bond within a bridge */
+static int parse_nested_bond(struct sfptpd_ptp_bond_info *bond_info, bool verbose,
+			     const struct sfptpd_link_table *link_table,
+			     const struct sfptpd_link *logical_link)
+{
+	int rc;
+	struct sfptpd_interface *interface;
+	int row;
+	int first_phy = bond_info->num_physical_ifs;
+
+	rc = 0;
+
+	/* Even though the bridge is indeterminate, try to identify the active
+	 * slave because if it includes an active-backup bond it is likely that
+	 * this will be the only locus of PTP traffic. */
+	if (logical_link->bond.bond_mode == SFPTPD_BOND_MODE_ACTIVE_BACKUP &&
+	    logical_link->bond.active_slave > 0 &&
+	    bond_info->active_if == NULL) {
+		bond_info->active_if = sfptpd_interface_find_by_if_index(logical_link->bond.active_slave);
+		if (verbose)
+			TRACE_L3("%s: active nested slave %s\n",
+				 bond_info->bond_if, sfptpd_interface_get_name(bond_info->active_if));
+	}
+
+	for (row = 0; row < link_table->count &&
+		      (bond_info->num_physical_ifs <
+		       sizeof(bond_info->physical_ifs)/sizeof(bond_info->physical_ifs[0]))
+	     ; row++) {
+		const struct sfptpd_link *link = link_table->rows + row;
+
+		if (link->is_slave && link->bond.if_master == logical_link->if_index) {
+			if (verbose)
+				TRACE_L3("ptp %s: nested slave interface %s\n",
+					 bond_info->bond_if, link->if_name);
+			interface = sfptpd_interface_find_by_if_index(link->if_index);
+			if (interface == NULL) {
+				ERROR("ptp: couldn't find interface object for "
+				      "nested slave %s\n", link->if_name);
+				/* Not fatal unless we find none overall! */
+			} else {
+				bond_info->physical_ifs[bond_info->num_physical_ifs] = interface;
+				bond_info->num_physical_ifs++;
+			}
+		}
+	}
+
+	if (logical_link->type == SFPTPD_LINK_TEAM)
+		qsort(bond_info->physical_ifs + first_phy,
+		      bond_info->num_physical_ifs - first_phy,
+		      sizeof(struct sfptpd_interface *), qsort_intfnamecmp);
+
+	return rc;
+}
+
+
 static int parse_bond(struct sfptpd_ptp_bond_info *bond_info, bool verbose,
 		      const struct sfptpd_link_table *link_table,
 		      const struct sfptpd_link *logical_link)
@@ -1225,7 +1280,7 @@ static int parse_bond(struct sfptpd_ptp_bond_info *bond_info, bool verbose,
 	bond_info->active_if = NULL;
 
 	if (bond_info->bond_mode == SFPTPD_BOND_MODE_ACTIVE_BACKUP &&
-	    logical_link->bond.active_slave != -1) {
+	    logical_link->bond.active_slave > 0) {
 		bond_info->active_if = sfptpd_interface_find_by_if_index(logical_link->bond.active_slave);
 		if (verbose)
 			TRACE_L3("%s: active slave %s\n",
@@ -1244,9 +1299,16 @@ static int parse_bond(struct sfptpd_ptp_bond_info *bond_info, bool verbose,
 					 bond_info->bond_if, link->if_name);
 			interface = sfptpd_interface_find_by_if_index(link->if_index);
 			if (interface == NULL) {
-				ERROR("ptp: couldn't find interface object for %s\n",
-				      link->if_name);
-				rc = EINVAL;
+				if (link->type == SFPTPD_LINK_BOND ||
+				    link->type == SFPTPD_LINK_TEAM) {
+					TRACE_L3("%s: probing nested bond %s\n",
+						 bond_info->bond_if, link->if_name);
+					rc = parse_nested_bond(bond_info, verbose, link_table, link);
+				} else {
+					WARNING("ptp: couldn't find interface object for %s\n",
+					      link->if_name);
+					/* Not fatal unless we find none! */
+				}
 			} else {
 				bond_info->physical_ifs[bond_info->num_physical_ifs] = interface;
 				bond_info->num_physical_ifs++;
@@ -1343,7 +1405,7 @@ static int ptp_probe_bonding(const struct sfptpd_link *logical_link,
 	}
 
 	if (found_bond && bond_info->num_physical_ifs == 0) {
-		TRACE_L4("ptp %s: no slave interfaces found\n", bond_info->bond_if);
+		ERROR("ptp %s: no slave interfaces found\n", bond_info->bond_if);
 		rc = ENOENT;
 	}
 
