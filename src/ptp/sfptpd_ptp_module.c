@@ -1474,9 +1474,22 @@ static int ptp_probe_bonding(const struct sfptpd_link *logical_link,
 					sfptpd_interface_get_name(bond_info->active_if));
 			}
 		}
+	} else if (logical_link->type == SFPTPD_LINK_MACVLAN) {
+		interface = sfptpd_interface_find_by_if_index(logical_link->if_link);
+		if (interface == NULL || sfptpd_interface_is_deleted(interface)) {
+			ERROR("ptp: physical interface for macvlan %s does not exist", logical_if);
+			bond_info->num_physical_ifs = 0;
+			rc = ENODEV;
+		} else {
+			TRACE_L3("ptp %s: using physical interface %s for macvlan\n",
+				 logical_if,
+				 sfptpd_interface_get_name(interface));
+			bond_info->num_physical_ifs = 1;
+			bond_info->active_if = bond_info->physical_ifs[0] = interface;
+		}
 	} else {
 		assert(bond_info->bond_mode == SFPTPD_BOND_MODE_NONE);
-		TRACE_L1("ptp: interface %s is not a bond\n", logical_if);
+		TRACE_L1("ptp: interface %s is not a bond, bridge or macvlan\n", logical_if);
 
 		interface = sfptpd_interface_find_by_name(logical_if);
 		if (interface == NULL || sfptpd_interface_is_deleted(interface)) {
