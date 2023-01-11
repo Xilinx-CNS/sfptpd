@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2023 Xilinx, Inc. */
+/* (c) Copyright 2023 Advanced Micro Devices, Inc. */
 
 /**
  * @file   sfptpd_link.c
@@ -25,6 +25,20 @@
 /****************************************************************************
  * Defines & Constants
  ****************************************************************************/
+
+static const char *sfptpd_link_type_names[] = {
+	"phys",
+	"vlan",
+	"bond",
+	"team",
+	"bridge",
+	"macvlan",
+	"ipvlan",
+	"veth",
+	"dummy",
+	"tunnel",
+	"other",
+};
 
 
 /****************************************************************************
@@ -59,6 +73,16 @@ const char *sfptpd_link_event_str(enum sfptpd_link_event event)
 		return "change";
 	default:
 		return "bad-link-event";
+	}
+}
+
+
+const char *sfptpd_link_type_str(enum sfptpd_link_type type)
+{
+	if (type < 0 || type >= SFPTPD_LINK_MAX) {
+		return "invalid";
+	} else {
+		return sfptpd_link_type_names[type];
 	}
 }
 

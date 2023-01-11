@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2022 Xilinx, Inc. */
+/* (c) Copyright 2022-2023 Advanced Micro Devices, Inc. */
 
 #ifndef _SFPTPD_LINK_H
 #define _SFPTPD_LINK_H
@@ -14,16 +14,17 @@
 
 enum sfptpd_link_type {
 	SFPTPD_LINK_PHYSICAL,
+	SFPTPD_LINK_VLAN,
 	SFPTPD_LINK_BOND,
 	SFPTPD_LINK_TEAM,
 	SFPTPD_LINK_BRIDGE,
-	SFPTPD_LINK_VLAN,
 	SFPTPD_LINK_MACVLAN,
 	SFPTPD_LINK_IPVLAN,
 	SFPTPD_LINK_VETH,
 	SFPTPD_LINK_DUMMY,
 	SFPTPD_LINK_TUNNEL,
 	SFPTPD_LINK_OTHER,
+	SFPTPD_LINK_MAX
 };
 
 enum sfptpd_link_event {
@@ -74,6 +75,8 @@ struct sfptpd_link_table {
  ****************************************************************************/
 
 const char *sfptpd_link_event_str(enum sfptpd_link_event event);
+
+const char *sfptpd_link_type_str(enum sfptpd_link_type type);
 
 const struct sfptpd_link *sfptpd_link_by_name(const struct sfptpd_link_table *link_table,
 					      const char *link_name);

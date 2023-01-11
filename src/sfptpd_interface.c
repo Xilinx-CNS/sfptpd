@@ -216,12 +216,19 @@ struct sfptpd_interface {
 
 	/* Zero adjustment for driver counters */
 	int64_t ethtool_stat_zero_adjustment[SFPTPD_DRVSTAT_MAX];
+
+	/* A copy of the link table object, not necessarily current */
+	struct sfptpd_link link;
 };
 
 
 /****************************************************************************
  * Constants
  ****************************************************************************/
+
+const uint32_t rx_filters_min = (1 << HWTSTAMP_FILTER_ALL)
+			      | (1 << HWTSTAMP_FILTER_PTP_V2_L4_EVENT)
+			      | (1 << HWTSTAMP_FILTER_PTP_V2_EVENT);
 
 static const struct ethtool_ts_info ts_info_hw_default =
 {
@@ -345,6 +352,7 @@ SEARCH_COMPAR_FN(mac, sfptpd_mac_addr_t, key, rec, memcmp(key, &rec->mac_addr, s
 SEARCH_COMPAR_FN(nic, int, key, rec, *key - rec->nic_id)
 SEARCH_COMPAR_FN(deleted, int, key, rec, *key ? (rec->deleted ? 0 : 1) : (rec->deleted ? -1 : 0))
 SEARCH_COMPAR_FN(ptp, int, key, rec, *key != -1 ? ((rec->nic_id == -1) ? -1 : 0) : ((rec->nic_id == -1) ? 0 : 1))
+SEARCH_COMPAR_FN(type, int, key, rec, *key - rec->link.type)
 SEARCH_COMPAR_FN(bus_addr_nic, char, key, rec, strcmp(key, rec->bus_addr_nic))
 
 /* Create sort comparison functions */
@@ -355,6 +363,7 @@ SORT_COMPAR_FN(mac, rec, &rec->mac_addr)
 SORT_COMPAR_FN(nic, rec, &rec->nic_id)
 SORT_COMPAR_FN(deleted, rec, &rec->deleted)
 SORT_COMPAR_FN(ptp, rec, &rec->nic_id)
+SORT_COMPAR_FN(type, rec, &rec->link.type)
 SORT_COMPAR_FN(bus_addr_nic, rec, rec->bus_addr_nic)
 
 /* Create print functions */
@@ -365,6 +374,7 @@ SNPRINT_FN(mac, rec, "%*s", rec->mac_string)
 SNPRINT_FN(nic, rec, "%*d", rec->nic_id)
 SNPRINT_FN(deleted, rec, "%*s", rec->deleted ? "deleted" : "")
 SNPRINT_FN(ptp, rec, "%*s", (rec->nic_id != -1) ? "ptp" : "")
+SNPRINT_FN(type, rec, "%*s", sfptpd_link_type_str(rec->link.type))
 SNPRINT_FN(bus_addr_nic, rec, "%*s", rec->bus_addr_nic)
 
 #define ADD_KEY(enum, name) [enum] = { # name, compar_search_ ## name, compar_sort_ ## name, snprint_ ## name },
@@ -385,6 +395,7 @@ enum interface_fields {
 	INTF_KEY_NIC,
 	INTF_KEY_DELETED,
 	INTF_KEY_PTP,
+	INTF_KEY_TYPE,
 	INTF_KEY_BUS_ADDR_NIC,
 	INTF_KEY_MAX
 };
@@ -397,6 +408,7 @@ struct sfptpd_db_field interface_fields[] = {
 	ADD_KEY(INTF_KEY_NIC, nic)
 	ADD_KEY(INTF_KEY_DELETED, deleted)
 	ADD_KEY(INTF_KEY_PTP, ptp)
+	ADD_KEY(INTF_KEY_TYPE, type)
 	ADD_KEY(INTF_KEY_BUS_ADDR_NIC, bus_addr_nic)
 };
 
@@ -573,20 +585,21 @@ static bool interface_check_suitability(const struct sfptpd_link *link,
 	case SFPTPD_LINK_VLAN:
 		TRACE_L2("interface %s: is a VLAN - ignoring\n", name);
 		return false;
-	case SFPTPD_LINK_MACVLAN:
 	case SFPTPD_LINK_IPVLAN:
 	case SFPTPD_LINK_VETH:
 	case SFPTPD_LINK_DUMMY:
 	case SFPTPD_LINK_OTHER:
 		TRACE_L2("interface %s: is virtual/other - ignoring\n", name);
 		return false;
+	case SFPTPD_LINK_MACVLAN:
 	case SFPTPD_LINK_PHYSICAL:
 		if (sysfs_file_exists(sysfs_dir, name, "wireless") ||
 		    sysfs_file_exists(sysfs_dir, name, "phy80211")) {
 			TRACE_L2("interface %s: is wireless - ignoring\n", name);
 			return false;
 		}
-		if (sysfs_file_exists(SFPTPD_SYSFS_VIRTUAL_NET_PATH, "", name)) {
+		if (link->type != SFPTPD_LINK_MACVLAN &&
+		    sysfs_file_exists(SFPTPD_SYSFS_VIRTUAL_NET_PATH, "", name)) {
 			TRACE_L2("interface %s: is virtual - ignoring\n", name);
 			return false;
 		}
@@ -595,6 +608,9 @@ static bool interface_check_suitability(const struct sfptpd_link *link,
 				 name, link->if_type);
 			return false;
 		}
+		break;
+	default:
+		assert(!"invalid link type");
 	}
 
 	/* Finally, get the vendor and device ID to determine if it is
@@ -629,10 +645,6 @@ static bool interface_check_suitability(const struct sfptpd_link *link,
 static bool interface_is_ptp_capable(const char *name,
 				     struct ethtool_ts_info *ts_info)
 {
-	const uint32_t rx_filters_min = (1 << HWTSTAMP_FILTER_ALL)
-				      | (1 << HWTSTAMP_FILTER_PTP_V2_L4_EVENT)
-				      | (1 << HWTSTAMP_FILTER_PTP_V2_EVENT);
-
 	assert(ts_info != NULL);
 
 	/* We need a clock to use. If there isn't one then this port doesn't
@@ -836,7 +848,8 @@ static void interface_check_efx_support(struct sfptpd_interface *interface)
 
 	assert(interface != NULL);
 
-	if (interface->class == SFPTPD_INTERFACE_SFC &&
+	if ((interface->class == SFPTPD_INTERFACE_SFC ||
+	    interface->link.type == SFPTPD_LINK_MACVLAN) &&
 	    !interface->driver_supports_efx) {
 
 		memset(&req, 0, sizeof(req));
@@ -1075,6 +1088,7 @@ static int interface_init(const struct sfptpd_link *link, const char *sysfs_dir,
 
 	interface->ts_enabled = false;
 	interface->class = class;
+	interface->link = *link;
 
 	/* Default to system clock */
 	sfptpd_interface_set_clock(interface, sfptpd_clock_get_system_clock());
@@ -1880,6 +1894,7 @@ struct sfptpd_db_query_result sfptpd_interface_get_all_snapshot(void)
 	return sfptpd_db_table_query(sfptpd_interface_table,
 				     SFPTPD_DB_SEL_ORDER_BY,
 				     INTF_KEY_NIC,
+				     INTF_KEY_TYPE,
 				     INTF_KEY_MAC);
 }
 
@@ -1891,6 +1906,7 @@ struct sfptpd_db_query_result sfptpd_interface_get_active_ptp_snapshot(void)
 				     INTF_KEY_PTP, &(int){ true },
 				     SFPTPD_DB_SEL_ORDER_BY,
 				     INTF_KEY_NIC,
+				     INTF_KEY_TYPE,
 				     INTF_KEY_MAC);
 }
 
@@ -2024,6 +2040,21 @@ int sfptpd_interface_hw_timestamping_enable(struct sfptpd_interface *interface)
 		if (n_retries > 0 && rc == 0) {
 			WARNING("interface %s: enabling timestamping took %d retries\n",
 				interface->name, n_retries);
+		}
+	}
+
+	if (rc == EOPNOTSUPP || rc == EPERM || rc == EACCES) {
+		struct hwtstamp_config so_ts_req;
+		int rc2;
+
+		rc2 = sfptpd_interface_ioctl(interface, SIOCGHWTSTAMP, &so_ts_req);
+		if (rc2 == 0 &&
+		    so_ts_req.tx_type == HWTSTAMP_TX_ON &&
+		    ((1 << so_ts_req.rx_filter) & rx_filters_min) != 0) {
+			INFO("interface %s: using already-enabled hardware timestamping\n",
+			     interface->name);
+			interface->ts_enabled = true;
+			rc = 0;
 		}
 	}
 
