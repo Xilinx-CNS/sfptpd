@@ -1477,7 +1477,7 @@ static int ptp_probe_bonding(const struct sfptpd_link *logical_link,
 	} else if (logical_link->type == SFPTPD_LINK_MACVLAN) {
 		interface = sfptpd_interface_find_by_if_index(logical_link->if_link);
 		if (interface == NULL || sfptpd_interface_is_deleted(interface)) {
-			ERROR("ptp: physical interface for macvlan %s does not exist", logical_if);
+			ERROR("ptp: physical interface for macvlan %s does not exist\n", logical_if);
 			bond_info->num_physical_ifs = 0;
 			rc = ENODEV;
 		} else {
