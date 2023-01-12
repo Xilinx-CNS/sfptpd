@@ -716,7 +716,7 @@ int sfptpd_config_parse_file(struct sfptpd_config *config)
 
 	rc = stat(general_config->config_filename, &file_stat);
 	if (rc < 0) {
-		ERROR("failed to retrieve info on config file, error %s\n", strerror(errno));
+		ERROR("failed to retrieve info on config file, %s\n", strerror(errno));
 		return rc;
 	}
 
