@@ -2633,7 +2633,7 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 				"control-flags: %s\n"
 				"interface: %s (%s)\n"
 				"transport: %s\n"
-				"profile: " SFPTPD_FORMAT_EUI48 "(%s) %s\n"
+				"profile: " SFPTPD_FORMAT_EUI48 " (%s) %s\n"
 				"timestamping: %s\n"
 				"in-sync: %d\n"
 				"ptp-domain: %d\n"
