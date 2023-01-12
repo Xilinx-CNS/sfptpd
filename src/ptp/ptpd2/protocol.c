@@ -1892,6 +1892,7 @@ processSyncFromSelf(const TimeInternal *time, RunTimeOpts *rtOpts,
 
 	/* Add latency */
 	addTime(&timestamp, time, &rtOpts->outboundLatency);
+
 	/* Issue follow-up CORRESPONDING TO THIS SYNC */
 	issueFollowup(&timestamp, rtOpts, ptpClock, sequenceId);
 }
@@ -1905,6 +1906,7 @@ processMonitoringSyncFromSelf(const TimeInternal *time, RunTimeOpts *rtOpts,
 
 	/* Add latency */
 	addTime(&timestamp, time, &rtOpts->outboundLatency);
+
 	/* Issue follow-up CORRESPONDING TO THIS SYNC */
 	issueFollowupForMonitoring(&timestamp, rtOpts, ptpClock, sequenceId);
 }
@@ -2125,7 +2127,7 @@ handleDelayReq(const MsgHeader *header, ssize_t length,
 				ptpClock->counters.messageFormatErrors++;
 				return;
 			}
-			issueDelayResp(time,&ptpClock->delayReqHeader, rtOpts,ptpClock);
+			issueDelayResp(time, &ptpClock->delayReqHeader, rtOpts, ptpClock);
 		}
 		ptpClock->counters.delayReqMessagesReceived++;
 		break;
@@ -3301,10 +3303,6 @@ issueSync(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		 * should have a transmit timestamp. Issue the follow up right
 		 * away */
 		if (ptpClock->interface->tsMethod != TS_METHOD_SYSTEM) {
-			/* Apply UTC offset if appropriate. Note that the offset
-			 * will not be applied in this case because only PTP
-			 * masters send Follow Up messages. Included for
-			 * consistency. */
 			applyUtcOffset(&timestamp, rtOpts, ptpClock);
 			processSyncFromSelf(&timestamp, rtOpts, ptpClock,
 					    ptpClock->sentSyncSequenceId);
@@ -3359,10 +3357,6 @@ issueSyncForMonitoring(RunTimeOpts *rtOpts, PtpClock *ptpClock, UInteger16 seque
 		 * should have a transmit timestamp. Issue the follow up right
 		 * away */
 		if (ptpClock->interface->tsMethod != TS_METHOD_SYSTEM) {
-			/* Apply UTC offset if appropriate. Note that the offset
-			 * will not be applied in this case because only PTP
-			 * masters send Follow Up messages. Included for
-			 * consistency. */
 			applyUtcOffset(&timestamp, rtOpts, ptpClock);
 			processMonitoringSyncFromSelf(&timestamp, rtOpts, ptpClock, sequenceId);
 		}
@@ -3875,13 +3869,27 @@ static void statsAddNode(Octet *buf, MsgHeader *header, PtpInterface *ptpInterfa
 }
 
 
-
-/* The reverse of this function is removeUtcOffset.
-	When modifying this function, you must make sure to update removeUtcOffset too! */
+/* The foreign master dataset handler uses an inverse of this function
+ * to undo this action.
+ *
+ * Local timestamps are all UTC because our local clocks need appropriate time
+ * for application purposes. This function converts that time to TAI time.
+ *
+ * This function is needed:
+ *   - to enter TAI timescale timestamps into time calculations
+ *   - when operating as a TAI master
+ */
 static void
-applyUtcOffset(TimeInternal *time, RunTimeOpts *rtOpts, PtpClock *ptpClock) {
-	if ((ptpClock->portState != PTPD_MASTER) &&
-	    (ptpClock->timePropertiesDS.currentUtcOffsetValid || rtOpts->alwaysRespectUtcOffset)) {
+applyUtcOffset(TimeInternal *time, RunTimeOpts *rtOpts, PtpClock *ptpClock)
+{
+	if ((ptpClock->portState != PTPD_MASTER &&
+	     (ptpClock->timePropertiesDS.currentUtcOffsetValid ||
+	      rtOpts->alwaysRespectUtcOffset)) ||
+	    (ptpClock->portState == PTPD_MASTER &&
+	     ptpClock->timePropertiesDS.currentUtcOffsetValid &&
+	     ptpClock->timePropertiesDS.ptpTimescale)) {
+
+		/* Convert timestamp to TAI */
 		time->seconds += ptpClock->timePropertiesDS.currentUtcOffset;
 	}
 }
