@@ -1782,6 +1782,18 @@ static void on_configure_test_mode(struct sfptpd_engine *engine,
 		on_test_leap_second(engine, SFPTPD_LEAP_SECOND_59);
 		break;
 
+	case SFPTPD_TEST_ID_LOCAL_LEAP_SECOND_CANCEL:
+		sfptpd_engine_schedule_leap_second(engine, SFPTPD_LEAP_SECOND_NONE, 12.0);
+		break;
+
+	case SFPTPD_TEST_ID_LOCAL_LEAP_SECOND_61:
+		sfptpd_engine_schedule_leap_second(engine, SFPTPD_LEAP_SECOND_61, 12.0);
+		break;
+
+	case SFPTPD_TEST_ID_LOCAL_LEAP_SECOND_59:
+		sfptpd_engine_schedule_leap_second(engine, SFPTPD_LEAP_SECOND_59, 12.0);
+		break;
+
 	case SFPTPD_TEST_ID_ADJUST_FREQUENCY:
 		on_test_adjust_frequency(engine, msg->u.configure_test_mode.params[0]);
 		break;

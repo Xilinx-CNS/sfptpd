@@ -21,6 +21,12 @@ enum sfptpd_test_id {
 	SFPTPD_TEST_ID_LEAP_SECOND_59,
 	SFPTPD_TEST_ID_LEAP_SECOND_CANCEL,
 
+	/** Local versions of local leap second testing. Causes a leap second
+	 * to occur on the master. */
+	SFPTPD_TEST_ID_LOCAL_LEAP_SECOND_61,
+	SFPTPD_TEST_ID_LOCAL_LEAP_SECOND_59,
+	SFPTPD_TEST_ID_LOCAL_LEAP_SECOND_CANCEL,
+
 	/* Note that the UTC offset test mode is used internally within the
 	 * daemon and not really usable via a signal. */
 	SFPTPD_TEST_ID_UTC_OFFSET,
@@ -85,6 +91,9 @@ struct sfptpd_test_mode_descriptor {
 	{ "leap_second_61", SFPTPD_TEST_ID_LEAP_SECOND_61 },	\
 	{ "leap_second_59", SFPTPD_TEST_ID_LEAP_SECOND_59 },	\
 	{ "leap_second_cancel", SFPTPD_TEST_ID_LEAP_SECOND_CANCEL }, \
+	{ "local_leap_second_61", SFPTPD_TEST_ID_LOCAL_LEAP_SECOND_61 },	\
+	{ "local_leap_second_59", SFPTPD_TEST_ID_LOCAL_LEAP_SECOND_59 },	\
+	{ "local_leap_second_cancel", SFPTPD_TEST_ID_LOCAL_LEAP_SECOND_CANCEL }, \
 	{ "utc_offset", SFPTPD_TEST_ID_UTC_OFFSET },		\
 	{ "timestamp_jitter", SFPTPD_TEST_ID_TIMESTAMP_JITTER }, \
 	{ "transparent_clock", SFPTPD_TEST_ID_TRANSPARENT_CLOCK }, \
