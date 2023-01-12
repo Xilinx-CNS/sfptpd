@@ -900,7 +900,8 @@ void ptpd_publish_status(struct ptpd_port_context *ptpd,
 }
 
 
-int ptpd_test_set_utc_offset(struct ptpd_port_context *ptpd, int offset)
+int ptpd_test_set_utc_offset(struct ptpd_port_context *ptpd, int offset,
+			     int compensation)
 {
 	if (ptpd == NULL) {
 		ERROR("null ptpd context supplied\n");
@@ -914,6 +915,7 @@ int ptpd_test_set_utc_offset(struct ptpd_port_context *ptpd, int offset)
 
 	ptpd->timePropertiesDS.currentUtcOffset = offset;
 	ptpd->timePropertiesDS.currentUtcOffsetValid = TRUE;
+	ptpd->fakeUtcAdjustment += compensation;
 	DBG("test: set UTC offset = %d\n", offset);
 	return 0;
 }

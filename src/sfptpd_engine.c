@@ -1217,11 +1217,9 @@ static void on_test_leap_second(struct sfptpd_engine *engine,
 			engine->leap_second.time.tv_sec--;
 
 		/* If we are testing leap seconds then the master has to be
-		 * operating in atomic timescale. In this case, we need to
-		 * set the timer for midnight UTC i.e. we must add on the
-		 * UTC offset to get the atomic time equivalent. */
-		engine->leap_second.time.tv_sec +=
-			sfptpd_ptp_module_get_utc_offset(engine->config);
+		 * serving the atomic timescale. Setting the timer for midnight
+		 * system time is correct because this is when the leap second
+		 * actually occurs. */
 
 		/* Record the leap second type */
 		engine->leap_second.type = type;

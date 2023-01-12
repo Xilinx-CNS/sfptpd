@@ -2920,8 +2920,12 @@ static void ptp_on_test_mode(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t 
 		 * PTPD to use the new value */
 		config->ptpd_port.timeProperties.currentUtcOffset += msg->u.test_mode_req.params[0];
 
+		/* Compensate for the fact that the NIC clocks have real UTC,
+		 * not fake UTC. */
+
 		if (ptpd_test_set_utc_offset(instance->ptpd_port_private,
-					     config->ptpd_port.timeProperties.currentUtcOffset) == 0) {
+					     config->ptpd_port.timeProperties.currentUtcOffset,
+					     msg->u.test_mode_req.params[0]) == 0) {
 			NOTICE("test-mode: set UTC offset = %d\n",
 			       config->ptpd_port.timeProperties.currentUtcOffset);
 		}

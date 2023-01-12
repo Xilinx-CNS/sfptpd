@@ -167,8 +167,11 @@ int ptpd_get_counters(struct ptpd_port_context *ptpd, struct ptpd_counters *stat
 int ptpd_clear_counters(struct ptpd_port_context *ptpd);
 
 
-/* Test operation, master mode only. Set UTC offset */
-int ptpd_test_set_utc_offset(struct ptpd_port_context *ptpd, int offset);
+/* Test operation, master mode only. Set UTC offset.
+ * And adjust compensation for UTC offset to maintain fake TAI */
+int ptpd_test_set_utc_offset(struct ptpd_port_context *ptpd,
+			     int offset,
+			     int compensation);
 
 /* Test operation. Get the jitter type */
 int ptpd_test_get_bad_timestamp_type(struct ptpd_port_context *ptpd);

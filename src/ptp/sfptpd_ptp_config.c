@@ -1694,14 +1694,4 @@ void sfptpd_ptp_module_set_default_interface(struct sfptpd_config *config,
 }
 
 
-int sfptpd_ptp_module_get_utc_offset(struct sfptpd_config *config)
-{
-	struct sfptpd_ptp_module_config *ptp;
-	ptp = sfptpd_ptp_module_get_config(config);
-	assert(ptp != NULL);
-
-	return ptp->ptpd_port.timeProperties.currentUtcOffset;
-}
-
-
 /* fin */

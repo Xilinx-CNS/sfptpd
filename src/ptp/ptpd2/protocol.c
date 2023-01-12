@@ -3891,6 +3891,7 @@ applyUtcOffset(TimeInternal *time, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 
 		/* Convert timestamp to TAI */
 		time->seconds += ptpClock->timePropertiesDS.currentUtcOffset;
+		time->seconds -= ptpClock->fakeUtcAdjustment;
 	}
 }
 

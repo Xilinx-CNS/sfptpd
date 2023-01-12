@@ -911,6 +911,9 @@ struct ptpd_port_context {
 	bool discriminator_valid;
 	sfptpd_time_t discriminator_offset;
 
+	/* Compensation for leap second to maintain TAI in master test mode */
+	Integer16 fakeUtcAdjustment;
+
 	/* Pointer to a struct of the same type in the linked list */
 	PtpClock *next;
 };

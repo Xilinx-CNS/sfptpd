@@ -91,15 +91,6 @@ struct sfptpd_ptp_module_config *sfptpd_ptp_module_get_config(struct sfptpd_conf
 void sfptpd_ptp_module_set_default_interface(struct sfptpd_config *config,
 					     const char *interface_name);
 
-/** Get the UTC offset. This will return 0 if PTP is configured to use UTC.
- * Otherwise it returns the current difference between UTC and TAI such that
- * that UTC + Offset = TAI. Note that this function is provided to support leap
- * second testing.
- * @param config  Pointer to the configuration
- * @return Current difference between UTC and PTP timescale
- */
-int sfptpd_ptp_module_get_utc_offset(struct sfptpd_config *config);
-
 /** Create a PTP sync module instance based on the configuration supplied
  * @param config  Pointer to configuration
  * @param engine  Pointer to sync engine
