@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2022 Xilinx, Inc. */
+/* (c) Copyright 2012-2023 Xilinx, Inc. */
 
 /**
  * @file   sfptpd_logging.c
@@ -58,6 +58,7 @@ const char *sfptpd_interfaces_file = "interfaces";
 const char *sfptpd_nodes_file = "ptp-nodes";
 const char *sfptpd_remote_monitor_file = "remote-monitor";
 const char *sfptpd_config_log_file = "config";
+const char *sfptpd_sync_instances_file = "sync-instances";
 
 
 /****************************************************************************
@@ -261,6 +262,7 @@ int sfptpd_log_open(struct sfptpd_config *config)
 				    "interfaces",
 				    "ptp-nodes",
 				    "remote-monitor",
+				    "sync-instances",
 				    ".next.*"
 	};
 
@@ -697,6 +699,12 @@ struct sfptpd_log *sfptpd_log_open_interfaces(void)
 struct sfptpd_log *sfptpd_log_open_ptp_nodes(void)
 {
 	return create_log("ptp-nodes", sfptpd_nodes_file);
+}
+
+
+struct sfptpd_log *sfptpd_log_open_sync_instances(void)
+{
+	return create_log("sync-instances", sfptpd_sync_instances_file);
 }
 
 

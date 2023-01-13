@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2019 Xilinx, Inc. */
+/* (c) Copyright 2012-2023 Xilinx, Inc. */
 
 #ifndef _SFPTPD_LOGGING_H
 #define _SFPTPD_LOGGING_H
@@ -242,6 +242,13 @@ struct sfptpd_log *sfptpd_log_open_interfaces(void);
  * @return A file handle on success or NULL on error
  */
 struct sfptpd_log *sfptpd_log_open_ptp_nodes(void);
+
+/** Open sync-instances file for writing. It is the responsibility of the
+ * caller to close the file once the information has been written using
+ * sfptpd_log_file_close().
+ * @return A file handle on success or NULL on error
+ */
+struct sfptpd_log *sfptpd_log_open_sync_instances(void);
 
 /** Appends a new row to a table. Used to create interfaces and ptp-nodes files
  * @param stream Stream to write to

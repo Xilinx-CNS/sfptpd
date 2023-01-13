@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2022 Xilinx, Inc. */
+/* (c) Copyright 2012-2023 Xilinx, Inc. */
 
 /**
  * @file   sfptpd_engine.c
@@ -680,6 +680,72 @@ static void write_topology(struct sfptpd_engine *engine)
 }
 
 
+static void write_sync_instances(struct sfptpd_engine *engine)
+{
+	const char *header[] = { "R", "instance", "S", "M", "state", "O", "A", "priority", "C", "gm class", "accuracy", "allan var", "steps" };
+	const char *format_header = "| %2s | %-12s%1s | %1s | %-9s %1s | %1s | %8s | %1s | %-11s | %8s | %9s | %5s |\n";
+	const char *format_record = "| %2d | %-12s%1s | %1s | %-9s %1d | %1s | %8.3g | %1d | %-11s | %8.3llg | %9.3llg | %5d |\n";
+	const struct sfptpd_selection_policy *policy;
+	struct sfptpd_log *log;
+	FILE *stream;
+	unsigned int i;
+	struct sync_instance_record *record;
+
+	assert(engine != NULL);
+
+	log = sfptpd_log_open_sync_instances();
+	if (log == NULL)
+		return;
+	stream = sfptpd_log_file_get_stream(log);
+
+	/* Write table header */
+	sfptpd_log_table_row(stream, true, format_header,
+			     header[0], header[1], header[2], header[3],
+			     header[4], header[5], header[6], header[7],
+			     header[8], header[9], header[10], header[11],
+			     header[12]);
+
+	/* Write table records */
+	for (i = 0; i < engine->num_sync_instances; i++) {
+		record = engine->sync_instances + i;
+		sfptpd_log_table_row(stream, i == engine->num_sync_instances - 1, format_record,
+				     record->rank,
+				     record->info.name,
+				     record == engine->selected ? "*" : " ",
+				     record->selected ? "M" : " ",
+				     sync_module_state_text[record->status.state],
+				     sfptpd_state_priorities[record->status.state],
+				     record->status.alarms == 0 ? " " : "A",
+				     (double) record->status.user_priority,
+				     record->status.clustering_score,
+				     sfptpd_clock_class_text(record->status.master.clock_class),
+				     record->status.master.accuracy + record->status.local_accuracy,
+				     record->status.master.allan_variance,
+				     record->status.master.steps_removed);
+	}
+
+	fprintf(stream,
+		"\nKey: R = rank  S = selected  M = manual  O = state order  "
+		"A = alarms  C = clustering score\n");
+
+	fprintf(stream,
+		"\nSelection policy:\n");
+
+	policy = &engine->general_config->selection_policy;
+	for (i = 0; i < SELECTION_RULE_MAX; i++) {
+		enum sfptpd_selection_rule rule = policy->rules[i];
+
+		if (rule == SELECTION_RULE_END)
+			break;
+		assert(rule < SELECTION_RULE_MAX);
+
+		fprintf(stream, " %i : %s\n", i, sfptpd_selection_rule_names[rule]);
+	}
+
+	sfptpd_log_file_close(log);
+}
+
+
 static void write_interfaces(void)
 {
 	const char *format_interface_string = "| %12s | %8s | %21s | %17s |\n";
@@ -839,6 +905,7 @@ static int select_sync_instance(struct sfptpd_engine *engine,
 	/* Write the updated topology and state. */
 	write_topology(engine);
 	write_state(engine);
+	write_sync_instances(engine);
 
 	/* Record the time of this change and print how long the previous
 	 * instance was selected for. */
@@ -1477,6 +1544,7 @@ static void on_log_stats(void *user_context, unsigned int timer_id)
 	}
 
 	write_topology(engine);
+	write_sync_instances(engine);
 }
 
 
@@ -1644,6 +1712,7 @@ static void on_sync_instance_state_changed(struct sfptpd_engine *engine,
 			reconfigure_servos(engine, status);
 			write_state(engine);
 			write_topology(engine);
+			write_sync_instances(engine);
 			state_written = true;
 		}
 	}

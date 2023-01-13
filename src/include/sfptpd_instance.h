@@ -93,6 +93,9 @@ struct sync_instance_record {
 	/* Last received clustering determination input
 	   (may be empty) */
 	struct sfptpd_clustering_input latest_clustering_input;
+
+	/* Rank - for diagnostic uses only */
+	int rank;
 };
 
 

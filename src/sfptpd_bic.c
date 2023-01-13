@@ -80,6 +80,19 @@ const char *sfptpd_selection_rule_names[SELECTION_RULE_MAX] = {
 	[SELECTION_RULE_TIE_BREAK] = "tie-break"
 };
 
+/* When making a comparison, the state of each sync module is converted
+ * to a priority where a lower value signifies a higher priority. */
+const int sfptpd_state_priorities[SYNC_MODULE_STATE_MAX] = {
+	[SYNC_MODULE_STATE_LISTENING] = 1,
+	[SYNC_MODULE_STATE_SLAVE] = 0,
+	[SYNC_MODULE_STATE_MASTER] = 2,
+	[SYNC_MODULE_STATE_PASSIVE] = 2,
+	[SYNC_MODULE_STATE_DISABLED] = 3,
+	[SYNC_MODULE_STATE_FAULTY] = 3,
+	[SYNC_MODULE_STATE_SELECTION] = 1
+};
+
+
 /****************************************************************************
  * Function prototypes
  ****************************************************************************/
@@ -127,18 +140,6 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 	struct sync_instance_record *choice;
 	int rule_idx;
 
-	/* When making a comparison, the state of each sync module is converted
-	 * to a priority where a lower value signifies a higher priority. */
-	const int state_priorities[SYNC_MODULE_STATE_MAX] = {
-		[SYNC_MODULE_STATE_LISTENING] = 1,
-		[SYNC_MODULE_STATE_SLAVE] = 0,
-		[SYNC_MODULE_STATE_MASTER] = 2,
-		[SYNC_MODULE_STATE_PASSIVE] = 2,
-		[SYNC_MODULE_STATE_DISABLED] = 3,
-		[SYNC_MODULE_STATE_FAULTY] = 3,
-		[SYNC_MODULE_STATE_SELECTION] = 1
-	};
-
 	assert (NULL != instance_record_a);
 	assert (NULL != instance_record_b);
 
@@ -172,8 +173,8 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 				choice = instance_record_b;
 			break;
 		case SELECTION_RULE_STATE:
-			state_priority_a = state_priorities[status_a->state];
-			state_priority_b = state_priorities[status_b->state];
+			state_priority_a = sfptpd_state_priorities[status_a->state];
+			state_priority_b = sfptpd_state_priorities[status_b->state];
 
 			DBG_L3("selection%s:   comparing %s: %s (%d), %s (%d)\n",
 			       phase, rule_name,
@@ -357,11 +358,17 @@ struct sync_instance_record *sfptpd_bic_choose(const struct sfptpd_selection_pol
 		     get_selection_rule_name(policy->rules[list[i].decisive_rule_index]),
 		     list[i].decisive_rule_index,
 		     i == 0 ? " <- BEST" : "");
+
+		/* Record rank in the record for diagnostic use only */
+		list[i].record->rank = i + 1;
 	}
 	assert(num_instances > 1);
 	INFO("selection: rank %i: %s <- WORST\n",
 	     num_instances,
 	     list[num_instances - 1].record->info.name);
+
+	/* Record rank in the record for diagnostic use only */
+	list[num_instances - 1].record->rank = i + 1;
 
 	result = list[0].record;
 	free(list);
