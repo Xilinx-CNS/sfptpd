@@ -94,7 +94,7 @@ int sfptpd_find_running_programs(struct sfptpd_prog *others)
 		char path[PATH_MAX];
 		char exe[PATH_MAX];
 		char *command;
-		FILE *pstat;
+		FILE *stream;
 		char status;
 		int i;
 
@@ -111,12 +111,12 @@ int sfptpd_find_running_programs(struct sfptpd_prog *others)
 		res = snprintf(path, sizeof path, "%s/%s/stat",
 			       ftsent->fts_path, ftsent->fts_name);
 		assert(res < sizeof path);
-		pstat = fopen(path, "r");
-		if (pstat == NULL)
+		stream = fopen(path, "r");
+		if (stream == NULL)
 			goto next_process;
-		if (fscanf(pstat, "%*d %*s %c", &status) != 1)
+		if (fscanf(stream, "%*d %*s %c", &status) != 1)
 			goto next_process;
-		fclose(pstat);
+		fclose(stream);
 		if (strchr("ZXx", status))
 			goto next_process;
 
@@ -126,9 +126,23 @@ int sfptpd_find_running_programs(struct sfptpd_prog *others)
 		assert(res < sizeof path);
 
 		res = readlink(path, exe, sizeof exe - 1);
-		if (res == -1)
+		if (res != -1) {
+			exe[res] = '\0';
+		} else if (errno == EACCES) {
+			res = snprintf(path, sizeof path, "%s/%s/cmdline",
+				       ftsent->fts_path, ftsent->fts_name);
+			assert(res < sizeof path);
+
+			stream = fopen(path, "r");
+			if (stream == NULL)
+				goto next_process;
+			res = fgets(exe, sizeof exe, stream) == NULL;
+			fclose(stream);
+			if (res)
+				goto next_process;
+		} else {
 			goto next_process;
-		exe[res] = '\0';
+		}
 
 		command = basename(exe);
 
