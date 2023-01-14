@@ -107,7 +107,7 @@ static int claim_drop_privilege(struct sfptpd_config *config, uid_t user)
 	gconf = sfptpd_general_config_get(config);
 
 	/* If running as root we expect to be able to access devices owned
-	   by any user and to be able to read PCIe config space */
+	   by any user. */
 	if (gconf->uid == 0 && user == 0) {
 		required = caps_for_root;
 		num_caps = ARRAY_SIZE(caps_for_root);
