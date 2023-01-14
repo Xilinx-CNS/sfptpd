@@ -606,8 +606,8 @@ static int parse_user(struct sfptpd_config_section *section, const char *option,
 		      unsigned int num_params, const char * const params[])
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
-	struct passwd pwd, *presult;
-	struct group grp, *gresult;
+	struct passwd pwd, *presult = NULL;
+	struct group grp, *gresult = NULL;
 	char *buf;
 	size_t buf_sz;
 	int tokens;
@@ -644,46 +644,58 @@ static int parse_user(struct sfptpd_config_section *section, const char *option,
 	if (rc == 0 && presult != &pwd)
 		rc = ENOENT;
 	if (rc == ENOENT || rc == ESRCH || rc == EBADF || rc == EPERM) {
-		CFG_ERROR(section, "user %s not known\n", params[0]);
+		/* Look up user id if name did not resolve. */
+
+		tokens = sscanf(params[0], "%ld", &nid);
+		if (tokens == 1) {
+			general->uid = nid;
+			general->gid = 0;
+		} else {
+			CFG_ERROR(section, "user %s not known\n", params[0]);
+			rc = ENOENT;
+			goto finish;
+		}
+		rc = getpwuid_r(general->uid, &pwd, buf, buf_sz, &presult);
+		if (rc == 0 && presult != &pwd)
+			rc = ENOENT;
+		if (rc == ENOENT || rc == ESRCH || rc == EBADF || rc == EPERM)
+				pwd.pw_name = "(uid)";
 	}
 	if (rc == 0) {
-
-		assert(presult == &pwd);
-
 		general->uid = pwd.pw_uid;
 		general->gid = pwd.pw_gid;
+	}
 
-		TRACE_L3("configured to switch to user %s %d\n",
-		     pwd.pw_name,
-		     pwd.pw_uid);
+	TRACE_L3("configured to switch to user %s %d\n",
+	     pwd.pw_name,
+	     pwd.pw_uid);
 
-		/* Look up group name if specified */
-		if (num_params > 1) {
-			rc = getgrnam_r(params[1], &grp, buf, buf_sz, &gresult);
-			if (rc == ENOENT || rc == ESRCH || rc == EBADF || rc == EPERM || gresult == NULL) {
-				tokens = sscanf(params[1], "%ld", &nid);
-				if (tokens == 1) {
-					general->gid = nid;
-				} else {
-					CFG_ERROR(section, "group %s not known\n", params[1]);
-					rc = ENOENT;
-					goto finish;
-				}
+	/* Look up group name if specified */
+	if (num_params > 1) {
+		rc = getgrnam_r(params[1], &grp, buf, buf_sz, &gresult);
+		if (rc == ENOENT || rc == ESRCH || rc == EBADF || rc == EPERM || gresult == NULL) {
+			tokens = sscanf(params[1], "%ld", &nid);
+			if (tokens == 1) {
+				general->gid = nid;
 			} else {
-				general->gid = grp.gr_gid;
+				CFG_ERROR(section, "group %s not known\n", params[1]);
+				rc = ENOENT;
+				goto finish;
 			}
+		} else {
+			general->gid = grp.gr_gid;
 		}
+	}
 
-		/* Look up group id otherwise or if name did not resolve. */
-		if (num_params <= 1 || gresult == NULL) {
-			if (getgrgid_r(general->gid, &grp, buf, buf_sz, &gresult) != 0 || gresult == NULL)
-				grp.gr_name = "(gid)";
-		}
-		if (rc == 0) {
-			TRACE_L3("configured to switch to group %s %d\n",
-			     grp.gr_name,
-			     general->gid);
-		}
+	/* Look up group id otherwise or if name did not resolve. */
+	if (num_params <= 1 || gresult == NULL) {
+		if (getgrgid_r(general->gid, &grp, buf, buf_sz, &gresult) != 0 || gresult == NULL)
+			grp.gr_name = "(gid)";
+	}
+	if (rc == 0) {
+		TRACE_L3("configured to switch to group %s %d\n",
+		     grp.gr_name,
+		     general->gid);
 	}
 
 finish:
