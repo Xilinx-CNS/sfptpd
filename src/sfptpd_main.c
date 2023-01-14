@@ -192,8 +192,9 @@ static int drop_user(struct sfptpd_config *config)
 
 	if (gconf->uid != 0) {
 		INFO("dropping to user %d\n", gconf->uid);
-		NOTICE("/dev/ptpN and /dev/ppsN devices need to be accessible "
-		       "to the user or group running sfptpd\n");
+		NOTICE("for hotplugged network interfaces, udev rules must "
+		       "give access to corresponding /dev/{ptp*,pps*} devices "
+		       "for the user or group running sfptpd\n");
 		rc = setresuid(gconf->uid, gconf->uid, gconf->uid);
 		if (rc == -1) {
 			CRITICAL("could not drop user to uid %d: %s\n",
@@ -650,19 +651,6 @@ int main(int argc, char **argv)
 	if (rc != 0)
 		goto exit;
 
-#ifdef HAVE_CAPS
-	/* Drop to non-root user/group if so configured */
-	original_user = geteuid();
-	rc = drop_user(config);
-	if (rc != 0)
-		goto fail;
-
-	/* Ensure suitable system privilege is gained or dropped */
-	rc = claim_drop_privilege(config, original_user);
-	if (rc != 0)
-		goto fail;
-#endif
-
 	/* Start netlink client */
 	rc = netlink_start();
 	if (rc != 0)
@@ -683,6 +671,19 @@ int main(int argc, char **argv)
 					 initial_link_table);
 	if (rc != 0)
 		goto exit;
+
+#ifdef HAVE_CAPS
+	/* Drop to non-root user/group if so configured */
+	original_user = geteuid();
+	rc = drop_user(config);
+	if (rc != 0)
+		goto exit;
+
+	/* Ensure suitable system privilege is gained or dropped */
+	rc = claim_drop_privilege(config, original_user);
+	if (rc != 0)
+		goto exit;
+#endif
 
 	/* If configured to do so, daemonize the application */
 	rc = daemonize(config, &lock_fd);
