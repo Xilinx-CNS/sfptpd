@@ -654,7 +654,7 @@ int main(int argc, char **argv)
 	/* Start netlink client */
 	rc = netlink_start();
 	if (rc != 0)
-		goto fail;
+		goto exit;
 
 	/* Set up the hardware state lock */
 	rc = hardware_state_lock_init();
@@ -713,10 +713,11 @@ exit:
 	sfptpd_clock_shutdown();
 	sfptpd_interface_shutdown(config);
 	hardware_state_lock_destroy();
+	if (netlink != NULL)
+		sfptpd_netlink_finish(netlink);
 	sfptpd_control_socket_close();
 	sfptpd_log_close();
 	lock_delete(lock_fd);
-	sfptpd_netlink_finish(netlink);
 fail:
 	sfptpd_log_config_abandon();
 	sfptpd_config_destroy(config);
