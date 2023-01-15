@@ -930,7 +930,7 @@ no_ethtool:
 			}
 		}
 
-		TRACE_L4("interface %s: driver stat %s available by %s\n",
+		TRACE_L5("interface %s: driver stat %s available by %s\n",
 			 interface->name, drv_stats[j].ethtool_name,
 			 interface->drv_stat[j].method == DRV_STAT_ETHTOOL ? "ethtool" :
 			 (interface->drv_stat[j].method == DRV_STAT_SYSFS ? "sysfs" :
