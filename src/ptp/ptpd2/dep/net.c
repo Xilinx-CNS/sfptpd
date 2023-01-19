@@ -300,6 +300,22 @@ netClearMulticastOptions(struct ptpd_transport *transport, struct sockaddr_stora
 
 
 /**
+ * Check if we have a physical interface (we may just be squatting on an
+ * aggregate interface temporarily lacking a slave.
+ *
+ * @param transport the transport object
+ *
+ * @return TRUE if present, otherwise FALSE
+ */
+static Boolean
+netHavePhysicalInterface(struct ptpd_transport *transport)
+{
+	return (transport &&
+		transport->interfaceInfo.ifIndex >=1 );
+}
+
+
+/**
  * shutdown the multicast (both General and Peer)
  *
  * @param transport
@@ -667,6 +683,12 @@ netInitMulticast(struct ptpd_transport * transport,  InterfaceOpts * ifOpts)
 	const char *addrStr;
 
 	/* Init General multicast IP address */
+
+	if (!netHavePhysicalInterface(transport)) {
+		INFO("%s: no physical interface for multicast\n",
+		     ifOpts->ifaceName);
+		return FALSE;
+	}
 
 	if (addr_family == AF_INET6) {
 		addrStr = ifOpts->linkLocalScope ?
