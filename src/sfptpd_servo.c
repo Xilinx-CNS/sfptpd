@@ -32,6 +32,19 @@
 
 
 /****************************************************************************
+ * Macros
+ ****************************************************************************/
+
+/* NTP component specific trace */
+#define DBG_L1(x, ...)  TRACE(SFPTPD_COMPONENT_ID_SERVO, 1, x, ##__VA_ARGS__)
+#define DBG_L2(x, ...)  TRACE(SFPTPD_COMPONENT_ID_SERVO, 2, x, ##__VA_ARGS__)
+#define DBG_L3(x, ...)  TRACE(SFPTPD_COMPONENT_ID_SERVO, 3, x, ##__VA_ARGS__)
+#define DBG_L4(x, ...)  TRACE(SFPTPD_COMPONENT_ID_SERVO, 4, x, ##__VA_ARGS__)
+#define DBG_L5(x, ...)  TRACE(SFPTPD_COMPONENT_ID_SERVO, 5, x, ##__VA_ARGS__)
+#define DBG_L6(x, ...)  TRACE(SFPTPD_COMPONENT_ID_SERVO, 6, x, ##__VA_ARGS__)
+
+
+/****************************************************************************
  * Types, Structures & Defines
  ****************************************************************************/
 
@@ -187,7 +200,7 @@ struct sfptpd_servo *sfptpd_servo_create(struct sfptpd_config *config, int idx)
 	/* Reset the servo filters */
 	sfptpd_servo_reset(servo);
 
-	TRACE_L4("%s: created successfully\n", servo->servo_name);
+	DBG_L3("%s: created successfully\n", servo->servo_name);
 	return servo;
 }
 
@@ -211,7 +224,7 @@ void sfptpd_servo_reset(struct sfptpd_servo *servo)
 	servo->freq_adjust_ppb = servo->freq_correction_ppb;
 	servo->offset_from_master_ns = 0.0;
 
-	TRACE_L4("%s: reset filters\n", servo->servo_name);
+	DBG_L4("%s: reset filters\n", servo->servo_name);
 }
 
 
@@ -253,9 +266,9 @@ void sfptpd_servo_set_clocks(struct sfptpd_servo *servo, struct sfptpd_clock *ma
 		/* Reset the servo filters */
 		sfptpd_servo_reset(servo);
 
-		TRACE_L2("%s: set clocks to master %s, slave %s\n",
-			 servo->servo_name, sfptpd_clock_get_short_name(master),
-			 sfptpd_clock_get_short_name(slave));
+		DBG_L2("%s: set clocks to master %s, slave %s\n",
+		       servo->servo_name, sfptpd_clock_get_short_name(master),
+		       sfptpd_clock_get_short_name(slave));
 	}
 }
 
@@ -316,32 +329,32 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 	/* Get the time difference between the two clocks */
 	rc = sfptpd_clock_compare(servo->slave, servo->master, &diff);
 	if (rc != 0) {
-		TRACE_L4("%s: failed to compare clocks %s and %s, error %s\n",
-			 servo->servo_name,
-			 sfptpd_clock_get_short_name(servo->slave),
-			 sfptpd_clock_get_short_name(servo->master), strerror(rc));
+		DBG_L4("%s: failed to compare clocks %s and %s, error %s\n",
+		       servo->servo_name,
+		       sfptpd_clock_get_short_name(servo->slave),
+		       sfptpd_clock_get_short_name(servo->master), strerror(rc));
 		return rc;
 	}
 
 	/* If the difference is greater than the limit, step the clock. */
 	diff_ns = sfptpd_time_timespec_to_float_ns(&diff);
 
-	TRACE_L6("%s: difference between master and slave = " SFPTPD_FORMAT_FLOAT "\n",
-		 servo->servo_name, diff_ns);
+	DBG_L6("%s: difference between master and slave = " SFPTPD_FORMAT_FLOAT "\n",
+	       servo->servo_name, diff_ns);
 
 	/* Check to see if the NIC time is less than 115 days since the epoch.
 	 * If so then the NIC has reset. In this case we need to raise an alarm. */
 	struct timespec curtime;
 	rc = sfptpd_clock_get_time(servo->master, &curtime);
 	if (rc != 0) {
-		TRACE_L4("%s: failed to get time from clock %s, error %s\n",
-			servo->servo_name,
-			sfptpd_clock_get_short_name(servo->master), strerror(rc));
+		DBG_L4("%s: failed to get time from clock %s, error %s\n",
+		      servo->servo_name,
+		      sfptpd_clock_get_short_name(servo->master), strerror(rc));
 		return rc;
 	}
 	long double curtime_ns = sfptpd_time_timespec_to_float_ns(&curtime);
-	TRACE_L6("%s: reference clock timestamp in ns: " SFPTPD_FORMAT_FLOAT "\n",
-		servo->servo_name, curtime_ns);
+	DBG_L6("%s: reference clock timestamp in ns: " SFPTPD_FORMAT_FLOAT "\n",
+	      servo->servo_name, curtime_ns);
 	if (curtime_ns < 1e16 || curtime_ns > (0xFFFC0000 * 1e9)) {
 		if (!SYNC_MODULE_ALARM_TEST(servo->alarms, CLOCK_NEAR_EPOCH)) {
 			SYNC_MODULE_ALARM_SET(servo->alarms, CLOCK_NEAR_EPOCH);
@@ -464,7 +477,7 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 	/* Add the new sample to the filter and get back the filtered delta */
 	mean = sfptpd_fir_filter_update(&servo->fir_filter, diff_ns);
 
-	TRACE_L6("%s, mean difference = %0.3Lf\n", servo->servo_name, mean);
+	DBG_L6("%s, mean difference = %0.3Lf\n", servo->servo_name, mean);
 
 	/* Store the filtered offset from master */
 	servo->offset_from_master_ns = mean;
@@ -502,12 +515,12 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
                 servo->stepped_after_lrc_locked = true;
         }
 
-	TRACE_L5("%s, clock %s: ofm = %0.3Lf (%0.3Lf), freq-adj = %0.3Lf, "
-		 "in-sync = %d, p = %0.3Lf, i = %0.3Lf\n",
-		 servo->servo_name, sfptpd_clock_get_short_name(servo->slave),
-		 mean, diff_ns, servo->freq_adjust_ppb, servo->synchronized,
-		 sfptpd_pid_filter_get_p_term(&servo->pid_filter),
-		 sfptpd_pid_filter_get_i_term(&servo->pid_filter));
+	DBG_L5("%s, clock %s: ofm = %0.3Lf (%0.3Lf), freq-adj = %0.3Lf, "
+	       "in-sync = %d, p = %0.3Lf, i = %0.3Lf\n",
+	       servo->servo_name, sfptpd_clock_get_short_name(servo->slave),
+	       mean, diff_ns, servo->freq_adjust_ppb, servo->synchronized,
+	       sfptpd_pid_filter_get_p_term(&servo->pid_filter),
+	       sfptpd_pid_filter_get_i_term(&servo->pid_filter));
 
 
 	return rc;

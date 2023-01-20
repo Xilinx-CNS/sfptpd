@@ -1996,10 +1996,6 @@ static bool ptp_update_instance_state(struct sfptpd_ptp_instance *instance,
 		ofm,
 		instance->intf->clock);
 
-	TRACE_L6("sync instance %s offset from master %Lf clustering score %d\n", 
-		 instance->config->hdr.name,
-		 ofm,
-		 current_clustering_score);
 	if (current_clustering_score != instance->clustering_score_snapshot) {
 		INFO("%s: clustering score changed %d -> %d\n",
 			 instance->config->hdr.name,

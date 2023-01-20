@@ -34,6 +34,19 @@
 
 
 /****************************************************************************
+ * Macros
+ ****************************************************************************/
+
+/* NTP component specific trace */
+#define DBG_L1(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 1, x, ##__VA_ARGS__)
+#define DBG_L2(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 2, x, ##__VA_ARGS__)
+#define DBG_L3(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 3, x, ##__VA_ARGS__)
+#define DBG_L4(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 4, x, ##__VA_ARGS__)
+#define DBG_L5(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 5, x, ##__VA_ARGS__)
+#define DBG_L6(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 6, x, ##__VA_ARGS__)
+
+
+/****************************************************************************
  * Structures and Types
  ****************************************************************************/
 
@@ -932,43 +945,43 @@ static int mode7_check_response_part1(struct sfptpd_ntpclient_state *ntpclient,
 	const uint8_t implementation_code = 3;
 
 	if (len < RESP_HEADER_SIZE) {
-		TRACE_L3("ntpclient: mode7: received undersize packet, %d\n", len);
+		DBG_L3("ntpclient: mode7: received undersize packet, %d\n", len);
 		return EAGAIN;
 	}
 
 	if ((INFO_VERSION(pkt->rm_vn_mode) > NTP_VERSION) ||
 	    (INFO_VERSION(pkt->rm_vn_mode) < NTP_OLDVERSION)) {
-		TRACE_L3("ntpclient: mode7: received packet with version %d\n",
-			 INFO_VERSION(pkt->rm_vn_mode));
+		DBG_L3("ntpclient: mode7: received packet with version %d\n",
+		       INFO_VERSION(pkt->rm_vn_mode));
 		return EAGAIN;
 	}
 
 	if (INFO_MODE(pkt->rm_vn_mode) != MODE_PRIVATE) {
-		TRACE_L3("ntpclient: mode7: received pkt with mode %d\n",
-			 INFO_MODE(pkt->rm_vn_mode));
+		DBG_L3("ntpclient: mode7: received pkt with mode %d\n",
+		       INFO_MODE(pkt->rm_vn_mode));
 		return EAGAIN;
 	}
 
 	if (INFO_IS_AUTH(pkt->auth_seq)) {
-		TRACE_L3("ntpclient: mode7: encrypted packet received\n");
+		DBG_L3("ntpclient: mode7: encrypted packet received\n");
 		return EAGAIN;
 	}
 
 	if (!ISRESPONSE(pkt->rm_vn_mode)) {
-		TRACE_L3("ntpclient: mode7: received request packet, wanted response\n");
+		DBG_L3("ntpclient: mode7: received request packet, wanted response\n");
 		return EAGAIN;
 	}
 
 	if (INFO_MBZ(pkt->mbz_itemsize) != 0) {
-		TRACE_L3("ntpclient: mode7: received packet with non-zero MBZ field\n");
+		DBG_L3("ntpclient: mode7: received packet with non-zero MBZ field\n");
 		return EAGAIN;
 	}
 
 	if ((pkt->implementation != implementation_code) ||
 	    (pkt->request != expected_request_code)) {
-		TRACE_L3("ntpclient: mode7: received implementation/request of %d/%d, wanted %d/%d",
-			 pkt->implementation, pkt->request,
-			 implementation_code, expected_request_code);
+		DBG_L3("ntpclient: mode7: received implementation/request of %d/%d, wanted %d/%d",
+		       pkt->implementation, pkt->request,
+		       implementation_code, expected_request_code);
 		return EAGAIN;
 	}
 
@@ -1044,8 +1057,8 @@ static int mode7_response(struct sfptpd_ntpclient_state *ntpclient,
 		len = recv(ntpclient->sock, &pkt, sizeof(pkt), 0);
 		if (len < 0) {
 			if (errno != ECONNREFUSED) {
-				TRACE_L3("ntpclient: mode7: error reading from socket, %s\n",
-					 strerror(errno));
+				DBG_L3("ntpclient: mode7: error reading from socket, %s\n",
+				       strerror(errno));
 			}
 			return errno;
 		}
@@ -1064,9 +1077,9 @@ static int mode7_response(struct sfptpd_ntpclient_state *ntpclient,
 		error_code = INFO_ERR(pkt.err_nitems);
 		if (error_code != INFO_OKAY) {
 			if (error_code != INFO_ERR_NODATA)
-				TRACE_L3("ntpclient: mode7: ntpd error code %d received on non-final packet, %s\n",
-					 INFO_ERR(pkt.err_nitems),
-					 strerror(mode7_error_to_errno[error_code]));
+				DBG_L3("ntpclient: mode7: ntpd error code %d received on non-final packet, %s\n",
+				       INFO_ERR(pkt.err_nitems),
+				       strerror(mode7_error_to_errno[error_code]));
 			if (error_code < INFO_ERR_MAX)
 				return mode7_error_to_errno[error_code];
 			else
@@ -1079,16 +1092,16 @@ static int mode7_response(struct sfptpd_ntpclient_state *ntpclient,
 		num_items = INFO_NITEMS(pkt.err_nitems);
 		item_size = INFO_ITEMSIZE(pkt.mbz_itemsize);
 		if (num_items * item_size > len - RESP_HEADER_SIZE) {
-			TRACE_L3("ntpclient: mode7: received items %d, size %d too large for pkt %zd\n",
-				 num_items, item_size, len - RESP_HEADER_SIZE);
+			DBG_L3("ntpclient: mode7: received items %d, size %d too large for pkt %zd\n",
+			       num_items, item_size, len - RESP_HEADER_SIZE);
 			continue;
 		}
 
 		/* If this isn't our first packet, make sure the size isn't
 		 * too large */
 		if ((pkts_received != 0) && (item_size > required_item_size)) {
-			TRACE_L3("ntpclient: mode7: received itemsize %d, previous %d\n",
-				 item_size, required_item_size);
+			DBG_L3("ntpclient: mode7: received itemsize %d, previous %d\n",
+			       item_size, required_item_size);
 			continue;
 		}
 
@@ -1096,13 +1109,13 @@ static int mode7_response(struct sfptpd_ntpclient_state *ntpclient,
 		 * already seen it */
 		seq_num = INFO_SEQ(pkt.auth_seq);
 		if (have_seq[seq_num]) {
-			TRACE_L3("ntpclient: mode7: received duplicate seq num %d\n", seq_num);
+			DBG_L3("ntpclient: mode7: received duplicate seq num %d\n", seq_num);
 			continue;
 		}
 
 		/* Check if this is the last in the sequence */
 		if (!ISMORE(pkt.rm_vn_mode) && (last_seq_num <= MAXSEQ)) {
-			TRACE_L3("ntpclient: mode7: received second end sequence packet\n");
+			DBG_L3("ntpclient: mode7: received second end sequence packet\n");
 			continue;
 		}
 
@@ -1309,18 +1322,18 @@ static int mode7_get_sys_info(struct sfptpd_ntpclient_state *ntpclient,
 				 host, sizeof host,
 				 NULL, 0, NI_NUMERICHOST);
 		if (rc != 0) {
-			TRACE_L4("ntpclient: mode7: getnameinfo: %s\n", gai_strerror(rc));
+			DBG_L4("ntpclient: mode7: getnameinfo: %s\n", gai_strerror(rc));
 		}
 		
-		TRACE_L6("ntp-sys-info: selected-peer-address %s "
-			 "leap-flags 0x%hhx, stratum 0x%hhx, flags 0x%hhx, "
-			 "clock-control %sabled\n",
-			 host,
-			 info->leap, info->stratum, info->flags,
-			 sys_info->clock_control_enabled? "en": "dis");
+		DBG_L6("ntp-sys-info: selected-peer-address %s "
+		       "leap-flags 0x%hhx, stratum 0x%hhx, flags 0x%hhx, "
+		       "clock-control %sabled\n",
+		       host,
+		       info->leap, info->stratum, info->flags,
+		       sys_info->clock_control_enabled? "en": "dis");
 	} else if (rc != ECONNREFUSED) {
-		TRACE_L3("ntpclient: mode7: failed to get system info from NTP daemon, %s\n",
-			 strerror(rc));
+		DBG_L3("ntpclient: mode7: failed to get system info from NTP daemon, %s\n",
+		       strerror(rc));
 	}
 
 	return rc;
@@ -1353,13 +1366,13 @@ static int mode7_get_peer_info(struct sfptpd_ntpclient_state *ntpclient,
 	 * queried. This can also happen when NTPd is starting if it is queried
 	 * before having completed the DNS lookup of the configured peers. */
 	if (rc == ENODATA) {
-		TRACE_L5("ntpclient: mode7: ntpd did not return any peers\n");
+		DBG_L5("ntpclient: mode7: ntpd did not return any peers\n");
 		num_items = 0;
 		rc = 0;
 	} else if (rc != 0) {
 		if (rc != ECONNREFUSED) {
-			TRACE_L3("ntpclient: mode7: failed to get peer summary from NTP daemon, %s\n",
-				 strerror(rc));
+			DBG_L3("ntpclient: mode7: failed to get peer summary from NTP daemon, %s\n",
+			       strerror(rc));
 		}
 		return rc;
 	}
@@ -1413,8 +1426,8 @@ static int mode7_get_peer_info(struct sfptpd_ntpclient_state *ntpclient,
 				 &num_items, sizeof(*stats), (void **)&stats);
 		if (rc != 0) {
 			if (rc != ECONNREFUSED) {
-				TRACE_L3("ntpclient: mode7: failed to get peer stats from NTP daemon, %s\n",
-					 strerror(rc));
+				DBG_L3("ntpclient: mode7: failed to get peer stats from NTP daemon, %s\n",
+				       strerror(rc));
 			}
 
 			return rc;
@@ -1446,8 +1459,8 @@ static int mode7_get_peer_info(struct sfptpd_ntpclient_state *ntpclient,
 				 &num_items, sizeof(*info), (void **)&info);
 		if (rc != 0) {
 			if (rc != ECONNREFUSED) {
-				TRACE_L3("ntpclient: mode7: failed to get peer info from NTP daemon, %s\n",
-					 strerror(rc));
+				DBG_L3("ntpclient: mode7: failed to get peer info from NTP daemon, %s\n",
+				       strerror(rc));
 			}
 
 			return rc;
@@ -1506,8 +1519,8 @@ static int mode7_clock_control(struct sfptpd_ntpclient_state *ntpclient,
 		WARNING("ntpclient: mode7: failed to set NTP daemon system flags, %s\n",
 			strerror(rc));
 	} else {
-		TRACE_L1("ntpclient: mode7: %sabled NTP daemon clock control\n",
-			 enable? "en": "dis");
+		DBG_L1("ntpclient: mode7: %sabled NTP daemon clock control\n",
+		       enable? "en": "dis");
 	}
 
 	return rc;

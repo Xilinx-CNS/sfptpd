@@ -37,6 +37,19 @@
 
 
 /****************************************************************************
+ * Macros
+ ****************************************************************************/
+
+/* NTP component specific trace */
+#define DBG_L1(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 1, x, ##__VA_ARGS__)
+#define DBG_L2(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 2, x, ##__VA_ARGS__)
+#define DBG_L3(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 3, x, ##__VA_ARGS__)
+#define DBG_L4(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 4, x, ##__VA_ARGS__)
+#define DBG_L5(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 5, x, ##__VA_ARGS__)
+#define DBG_L6(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 6, x, ##__VA_ARGS__)
+
+
+/****************************************************************************
  * Types
  ****************************************************************************/
 
@@ -882,7 +895,7 @@ static void ntp_on_clock_control_change(ntp_module_t *ntp, struct ntp_state *new
 
 static void ntp_on_offset_id_change(ntp_module_t *ntp, struct ntp_state *new_state)
 {
-	TRACE_L4("ntp: offset ID changed\n");
+	DBG_L4("ntp: offset ID changed\n");
 
 	if (ntp->offset_unsafe && !offset_id_is_valid(new_state)) {
 		ntp->offset_unsafe = false;
@@ -978,8 +991,8 @@ static void ntp_on_control(ntp_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 		rc = sfptpd_ntpclient_clock_control(ntp->client, clock_control);
 		if (rc == 0) {
 			ntp->state.sys_info.clock_control_enabled = clock_control;
-			TRACE_L2("ntp: successfully %sabled ntpd clock control\n",
-				 clock_control? "en": "dis");
+			DBG_L2("ntp: successfully %sabled ntpd clock control\n",
+			       clock_control? "en": "dis");
 		} else {
 			ERROR("ntp: failed to change ntpd clock control, %s!\n",
 			      strerror(rc));
@@ -1048,7 +1061,7 @@ static void ntp_on_save_state(ntp_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 				 host, sizeof host,
 				 NULL, 0, NI_NUMERICHOST);
 		if (rc != 0) {
-			TRACE_L4("ntp: getnameinfo: %s\n", gai_strerror(rc));
+			DBG_L4("ntp: getnameinfo: %s\n", gai_strerror(rc));
 		}
 
 		sfptpd_log_write_state(clock,
@@ -1116,7 +1129,7 @@ static void ntp_on_write_topology(ntp_module_t *ntp, sfptpd_sync_module_msg_t *m
 			 host, sizeof host,
 			 NULL, 0, NI_NUMERICHOST);
 	if (rc != 0) {
-		TRACE_L4("ntp: getnameinfo: %s\n", gai_strerror(rc));
+		DBG_L4("ntp: getnameinfo: %s\n", gai_strerror(rc));
 	}
 
 	stream = msg->u.write_topology_req.stream;
@@ -1487,7 +1500,7 @@ int sfptpd_ntp_module_create(struct sfptpd_config *config,
 	assert(engine != NULL);
 	assert(sync_module != NULL);
 
-	TRACE_L3("ntp: creating sync-module\n");
+	DBG_L3("ntp: creating sync-module\n");
 
 	*sync_module = NULL;
 	ntp = (ntp_module_t *)calloc(1, sizeof(*ntp));

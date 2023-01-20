@@ -44,6 +44,19 @@
 
 
 /****************************************************************************
+ * Macros
+ ****************************************************************************/
+
+/* NTP component specific trace */
+#define DBG_L1(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 1, x, ##__VA_ARGS__)
+#define DBG_L2(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 2, x, ##__VA_ARGS__)
+#define DBG_L3(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 3, x, ##__VA_ARGS__)
+#define DBG_L4(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 4, x, ##__VA_ARGS__)
+#define DBG_L5(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 5, x, ##__VA_ARGS__)
+#define DBG_L6(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 6, x, ##__VA_ARGS__)
+
+
+/****************************************************************************
  * Types
  ****************************************************************************/
 
@@ -431,8 +444,8 @@ int sfptpd_crny_addr_to_sockaddr(struct sockaddr_storage *addr,
 		sin->sin_addr.s_addr = ip_addr->addr_union.v4_addr;
 	} else {
 		if (addr_family != IP_UNSPEC)
-			TRACE_L6("crny: unexpected chrony address type %d\n",
-				 addr_family);
+			DBG_L6("crny: unexpected chrony address type %d\n",
+				addr_family);
 		*length = sizeof *addr;
 		memset(addr, '0', sizeof *addr);
 		addr->ss_family = AF_UNSPEC;
@@ -718,12 +731,12 @@ static bool clock_control_at_launch(void)
 	};
 
 	if (sfptpd_find_running_programs(chrony) == 0) {
-		TRACE_L6("crny: chrony static check: not running\n");
+		DBG_L6("crny: chrony static check: not running\n");
 		goto finish;
 	}
 
-	TRACE_L6("crny: chrony static check: running (%d, %s)\n",
-		 chrony[0].a_pid, chrony[0].a_program);
+	DBG_L6("crny: chrony static check: running (%d, %s)\n",
+		chrony[0].a_pid, chrony[0].a_program);
 
 	pid = chrony[0].a_pid;
 
@@ -839,9 +852,9 @@ static int issue_request(crny_module_t *ntp)
 		return ENOTCONN;
 	}
 
-	TRACE_L6("crny: req(ver=%d, pkt=%d, cmd=%d, attempt=%d, seq=%d)\n",
-		 req->header[0], req->header[1],
-		 ntohs(req->cmd1), ntohs(req->ignore), req->randoms);
+	DBG_L6("crny: req(ver=%d, pkt=%d, cmd=%d, attempt=%d, seq=%d)\n",
+	       req->header[0], req->header[1],
+	       ntohs(req->cmd1), ntohs(req->ignore), req->randoms);
 
 	/* Determine the timeout for this request */
 	(void)clock_gettime(CLOCK_MONOTONIC, &ntp->reply_expiry_time);
@@ -879,27 +892,27 @@ static int check_reply(struct crny_cmd_request *request,
 	int rc = 0;
 
 	if (status != 0) {
-		TRACE_L4("crny: unsuccessful chrony "
-			 "response status %d for command %d\n",
+		DBG_L4("crny: unsuccessful chrony "
+		       "response status %d for command %d\n",
 			 status, req_cmd);
 		rc = rc == 0 ? EPROTO : rc;
 	}
 	if (seq != req_seq) {
-		TRACE_L4("crny: sequence number in response (%x) "
-			 "does not match sequence number in request (%x)\n",
-			 seq, req_seq);
+		DBG_L4("crny: sequence number in response (%x) "
+		       "does not match sequence number in request (%x)\n",
+		       seq, req_seq);
 		rc = rc == 0 ? EPROTO : rc;
 	}
 	if (packet != expect) {
-		TRACE_L6("crny: unexpected response type "
-			  "%d to command %d, expected %d\n",
-			  packet, req_cmd, expect);
+		DBG_L6("crny: unexpected response type "
+		       "%d to command %d, expected %d\n",
+		       packet, req_cmd, expect);
 		rc = rc == 0 ? EPROTO : rc;
 	}
 	if (cmd != req_cmd) {
-		TRACE_L6("crny: response command field (%d) does "
-			 "not match command %d\n",
-			  cmd, req_cmd);
+		DBG_L6("crny: response command field (%d) does "
+		       "not match command %d\n",
+		       cmd, req_cmd);
 		rc = rc == 0 ? EPROTO : rc;
 	}
 
@@ -920,8 +933,8 @@ static int issue_get_sys_info(crny_module_t *ntp)
 	/* Allocate space for receiving reply */
 	rc = issue_request(ntp);
 	if (rc != 0) {
-		TRACE_L6("crny: get-sys-info: chrony_send_recv failed, %s\n",
-			strerror(errno));
+		DBG_L6("crny: get-sys-info: chrony_send_recv failed, %s\n",
+		       strerror(errno));
 	}
 
 	return rc;
@@ -941,29 +954,29 @@ static int handle_get_sys_info(crny_module_t *ntp)
 
 	rc = check_reply(req, reply, CRNY_RESP_TRACKING_STATE);
 	if (rc != 0) {
-		TRACE_L6("crny: get-sys-info: invalid reply, %s\n",
-			 strerror(errno));
+		DBG_L6("crny: get-sys-info: invalid reply, %s\n",
+		       strerror(errno));
 		return rc;
 	}
 
 	/* ref_id of 0x7f7f0101L means LOCAL == 127.127.1.1. 0x4C4F434C == LOCL also means local */
 	uint32_t ref_id = ntohl(*(uint32_t*)reply->data);
-	TRACE_L6("crny: get-sys-info: tracking ref id: %08lX\n", ref_id);
+	DBG_L6("crny: get-sys-info: tracking ref id: %08lX\n", ref_id);
 	if (ref_id == REF_ID_UNSYNC){
 		/* if the ref_id is null then we likely don't have any other info either
 		so we should just return an error code */
-		TRACE_L4("crny: get-sys-info: peer not contactable\n");
+		DBG_L4("crny: get-sys-info: peer not contactable\n");
 		return EAGAIN;
 	}
 	else if (ref_id == REF_ID_LOCAL || ref_id == REF_ID_LOCL){
-		TRACE_L6("crny: get-sys-info: peer is local\n");
+		DBG_L6("crny: get-sys-info: peer is local\n");
 	}
 
 	struct crny_addr *ip_addr = (struct crny_addr *)((uint32_t *)reply->data + 1);
 
 	if (ip_addr->addr_family == 0){
-		TRACE_L6("crny: get-sys-info: tracked source does not "
-			 "have a network address.\n");
+		DBG_L6("crny: get-sys-info: tracked source does not "
+		       "have a network address.\n");
 	} else {
 		char host[NI_MAXHOST];
 
@@ -975,8 +988,8 @@ static int handle_get_sys_info(crny_module_t *ntp)
 				     sys_info.peer_address_len,
 				     host, sizeof host,
 				     NULL, 0, 0);
-		TRACE_L6("crny: get-sys-info: selected-peer-address: %s\n",
-			 rc == 0 ? host : gai_strerror(rc));
+		DBG_L6("crny: get-sys-info: selected-peer-address: %s\n",
+		       rc == 0 ? host : gai_strerror(rc));
 	}
 
 	bool clock_control = clock_control_at_launch();
@@ -1003,8 +1016,8 @@ int handle_get_source_count(crny_module_t *ntp)
 
 	rc = check_reply(req, reply, CRNY_RESP_NUM_SOURCES);
 	if (rc != 0) {
-		TRACE_L6("crny: get-peer-info: invalid reply, %s\n",
-			 strerror(errno));
+		DBG_L6("crny: get-peer-info: invalid reply, %s\n",
+		       strerror(errno));
 		return rc;
 	}
 
@@ -1013,8 +1026,8 @@ int handle_get_source_count(crny_module_t *ntp)
 
 	if (num_sources > SFPTPD_NTP_PEERS_MAX) {
 		num_sources = SFPTPD_NTP_PEERS_MAX;
-		WARNING("crny: get-peer-info: too many peers - summary limited to %d peers\n",
-			num_sources);
+		DBG_L4("crny: get-peer-info: too many peers - summary limited to %d peers\n",
+		       num_sources);
 	}
 	next_state->peer_info.num_peers = num_sources;
 
@@ -1044,8 +1057,8 @@ int handle_get_source_datum(crny_module_t *ntp)
 
 	rc = check_reply(req, reply, CRNY_RESP_SOURCE_DATA_ITEM);
 	if (rc != 0) {
-		TRACE_L6("crny: get-peer%d-info: invalid reply, %s\n",
-			 ntp->query_src_idx, strerror(errno));
+		DBG_L6("crny: get-peer%d-info: invalid reply, %s\n",
+		       ntp->query_src_idx, strerror(errno));
 		return ENOENT;
 	}
 
@@ -1054,15 +1067,15 @@ int handle_get_source_datum(crny_module_t *ntp)
 	enum crny_state_code state = ntohs(src_data->state);
 	enum crny_src_mode_code mode = ntohs(src_data->mode);
 
-	TRACE_L6("crny: get-peer%d-info: mode %d state %d\n",
-		 ntp->query_src_idx, mode, state);
+	DBG_L6("crny: get-peer%d-info: mode %d state %d\n",
+	       ntp->query_src_idx, mode, state);
 
 	peer->selected = (state == CRNY_STATE_SYSPEER);
 	peer->shortlist = (state == CRNY_STATE_CANDIDATE);
 	peer->self = (mode == CRNY_SRC_MODE_REF);
 
 	if (mode == CRNY_SRC_MODE_REF) {
-		TRACE_L6("crny: get-peer%d-info: source is a reference clock\n", ntp->query_src_idx);
+		DBG_L6("crny: get-peer%d-info: source is a reference clock\n", ntp->query_src_idx);
 		/* No peer information will be avaliable via NTPDATA request */
 		return ENOENT;
 	}
@@ -1075,7 +1088,7 @@ int handle_get_source_datum(crny_module_t *ntp)
 	   Copy directly from reply into request. */
 	ip_addr = &src_data->ip_addr;
 	if (ip_addr->addr_family == 0) {
-		TRACE_L6("crny: get-peer%d-info: address family unspecified in tracking reply.\n", ntp->query_src_idx);
+		DBG_L6("crny: get-peer%d-info: address family unspecified in tracking reply.\n", ntp->query_src_idx);
 		return ENOENT;
 	}
 	memcpy(&ntp->crny_comm.req.cmd2, ip_addr, sizeof(*ip_addr));
@@ -1101,8 +1114,8 @@ int handle_get_ntp_datum(crny_module_t *ntp)
 	struct crny_ntpdata *answer = (struct crny_ntpdata *)(&reply->data);
 	rc = check_reply(req, reply, CRNY_RESP_NTP_DATA);
 	if (rc != 0) {
-		TRACE_L6("crny: get-chrony-peer%d-info: invalid reply, %s\n",
-			 ntp->query_src_idx, strerror(errno));
+		DBG_L6("crny: get-chrony-peer%d-info: invalid reply, %s\n",
+		       ntp->query_src_idx, strerror(errno));
 	} else {
 		sfptpd_crny_addr_to_sockaddr(&peer->remote_address,
 					     &peer->remote_address_len,
@@ -1131,8 +1144,8 @@ static int crny_resolve(crny_module_t *ntp)
 
 	/* check if chronyd is running */
 	if (access(ntp->crny_comm.remote.sun_path, F_OK) != 0) {
-		TRACE_L4("crny: nonexistent path %s, %s. Is chronyd running?\n",
-			 ntp->crny_comm.remote.sun_path, strerror(errno));
+		DBG_L4("crny: nonexistent path %s, %s. Is chronyd running?\n",
+		       ntp->crny_comm.remote.sun_path, strerror(errno));
 		return errno;
 	} else {
 		return 0;
@@ -1398,11 +1411,11 @@ static bool crny_state_machine(crny_module_t *ntp,
 	}
 
 finish:
-	TRACE_L6("crny: state %s --%s--> %s (%s)\n",
-		 query_state_names[ntp->query_state],
-		 query_event_names[event],
-		 query_state_names[next_query_state],
-		 update ? "update" : "no update");
+	DBG_L6("crny: state %s --%s--> %s (%s)\n",
+	       query_state_names[ntp->query_state],
+	       query_event_names[event],
+	       query_state_names[next_query_state],
+	       update ? "update" : "no update");
 
 	if (ntp->next_state.state != ntp->state.state)
 		update = true;
@@ -1583,8 +1596,8 @@ static int do_clock_control(crny_module_t *ntp,
 		op_do = CRNY_CTRL_OP_RESTORENORESTART;
 
 	action = clock_control_op_name(op_do);
-	TRACE_L6("crny: chrony_clock_control(op_req = %s, op_do = %s)\n",
-		 clock_control_op_name(op_req), action);
+	DBG_L6("crny: chrony_clock_control(op_req = %s, op_do = %s)\n",
+	       clock_control_op_name(op_req), action);
 
 	if (op_do == CRNY_CTRL_OP_NOP)
 		return 0;
@@ -1693,7 +1706,7 @@ static void ntp_on_clock_control_change(crny_module_t *ntp, struct ntp_state *ne
 
 static void ntp_on_offset_id_change(crny_module_t *ntp, struct ntp_state *new_state)
 {
-	TRACE_L4("crny: offset ID changed\n");
+	DBG_L3("crny: offset ID changed\n");
 
 	if (new_state->offset_unsafe && !offset_id_is_valid(new_state)) {
 		new_state->offset_unsafe = false;
@@ -1782,8 +1795,8 @@ static void ntp_on_control(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 			} else {
 				rc = crny_clock_control(ntp, clock_control);
 				if (rc == 0) {
-					TRACE_L2("crny: successfully %sabled chronyd clock control\n",
-						 clock_control? "en": "dis");
+					INFO("crny: %sabled chronyd clock control\n",
+					       clock_control? "en": "dis");
 				} else {
 				ERROR("crny: failed to change chronyd clock control, %s!\n",
 				      strerror(rc));
@@ -1853,7 +1866,7 @@ static void ntp_on_save_state(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 				 host, sizeof host,
 				 NULL, 0, NI_NUMERICHOST);
 		if (rc != 0) {
-			TRACE_L4("crny: getnameinfo: %s\n", gai_strerror(rc));
+			DBG_L4("crny: getnameinfo: %s\n", gai_strerror(rc));
 		}
 
 		sfptpd_log_write_state(clock,
@@ -1921,7 +1934,7 @@ static void ntp_on_write_topology(crny_module_t *ntp, sfptpd_sync_module_msg_t *
 			 host, sizeof host,
 			 NULL, 0, NI_NUMERICHOST);
 	if (rc != 0) {
-		TRACE_L4("crny: getnameinfo: %s\n", gai_strerror(rc));
+		DBG_L4("crny: getnameinfo: %s\n", gai_strerror(rc));
 	}
 
 	stream = msg->u.write_topology_req.stream;
@@ -2265,15 +2278,15 @@ static void crny_do_io(crny_module_t *ntp)
 		rc = -errno;
 
 	if (rc >= 8) {
-		TRACE_L6("crny: resp(ver=%d, pkt=%d, cmd=%d, seq=%d)\n",
-			 comm->resp.header[0], comm->resp.header[1],
-			 ntohs(comm->resp.cmd), comm->resp.seq_id);
+		DBG_L6("crny: resp(ver=%d, pkt=%d, cmd=%d, seq=%d)\n",
+		       comm->resp.header[0], comm->resp.header[1],
+		       ntohs(comm->resp.cmd), comm->resp.seq_id);
 		event = NTP_QUERY_EVENT_TRAFFIC;
 	} else if (rc >= 0) {
 		ERROR("crny: useless reply received from chronyd\n");
 	} else if (rc == -EAGAIN || rc == -EINTR) {
 		/* Ignore wakeup */
-		TRACE_L6("crny: fd woken up, %s\n", strerror(rc));
+		DBG_L6("crny: fd woken up, %s\n", strerror(rc));
 	} else {
 		ERROR("crny: chrony: error receiving reply from chronyd, %s\n",
 		      strerror(rc));

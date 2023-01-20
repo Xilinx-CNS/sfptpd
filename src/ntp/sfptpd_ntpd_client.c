@@ -20,6 +20,19 @@
 
 
 /****************************************************************************
+ * Macros
+ ****************************************************************************/
+
+/* NTP component specific trace */
+#define DBG_L1(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 1, x, ##__VA_ARGS__)
+#define DBG_L2(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 2, x, ##__VA_ARGS__)
+#define DBG_L3(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 3, x, ##__VA_ARGS__)
+#define DBG_L4(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 4, x, ##__VA_ARGS__)
+#define DBG_L5(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 5, x, ##__VA_ARGS__)
+#define DBG_L6(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 6, x, ##__VA_ARGS__)
+
+
+/****************************************************************************
  * Local Functions
  ****************************************************************************/
 
@@ -33,10 +46,10 @@ static int select_protocol(struct sfptpd_ntpclient *container)
 	{
 		if (container->mode7.fns->test_connection(container->mode7.state) == 0) {
 			container->selected = &(container->mode7);
-			TRACE_L3("ntpclient: selected NTP Mode 7 Protocol\n");
+			DBG_L3("ntpclient: selected NTP Mode 7 Protocol\n");
 		} else if (container->mode6.fns->test_connection(container->mode6.state) == 0) {
 			container->selected = &(container->mode6);
-			TRACE_L3("ntpclient: selected NTP Mode 6 Protocol\n");
+			DBG_L3("ntpclient: selected NTP Mode 6 Protocol\n");
 		} else {
 			/* No NTP protocol available */
 			return ENOPROTOOPT;
@@ -72,9 +85,9 @@ void sfptpd_ntpclient_print_peers(struct sfptpd_ntpclient_peer_info *peer_info,
 			if (peer->self) {
 				strcpy(remote_host, "<reference clock>");
 			} else {
-				TRACE_L5("ntpclient: getnameinfo: error "
-					 "retrieving remote_address, %s\n",
-					 gai_strerror(rc));
+				DBG_L5("ntpclient: getnameinfo: error "
+				       "retrieving remote_address, %s\n",
+				       gai_strerror(rc));
 				strcpy(remote_host, "<invalid>");
 			}
 		}
@@ -87,22 +100,22 @@ void sfptpd_ntpclient_print_peers(struct sfptpd_ntpclient_peer_info *peer_info,
 			if (peer->self) {
 				strcpy(local_host, "<reference clock>");
 			} else {
-				TRACE_L5("ntpclient: getnameinfo: error "
-					 "retrieving local_address, %s\n",
-					 gai_strerror(rc));
+				DBG_L5("ntpclient: getnameinfo: error "
+				       "retrieving local_address, %s\n",
+				       gai_strerror(rc));
 				strcpy(local_host, "<invalid>");
 			}
 		}
 
-		TRACE_L5("%s-peer%d: remote-address %s, "
-			 "local-address %s, sent %u, received %u, "
-			 "candidate %d, stratum %d, offset %0.3Lf ns, "
-			 "root disp %0.3Lf ns\n",
-			 subsystem,
-			 i, remote_host, local_host,
-			 peer->pkts_sent, peer->pkts_received,
-			 peer->candidate, peer->stratum,
-			 peer->offset, peer->root_dispersion);
+		DBG_L5("%s-peer%d: remote-address %s, "
+		       "local-address %s, sent %u, received %u, "
+		       "candidate %d, stratum %d, offset %0.3Lf ns, "
+		       "root disp %0.3Lf ns\n",
+		       subsystem,
+		       remote_host, local_host,
+		       peer->pkts_sent, peer->pkts_received,
+		       peer->candidate, peer->stratum,
+		       peer->offset, peer->root_dispersion);
 	}
 }
 
@@ -139,8 +152,8 @@ int sfptpd_ntpclient_create(struct sfptpd_ntpclient **container,
 	rc = select_protocol(new);
 	if (rc != 0) {
 		if (rc == ENOPROTOOPT)
-			TRACE_L5("ntpclient: could not communicate with NTP "
-				 "daemon over any known protocol.\n");
+			DBG_L5("ntpclient: could not communicate with NTP "
+			       "daemon over any known protocol.\n");
 	}
 
 	/* Success */

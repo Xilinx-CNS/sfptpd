@@ -41,6 +41,19 @@
 
 
 /****************************************************************************
+ * Macros
+ ****************************************************************************/
+
+/* NTP component specific trace */
+#define DBG_L1(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 1, x, ##__VA_ARGS__)
+#define DBG_L2(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 2, x, ##__VA_ARGS__)
+#define DBG_L3(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 3, x, ##__VA_ARGS__)
+#define DBG_L4(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 4, x, ##__VA_ARGS__)
+#define DBG_L5(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 5, x, ##__VA_ARGS__)
+#define DBG_L6(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 6, x, ##__VA_ARGS__)
+
+
+/****************************************************************************
  * Structures and Types
  ****************************************************************************/
 
@@ -537,25 +550,25 @@ static int mode6_validate_response_packet(struct ntp_mode6_packet *pkt,
 	assert(pkt != NULL);
 
 	if (len < CTL_HEADER_LEN) {
-		TRACE_L3("ntpclient: mode6: received undersize packet, %d\n", len);
+		DBG_L3("ntpclient: mode6: received undersize packet, %d\n", len);
 		return EAGAIN;
 	}
 
 	if ((PKT_VERSION(pkt->li_vn_mode) > NTP_VERSION) ||
 	    (PKT_VERSION(pkt->li_vn_mode) < NTP_OLDVERSION)) {
-		TRACE_L3("ntpclient: mode6: received packet with version %d\n",
-			 PKT_VERSION(pkt->li_vn_mode));
+		DBG_L3("ntpclient: mode6: received packet with version %d\n",
+		       PKT_VERSION(pkt->li_vn_mode));
 		return EAGAIN;
 	}
 
 	if (PKT_MODE(pkt->li_vn_mode) != MODE_CONTROL) {
-		TRACE_L3("ntpclient: mode6: received pkt with mode %d\n",
-			 PKT_MODE(pkt->li_vn_mode));
+		DBG_L3("ntpclient: mode6: received pkt with mode %d\n",
+		       PKT_MODE(pkt->li_vn_mode));
 		return EAGAIN;
 	}
 
 	if (!CTL_ISRESPONSE(pkt->r_e_m_op)) {
-		TRACE_L3("ntpclient: mode6: received request packet, wanted response\n");
+		DBG_L3("ntpclient: mode6: received request packet, wanted response\n");
 		return EAGAIN;
 	}
 
@@ -563,15 +576,15 @@ static int mode6_validate_response_packet(struct ntp_mode6_packet *pkt,
 	   and not a response to our request */
 
 	if (ntohs(pkt->sequence) != sequence) {
-		TRACE_L3("ntpclient: mode6: received sequence number %d, wanted %d\n",
-			 pkt-sequence, sequence);
+		DBG_L3("ntpclient: mode6: received sequence number %d, wanted %d\n",
+		       pkt-sequence, sequence);
 		return EAGAIN;
 	}
 
 	if (CTL_OP(pkt->r_e_m_op) != expected_request_code) {
-		TRACE_L3("ntpclient: mode6: received opcode %d, wanted %d (sequence number"
-			 " correct)\n", CTL_OP(pkt->r_e_m_op),
-			 expected_request_code);
+		DBG_L3("ntpclient: mode6: received opcode %d, wanted %d (sequence number"
+		       " correct)\n", CTL_OP(pkt->r_e_m_op),
+		       expected_request_code);
 		return EAGAIN;
 	}
 
@@ -656,8 +669,8 @@ static int mode6_response(struct sfptpd_ntpclient_state *ntpclient,
 		len = recv(ntpclient->sock, &pkt, sizeof(pkt), 0);
 		if (len < 0) {
 			if (errno != ECONNREFUSED) {
-				TRACE_L3("ntpclient: mode6: error reading from socket,"
-					 " %s\n", strerror(errno));
+				DBG_L3("ntpclient: mode6: error reading from socket,"
+				       " %s\n", strerror(errno));
 			}
 			return errno;
 		}
@@ -677,16 +690,16 @@ static int mode6_response(struct sfptpd_ntpclient_state *ntpclient,
 		if (CTL_ISERROR(pkt.r_e_m_op)) {
 			err_code = (ntohs(pkt.status) >> 8) & 0xff;
 			if (CTL_ISMORE(pkt.r_e_m_op))
-				TRACE_L3("ntpclient: mode6: error code %d received on"
-				" non-final packet\n", pkt.r_e_m_op);
+				DBG_L3("ntpclient: mode6: error code %d received on"
+				       " non-final packet\n", pkt.r_e_m_op);
 			return ntp_cerr2errno[err_code];	
 		}
 
 		/* Check the association ID to make sure it matches what we
 		 * sent */
 		if (ntohs(pkt.associd) != associd) {
-			TRACE_L3("ntpclient: mode6: Association ID %d doesn't match "
-				 "expected %d\n", ntohs(pkt.associd), associd);
+			DBG_L3("ntpclient: mode6: Association ID %d doesn't match "
+			       "expected %d\n", ntohs(pkt.associd), associd);
 		}
 
 		/* Collect offset and count. Make sure they make sense. */
@@ -696,8 +709,8 @@ static int mode6_response(struct sfptpd_ntpclient_state *ntpclient,
 		/* Validate received payload size is padded to next 32-bit
 		 * boundary and no smaller than claimed by pkt.count */
 		if (len & 0x3) {
-			TRACE_L3("ntpclient: mode6: Response packet not padded, "
-				 "size = %d\n", len);
+			DBG_L3("ntpclient: mode6: Response packet not padded, "
+			       "size = %d\n", len);
 			continue;
 		}
 
@@ -713,24 +726,24 @@ static int mode6_response(struct sfptpd_ntpclient_state *ntpclient,
 		/* Packet fragment checks */
 		/* fragment larger than stated in packet header */
 		if (count > (len - CTL_HEADER_LEN)) {
-			TRACE_L3("ntpclient: mode6: Received count of %u octets, data in packet is"
-				 " %ld\n", count, (long)len - CTL_HEADER_LEN);
+			DBG_L3("ntpclient: mode6: Received count of %u octets, data in packet is"
+			       " %ld\n", count, (long)len - CTL_HEADER_LEN);
 			continue;
 		}
 		/* count is zero but there are more packets to come */
 		if (count == 0 && CTL_ISMORE(pkt.r_e_m_op)) {
-			TRACE_L3("ntpclient: mode6: Received count of 0 in non-final fragment\n");
+			DBG_L3("ntpclient: mode6: Received count of 0 in non-final fragment\n");
 			continue;
 		}
 		/* check packet fragment fits in buffer */
 		if (offset + count > sizeof(ntpclient->buffer)) {
-			TRACE_L3("ntpclient: mode6: Offset %u, count %u, too big for buffer\n",
-				  offset, count);
+			DBG_L3("ntpclient: mode6: Offset %u, count %u, too big for buffer\n",
+			        offset, count);
 			return ENOSPC;
 		}
 		/* check if we've received duplicate 'last' fragments */
 		if (seen_last_frag && !CTL_ISMORE(pkt.r_e_m_op)) {
-			TRACE_L3("ntpclient: mode6: Received second last fragment packet\n");
+			DBG_L3("ntpclient: mode6: Received second last fragment packet\n");
 			continue;
 		}
 
@@ -738,8 +751,8 @@ static int mode6_response(struct sfptpd_ntpclient_state *ntpclient,
 		
 		/* Record fragment, making sure it doesn't overlap anything */
 		if (num_frags > (MAXFRAGS - 1)) {
-			TRACE_L3("ntpclient: mode6: Number of fragments exceeds maximum"
-				 " %d\n", (MAXFRAGS - 1));
+			DBG_L3("ntpclient: mode6: Number of fragments exceeds maximum"
+			       " %d\n", (MAXFRAGS - 1));
 			return EFBIG;
 		}
 		
@@ -753,20 +766,20 @@ static int mode6_response(struct sfptpd_ntpclient_state *ntpclient,
 		}
 		/* Fragment validation checks... */
 		if (frag_idx < num_frags && offset == offsets[frag_idx]) {
-			TRACE_L3("ntpclient: mode6: duplicate %u octets at %u ignored, prior %u"
-				  " at %u\n", count, offset, counts[frag_idx],
-				  offsets[frag_idx]);
+			DBG_L3("ntpclient: mode6: duplicate %u octets at %u ignored, prior %u"
+			        " at %u\n", count, offset, counts[frag_idx],
+			        offsets[frag_idx]);
 			continue;
 		}
 		if (frag_idx > 0 && (offsets[frag_idx-1] + counts[frag_idx-1]) > offset) {
-			TRACE_L3("ntpclient: mode6: received frag at %u overlaps with %u octet"
-				  " frag at %u\n", offset, counts[frag_idx-1],
-				  offsets[frag_idx-1]);
+			DBG_L3("ntpclient: mode6: received frag at %u overlaps with %u octet"
+			        " frag at %u\n", offset, counts[frag_idx-1],
+			        offsets[frag_idx-1]);
 			continue;
 		}
 		if (frag_idx < num_frags && (offset + count) > offsets[frag_idx]) {
-			TRACE_L3("ntpclient: mode6: received %u octet frag at %u overlaps with"
-				  " frag at %u\n", count, offset, offsets[frag_idx]);
+			DBG_L3("ntpclient: mode6: received %u octet frag at %u overlaps with"
+			        " frag at %u\n", count, offset, offsets[frag_idx]);
 			continue;
 		}
 		/* Move all later fragments +1 index to make room for new fragment */
@@ -896,9 +909,9 @@ make_query_data(struct varlist *var_list,
 		total_len = name_len + value_len + (value_len != 0) + (cp != data);
 		/* Check if we've exceeded maximum request string length */
 		if (cp + total_len > cp_end) {
-		    TRACE_L4("ntpclient: mode6: make_query_data: Ignoring variables "
-			     "starting with '%s'\n",
-			     vl->name);
+		    DBG_L4("ntpclient: mode6: make_query_data: Ignoring variables "
+		           "starting with '%s'\n",
+		           vl->name);
 		    break;
 		}
 
@@ -1052,9 +1065,9 @@ static void parse_addr_string(struct sockaddr_storage *sockaddr,
 		address_len--;
 		while (address[i] != ']') {
 			if (i >= address_len) {
-				TRACE_L5("ntpclient: mode6: parse_addr_string: "
-					 "address starting with '[' terminated "
-					 "without matching ']'\n");
+				DBG_L5("ntpclient: mode6: parse_addr_string: "
+				       "address starting with '[' terminated "
+				       "without matching ']'\n");
 				break;
 			}
 			i++;
@@ -1264,10 +1277,10 @@ static int mode6_get_sys_info(struct sfptpd_ntpclient_state *ntpclient,
 				 host, sizeof host,
 				 NULL, 0, NI_NUMERICHOST);
 		if (rc != 0) {
-			TRACE_L4("ntpclient: mode6: getnameinfo: %s\n", gai_strerror(rc));
+			DBG_L4("ntpclient: mode6: getnameinfo: %s\n", gai_strerror(rc));
 		}
 		
-		TRACE_L6("ntp-sys-info: selected-peer-address %s\n", host);
+		DBG_L6("ntp-sys-info: selected-peer-address %s\n", host);
 	} else {
 		if (rc == CERR_UNKNOWNVAR) {
 			/* In cases where mode 7 is not available and the 'peeradr' variable
@@ -1279,8 +1292,8 @@ static int mode6_get_sys_info(struct sfptpd_ntpclient_state *ntpclient,
 		if (rc != ECONNREFUSED) {
 			/* this may be because peeradr is not implemented in this
 			 * instance of ntpd, as I found with rhel 7.1 */
-			TRACE_L3("ntpclient: mode6: failed to get system info from NTP daemon, %s\n",
-				 strerror(rc));
+			DBG_L3("ntpclient: mode6: failed to get system info from NTP daemon, %s\n",
+			       strerror(rc));
 		}
 	}
 
@@ -1315,7 +1328,7 @@ static int mode6_get_peer_info(struct sfptpd_ntpclient_state *ntpclient,
 		return 0;
 
 	if (resp_size == 0) {
-		TRACE_L5("ntpclient: mode6: ntpd did not return any peers\n");
+		DBG_L5("ntpclient: mode6: ntpd did not return any peers\n");
 		return 0;
 	}
 
@@ -1468,8 +1481,8 @@ static int mode6_clock_control(struct sfptpd_ntpclient_state *ntpclient,
 		}
 		else {
 			/* Successfully set clock control */
-			TRACE_L1("ntpclient: mode6: %sabled NTP daemon clock control\n",
-				 enable? "en": "dis");
+			DBG_L1("ntpclient: mode6: %sabled NTP daemon clock control\n",
+			       enable? "en": "dis");
 			ntpclient->features.set_clock_control = true;
 		}	
 	}
