@@ -66,6 +66,38 @@
 #define DBG_L5(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NETLINK, 5, x, ##__VA_ARGS__)
 #define DBG_L6(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NETLINK, 6, x, ##__VA_ARGS__)
 
+struct flag_desc {
+	int flag;
+	const char *name;
+};
+
+const static struct flag_desc if_flag_descs[] = {
+	{ IFF_UP		, "UP" },
+	{ IFF_BROADCAST		, "BROADCAST" },
+	{ IFF_DEBUG		, "DEBUG" },
+	{ IFF_LOOPBACK		, "LOOPPBACK" },
+	{ IFF_POINTOPOINT	, "POINTOPOINT" },
+	{ IFF_NOTRAILERS	, "NOTRAILERS" },
+	{ IFF_RUNNING		, "RUNNING" },
+	{ IFF_NOARP		, "NOARP" },
+	{ IFF_PROMISC		, "PROMISC" },
+	{ IFF_ALLMULTI		, "ALLMULTI" },
+	{ IFF_MASTER		, "MASTER" },
+	{ IFF_SLAVE		, "SLAVE" },
+	{ IFF_MULTICAST		, "MULTICAST" },
+	{ IFF_PORTSEL		, "PORTSEL" },
+	{ IFF_AUTOMEDIA		, "AUTOMEDIA" },
+	{ IFF_DYNAMIC		, "DYNAMIC" },
+	{ 0x10000		, "LOWER_UP" },
+	{ 0, NULL }
+};
+
+/* Only act on changes in flags that should cause the application to change
+ * behaviour. */
+const static int significant_flags = IFF_UP | IFF_RUNNING | IFF_MASTER |
+				     IFF_SLAVE | IFF_MULTICAST | 0x10000 |
+				     IFF_LOOPBACK | IFF_NOARP;
+
 #ifdef HAVE_TEAMING
 #define NUM_GROUPS 2
 #define GRP_CTRL 0
@@ -148,14 +180,47 @@ static struct nlmsghdr *netlink_create_team_query(struct nl_conn_state *conn,
  * Local Functions
  ****************************************************************************/
 
+static int snprint_flags_delta(char *buf, size_t space, int flags1, int flags2)
+{
+	const struct flag_desc *flag;
+	int total = 0;
+	int len;
+
+	for (flag = if_flag_descs; flag->flag != 0; flag++) {
+		if ((flags1 & flag->flag) !=
+		    (flags2 & flag->flag)) {
+			len = snprintf(buf, space, "%s%c%s",
+				       total != 0 ? " " : "",
+				       flags2 & flag->flag ? '+' : '-',
+				       flag->name);
+			if (len >= space) {
+				buf = NULL;
+			} else {
+				buf += len;
+			}
+			space -= len;
+			total += len;
+		}
+		flags1 &= ~flag->flag;
+		flags2 &= ~flag->flag;
+	}
+
+	if (flags1 != 0 || flags2 != 0) {
+		total += snprintf(buf, space, " -%x +%x", flags1, flags2);
+	}
+
+	return total;
+}
+
+
 static void print_link(struct sfptpd_link *link)
 {
 	DBG_L4("if %d name %s event %s link %d kind %s type %d flags %x family %d master %d type %d bond_mode %d active_slave %d is_slave %d vlan %d\n",
 	       link->if_index, link->if_name, sfptpd_link_event_str(link->event),
-           link->if_link, link->if_kind, link->if_type, link->if_flags,
-           link->if_family, link->bond.if_master, link->type,
-           link->bond.bond_mode, link->bond.active_slave, link->is_slave,
-           link->vlan_id);
+               link->if_link, link->if_kind, link->if_type, link->if_flags,
+               link->if_family, link->bond.if_master, link->type,
+               link->bond.bond_mode, link->bond.active_slave, link->is_slave,
+               link->vlan_id);
 }
 
 static int link_attr_cb(const struct nlattr *attr, void *data)
@@ -1317,8 +1382,21 @@ int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 				event = SFPTPD_LINK_CHANGE;
 			}
 			if (a->if_flags != b->if_flags) {
-				DBG_L1("if_flags changed %x -> %x\n", a->if_flags, b->if_flags);
-				event = SFPTPD_LINK_CHANGE;
+				char flags[256];
+				int sig_a, sig_b;
+
+				/* ignore truncation of flag text: this is diagnostic */
+				snprint_flags_delta(flags, sizeof flags, a->if_flags, b->if_flags);
+
+				DBG_L3("if_flags (any) changed %x -> %x (%s)\n", a->if_flags, b->if_flags, flags);
+				sig_a = a->if_flags & significant_flags;
+				sig_b = b->if_flags & significant_flags;
+				if (sig_a != sig_b) {
+					snprint_flags_delta(flags, sizeof flags, sig_a, sig_b);
+
+					DBG_L1("if_flags (significant) changed %x -> %x (%s)\n", sig_a, sig_b, flags);
+					       event = SFPTPD_LINK_CHANGE;
+				}
 			}
 			if (a->bond.if_master != b->bond.if_master) {
 				DBG_L1("if_master changed %d -> %d\n", a->bond.if_master, b->bond.if_master);
