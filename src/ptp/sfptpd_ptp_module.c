@@ -800,9 +800,12 @@ static bool ptp_is_instance_hw_timestamping(struct sfptpd_ptp_instance *instance
 
 
 static bool ptp_is_interface_hw_timestamping(struct sfptpd_ptp_intf *logical,
-					     struct sfptpd_interface *physical)
+					     struct sfptpd_interface *physical,
+					     ptpd_timestamp_type_e logical_ts)
 {
-	return ((!logical || logical->representative_config->ptpd_intf.timestampType != PTPD_TIMESTAMP_TYPE_SW) &&
+	if (logical && logical_ts == PTPD_TIMESTAMP_TYPE_AUTO)
+		logical_ts = logical->representative_config->ptpd_intf.timestampType;
+	return ((!logical || logical_ts != PTPD_TIMESTAMP_TYPE_SW) &&
 	        (!physical || sfptpd_interface_supports_ptp(physical)));
 }
 
@@ -853,7 +856,8 @@ static void ptp_timestamp_filtering_deconfigure_one(struct sfptpd_interface *int
 
 static int ptp_timestamp_filtering_configure_one(struct sfptpd_ptp_intf *intf,
 						 struct sfptpd_interface *interface,
-						 bool enable_uuid_filtering)
+						 bool enable_uuid_filtering,
+						 bool already_checked)
 {
 	int rc;
 	sfptpd_ptp_module_config_t *config;
@@ -874,7 +878,7 @@ static int ptp_timestamp_filtering_configure_one(struct sfptpd_ptp_intf *intf,
 	/* If we are not using hardware timestamping for this logical PTP
 	 * interface or the physical interface does not support timestamping
          * then do not configure it. */
-	if (!ptp_is_interface_hw_timestamping(intf, interface))
+	if (!ptp_is_interface_hw_timestamping(intf, interface, PTPD_TIMESTAMP_TYPE_AUTO) && !already_checked)
 		return 0;
 
 	/* If the interface is a Solarflare Siena based PTP adapter, i.e. it
@@ -948,7 +952,7 @@ static void ptp_timestamp_filtering_deconfigure_all(struct sfptpd_ptp_intf *intf
 	if (!general_cfg->timestamping.disable_on_exit)
 		return;
 
-	if (!ptp_is_interface_hw_timestamping(intf, NULL))
+	if (!ptp_is_interface_hw_timestamping(intf, NULL, PTPD_TIMESTAMP_TYPE_AUTO))
 		return;
 
 	TRACE_L3("ptp: deconfiguring timestamp filtering on %s:*\n",
@@ -975,7 +979,7 @@ static int ptp_timestamp_filtering_configure_all(struct sfptpd_ptp_intf *intf)
 	error = 0;
 	for (i = 0; i < bond_info->num_physical_ifs; i++) {
 		rc = ptp_timestamp_filtering_configure_one(intf, bond_info->physical_ifs[i],
-							   false);
+							   false, false);
 		if (rc != 0)
 			error = rc;
 	}
@@ -985,7 +989,8 @@ static int ptp_timestamp_filtering_configure_all(struct sfptpd_ptp_intf *intf)
 
 
 static void ptp_timestamp_filtering_reconfigure_all(struct sfptpd_ptp_intf *intf,
-						    struct sfptpd_ptp_bond_info *new_bond_info)
+						    struct sfptpd_ptp_bond_info *new_bond_info,
+						    ptpd_timestamp_type_e new_active_intf_mode)
 {
 	unsigned int i, j;
 	struct sfptpd_interface *candidate;
@@ -1017,7 +1022,7 @@ static void ptp_timestamp_filtering_reconfigure_all(struct sfptpd_ptp_intf *intf
 			     old_bond_info->bond_if,
 			     sfptpd_interface_get_name(candidate));
 
-			if (ptp_is_interface_hw_timestamping(intf, candidate))
+			if (ptp_is_interface_hw_timestamping(intf, candidate, PTPD_TIMESTAMP_TYPE_AUTO))
 				ptp_timestamp_filtering_deconfigure_one(candidate);
 		}
 	}
@@ -1041,8 +1046,16 @@ static void ptp_timestamp_filtering_reconfigure_all(struct sfptpd_ptp_intf *intf
 
 		/* Enable timestamping on all interfaces to avoid races.
 		   The interface module knows if they're already enabled. */
-		if (ptp_is_interface_hw_timestamping(intf, candidate))
-			(void)ptp_timestamp_filtering_configure_one(intf, candidate, true);
+		if (candidate == new_bond_info->active_if) {
+			if (ptp_is_interface_hw_timestamping(intf, candidate,
+							     new_active_intf_mode))
+				(void)ptp_timestamp_filtering_configure_one(intf, candidate, true, true);
+		} else {
+			if (ptp_is_interface_hw_timestamping(intf, candidate,
+							     PTPD_TIMESTAMP_TYPE_AUTO))
+				(void)ptp_timestamp_filtering_configure_one(intf, candidate, true, true);
+		}
+
 	}
 }
 
@@ -1071,7 +1084,7 @@ static void ptp_timestamp_filtering_set_uuid(struct sfptpd_ptp_intf *intf,
 
 		/* If we are using UUID filtering and this is a Siena based
 		 * PTP adapters, configure the filter. */
-		if (ptp_is_interface_hw_timestamping(intf, interface) &&
+		if (ptp_is_interface_hw_timestamping(intf, interface, PTPD_TIMESTAMP_TYPE_AUTO) &&
 		    config->uuid_filtering &&
 		    sfptpd_interface_is_siena(interface)) {
 			sfptpd_interface_hw_timestamping_disable(interface);
@@ -1773,6 +1786,8 @@ static int ptp_handle_bonding_interface_change(struct sfptpd_ptp_intf *intf,
 	const struct sfptpd_link *logical_link;
 	ptpd_timestamp_type_e timestamp_type;
 	int rc;
+	bool set_changed;
+	bool active_changed;
 
 	assert(intf != NULL);
 	assert(intf->ptpd_intf_private != NULL);
@@ -1808,11 +1823,21 @@ static int ptp_handle_bonding_interface_change(struct sfptpd_ptp_intf *intf,
 		return EIO;
 	}
 
+	/* Work out the correct time mode to use based on whether the NIC is
+	 * PTP-capable or not. */
+	rc = ptp_determine_timestamp_type(&timestamp_type, intf,
+					  new_bond_info.active_if);
+	if (rc != 0)
+		return rc;
+
 	/* If the set of slave interfaces has changed, we need to reconfigure
 	 * timestamping. */
-	if ((new_bond_info.num_physical_ifs != intf->bond_info.num_physical_ifs) ||
-	    (memcmp(new_bond_info.physical_ifs, &intf->bond_info.physical_ifs,
-				sizeof(new_bond_info.physical_ifs[0]) * new_bond_info.num_physical_ifs) != 0)) {
+	set_changed = (new_bond_info.num_physical_ifs != intf->bond_info.num_physical_ifs) ||
+		      (memcmp(new_bond_info.physical_ifs, &intf->bond_info.physical_ifs,
+			      sizeof(new_bond_info.physical_ifs[0]) * new_bond_info.num_physical_ifs) != 0);
+	active_changed = (new_bond_info.active_if != intf->bond_info.active_if);
+
+	if (set_changed) {
 		INFO("ptp: interface %s number or set of slave interfaces changed (%d -> %d)\n",
 		     intf->bond_info.bond_if, intf->bond_info.num_physical_ifs,
 		     new_bond_info.num_physical_ifs);
@@ -1825,10 +1850,13 @@ static int ptp_handle_bonding_interface_change(struct sfptpd_ptp_intf *intf,
 		 * fatal error in this case so instead, we just warn and
 		 * continue anyway. */
 		(void)ptp_check_clock_discipline_flags(intf, &new_bond_info);
+	}
 
+	if (set_changed || active_changed) {
 		/* Reconfigure timestamping based on any changes to the
 		 * interface set. */
-		ptp_timestamp_filtering_reconfigure_all(intf, &new_bond_info);
+		ptp_timestamp_filtering_reconfigure_all(intf, &new_bond_info,
+							timestamp_type);
 	}
 
 	/* If the active interface hasn't changed, just return now */
@@ -1849,13 +1877,6 @@ static int ptp_handle_bonding_interface_change(struct sfptpd_ptp_intf *intf,
 
 	/* Determine the new PTP clock for the new active i/f */
 	new_clock = sfptpd_interface_get_clock(new_bond_info.active_if);
-
-	/* Work out the correct time mode to use based on whether the NIC is
-	 * PTP-capable or not. */
-	rc = ptp_determine_timestamp_type(&timestamp_type, intf,
-					  new_bond_info.active_if);
-	if (rc != 0)
-		return rc;
 
 	/* Reconfigure PTPD to use the new interface */
 	rc = ptpd_change_interface(intf->ptpd_intf_private, new_bond_info.logical_if,
