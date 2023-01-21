@@ -360,6 +360,21 @@ static void ptp_send_rt_stats_update(struct sfptpd_ptp_module *ptp,
  * Internal Functions
  ****************************************************************************/
 
+static const char *ts_name(ptpd_timestamp_type_e type)
+{
+	switch (type) {
+	case PTPD_TIMESTAMP_TYPE_AUTO:
+		return "auto";
+	case PTPD_TIMESTAMP_TYPE_SW:
+		return "sw";
+	case PTPD_TIMESTAMP_TYPE_HW_RAW:
+		return "hw";
+	default:
+		return "invalid";
+	}
+}
+
+
 static sfptpd_sync_module_state_t ptp_translate_state(ptpd_state_e ptpd_port_state)
 {
 	sfptpd_sync_module_state_t sfptpd_port_state;
@@ -784,8 +799,8 @@ static void ptp_stats_update(sfptpd_ptp_instance_t *instance)
 
 
 /* Return a configuration object suitable for accessing interface-level options */
-static sfptpd_ptp_module_config_t *ptp_get_config_for_interface(struct sfptpd_ptp_intf *intf) {
-
+static sfptpd_ptp_module_config_t *ptp_get_config_for_interface(struct sfptpd_ptp_intf *intf)
+{
 	assert(intf);
 	assert(intf->representative_config);
 
@@ -793,9 +808,24 @@ static sfptpd_ptp_module_config_t *ptp_get_config_for_interface(struct sfptpd_pt
 }
 
 
+static bool ptp_is_ptpd_interface_hw_timestamping(struct sfptpd_ptp_intf *intf)
+{
+	ptpd_timestamp_type_e mode;
+
+	if (intf->ptpd_intf_private == NULL) {
+		/* At startup use configuration value */
+		mode = intf->representative_config->ptpd_intf.timestampType;
+	} else {
+		mode = ptpd_get_timestamping(intf->ptpd_intf_private);
+	}
+
+	return mode != PTPD_TIMESTAMP_TYPE_SW;
+}
+
+
 static bool ptp_is_instance_hw_timestamping(struct sfptpd_ptp_instance *instance)
 {
-	return instance->config->ptpd_intf.timestampType != PTPD_TIMESTAMP_TYPE_SW;
+	return ptp_is_ptpd_interface_hw_timestamping(instance->intf);
 }
 
 
@@ -803,9 +833,11 @@ static bool ptp_is_interface_hw_timestamping(struct sfptpd_ptp_intf *logical,
 					     struct sfptpd_interface *physical,
 					     ptpd_timestamp_type_e logical_ts)
 {
+	bool logical_is_hw = (logical_ts != PTPD_TIMESTAMP_TYPE_SW);
+
 	if (logical && logical_ts == PTPD_TIMESTAMP_TYPE_AUTO)
-		logical_ts = logical->representative_config->ptpd_intf.timestampType;
-	return ((!logical || logical_ts != PTPD_TIMESTAMP_TYPE_SW) &&
+		logical_is_hw = ptp_is_ptpd_interface_hw_timestamping(logical);
+	return ((!logical || logical_is_hw) &&
 	        (!physical || sfptpd_interface_supports_ptp(physical)));
 }
 
@@ -1788,6 +1820,7 @@ static int ptp_handle_bonding_interface_change(struct sfptpd_ptp_intf *intf,
 	int rc;
 	bool set_changed;
 	bool active_changed;
+	bool ts_changed;
 
 	assert(intf != NULL);
 	assert(intf->ptpd_intf_private != NULL);
@@ -1810,7 +1843,8 @@ static int ptp_handle_bonding_interface_change(struct sfptpd_ptp_intf *intf,
 	if (logical_link == NULL) {
 		ERROR("ptp: could not find interface %s in link table\n",
 		      intf->bond_info.bond_if, strerror(errno));
-		return errno;
+		rc = errno;
+		goto finish;
 	}
 
 	/* Take a copy of the interface configuration and reparse the bond
@@ -1820,7 +1854,8 @@ static int ptp_handle_bonding_interface_change(struct sfptpd_ptp_intf *intf,
 	if (rc != 0 && rc != ENOENT && rc != ENODEV) {
 		CRITICAL("ptp: interface %s error parsing bond configuration\n",
 			 intf->bond_info.bond_if);
-		return EIO;
+		rc = EIO;
+		goto finish;
 	}
 
 	/* Work out the correct time mode to use based on whether the NIC is
@@ -1828,7 +1863,7 @@ static int ptp_handle_bonding_interface_change(struct sfptpd_ptp_intf *intf,
 	rc = ptp_determine_timestamp_type(&timestamp_type, intf,
 					  new_bond_info.active_if);
 	if (rc != 0)
-		return rc;
+		goto finish;
 
 	/* If the set of slave interfaces has changed, we need to reconfigure
 	 * timestamping. */
@@ -1836,6 +1871,7 @@ static int ptp_handle_bonding_interface_change(struct sfptpd_ptp_intf *intf,
 		      (memcmp(new_bond_info.physical_ifs, &intf->bond_info.physical_ifs,
 			      sizeof(new_bond_info.physical_ifs[0]) * new_bond_info.num_physical_ifs) != 0);
 	active_changed = (new_bond_info.active_if != intf->bond_info.active_if);
+	ts_changed = (timestamp_type != intf->ptpd_intf_private->ifOpts.timestampType);
 
 	if (set_changed) {
 		INFO("ptp: interface %s number or set of slave interfaces changed (%d -> %d)\n",
@@ -1852,59 +1888,71 @@ static int ptp_handle_bonding_interface_change(struct sfptpd_ptp_intf *intf,
 		(void)ptp_check_clock_discipline_flags(intf, &new_bond_info);
 	}
 
-	if (set_changed || active_changed) {
+	if (ts_changed) {
+		INFO("ptp: interface %s timestamping changed %s -> %s\n",
+		     intf->bond_info.bond_if,
+		     ts_name(intf->ptpd_intf_private->ifOpts.timestampType),
+		     ts_name(timestamp_type));
+	}
+
+	if (set_changed || active_changed || ts_changed) {
 		/* Reconfigure timestamping based on any changes to the
 		 * interface set. */
 		ptp_timestamp_filtering_reconfigure_all(intf, &new_bond_info,
 							timestamp_type);
 	}
 
-	/* If the active interface hasn't changed, just return now */
-	if (new_bond_info.active_if == intf->bond_info.active_if) {
-		/* Something has changed so save the new config */
-		intf->bond_info = new_bond_info;
-		return 0;
+	if (active_changed) {
+		INFO("ptp: interface %s changed %s (%s) -> %s (%s)\n",
+		     intf->bond_info.bond_if,
+		     sfptpd_interface_get_name(intf->bond_info.active_if),
+		     intf->bond_info.logical_if,
+		     sfptpd_interface_get_name(new_bond_info.active_if),
+		     new_bond_info.logical_if);
 	}
 
-	INFO("ptp: interface %s changed %s (%s) -> %s (%s)\n",
-	     intf->bond_info.bond_if,
-	     sfptpd_interface_get_name(intf->bond_info.active_if),
-	     intf->bond_info.logical_if,
-	     sfptpd_interface_get_name(new_bond_info.active_if),
-	     new_bond_info.logical_if);
+	*bond_changed = active_changed || ts_changed;
 
-	*bond_changed = true;
-
-	/* Determine the new PTP clock for the new active i/f */
-	new_clock = sfptpd_interface_get_clock(new_bond_info.active_if);
+	if (active_changed) {
+		/* Determine the new PTP clock for the new active i/f */
+		new_clock = sfptpd_interface_get_clock(new_bond_info.active_if);
+	}
 
 	/* Reconfigure PTPD to use the new interface */
-	rc = ptpd_change_interface(intf->ptpd_intf_private, new_bond_info.logical_if,
-				   new_bond_info.active_if, timestamp_type);
-	if (rc != 0 && rc != ENOENT) {
+	if (active_changed || ts_changed) {
+		rc = ptpd_change_interface(intf->ptpd_intf_private, new_bond_info.logical_if,
+					   new_bond_info.active_if, timestamp_type);
+	} else {
+		rc = 0;
+	}
+
+	if (active_changed && rc != 0 && rc != ENOENT) {
 		CRITICAL("ptp %s: failed to change interface from %s (%s) to %s (%s)\n",
 			 intf->bond_info.bond_if,
 			 sfptpd_interface_get_name(intf->bond_info.active_if),
 			 intf->bond_info.logical_if,
 			 sfptpd_interface_get_name(new_bond_info.active_if),
 			 new_bond_info.logical_if);
-		return rc;
+	} else if (ts_changed && rc != 0 && rc != ENOENT) {
+		CRITICAL("ptp %s: failed to change timesetamping\n",
+			 intf->bond_info.bond_if);
 	}
 
+	/* Store the new PTP clock and the new interface configuration */
+	intf->bond_info = new_bond_info;
+	if (active_changed)
+		intf->clock = new_clock;
+
+finish:
 	/* Set alarm based on interface availability */
 	for (instance = intf->instance_list; instance; instance = instance->next) {
-		if (rc == 0) {
+		if (rc == 0 && new_bond_info.num_physical_ifs != 0) {
 			SYNC_MODULE_ALARM_CLEAR(instance->local_alarms, NO_INTERFACE);
 		} else {
 			SYNC_MODULE_ALARM_SET(instance->local_alarms, NO_INTERFACE);
 		}
 	}
-
-	/* Store the new PTP clock and the new interface configuration */
-	intf->bond_info = new_bond_info;
-	intf->clock = new_clock;
-
-	return 0;
+	return rc;
 }
 
 
@@ -3717,6 +3765,9 @@ static int ptp_start_instance(struct sfptpd_ptp_instance *instance) {
 			 config->interface_name);
 		goto fail;
 	}
+
+	if (instance->intf->bond_info.num_physical_ifs == 0)
+		SYNC_MODULE_ALARM_SET(instance->local_alarms, NO_INTERFACE);
 
 	rc = ptp_stats_init(instance);
 	if (rc != 0) {

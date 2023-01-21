@@ -538,6 +538,14 @@ void ptpd_step_clock(struct ptpd_port_context *ptpd, struct timespec *offset)
 }
 
 
+ptpd_timestamp_type_e ptpd_get_timestamping(struct ptpd_intf_context *ptpd_if)
+{
+	assert(ptpd_if != NULL);
+
+	return ptpd_if->ifOpts.timestampType;
+}
+
+
 int ptpd_change_interface(struct ptpd_intf_context *ptpd_if, Octet *logical_iface_name,
 			  struct sfptpd_interface *physical_iface,
 			  ptpd_timestamp_type_e timestamp_type)

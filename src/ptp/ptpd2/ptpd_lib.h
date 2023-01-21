@@ -146,6 +146,8 @@ void ptpd_update_leap_second(struct ptpd_port_context *ptpd,
 /* Step the clock by the specified amount */
 void ptpd_step_clock(struct ptpd_port_context *ptpd, struct timespec *offset);
 
+/* Get the current timestamping mode */
+ptpd_timestamp_type_e ptpd_get_timestamping(struct ptpd_intf_context *ptpd_if);
 
 /* Change the interface being used for PTP */
 int ptpd_change_interface(struct ptpd_intf_context *ptpd, Octet *logical_iface_name,
