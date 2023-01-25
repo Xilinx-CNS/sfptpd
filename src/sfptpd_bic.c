@@ -53,6 +53,7 @@ const struct sfptpd_selection_policy sfptpd_default_selection_policy = {
 	SFPTPD_SELECTION_STRATEGY_AUTOMATIC,
 	{
 		SELECTION_RULE_MANUAL,
+		SELECTION_RULE_EXT_CONSTRAINTS,
 		SELECTION_RULE_STATE,
 		SELECTION_RULE_NO_ALARMS,
 		SELECTION_RULE_USER_PRIORITY,
@@ -69,6 +70,7 @@ const struct sfptpd_selection_policy sfptpd_default_selection_policy = {
 
 const char *sfptpd_selection_rule_names[SELECTION_RULE_MAX] = {
 	[SELECTION_RULE_MANUAL] = "manual",
+	[SELECTION_RULE_EXT_CONSTRAINTS] = "ext-constraints",
 	[SELECTION_RULE_STATE] = "state",
 	[SELECTION_RULE_NO_ALARMS] = "no-alarms",
 	[SELECTION_RULE_USER_PRIORITY] = "user-priority",
@@ -115,6 +117,17 @@ static const char *get_selection_rule_name(enum sfptpd_selection_rule rule)
 }
 
 
+static int ext_constraint_priority(sfptpd_sync_module_constraints_t constraints)
+{
+	if (SYNC_MODULE_CONSTRAINT_TEST(constraints, MUST_BE_SELECTED))
+		return -1;
+	else if(SYNC_MODULE_CONSTRAINT_TEST(constraints, CANNOT_BE_SELECTED))
+		return 1;
+	else
+		return 0;
+}
+
+
 /** Select between two instances for the "best" clock
  *
  * See sfptpd_config.h for selection algorithm
@@ -139,6 +152,9 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 	int state_priority_b;
 	struct sync_instance_record *choice;
 	int rule_idx;
+	int difference;
+	char constraints_a[SYNC_MODULE_CONSTRAINT_ALL_TEXT_MAX];
+	char constraints_b[SYNC_MODULE_CONSTRAINT_ALL_TEXT_MAX];
 
 	assert (NULL != instance_record_a);
 	assert (NULL != instance_record_b);
@@ -170,6 +186,22 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 			if (instance_record_a->selected)
 				choice = instance_record_a;
 			else if (instance_record_b->selected)
+				choice = instance_record_b;
+			break;
+		case SELECTION_RULE_EXT_CONSTRAINTS:
+			sfptpd_sync_module_constraints_text(status_a->constraints,
+							    constraints_a, sizeof constraints_a);
+			sfptpd_sync_module_constraints_text(status_b->constraints,
+							    constraints_b, sizeof constraints_b);
+
+			DBG_L3("selection%s:   comparing %s: [%s], [%s]\n",
+			       phase, rule_name, constraints_a, constraints_b);
+
+			difference = ext_constraint_priority(status_a->constraints) -
+				     ext_constraint_priority(status_b->constraints);
+			if (difference < 0)
+				choice = instance_record_a;
+			else if (difference > 0)
 				choice = instance_record_b;
 			break;
 		case SELECTION_RULE_STATE:

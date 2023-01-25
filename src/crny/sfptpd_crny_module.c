@@ -180,6 +180,9 @@ typedef struct sfptpd_crny_module {
 	/* Which elements of the NTP daemon are enabled */
 	sfptpd_sync_module_ctrl_flags_t ctrl_flags;
 
+	/* Constraints */
+	sfptpd_sync_module_constraints_t constraints;
+
 	/* NTP daemon query state. */
 	enum ntp_query_state query_state;
 	int query_src_idx;
@@ -711,7 +714,7 @@ static void unblock_clock(crny_module_t *ntp)
 	}
 }
 
-static bool clock_control_at_launch(void)
+static bool clock_control_at_launch(crny_module_t *ntp)
 {
 	pid_t pid;
 	int fd;
@@ -778,6 +781,19 @@ static bool clock_control_at_launch(void)
 	close(fd);
 
 finish:
+	if (!assume_absent && strlen(ntp->config->chronyd_script) == 0) {
+		if (state == OPT_X) {
+			SYNC_MODULE_CONSTRAINT_SET(ntp->constraints, CANNOT_BE_SELECTED);
+			SYNC_MODULE_CONSTRAINT_CLEAR(ntp->constraints, MUST_BE_SELECTED);
+		} else {
+			SYNC_MODULE_CONSTRAINT_SET(ntp->constraints, MUST_BE_SELECTED);
+			SYNC_MODULE_CONSTRAINT_CLEAR(ntp->constraints, CANNOT_BE_SELECTED);
+		}
+	} else {
+		SYNC_MODULE_CONSTRAINT_CLEAR(ntp->constraints, MUST_BE_SELECTED);
+		SYNC_MODULE_CONSTRAINT_CLEAR(ntp->constraints, CANNOT_BE_SELECTED);
+	}
+
 	return assume_absent || state == OPT_X ? 0 : 1;
 }
 
@@ -831,7 +847,7 @@ int crny_configure_ntpd(crny_module_t *ntp)
 	/* Assume that the NTP daemon is controlling the system clock until the
 	 * NTP client tells us otherwise (Note: this is updated as part of the
 	 * sys_info struct) */
-	if ((ntp->state.sys_info.clock_control_enabled = clock_control_at_launch()))
+	if ((ntp->state.sys_info.clock_control_enabled = clock_control_at_launch(ntp)))
 		block_clock(ntp);
 
 	return 0;
@@ -992,7 +1008,7 @@ static int handle_get_sys_info(crny_module_t *ntp)
 		       rc == 0 ? host : gai_strerror(rc));
 	}
 
-	bool clock_control = clock_control_at_launch();
+	bool clock_control = clock_control_at_launch(ntp);
 	sys_info.clock_control_enabled = clock_control;
 
 	next_state->sys_info = sys_info;
@@ -1473,6 +1489,7 @@ static bool ntp_handle_state_change(crny_module_t *ntp,
 		 * that the state of the NTP module has changed. */
 		status.state = new_state->state;
 		status.alarms = new_state->alarms;
+		status.constraints = ntp->constraints;
 		status.clock = sfptpd_clock_get_system_clock();
 		status.user_priority = ntp->config->priority;
 
@@ -1584,7 +1601,7 @@ static int do_clock_control(crny_module_t *ntp,
 	if (!have_control)
 		return ENOSYS; /* Functionality not available */
 
-	clock_control = clock_control_at_launch();
+	clock_control = clock_control_at_launch(ntp);
 
 	if ((op_req == CRNY_CTRL_OP_ENABLE && clock_control) ||
 	    (op_req == CRNY_CTRL_OP_DISABLE && !clock_control))
@@ -1729,6 +1746,7 @@ static void ntp_on_get_status(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 	status = &msg->u.get_status_resp.status;
 	status->state = ntp->state.state;
 	status->alarms = ntp->state.alarms;
+	status->constraints = ntp->constraints;
 	/* The reference clock for NTP is always the system clock */
 	status->clock = sfptpd_clock_get_system_clock();
 	status->user_priority = ntp->config->priority;
@@ -1784,7 +1802,7 @@ static void ntp_on_control(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 	if (ntp->running_phase &&
 	    (flags ^ ntp->ctrl_flags) & SYNC_MODULE_CLOCK_CTRL) {
 		bool clock_control = ((flags & SYNC_MODULE_CLOCK_CTRL) != 0);
-		bool clock_controlling = clock_control_at_launch();
+		bool clock_controlling = clock_control_at_launch(ntp);
 
 		if (!!clock_control != !!clock_controlling) {
 			/* Check if we can actually effect any control. */
@@ -1839,12 +1857,15 @@ static void ntp_on_save_state(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 {
 	struct sfptpd_clock *clock;
 	unsigned int num_candidates, i;
-	char alarms[256], flags[256];
+	char constraints[SYNC_MODULE_CONSTRAINT_ALL_TEXT_MAX];
+	char alarms[SYNC_MODULE_ALARM_ALL_TEXT_MAX];
+	char flags[256];
 
 	assert(ntp != NULL);
 	assert(msg != NULL);
 
 	sfptpd_sync_module_alarms_text(ntp->state.alarms, alarms, sizeof(alarms));
+	sfptpd_sync_module_constraints_text(ntp->constraints, constraints, sizeof(constraints));
 	sfptpd_sync_module_ctrl_flags_text(ntp->ctrl_flags, flags, sizeof(flags));
 
 	clock = sfptpd_clock_get_system_clock();
@@ -1875,6 +1896,7 @@ static void ntp_on_save_state(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 			"clock-name: %s\n"
 			"state: %s\n"
 			"alarms: %s\n"
+			"constraints: %s\n"
 			"control-flags: %s\n"
 			"offset-from-peer: " SFPTPD_FORMAT_FLOAT "\n"
 			"in-sync: %d\n"
@@ -1885,7 +1907,7 @@ static void ntp_on_save_state(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 			SFPTPD_CONFIG_GET_NAME(ntp->config),
 			sfptpd_clock_get_long_name(clock),
 			crny_state_text(ntp->state.state, 0),
-			alarms, flags, peer->offset,
+			alarms, constraints, flags, peer->offset,
 			ntp->state.synchronized,
 			host,
 			ntp->state.peer_info.num_peers,
@@ -1898,13 +1920,14 @@ static void ntp_on_save_state(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 			"clock-name: %s\n"
 			"state: %s\n"
 			"alarms: %s\n"
+			"constraints: %s\n"
 			"control-flags: %s\n"
 			"num-peers: %d\n"
 			"num-candidates: %d\n",
 			SFPTPD_CONFIG_GET_NAME(ntp->config),
 			sfptpd_clock_get_long_name(clock),
 			crny_state_text(ntp->state.state, 0),
-			alarms, flags,
+			alarms, constraints, flags,
 			ntp->state.peer_info.num_peers,
 			num_candidates);
 	}
@@ -2083,7 +2106,7 @@ static void ntp_on_run(crny_module_t *ntp)
 
 	rc = EOPNOTSUPP;
 	if (ntp->ctrl_flags & SYNC_MODULE_CLOCK_CTRL &&
-	    !clock_control_at_launch()) {
+	    !clock_control_at_launch(ntp)) {
 		if (have_control)
 			rc = crny_clock_control(ntp, true);
 		if (!have_control || rc != 0) {
@@ -2092,7 +2115,7 @@ static void ntp_on_run(crny_module_t *ntp)
 			ntp->ctrl_flags &= ~SYNC_MODULE_CLOCK_CTRL;
 		}
 	} else if ((ntp->ctrl_flags & SYNC_MODULE_CLOCK_CTRL) == 0 &&
-		    clock_control_at_launch()) {
+		    clock_control_at_launch(ntp)) {
 		if (have_control)
 			rc = crny_clock_control(ntp, false);
 		if ((!have_control || rc != 0) &&

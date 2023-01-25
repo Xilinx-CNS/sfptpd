@@ -88,6 +88,15 @@ const struct sync_module_bitmask_to_text_map alarm_texts[] = {
 STATIC_ASSERT(1 << (sizeof(alarm_texts) / sizeof(*alarm_texts)) == SYNC_MODULE_ALARM_MAX);
 
 
+const struct sync_module_bitmask_to_text_map constraint_texts[] = {
+	{SYNC_MODULE_CONSTRAINT_MUST_BE_SELECTED,     "must-be-selected"},
+	{SYNC_MODULE_CONSTRAINT_CANNOT_BE_SELECTED,   "cannot-be-selected"},
+
+};
+
+STATIC_ASSERT(1 << (sizeof(constraint_texts) / sizeof(*constraint_texts)) == SYNC_MODULE_CONSTRAINT_MAX);
+
+
 const char *sync_module_state_text[] = {
     "listening",        /* SYNC_MODULE_STATE_LISTENING */
     "slave",            /* SYNC_MODULE_STATE_SLAVE */
@@ -228,6 +237,14 @@ void sfptpd_sync_module_alarms_text(sfptpd_sync_module_alarms_t alarms,
 {
 	sync_module_bitmask_to_text(alarms, buffer, buffer_size, alarm_texts,
 				    sizeof(alarm_texts)/sizeof(alarm_texts[0]));
+}
+
+
+void sfptpd_sync_module_constraints_text(sfptpd_sync_module_constraints_t constraints,
+					 char *buffer, unsigned int buffer_size)
+{
+	sync_module_bitmask_to_text(constraints, buffer, buffer_size, constraint_texts,
+				    sizeof(constraint_texts)/sizeof(constraint_texts[0]));
 }
 
 

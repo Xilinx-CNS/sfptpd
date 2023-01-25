@@ -146,6 +146,28 @@ typedef unsigned int sfptpd_sync_module_alarms_t;
 	0)
 
 
+/** Sync instance externally constrained always to control clock */
+#define SYNC_MODULE_CONSTRAINT_MUST_BE_SELECTED      (1<<0)
+/** Sync instance externally constrained never to control clock */
+#define SYNC_MODULE_CONSTRAINT_CANNOT_BE_SELECTED    (1<<1)
+/** Invalid: any constraint value >= to this will trigger an assertion failure! */
+#define SYNC_MODULE_CONSTRAINT_MAX                   (1<<2)
+
+/** Type used to hold bitfield of external constraint flags */
+typedef unsigned int sfptpd_sync_module_constraints_t;
+
+/** Test if an external constaint flag is set */
+#define SYNC_MODULE_CONSTRAINT_TEST(s, a)     (((s) & SYNC_MODULE_CONSTRAINT_##a) != 0)
+/** Set an external constraint */
+#define SYNC_MODULE_CONSTRAINT_SET(s, a)      ((s) = (s) | SYNC_MODULE_CONSTRAINT_##a)
+/** Clear an external constraint */
+#define SYNC_MODULE_CONSTRAINT_CLEAR(s, a)    ((s) = (s) & ~(SYNC_MODULE_CONSTRAINT_##a))
+
+
+/** A reasonable size to hold all alarm text that needs rendering */
+#define SYNC_MODULE_CONSTRAINT_ALL_TEXT_MAX		   (80)
+
+
 /** Information about the currently selected Grandmaster
  * @clock_id Clock identity of grandmaster
  * @remote_clock Indicates that the grandmaster is a remote clock i.e.
@@ -188,6 +210,7 @@ struct sfptpd_grandmaster_info {
 typedef struct sfptpd_sync_instance_status {
 	sfptpd_sync_module_state_t state;
 	sfptpd_sync_module_alarms_t alarms;
+	sfptpd_sync_module_constraints_t constraints;
 	struct sfptpd_clock *clock;
 	struct timespec offset_from_master;
 	unsigned int user_priority;
@@ -249,6 +272,14 @@ void sfptpd_sync_module_alarms_stream(FILE *stream,
  */
 void sfptpd_sync_module_alarms_text(sfptpd_sync_module_alarms_t alarms,
 				    char *buffer, unsigned int buffer_size);
+
+/** Convert a set of external constraints into a textual string
+ * @param alarms  Bitmask of constraints
+ * @param buffer  Pointer to buffer to store textual representation
+ * @param size  Size of output buffer.
+ */
+void sfptpd_sync_module_constraints_text(sfptpd_sync_module_constraints_t constraints,
+					 char *buffer, unsigned int buffer_size);
 
 /** Get the name of a sync module (not a sync instance) from the category type
  * @param type Type of the sync module

@@ -35,6 +35,7 @@ struct sync_instance_record  single_slave [] =
 		{
 			SYNC_MODULE_STATE_SLAVE,
 			0,
+			0,
 			NULL,
 			{ 0, 0 },
 			64,
@@ -64,6 +65,7 @@ struct sync_instance_record  single_alarmed [] =
 		{
 			SYNC_MODULE_STATE_SLAVE,
 			SYNC_MODULE_ALARM_NO_FOLLOW_UPS,
+			0,
 			NULL,
 			{ 0, 0 },
 			64,
@@ -92,6 +94,7 @@ struct sync_instance_record  single_non_slave [] =
 		},
 		{
 			SYNC_MODULE_STATE_LISTENING,
+			0,
 			0,
 			NULL,
 			{ 0, 0 },
@@ -122,6 +125,7 @@ struct sync_instance_record  two [] =
 		{
 			SYNC_MODULE_STATE_SLAVE,
 			0,
+			0,
 			NULL,
 			{ 0, 0 },
 			64,
@@ -145,6 +149,7 @@ struct sync_instance_record  two [] =
 		},
 		{
 			SYNC_MODULE_STATE_SLAVE,
+			0,
 			0,
 			NULL,
 			{ 0, 0 },
@@ -175,6 +180,7 @@ struct sync_instance_record  two_alarmed [] =
 		{
 			SYNC_MODULE_STATE_SLAVE,
 			0,
+			0,
 			NULL,
 			{ 0, 0 },
 			64,
@@ -199,6 +205,7 @@ struct sync_instance_record  two_alarmed [] =
 		{
 			SYNC_MODULE_STATE_SLAVE,
 			SYNC_MODULE_ALARM_NO_FOLLOW_UPS,
+			0,
 			NULL,
 			{ 0, 0 },
 			32,
@@ -229,6 +236,7 @@ struct sync_instance_record  two_all_alarmed [] =
 		{
 			SYNC_MODULE_STATE_SLAVE,
 			SYNC_MODULE_ALARM_NO_FOLLOW_UPS,
+			0,
 			NULL,
 			{ 0, 0 },
 			64,
@@ -253,6 +261,7 @@ struct sync_instance_record  two_all_alarmed [] =
 		{
 			SYNC_MODULE_STATE_SLAVE,
 			SYNC_MODULE_ALARM_NO_FOLLOW_UPS,
+			0,
 			NULL,
 			{ 0, 0 },
 			32,
@@ -283,6 +292,7 @@ struct sync_instance_record  two_stepped [] =
 		{
 			SYNC_MODULE_STATE_SLAVE,
 			0,
+			0,
 			NULL,
 			{ 0, 0 },
 			64,
@@ -306,6 +316,7 @@ struct sync_instance_record  two_stepped [] =
 		},
 		{
 			SYNC_MODULE_STATE_SLAVE,
+			0,
 			0,
 			NULL,
 			{ 0, 0 },
@@ -336,6 +347,7 @@ struct sync_instance_record two_slave_and_non_slave[] =
 		{
 			SYNC_MODULE_STATE_LISTENING,
 			0,
+			0,
 			NULL,
 			{ 0, 0 },
 			64,
@@ -359,6 +371,7 @@ struct sync_instance_record two_slave_and_non_slave[] =
 		},
 		{
 			SYNC_MODULE_STATE_SLAVE,
+			0,
 			0,
 			NULL,
 			{ 0, 0 },
@@ -389,6 +402,7 @@ struct sync_instance_record two_non_slave_diff[] =
 		{
 			SYNC_MODULE_STATE_FAULTY,
 			0,
+			0,
 			NULL,
 			{ 0, 0 },
 			64,
@@ -412,6 +426,7 @@ struct sync_instance_record two_non_slave_diff[] =
 		},
 		{
 			SYNC_MODULE_STATE_PASSIVE,
+			0,
 			0,
 			NULL,
 			{ 0, 0 },
@@ -442,6 +457,7 @@ struct sync_instance_record two_non_slave_same[] =
 		{
 			SYNC_MODULE_STATE_MASTER,
 			0,
+			0,
 			NULL,
 			{ 0, 0 },
 			64,
@@ -465,6 +481,7 @@ struct sync_instance_record two_non_slave_same[] =
 		},
 		{
 			SYNC_MODULE_STATE_MASTER,
+			0,
 			0,
 			NULL,
 			{ 0, 0 },
@@ -495,6 +512,7 @@ struct sync_instance_record  ptp_ntp [] =
 		{
 			SYNC_MODULE_STATE_SLAVE,
 			0,
+			0,
 			NULL,
 			{ 0, 0 },
 			64,
@@ -518,6 +536,7 @@ struct sync_instance_record  ptp_ntp [] =
 		},
 		{
 			SYNC_MODULE_STATE_SLAVE,
+			0,
 			0,
 			NULL,
 			{ 0, 0 },

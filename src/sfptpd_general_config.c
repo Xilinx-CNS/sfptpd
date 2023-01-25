@@ -127,7 +127,7 @@ static const sfptpd_config_option_t config_general_options[] =
 		"automatic sync instance selection",
 		~1, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
 		parse_selection_policy},
-	{"selection_policy_rules", "<manual | state | no-alarms | user-priority | clustering | clock-class | total-accuracy | allan-variance | steps-removed>*",
+	{"selection_policy_rules", "<manual | ext-constraints | state | no-alarms | user-priority | clustering | clock-class | total-accuracy | allan-variance | steps-removed>*",
 		"Define the list of rules for the automatic selection policy",
 		~1, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
 		parse_selection_policy_rules},

@@ -682,9 +682,9 @@ static void write_topology(struct sfptpd_engine *engine)
 
 static void write_sync_instances(struct sfptpd_engine *engine)
 {
-	const char *header[] = { "R", "instance", "S", "M", "state", "O", "A", "priority", "C", "gm class", "accuracy", "allan var", "steps" };
-	const char *format_header = "| %2s | %-12s%1s | %1s | %-9s %1s | %1s | %8s | %1s | %-11s | %8s | %9s | %5s |\n";
-	const char *format_record = "| %2d | %-12s%1s | %1s | %-9s %1d | %1s | %8.3g | %1d | %-11s | %8.3llg | %9.3llg | %5d |\n";
+	const char *header[] = { "R", "instance", "S", "M", "X", "state", "O", "A", "priority", "C", "gm class", "accuracy", "allan var", "steps" };
+	const char *format_header = "| %2s | %-12s%1s | %1s%1s |%-9s %1s | %1s | %8s | %1s | %-11s | %8s | %9s | %5s |\n";
+	const char *format_record = "| %2d | %-12s%1s | %c%c |%-9s %1d | %1s | %8.3g | %1d | %-11s | %8.3llg | %9.3llg | %5d |\n";
 	const struct sfptpd_selection_policy *policy;
 	struct sfptpd_log *log;
 	FILE *stream;
@@ -703,16 +703,26 @@ static void write_sync_instances(struct sfptpd_engine *engine)
 			     header[0], header[1], header[2], header[3],
 			     header[4], header[5], header[6], header[7],
 			     header[8], header[9], header[10], header[11],
-			     header[12]);
+			     header[12], header[13]);
 
 	/* Write table records */
 	for (i = 0; i < engine->num_sync_instances; i++) {
+		char constraint;
+
 		record = engine->sync_instances + i;
+		if (SYNC_MODULE_CONSTRAINT_TEST(record->status.constraints, MUST_BE_SELECTED))
+			constraint = 'm';
+		else if (SYNC_MODULE_CONSTRAINT_TEST(record->status.constraints, CANNOT_BE_SELECTED))
+			constraint = 'c';
+		else
+			constraint = '-';
+
 		sfptpd_log_table_row(stream, i == engine->num_sync_instances - 1, format_record,
 				     record->rank,
 				     record->info.name,
 				     record == engine->selected ? "*" : " ",
-				     record->selected ? "M" : " ",
+				     record->selected ? 'M' : '-',
+				     constraint,
 				     sync_module_state_text[record->status.state],
 				     sfptpd_state_priorities[record->status.state],
 				     record->status.alarms == 0 ? " " : "A",
@@ -726,7 +736,8 @@ static void write_sync_instances(struct sfptpd_engine *engine)
 
 	fprintf(stream,
 		"\nKey: R = rank  S = selected  M = manual  O = state order  "
-		"A = alarms  C = clustering score\n");
+		"A = alarms  C = clustering score\n"
+		"     X = external constraint (m = must-be-selected  c = cannot-be-selected) \n");
 
 	fprintf(stream,
 		"\nSelection policy:\n");
