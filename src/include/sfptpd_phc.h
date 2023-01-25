@@ -23,9 +23,10 @@ sfptpd_phc_diff_method_text appropriately.
 */
 enum sfptpd_phc_diff_method {
 	SFPTPD_DIFF_METHOD_SYS_OFFSET_PRECISE = 0,
+	SFPTPD_DIFF_METHOD_EFX,
 	SFPTPD_DIFF_METHOD_PPS,
-	SFPTPD_DIFF_METHOD_SYS_OFFSET,
 	SFPTPD_DIFF_METHOD_SYS_OFFSET_EXTENDED,
+	SFPTPD_DIFF_METHOD_SYS_OFFSET,
 	SFPTPD_DIFF_METHOD_READ_TIME,
 	SFPTPD_DIFF_METHOD_MAX
 };
@@ -41,6 +42,9 @@ typedef enum {
 /* Forward declaration of PHC context */
 struct sfptpd_phc;
 
+/* Function to perform clock diff */
+typedef int (*sfptpd_phc_diff_fn)(void *context, struct timespec *diff);
+
 
 extern const char *sfptpd_phc_diff_method_text[];
 extern const enum sfptpd_phc_diff_method sfptpd_default_phc_diff_methods[SFPTPD_DIFF_METHOD_MAX+1];
@@ -48,11 +52,6 @@ extern const enum sfptpd_phc_diff_method sfptpd_default_phc_diff_methods[SFPTPD_
 extern const char *sfptpd_phc_pps_method_text[];
 extern const sfptpd_phc_pps_method_t sfptpd_default_pps_method[SFPTPD_PPS_METHOD_MAX + 1];
 
-/** Set the order of diff methods to use.
- * @param new_order the new list of methods.
- * @return 0 on success or an errno otherwise
- */
-int sfptpd_phc_set_diff_methods(const enum sfptpd_phc_diff_method *new_order);
 
 /****************************************************************************
  * Function Prototypes
@@ -64,6 +63,12 @@ int sfptpd_phc_set_diff_methods(const enum sfptpd_phc_diff_method *new_order);
  * @return 0 on success or an errno otherwise
  */
 int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc);
+
+/** Choose methods and start PHC operations
+ * @param phc Handle of the PHC device
+ * @return 0 on success or an errno otherwise
+ */
+int sfptpd_phc_start(struct sfptpd_phc *phc);
 
 /** Close a PHC device
  * @param phc Handle of the PHC device
@@ -154,11 +159,21 @@ const char *sfptpd_phc_get_pps_method_name(struct sfptpd_phc *phc);
  */
 void sfptpd_phc_record_step(struct sfptpd_phc *phc);
 
+/** Set the order of diff methods to use.
+ * @param new_order the new list of methods.
+ * @return 0 on success or an errno otherwise
+ */
+int sfptpd_phc_set_diff_methods(const enum sfptpd_phc_diff_method *new_order);
+
 /** Set the order of PPS methods to use.
  * @param new_order the new list of methods.
  * @return 0 on success or an errno otherwise
  */
 int sfptpd_phc_set_pps_methods(sfptpd_phc_pps_method_t *new_order);
 
+void sfptpd_phc_define_diff_method(struct sfptpd_phc *phc,
+				   enum sfptpd_phc_diff_method method,
+				   sfptpd_phc_diff_fn implementation,
+				   void *state);
 
 #endif /* _SFPTPD_PHC_H */

@@ -223,7 +223,7 @@ static const sfptpd_config_option_t config_general_options[] =
 		"adapters where possible. Disabled by default",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, true,
 		parse_avoid_efx_ioctl},
-	{"phc_diff_methods", "<sys-offset-precise | pps | sys-offset-ext | sys-offset | read-time>*",
+	{"phc_diff_methods", "<sys-offset-precise | efx | pps | sys-offset-ext | sys-offset | read-time>*",
 		"Define the list of PHC diff methods used",
 		~1, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
 		parse_phc_diff_method_order},

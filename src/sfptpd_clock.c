@@ -682,6 +682,23 @@ static void clock_determine_max_freq_adj(struct sfptpd_clock *clock)
 }
 
 
+static int clock_compare_using_efx(void *context, struct timespec *diff)
+{
+	struct sfptpd_clock *clock = (struct sfptpd_clock *) context;
+	struct efx_sock_ioctl req = { .cmd = EFX_TS_SYNC };
+	int rc;
+
+	rc = sfptpd_interface_ioctl(clock->u.nic.primary_if, SIOCEFX, &req);
+	if (rc == 0) {
+		/* Store the difference- this is (Tptp - Tsys) */
+		diff->tv_sec = req.u.ts_sync.ts.tv_sec;
+		diff->tv_nsec = req.u.ts_sync.ts.tv_nsec;
+	}
+
+	return rc;
+}
+
+
 static int renew_clock(struct sfptpd_clock *clock)
 {
 	struct sfptpd_interface *interface, *primary;
@@ -763,6 +780,15 @@ static int renew_clock(struct sfptpd_clock *clock)
 				clock->posix_id = POSIX_ID_NULL;
 			} else {
 				clock->posix_id = sfptpd_phc_get_clock_id(clock->u.nic.phc);
+
+				if (clock->u.nic.supports_efx) {
+					sfptpd_phc_define_diff_method(clock->u.nic.phc,
+								      SFPTPD_DIFF_METHOD_EFX,
+								      clock_compare_using_efx,
+								      clock);
+				}
+
+				sfptpd_phc_start(clock->u.nic.phc);
 			}
 		}
 
@@ -1947,7 +1973,6 @@ int sfptpd_clock_get_time(const struct sfptpd_clock *clock, struct timespec *tim
 int sfptpd_clock_compare(struct sfptpd_clock *clock1, struct sfptpd_clock *clock2,
 			 struct timespec *diff)
 {
-	struct efx_sock_ioctl req;
 	struct timespec diff2;
 	int rc = 0;
 
@@ -1980,20 +2005,7 @@ int sfptpd_clock_compare(struct sfptpd_clock *clock1, struct sfptpd_clock *clock
 	}
 
 	if (clock1->type != SFPTPD_CLOCK_TYPE_SYSTEM) {
-		if (clock1->type == SFPTPD_CLOCK_TYPE_SFC &&
-		    clock1->u.nic.supports_efx &&
-		    !clock1->cfg_avoid_efx) {
-			memset(&req, 0, sizeof(req));
-			req.cmd = EFX_TS_SYNC;
-			rc = sfptpd_interface_ioctl(clock1->u.nic.primary_if, SIOCEFX, &req);
-			if (rc == 0) {
-				/* Store the difference- this is (Tptp - Tsys) */
-				diff->tv_sec = req.u.ts_sync.ts.tv_sec;
-				diff->tv_nsec = req.u.ts_sync.ts.tv_nsec;
-			}
-		} else {
-			rc = sfptpd_phc_compare_to_sys_clk(clock1->u.nic.phc, diff);
-		}
+		rc = sfptpd_phc_compare_to_sys_clk(clock1->u.nic.phc, &diff2);
 
 		if (rc != 0) {
 			sfptpd_stats_collection_update_count(&clock1->stats,
@@ -2019,20 +2031,7 @@ int sfptpd_clock_compare(struct sfptpd_clock *clock1, struct sfptpd_clock *clock
 	}
 
 	if (clock2->type != SFPTPD_CLOCK_TYPE_SYSTEM) {
-		if (clock2->type == SFPTPD_CLOCK_TYPE_SFC &&
-		    clock2->u.nic.supports_efx &&
-		    !clock2->cfg_avoid_efx) {
-			memset(&req, 0, sizeof(req));
-			req.cmd = EFX_TS_SYNC;
-
-			rc = sfptpd_interface_ioctl(clock2->u.nic.primary_if, SIOCEFX, &req);
-			if (rc == 0) {
-				diff2.tv_sec = req.u.ts_sync.ts.tv_sec;
-				diff2.tv_nsec = req.u.ts_sync.ts.tv_nsec;
-			}
-		} else {
-			rc = sfptpd_phc_compare_to_sys_clk(clock2->u.nic.phc, &diff2);
-		}
+		rc = sfptpd_phc_compare_to_sys_clk(clock2->u.nic.phc, &diff2);
 
 		if (rc != 0) {
 			/* We always update the stats of clock1 even if this
@@ -2337,9 +2336,6 @@ const char *sfptpd_clock_get_diff_method(struct sfptpd_clock *clock)
 
 	if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM) {
 		return "zero";
-	} else if (clock->u.nic.supports_efx &&
-		   !clock->cfg_avoid_efx) {
-		return "efx";
 	} else if (clock->u.nic.phc != NULL) {
 		return sfptpd_phc_get_diff_method_name(clock->u.nic.phc);
 	} else {

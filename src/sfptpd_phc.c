@@ -70,50 +70,10 @@ int clock_adjtime(clockid_t clock, struct timex *timex_block)
 /* How long to allow for first successful PPS attempt */
 #define PPS_FIRST_ATTEMPT_TIMEOUT_NS       (ONE_BILLION * 1.2)
 
-const char *sfptpd_phc_diff_method_text[] = {
-	"sys-offset-precise",
-	"pps",
-	"sys-offset",
-	"sys-offset-ext",
-	"read-time",
-	"none"
+struct phc_diff_method {
+	sfptpd_phc_diff_fn diff_fn;
+	void *context; /* If NULL, phc context is used */
 };
-
-
-/* Default PHC diff method order. */
-const enum sfptpd_phc_diff_method sfptpd_default_phc_diff_methods[SFPTPD_DIFF_METHOD_MAX+1] = {
-	SFPTPD_DIFF_METHOD_SYS_OFFSET_PRECISE,
-	SFPTPD_DIFF_METHOD_PPS,
-	SFPTPD_DIFF_METHOD_SYS_OFFSET_EXTENDED,
-	SFPTPD_DIFF_METHOD_SYS_OFFSET,
-	SFPTPD_DIFF_METHOD_READ_TIME,
-	SFPTPD_DIFF_METHOD_MAX
-};
-
-/* PHC diff methods order. */
-static enum sfptpd_phc_diff_method phc_diff_methods[SFPTPD_DIFF_METHOD_MAX + 1] = {
-	SFPTPD_DIFF_METHOD_MAX
-};
-
-const char *sfptpd_phc_pps_method_text[] = {
-	"devptp",
-	"devpps",
-};
-
-
-/* Default PPS method order. */
-const sfptpd_phc_pps_method_t sfptpd_default_pps_method[SFPTPD_PPS_METHOD_MAX + 1] = {
-	SFPTPD_PPS_METHOD_DEV_PPS,
-	SFPTPD_PPS_METHOD_DEV_PTP,
-	SFPTPD_PPS_METHOD_MAX
-};
-
-
-/* PPS methods order. */
-static sfptpd_phc_pps_method_t phc_pps_methods[SFPTPD_PPS_METHOD_MAX + 1] = {
-	SFPTPD_PPS_METHOD_MAX
-};
-
 
 struct sfptpd_phc {
 	/* PHC Index */
@@ -127,6 +87,9 @@ struct sfptpd_phc {
 
 	/* PHC capabilities */
 	struct ptp_clock_caps caps;
+
+	/* PHC diff method definitions */
+	struct phc_diff_method diff_method_defs[SFPTPD_DIFF_METHOD_MAX];
 
 	/* Method that is used to compare the PHC and system clocks */
 	enum sfptpd_phc_diff_method diff_method;
@@ -165,11 +128,78 @@ struct sfptpd_phc {
 	struct pps_kinfo devpps_prev;
 };
 
+
 /****************************************************************************
  * Forward declarations
  ****************************************************************************/
 
 static int phc_set_fallback_diff_method(struct sfptpd_phc *phc);
+
+static int phc_compare_using_precise_offset(void *phc, struct timespec *diff);
+static int phc_compare_using_extended_offset(void *phc, struct timespec *diff);
+static int phc_compare_using_sys_offset(void *phc, struct timespec *diff);
+static int phc_compare_using_pps(void *phc, struct timespec *diff);
+static int phc_compare_by_reading_time(void *phc, struct timespec *diff);
+
+
+/****************************************************************************
+ * Constants
+ ****************************************************************************/
+
+
+const char *sfptpd_phc_diff_method_text[] = {
+	"sys-offset-precise",
+	"efx",
+	"pps",
+	"sys-offset-ext",
+	"sys-offset",
+	"read-time",
+	"none"
+};
+
+const static struct phc_diff_method phc_diff_method_defs[SFPTPD_DIFF_METHOD_MAX] = {
+	{ phc_compare_using_precise_offset, },
+	{ NULL /* EFX method is set by user */, },
+	{ phc_compare_using_pps, },
+	{ phc_compare_using_extended_offset, },
+	{ phc_compare_using_sys_offset, },
+	{ phc_compare_by_reading_time, },
+};
+
+
+/* Default PHC diff method order. */
+const enum sfptpd_phc_diff_method sfptpd_default_phc_diff_methods[SFPTPD_DIFF_METHOD_MAX+1] = {
+	SFPTPD_DIFF_METHOD_SYS_OFFSET_PRECISE,
+	SFPTPD_DIFF_METHOD_EFX,
+	SFPTPD_DIFF_METHOD_PPS,
+	SFPTPD_DIFF_METHOD_SYS_OFFSET_EXTENDED,
+	SFPTPD_DIFF_METHOD_SYS_OFFSET,
+	SFPTPD_DIFF_METHOD_READ_TIME,
+	SFPTPD_DIFF_METHOD_MAX
+};
+
+/* PHC diff methods order. */
+static enum sfptpd_phc_diff_method phc_diff_methods[SFPTPD_DIFF_METHOD_MAX + 1] = {
+	SFPTPD_DIFF_METHOD_MAX
+};
+
+const char *sfptpd_phc_pps_method_text[] = {
+	"devptp",
+	"devpps",
+};
+
+/* Default PPS method order. */
+const sfptpd_phc_pps_method_t sfptpd_default_pps_method[SFPTPD_PPS_METHOD_MAX + 1] = {
+	SFPTPD_PPS_METHOD_DEV_PPS,
+	SFPTPD_PPS_METHOD_DEV_PTP,
+	SFPTPD_PPS_METHOD_MAX
+};
+
+
+/* PPS methods order. */
+static sfptpd_phc_pps_method_t phc_pps_methods[SFPTPD_PPS_METHOD_MAX + 1] = {
+	SFPTPD_PPS_METHOD_MAX
+};
 
 
 /****************************************************************************
@@ -460,8 +490,8 @@ static int phc_configure_devpps(struct sfptpd_phc *phc)
 }
 
 
-static int phc_compare_by_reading_time(struct sfptpd_phc *phc, unsigned int num_samples,
-				struct timespec *diff)
+static int phc_compare_by_reading_time_n(struct sfptpd_phc *phc, unsigned int num_samples,
+					 struct timespec *diff)
 {
 	struct timespec sys_ts[2], phc_ts, window, ts;
 	unsigned int i;
@@ -502,8 +532,9 @@ static int phc_compare_by_reading_time(struct sfptpd_phc *phc, unsigned int num_
 }
 
 
-static int phc_compare_using_pps(struct sfptpd_phc *phc, struct timespec *diff)
+static int phc_compare_using_pps(void *context, struct timespec *diff)
 {
+	struct sfptpd_phc *phc = (struct sfptpd_phc *) context;
 	struct pps_fdata pps;
 	int rc;
 	struct timespec approx, mono_now;
@@ -581,7 +612,7 @@ static int phc_compare_using_pps(struct sfptpd_phc *phc, struct timespec *diff)
 	phc->pps_prev_monotime = mono_now;
 
 	/* Compare to system time to get seconds offset. */
-	rc = phc_compare_by_reading_time(phc, READ_TIME_NUM_SAMPLES, &approx);
+	rc = phc_compare_by_reading_time_n(phc, READ_TIME_NUM_SAMPLES, &approx);
 	if (rc != 0) {
 		TRACE_L3("phc%d: read_time for pps failed\n", phc->phc_idx);
 		return rc;
@@ -612,9 +643,10 @@ static int phc_compare_using_pps(struct sfptpd_phc *phc, struct timespec *diff)
 }
 
 
-static int phc_compare_using_precise_offset(struct sfptpd_phc *phc,
+static int phc_compare_using_precise_offset(void *context,
 					    struct timespec *diff)
 {
+	struct sfptpd_phc *phc = (struct sfptpd_phc *) context;
 	int rc = EOPNOTSUPP;
 
 #ifdef PTP_SYS_OFFSET_PRECISE
@@ -646,9 +678,9 @@ static int phc_compare_using_precise_offset(struct sfptpd_phc *phc,
 }
 
 
-static int phc_compare_using_extended_offset(struct sfptpd_phc *phc,
-					     int n_samples,
-					     struct timespec *diff)
+static int phc_compare_using_extended_offset_n(struct sfptpd_phc *phc,
+					       int n_samples,
+					       struct timespec *diff)
 {
 	int rc = EOPNOTSUPP;
 
@@ -705,9 +737,9 @@ static int phc_compare_using_extended_offset(struct sfptpd_phc *phc,
 }
 
 
-static int phc_compare_using_kernel_readings(struct sfptpd_phc *phc,
-					     int n_samples,
-					     struct timespec *diff)
+static int phc_compare_using_kernel_readings_n(struct sfptpd_phc *phc,
+					       int n_samples,
+					       struct timespec *diff)
 {
 	int rc, i;
 	struct ptp_sys_offset sysoff;
@@ -755,19 +787,24 @@ static int phc_compare_using_kernel_readings(struct sfptpd_phc *phc,
 
 static int phc_set_fallback_diff_method(struct sfptpd_phc *phc)
 {
-	assert(phc != NULL);
+	enum sfptpd_phc_diff_method method;
+	const struct phc_diff_method *defn;
 	int sys_offset_extended_rc;
 	struct timespec sink;
+	int rc;
+
+	assert(phc != NULL);
 
 	/* Requires invariant that diff methods array is terminated by SFPTPD_DIFF_METHOD_MAX */
-	for (; phc->diff_method_index < SFPTPD_DIFF_METHOD_MAX; ) {
-		enum sfptpd_phc_diff_method method = phc_diff_methods[phc->diff_method_index++];
+	for (; phc->diff_method_index < SFPTPD_DIFF_METHOD_MAX; phc->diff_method_index++) {
+		method = phc_diff_methods[phc->diff_method_index];
+		defn = phc->diff_method_defs + method;
+
 		switch (method) {
 		case SFPTPD_DIFF_METHOD_SYS_OFFSET_PRECISE:
 #ifdef PTP_SYS_OFFSET_PRECISE
 			if (phc->caps.cross_timestamping != 0) {
 				/* Use PTP_SYS_OFFSET_PRECISE (cross-timestamping) */
-				phc->diff_method = SFPTPD_DIFF_METHOD_SYS_OFFSET_PRECISE;
 				INFO("phc%d: using diff method SYS_OFFSET_PRECISE\n", phc->phc_idx);
 				goto diff_method_selected;
 			}
@@ -777,9 +814,8 @@ static int phc_set_fallback_diff_method(struct sfptpd_phc *phc)
 		case SFPTPD_DIFF_METHOD_SYS_OFFSET_EXTENDED:
 			/* Use PTP_SYS_OFFSET_EXTENDED */
 			sys_offset_extended_rc =
-				phc_compare_using_extended_offset(phc, 0, &sink);
+				phc_compare_using_extended_offset_n(phc, 0, &sink);
 			if (sys_offset_extended_rc == 0) {
-				phc->diff_method = SFPTPD_DIFF_METHOD_SYS_OFFSET_EXTENDED;
 				INFO("phc%d: using diff method SYS_OFFSET_EXTENDED\n", phc->phc_idx);
 				goto diff_method_selected;
 			}
@@ -790,9 +826,8 @@ static int phc_set_fallback_diff_method(struct sfptpd_phc *phc)
 			if (phc->caps.pps != 0) {
 				/* Attempt to configure the PPS device associated with this
 				* PHC device. */
-				int rc = phc_configure_pps(phc);
+				rc = phc_configure_pps(phc);
 				if (rc == 0) {
-					phc->diff_method = SFPTPD_DIFF_METHOD_PPS;
 					INFO("phc%d: using diff method PPS\n", phc->phc_idx);
 					goto diff_method_selected;
 				} else {
@@ -809,7 +844,6 @@ static int phc_set_fallback_diff_method(struct sfptpd_phc *phc)
 			* The ioctl will always fail because we pass NULL in the 3rd arg. */
 			assert(-1 == ioctl(phc->phc_fd, PTP_SYS_OFFSET, NULL));
 			if (errno == EFAULT) {
-				phc->diff_method = SFPTPD_DIFF_METHOD_SYS_OFFSET;
 				INFO("phc%d: using diff method SYS_OFFSET\n", phc->phc_idx);
 				goto diff_method_selected;
 			}
@@ -817,22 +851,34 @@ static int phc_set_fallback_diff_method(struct sfptpd_phc *phc)
 
 		case SFPTPD_DIFF_METHOD_READ_TIME:
 			/* Read the system and NIC time from user-space */
-			phc->diff_method = SFPTPD_DIFF_METHOD_READ_TIME;
 			INFO("phc%d: using diff method READ_TIME\n", phc->phc_idx);
 			goto diff_method_selected;
 
 		case SFPTPD_DIFF_METHOD_MAX:
 			/* We've reached the sentinel. */
 			goto no_diff_method_selected;
+
+		default:
+			if (defn->diff_fn != NULL) {
+				rc = defn->diff_fn(defn->context != NULL ? defn->context : phc, &sink);
+				if (rc == 0) {
+					INFO("phc%d: using diff method %s\n",
+					     phc->phc_idx,
+					     sfptpd_phc_diff_method_text[method]);
+					goto diff_method_selected;
+				}
+			}
 		}
 	}
 
 no_diff_method_selected:
 	WARNING("phc%d: No configured diff methods available\n", phc->phc_idx);
-	phc->diff_method = SFPTPD_DIFF_METHOD_MAX;
+	assert(method == SFPTPD_DIFF_METHOD_MAX);
 
 diff_method_selected:
-	return 0;
+	phc->diff_method = method;
+
+	return phc->diff_method == SFPTPD_DIFF_METHOD_MAX ? EOPNOTSUPP : 0;
 }
 
 
@@ -1012,7 +1058,6 @@ int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc)
 	char path[PATH_MAX];
 	struct sfptpd_phc *new;
 	int rc;
-	int i;
 
 	assert(phc_index >= 0);
 	assert(phc != NULL);
@@ -1024,7 +1069,7 @@ int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc)
 	if (new == NULL)
 		return ENOMEM;
 
-	new->diff_method_index = 0;
+	new->diff_method_index = SFPTPD_DIFF_METHOD_MAX;
 
 	/* Open the PHC device */
 	snprintf(path, sizeof(path), SFPTPD_PHC_DEVICE_FORMAT, phc_index);
@@ -1041,7 +1086,7 @@ int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc)
 		ERROR("phc%d: failed to get capabilities, %s\n",
 		      phc_index, strerror(errno));
 		rc = errno;
-		goto fail1;
+		goto fail2;
 	}
 
 	new->phc_idx = phc_index;
@@ -1049,6 +1094,7 @@ int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc)
 	new->pps_fd = -1;
 	new->devpps_fd = -1;
 	new->devpps_prev.assert_sequence = UINT32_MAX;
+	memcpy(new->diff_method_defs, phc_diff_method_defs, sizeof new->diff_method_defs);
 
 	/* On 32 bit platforms, the scaled frequency adjustment in the timex
 	 * structure (long) is not big enough for the range of frequency
@@ -1058,47 +1104,61 @@ int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc)
 	if (sizeof(long) == 4)
 		new->caps.max_adj = timex_max_adj_32bit;
 
-	rc = phc_set_fallback_diff_method(new);
+	*phc = new;
+	return 0;
+
+fail2:
+	close(new->phc_fd);
+
+fail1:
+	free(new);
+	return rc;
+}
+
+int sfptpd_phc_start(struct sfptpd_phc *phc)
+{
+	int rc;
+	int i;
+
+	phc->diff_method_index = 0;
+	rc = phc_set_fallback_diff_method(phc);
+	if (rc != 0)
+		return rc;
 
 	/* Check external time stamp capabilities */
 	TRACE_L2("phc%d: %d external time stamp channels\n",
-		 phc_index, new->caps.n_ext_ts);
+		 phc->phc_idx, phc->caps.n_ext_ts);
 
 	/* Discover external PPS device */
-	if (phc_discover_devpps(new, new->devpps_path, sizeof new->devpps_path) == 0) {
+	if (phc_discover_devpps(phc, phc->devpps_path, sizeof phc->devpps_path) == 0) {
 		TRACE_L2("phc%d: discovered related external PPS device %s\n",
-			 phc_index, new->devpps_path);
+			 phc->phc_idx, phc->devpps_path);
 	} else {
-		new->devpps_path[0] = '\0';
+		phc->devpps_path[0] = '\0';
 	}
 
 	for (i = 0; i < SFPTPD_PPS_METHOD_MAX; i++) {
 		sfptpd_phc_pps_method_t method = phc_pps_methods[i];
 		switch (method) {
 		case SFPTPD_PPS_METHOD_DEV_PTP:
-			if (new->caps.n_ext_ts >= 1) {
-				new->pps_method = method;
+			if (phc->caps.n_ext_ts >= 1) {
+				phc->pps_method = method;
 				goto pps_method_selected;
 			}
 			break;
 		case SFPTPD_PPS_METHOD_DEV_PPS:
-			if (new->devpps_path[0]) {
-				new->pps_method = method;
+			if (phc->devpps_path[0]) {
+				phc->pps_method = method;
 				goto pps_method_selected;
 			}
 			break;
 		case SFPTPD_PPS_METHOD_MAX:
-			new->pps_method = method;
+			phc->pps_method = method;
 			goto pps_method_selected;
 		}
 	}
 
 pps_method_selected:
-	*phc = new;
-	return rc;
-
-fail1:
-	free(new);
 	return rc;
 }
 
@@ -1134,44 +1194,44 @@ int sfptpd_phc_get_max_freq_adj(struct sfptpd_phc *phc)
 }
 
 
+static int phc_compare_using_extended_offset(void *context, struct timespec *diff)
+{
+	struct sfptpd_phc *phc = (struct sfptpd_phc *) context;
+
+	return phc_compare_using_extended_offset_n(phc, SYS_OFFSET_NUM_SAMPLES, diff);
+}
+
+
+static int phc_compare_using_sys_offset(void *context, struct timespec *diff)
+{
+	struct sfptpd_phc *phc = (struct sfptpd_phc *) context;
+
+	return phc_compare_using_kernel_readings_n(phc, SYS_OFFSET_NUM_SAMPLES, diff);
+}
+
+
+static int phc_compare_by_reading_time(void *context, struct timespec *diff)
+{
+	struct sfptpd_phc *phc = (struct sfptpd_phc *) context;
+
+	return phc_compare_by_reading_time_n(phc, SYS_OFFSET_NUM_SAMPLES, diff);
+}
+
+
 int sfptpd_phc_compare_to_sys_clk(struct sfptpd_phc *phc, struct timespec *diff)
 {
-	int rc;
+	const struct phc_diff_method *method_def;
 
 	assert(phc != NULL);
 	assert(diff != NULL);
+	assert(phc->diff_method < SFPTPD_DIFF_METHOD_MAX);
 
-	switch (phc->diff_method) {
-	case SFPTPD_DIFF_METHOD_SYS_OFFSET_PRECISE:
-		rc = phc_compare_using_precise_offset(phc, diff);
-		break;
+	method_def = phc->diff_method_defs + phc->diff_method;
 
-	case SFPTPD_DIFF_METHOD_SYS_OFFSET_EXTENDED:
-		rc = phc_compare_using_extended_offset(phc, SYS_OFFSET_NUM_SAMPLES, diff);
-		break;
-
-	case SFPTPD_DIFF_METHOD_PPS:
-		rc = phc_compare_using_pps(phc, diff);
-		break;
-
-	case SFPTPD_DIFF_METHOD_SYS_OFFSET:
-		rc = phc_compare_using_kernel_readings(phc, SYS_OFFSET_NUM_SAMPLES, diff);
-		break;
-
-	case SFPTPD_DIFF_METHOD_READ_TIME:
-		rc = phc_compare_by_reading_time(phc, READ_TIME_NUM_SAMPLES, diff);
-		break;
-
-	case SFPTPD_DIFF_METHOD_MAX:
-		rc = EOPNOTSUPP;
-		break;
-
-	default:
-		assert(!"unknown diff_method in sfptpd_phc_compare_to_sys_clk");
-		break;
-	}
-
-	return rc;
+	if (method_def->diff_fn != NULL)
+		return method_def->diff_fn(method_def->context ? method_def->context : phc, diff);
+	else
+		return EOPNOTSUPP;
 }
 
 
@@ -1285,6 +1345,20 @@ int sfptpd_phc_get_pps_event(struct sfptpd_phc *phc,
 		assert(!"unknown pps_method in sfptpd_phc_get_pps_event");
 		return EINVAL;
 	}
+}
+
+
+void sfptpd_phc_define_diff_method(struct sfptpd_phc *phc,
+				   enum sfptpd_phc_diff_method method,
+				   sfptpd_phc_diff_fn implementation,
+				   void *context)
+{
+	assert(phc != NULL);
+	assert(method < SFPTPD_DIFF_METHOD_MAX);
+	assert(method == SFPTPD_DIFF_METHOD_EFX);
+
+	phc->diff_method_defs[method].context = context;
+	phc->diff_method_defs[method].diff_fn = implementation;
 }
 
 
