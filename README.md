@@ -13,8 +13,23 @@ later.
 
 ## Execution
 
-The built sfptpd daemon does not require installation. However, it must be run
-as root.
+The built sfptpd daemon does not require installation. However, it must
+normally be run as root.
+
+### Back-to-back PTP example
+
+On host A:
+
+```
+sudo build/sfptpd -i eth1 -f config/ptp_master_freerun.cfg
+```
+
+On host B:
+
+```
+for i in ntp{,d} chrony{,d}; do sudo service $i stop 2>/dev/null; done
+sudo build/sfptpd -i eth1 -f config/ptp_slave.cfg
+```
 
 ## Installation
 
