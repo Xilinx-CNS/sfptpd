@@ -332,7 +332,7 @@ netShutdownMulticast(struct ptpd_transport *transport)
 	/* Close Peer Multicast */
 	netClearMulticastOptions(transport, &transport->peerMulticastAddr);
 	transport->peerMulticastAddrLen = 0;
-  
+
 	return TRUE;
 }
 
@@ -736,7 +736,7 @@ netInitMulticast(struct ptpd_transport * transport,  InterfaceOpts * ifOpts)
 	address_display("peer event multicast address",
 			&transport->peerMulticastAddr, transport->peerMulticastAddrLen, TRUE);
 	/* End of Peer multicast Ip address init */
-  
+
 	return TRUE;
 }
 
@@ -820,7 +820,7 @@ static int getTxTimestamp(PtpClock *ptpClock, char *pdu, int pdulen,
 	if (ipproto == IPPROTO_IPV6) {
 		/* IPv6 packets are sent with two extra bytes according
 		 * to Annex E. These are not included in the pdulen
-* 		 * passed to this function. */
+		 * passed to this function. */
 		trailer = 2;
 	} else {
 		trailer = 0;
@@ -1294,7 +1294,7 @@ netInit(struct ptpd_transport * transport, InterfaceOpts * ifOpts, PtpInterface 
 				uint8_t *addr = (uint8_t *) &((struct sockaddr_in6*)&(transport->interfaceInfo.afAddress))->sin6_addr;
 
 				/* Use the host portion of the IPv6 address as the interface ID
- * 				 * per 7.5.2.2.2 */
+				 * per 7.5.2.2.2 */
 				memcpy(transport->interfaceID, addr + 8, 8);
 			}
 		}
