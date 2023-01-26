@@ -1,6 +1,6 @@
 Solarflare Enhanced PTP Daemon (sfptpd) from Xilinx
 ===================================================
-Version: v3.6.0.1015
+Version: v3.7.0.1000
 
 
 Overview
@@ -57,15 +57,14 @@ This package is supported on:
 Documentation
 -------------
 For detailed instructions on how to use the sfptpd with Xilinx adapters
-please refer to the "Solarflare Enhanced PTP User Guide"
-(part number SF-109110-CD) which is available as a PDF from
-under the Linux category at: <https://www.xilinx.com/download/drivers>
+please refer to the "Enhanced PTP User Guide" (UG1602) available from
+<https://docs.xilinx.com/r/en-US/ug1602-ptp-user>
 
 
 Support
 -------
 Please contact your local Xilinx NIC support representative or email
-<support-nic@xilinx.com>.
+<support-nic@amd.com>.
 
 Issues using sfptpd with non-Xilinx NICs are best raised at
 <https://github.com/Xilinx-CNS/sfptpd/issues> for support from the user
@@ -86,8 +85,8 @@ Issue SWNETLINUX-4466
     https://support.xilinx.com/s/article/PPS-not-detected-by-sfptpd-without-timestamping
 
 
-Advanced notice of likely future changes after v3.6
----------------------------------------------------
+Advanced notice of possible future changes
+------------------------------------------
 
  * Future change to default for non_xilinx_nics
 
@@ -106,15 +105,24 @@ Advanced notice of likely future changes after v3.6
    crny sync module explicitly as a future release may not create the implicit
    instance.
 
- * Supporting new IEEE1588 specifications
-
-   Future releases may default to supporting new PTP specs out of the box. If
-   it is required to avoid new features for interoperability reasons it is
-   recommended to specify 'ptp_version 2.0' in the 'ptp' configuration section.
-
 
 Changelog
 ---------
+
+### v3.7.0.1000 Feature Release
+
+Features:
+ ~ Allow running as non-root user with minimum required capabilities (SWPTP-442)
+ ~ Support bridges including over bonds in similar way to LACP bonds (SWPTP-826)
+ ~ Support MACVLANs when timestamping enabled in host netns (SWPTP-992)
+ ~ Default to IEEE1588:2019, PTP revision 2.1 (SWPTP-1251)
+ ~ Allow a bond or bridge to be specified to define a freerun clock (SWPTP-1169)
+ ~ Replace bond, team and interface probing with netlink scanning (SWPTP-1269)
+ ~ Mix 'efx' clock diff method with list of preferred phc methods (SWPTP-1285)
+ ~ Add sync-instances file showing factors influencing selection (SWPTP-1286)
+ ~ Add ntp and servo logging modules for targetted diagnostics (SWPTP-1291)
+ ~ Reflect external constraints (i.e. on chronyd) as selection rule (SWPTP-1295)
+
 
 ### v3.6.0.1015 Feature Release
 
@@ -748,16 +756,15 @@ Copyright
 ---------
 Please see LICENSE included in this distribution for terms of use.
 
-Certain files intended as examples for customisation by users are licensed
-with the BSD 2-clause licence. Such files are identified with an SPDX tag.
+sfptpd is provided under a BSD 3-clause license.
 
 This application includes a modified version of the 'ptpd' PTPD2 sourceforge
 project available at http://ptpd.sourceforge.net/. The PTPD2 software is
-distributed under a BSD-style license available in the file PTPD2_COPYRIGHT.
+distributed under a BSD 2-clause license available in the file PTPD2_COPYRIGHT.
 The version sourced is ptpd v2.3.
 
-This application includes part of ntpd to implement the mode 6 NTP query
-protocol; this is distributed under the NTP license available in the file
+The program includes part of ntpd to implement NTP query and control
+protocols; this is distributed under the NTP license available in the file
 NTP_COPYRIGHT.html. The following files in the source code are affected:
   - src/ntp/sfptpd_ntpd_client_mode6.c
   - src/ntp/sfptpd_ntpd_client_mode7.c
@@ -766,4 +773,4 @@ NTP_COPYRIGHT.html. The following files in the source code are affected:
 The version sourced is ntp-4.2.6p5.
 
 
-(c) Copyright 2012-2022 Xilinx, Inc.
+(c) Copyright 2012-2023 Xilinx, Inc.
