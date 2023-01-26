@@ -309,13 +309,14 @@ static void clock_dump_header(const char *title, int trace_level) {
 }
 
 static void clock_dump_record(struct sfptpd_clock *clock, int trace_level) {
-	const char *sys_pat = "  | %-7s | %-36s | %-10s | %s\n";
+	const char *sys_pat = "  | %-7s | %-36s | %-10s | %s%s\n";
 	const char *nic_pat = "  | %-7s | %6d | %6d | %-18s | %-10s | %s%s%s\n";
 
 	if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM) {
 	  sfptpd_log_trace(SFPTPD_COMPONENT_ID_SFPTPD, trace_level,
 			   sys_pat, "sys", "",
-			   clock->short_name, clock->long_name);
+			   clock->short_name, clock->long_name,
+			   clock->read_only ? " [read-only]" : "");
 	} else {
 	  sfptpd_log_trace(SFPTPD_COMPONENT_ID_SFPTPD, trace_level,
 			   nic_pat,
