@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# (c) Copyright 2023 Xilinx, Inc.
+
+SUBSYSTEM=="ptp", GROUP="sfptpd", OWNER="sfptpd", MODE="0660"
+SUBSYSTEM=="pps", GROUP="sfptpd", OWNER="sfptpd", MODE="0660"
