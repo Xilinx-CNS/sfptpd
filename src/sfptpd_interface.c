@@ -437,8 +437,6 @@ static pthread_mutex_t *sfptpd_interface_lock;
  * Forward declarations
  ****************************************************************************/
 
-static void interface_diagnostics(int trace_level);
-
 
 /****************************************************************************
  * Interface Operations
@@ -951,7 +949,7 @@ no_ethtool:
 
 static int rescan_interfaces(void)
 {
-	interface_diagnostics(4);
+	sfptpd_interface_diagnostics(4);
 	sfptpd_clock_rescan_interfaces();
 
 	return 0;
@@ -1176,17 +1174,6 @@ static void interface_free(struct sfptpd_interface *interface)
 }
 
 
-static void interface_diagnostics(int trace_level)
-{
-	sfptpd_db_table_dump(trace_level, "interfaces", false,
-			     sfptpd_interface_table,
-			     INTF_KEY_DELETED, &(int){ false },
-			     SFPTPD_DB_SEL_ORDER_BY,
-			     INTF_KEY_IF_INDEX,
-			     SFPTPD_DB_SEL_END);
-}
-
-
 /* Updates the passed variable with the canonical interface object.
    Acquires the lock if found.
    Returns false if no interface was specified or it was deleted,
@@ -1367,10 +1354,21 @@ int sfptpd_interface_initialise(struct sfptpd_config *config,
 	}
 
 	/* Output initial interface and clock lists */
-	interface_diagnostics(3);
+	sfptpd_interface_diagnostics(3);
 	sfptpd_clock_diagnostics(3);
 
 	return 0;
+}
+
+
+void sfptpd_interface_diagnostics(int trace_level)
+{
+	sfptpd_db_table_dump(trace_level, "interfaces", false,
+			     sfptpd_interface_table,
+			     INTF_KEY_DELETED, &(int){ false },
+			     SFPTPD_DB_SEL_ORDER_BY,
+			     INTF_KEY_IF_INDEX,
+			     SFPTPD_DB_SEL_END);
 }
 
 
@@ -1400,7 +1398,7 @@ void sfptpd_interface_shutdown(struct sfptpd_config *config)
 	if (sfptpd_interface_socket == -1) return;
 
 	interface_lock();
-	interface_diagnostics(4);
+	sfptpd_interface_diagnostics(4);
 
 	/* Mark all the interfaces as dead */
 	sfptpd_db_table_foreach(sfptpd_interface_table,

@@ -352,4 +352,9 @@ int sfptpd_interface_driver_stats_read(struct sfptpd_interface *interface,
  */
 int sfptpd_interface_driver_stats_reset(struct sfptpd_interface *interface);
 
+/** Dump list of interfaces to logs
+ * @param trace_level the level of trace
+ */
+void sfptpd_interface_diagnostics(int trace_level);
+
 #endif /* _SFPTPD_INTERFACE_H */

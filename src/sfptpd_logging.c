@@ -539,8 +539,10 @@ void sfptpd_log_trace(sfptpd_component_id_e component, unsigned int level,
 	va_start(ap, format);
 
 	assert(component < SFPTPD_COMPONENT_ID_MAX);
-	assert(level > 0);
 	assert(format != NULL);
+
+	/* Permit trace level 0, using it for explicit user requests for
+	 * diagnostics at runtime. */
 
 	/* For trace, we suppress the output if above the current trace level. */
 	if (level > trace_levels[component])

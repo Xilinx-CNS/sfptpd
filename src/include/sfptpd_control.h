@@ -25,6 +25,7 @@ enum sfptpd_control_action {
 	CONTROL_STEPCLOCKS,
 	CONTROL_SELECTINSTANCE,
 	CONTROL_TESTMODE,
+	CONTROL_DUMPTABLES,
 };
 
 union sfptpd_control_action_parameters {

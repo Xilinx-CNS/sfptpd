@@ -40,6 +40,7 @@ static const char *COMMAND_LOGROTATE = "logrotate";
 static const char *COMMAND_STEPCLOCKS = "stepclocks";
 static const char *COMMAND_SELECTINSTANCE = "selectinstance=";
 static const char *COMMAND_TESTMODE = "testmode=";
+static const char *COMMAND_DUMPTABLES = "dumptables";
 
 static const struct sfptpd_test_mode_descriptor test_modes[] = SFPTPD_TESTS_ARRAY;
 
@@ -130,6 +131,8 @@ enum sfptpd_control_action sfptpd_control_socket_get_action(union sfptpd_control
 		return CONTROL_LOGROTATE;
 	} else if (!strcmp(buf, COMMAND_STEPCLOCKS)) {
 		return CONTROL_STEPCLOCKS;
+	} else if (!strcmp(buf, COMMAND_DUMPTABLES)) {
+		return CONTROL_DUMPTABLES;
 	} else if (!strncmp(buf, COMMAND_SELECTINSTANCE, strlen(COMMAND_SELECTINSTANCE))) {
 		sfptpd_strncpy(param->selected_instance,
 			       &buf[strlen(COMMAND_SELECTINSTANCE)],

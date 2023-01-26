@@ -574,6 +574,12 @@ static void main_on_user_fds(void *not_used, unsigned int num_fds, int fds[])
 					param.test_mode.params[1],
 					param.test_mode.params[2]);
 		break;
+	case CONTROL_DUMPTABLES:
+		/* Dump diagnostic tables */
+		NOTICE("received 'dumptables' control command: outputing diagnostics\n");
+		sfptpd_interface_diagnostics(0);
+		sfptpd_clock_diagnostics(0);
+		break;
 	}
 }
 
