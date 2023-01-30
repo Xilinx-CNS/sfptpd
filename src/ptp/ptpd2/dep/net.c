@@ -882,7 +882,7 @@ static int getTxTimestamp(PtpClock *ptpClock, char *pdu, int pdulen,
 
 					if ((SOL_SOCKET == level) &&
 					    (SO_TIMESTAMPING == type)) {
-						if (cmsg->cmsg_len < sizeof(*ts)*3) {
+						if (cmsg->cmsg_len < CMSG_LEN(sizeof(*ts) * 3)) {
 							ERROR("received short so_timestamping\n");
 							return ENOTIMESTAMP;
 						}
@@ -1011,7 +1011,7 @@ static Boolean getRxTimestamp(PtpInterface *ptpInterface, char *pdu, int pduLeng
 		case SCM_TIMESTAMP:
 			tv = (struct timeval *)CMSG_DATA(cmsg);
 
-			if(cmsg->cmsg_len < sizeof(*tv)) {
+			if(cmsg->cmsg_len < CMSG_LEN(sizeof(*tv))) {
 				ERROR("received short SCM_TIMESTAMP (%zu)\n",
 				      cmsg->cmsg_len);
 				return FALSE;
@@ -1025,7 +1025,7 @@ static Boolean getRxTimestamp(PtpInterface *ptpInterface, char *pdu, int pduLeng
 		case SCM_TIMESTAMPNS:
 			ts = (struct timespec *)CMSG_DATA(cmsg);
 
-			if(cmsg->cmsg_len < sizeof(*ts)) {
+			if(cmsg->cmsg_len < CMSG_LEN(sizeof(*ts))) {
 				ERROR("received short SCM_TIMESTAMPNS (%zu)\n",
 				      cmsg->cmsg_len);
 				return FALSE;
@@ -1040,7 +1040,7 @@ static Boolean getRxTimestamp(PtpInterface *ptpInterface, char *pdu, int pduLeng
 			/* Array of three time stamps: sw, hw, raw hw */
 			ts = (struct timespec*)CMSG_DATA(cmsg);
 
-			if (cmsg->cmsg_len < sizeof(*ts)*3) {
+			if (cmsg->cmsg_len < CMSG_LEN(sizeof(*ts) * 3)) {
 				ERROR("received short SO_TIMESTAMPING (%zu)\n",
 				cmsg->cmsg_len);
 				return FALSE;
