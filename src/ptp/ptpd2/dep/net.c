@@ -852,6 +852,7 @@ static int getTxTimestamp(PtpClock *ptpClock, char *pdu, int pdulen,
 		struct sock_extended_err *err;
 		struct timespec *ts;
 		int cnt, level, type;
+		size_t len;
 		char control[512];
 		unsigned char buf[PACKET_SIZE];
 
@@ -871,18 +872,30 @@ static int getTxTimestamp(PtpClock *ptpClock, char *pdu, int pdulen,
 			cnt = recvmsg(transport->eventSock, &msg, MSG_ERRQUEUE);
 			if (cnt >= pdulen + trailer) {
 				/* We have a suitable message */
+				DBGV("recvmsg(ERRQUEUE) returned %d bytes\n", cnt);
 				DUMP("cmsg all", buf, cnt);
+
+				/* Report if we get unexpected control message flags
+				 * but still try parsing the ancillary data */
+				if (msg.msg_flags != MSG_ERRQUEUE) {
+					WARNING("Received %s ancillary data 0x%x\n",
+					        msg.msg_flags | MSG_CTRUNC ? "truncated" : "invalid",
+						msg.msg_flags);
+				}
 
 				for (cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL;
 				     cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+					len = cmsg->cmsg_len;
 					level = cmsg->cmsg_level;
 					type  = cmsg->cmsg_type;
 
-					DUMP("cmsg", cmsg, cmsg->cmsg_len);
+					DBGV("control message len=%zu level=%d type=%d\n",
+					     len, level, type);
+					DUMP("cmsg", cmsg, len);
 
 					if ((SOL_SOCKET == level) &&
 					    (SO_TIMESTAMPING == type)) {
-						if (cmsg->cmsg_len < CMSG_LEN(sizeof(*ts) * 3)) {
+						if (len < CMSG_LEN(sizeof(*ts) * 3)) {
 							ERROR("received short so_timestamping\n");
 							return ENOTIMESTAMP;
 						}
