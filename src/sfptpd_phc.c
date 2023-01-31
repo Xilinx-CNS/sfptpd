@@ -796,9 +796,16 @@ static int phc_set_fallback_diff_method(struct sfptpd_phc *phc)
 	assert(phc != NULL);
 
 	/* Requires invariant that diff methods array is terminated by SFPTPD_DIFF_METHOD_MAX */
-	for (; phc->diff_method_index < SFPTPD_DIFF_METHOD_MAX; phc->diff_method_index++) {
+	for (phc->diff_method_index++;
+	     phc->diff_method_index < SFPTPD_DIFF_METHOD_MAX;
+	     phc->diff_method_index++) {
 		method = phc_diff_methods[phc->diff_method_index];
 		defn = phc->diff_method_defs + method;
+
+		TRACE_L4("phc%d: checking %dth method (%p), %s\n",
+		     phc->phc_idx, phc->diff_method_index,
+		     defn->diff_fn,
+		     sfptpd_phc_diff_method_text[method]);
 
 		switch (method) {
 		case SFPTPD_DIFF_METHOD_SYS_OFFSET_PRECISE:
@@ -1120,7 +1127,7 @@ int sfptpd_phc_start(struct sfptpd_phc *phc)
 	int rc;
 	int i;
 
-	phc->diff_method_index = 0;
+	phc->diff_method_index = -1;
 	rc = phc_set_fallback_diff_method(phc);
 	if (rc != 0)
 		return rc;
