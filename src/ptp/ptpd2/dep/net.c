@@ -843,31 +843,26 @@ static int getTxTimestamp(PtpClock *ptpClock, char *pdu, int pdulen,
 		break;
 
 	case TS_METHOD_SO_TIMESTAMPING:
-	{
-		Boolean haveTs, havePkt, matchedPkt;
-
-		struct cmsghdr *cmsg;
-		struct iovec vec[1];
-		struct msghdr msg;
-		struct sock_extended_err *err;
-		struct timespec *ts;
-		int cnt, level, type;
-		size_t len;
-		char control[512];
-		unsigned char buf[PACKET_SIZE];
-
-		vec[0].iov_base = buf;
-		vec[0].iov_len = sizeof(buf);
-		memset(&msg, 0, sizeof(msg));
-		msg.msg_iov = vec;
-		msg.msg_iovlen = 1;
-		msg.msg_control = control;
-		msg.msg_controllen = sizeof(control);
-
 		do {
-			haveTs = FALSE;
-			havePkt = FALSE;
-			matchedPkt = FALSE;
+			Boolean haveTs = FALSE, havePkt = FALSE, matchedPkt = FALSE;
+
+			struct cmsghdr *cmsg;
+			struct iovec vec[1];
+			struct msghdr msg;
+			struct sock_extended_err *err;
+			struct timespec *ts;
+			int cnt, level, type;
+			size_t len;
+			char control[512];
+			unsigned char buf[PACKET_SIZE];
+
+			vec[0].iov_base = buf;
+			vec[0].iov_len = sizeof(buf);
+			memset(&msg, 0, sizeof(msg));
+			msg.msg_iov = vec;
+			msg.msg_iovlen = 1;
+			msg.msg_control = control;
+			msg.msg_controllen = sizeof(control);
 
 			cnt = recvmsg(transport->eventSock, &msg, MSG_ERRQUEUE);
 			if (cnt >= pdulen + trailer) {
@@ -985,7 +980,6 @@ static int getTxTimestamp(PtpClock *ptpClock, char *pdu, int pdulen,
 			sfptpd_time_subtract(&elapsed, &elapsed, &start);
 		} while ((elapsed.tv_sec == 0) && (elapsed.tv_nsec < 100000000));
 		break;
-	}
 
 	default:
 		ERROR("getTxTimestamp() Unexpected timestamp type %d\n", tsType);
