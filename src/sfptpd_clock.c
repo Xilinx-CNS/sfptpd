@@ -2005,7 +2005,7 @@ int sfptpd_clock_compare(struct sfptpd_clock *clock1, struct sfptpd_clock *clock
 	}
 
 	if (clock1->type != SFPTPD_CLOCK_TYPE_SYSTEM) {
-		rc = sfptpd_phc_compare_to_sys_clk(clock1->u.nic.phc, &diff2);
+		rc = sfptpd_phc_compare_to_sys_clk(clock1->u.nic.phc, diff);
 
 		if (rc != 0) {
 			sfptpd_stats_collection_update_count(&clock1->stats,
