@@ -855,7 +855,15 @@ static void timer_on_expiry(struct sfptpd_timer *timer)
 	assert(timer->magic == SFPTPD_TIMER_MAGIC);
 
 	result = read(timer->fd, &expirations, sizeof(expirations));
-	if (result != sizeof(uint64_t)) {
+	if (result == -1) {
+		if (errno == ECANCELED) {
+			WARNING("thread %s timer %d: detected discontinuity in clock\n",
+				thread_get_name(), timer->id);
+		} else {
+			WARNING("thread %s timer %d: error reading timer expiry count, %s\n",
+				thread_get_name(), timer->id, strerror(errno));
+		}
+	} else if (result != sizeof(uint64_t)) {
 		WARNING("thread %s timer %d: read unexpected length from timer fd, %zd\n",
 			thread_get_name(), timer->id, result);
 	} else if (expirations > TIMER_EXPIRIES_WARN_THRESH) {
