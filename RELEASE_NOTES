@@ -41,9 +41,9 @@ under the Linux category at: <https://www.xilinx.com/download/drivers>
 Linux distribution support
 --------------------------
 This package is supported on:
-- Red Hat Enterprise Linux 6.10
-- Red Hat Enterprise Linux 7.8 - 7.9
-- Red Hat Enterprise Linux 8.2 - 8.7
+- Red Hat Enterprise Linux 6.9 - 6.10
+- Red Hat Enterprise Linux 7.6 - 7.9
+- Red Hat Enterprise Linux 8.1 - 8.7
 - Red Hat Enterprise Linux 9.0 - 9.1
 - SuSE Linux Enterprise Server 12 sp4 and sp5
 - SuSE Linux Enterprise Server 15 sp1 - sp4
@@ -115,13 +115,16 @@ Features:
  ~ Allow running as non-root user with minimum required capabilities (SWPTP-442)
  ~ Support bridges including over bonds in similar way to LACP bonds (SWPTP-826)
  ~ Support MACVLANs when timestamping enabled in host netns (SWPTP-992)
- ~ Default to IEEE1588:2019, PTP revision 2.1 (SWPTP-1251)
+ ~ Default to IEEE Std 1588-2019, PTP revision 2.1 (SWPTP-1251)
  ~ Allow a bond or bridge to be specified to define a freerun clock (SWPTP-1169)
  ~ Replace bond, team and interface probing with netlink scanning (SWPTP-1269)
  ~ Mix 'efx' clock diff method with list of preferred phc methods (SWPTP-1285)
  ~ Add sync-instances file showing factors influencing selection (SWPTP-1286)
  ~ Add ntp and servo logging modules for targetted diagnostics (SWPTP-1291)
  ~ Reflect external constraints (i.e. on chronyd) as selection rule (SWPTP-1295)
+
+Issue SWPTP-1278
+ ~ Fix retrieval of transmit timestamps to recover from nic reset quicker
 
 
 ### v3.6.0.1015 Feature Release
