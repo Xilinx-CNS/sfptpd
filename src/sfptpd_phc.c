@@ -646,12 +646,12 @@ static int phc_compare_using_pps(void *context, struct timespec *diff)
 static int phc_compare_using_precise_offset(void *context,
 					    struct timespec *diff)
 {
-	struct sfptpd_phc *phc = (struct sfptpd_phc *) context;
 	int rc = EOPNOTSUPP;
 
 #ifdef PTP_SYS_OFFSET_PRECISE
 	/* Kernel snapshot of {dev, real, mono} clock times */
 	struct ptp_sys_offset_precise ktimes;
+	struct sfptpd_phc *phc = (struct sfptpd_phc *) context;
 
 	assert(phc != NULL);
 	assert(phc->phc_fd >= 0);
