@@ -1812,7 +1812,6 @@ static int ptp_configure_clock(struct sfptpd_ptp_intf *interface)
 static int ptp_handle_bonding_interface_change(struct sfptpd_ptp_intf *intf,
 					       bool *bond_changed)
 {
-	struct sfptpd_clock *new_clock;
 	struct sfptpd_ptp_bond_info new_bond_info;
 	struct sfptpd_ptp_instance *instance;
 	const struct sfptpd_link *logical_link;
@@ -1911,19 +1910,18 @@ static int ptp_handle_bonding_interface_change(struct sfptpd_ptp_intf *intf,
 		     new_bond_info.logical_if);
 	}
 
-	*bond_changed = active_changed || ts_changed;
-
-	if (active_changed) {
-		/* Determine the new PTP clock for the new active i/f */
-		new_clock = sfptpd_interface_get_clock(new_bond_info.active_if);
-	}
-
-	/* Reconfigure PTPD to use the new interface */
 	if (active_changed || ts_changed) {
+		/* Determine and store the new PTP clock */
+		intf->clock = sfptpd_interface_get_clock(new_bond_info.active_if);
+
+		/* Reconfigure PTPD to use the new interface */
 		rc = ptpd_change_interface(intf->ptpd_intf_private, new_bond_info.logical_if,
 					   new_bond_info.active_if, timestamp_type);
+
+		*bond_changed = true;
 	} else {
 		rc = 0;
+		*bond_changed = false;
 	}
 
 	if (active_changed && rc != 0 && rc != ENOENT) {
@@ -1938,10 +1936,8 @@ static int ptp_handle_bonding_interface_change(struct sfptpd_ptp_intf *intf,
 			 intf->bond_info.bond_if);
 	}
 
-	/* Store the new PTP clock and the new interface configuration */
+	/* Store the new interface configuration */
 	intf->bond_info = new_bond_info;
-	if (active_changed)
-		intf->clock = new_clock;
 
 finish:
 	/* Set alarm based on interface availability */
