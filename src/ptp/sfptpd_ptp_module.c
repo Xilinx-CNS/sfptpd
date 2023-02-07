@@ -1952,6 +1952,12 @@ finish:
 			SYNC_MODULE_ALARM_SET(instance->local_alarms, NO_INTERFACE);
 		}
 	}
+
+	/* Failure to find a physical interface is not fatal, we may get one
+	 * later. */
+	if (rc == ENOENT)
+		rc = 0;
+
 	return rc;
 }
 
