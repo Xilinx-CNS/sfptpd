@@ -621,7 +621,7 @@ static void clock_determine_stratum(struct sfptpd_clock *clock)
 	assert(stratum < SFPTPD_CLOCK_STRATUM_MAX);
 	clock->spec = &sfptpd_clock_specifications[stratum];
 
-	TRACE_L3("clock %s: stratum %s, accuracy (ppb) %Lf, holdover (ppb) %Lf (ppb)\n",
+	TRACE_L3("clock %s: stratum %s, accuracy %.3Lf ppb, holdover %.3Lf ppb\n",
 		 clock->short_name, clock->spec->name,
 		 clock->spec->accuracy, clock->spec->holdover);
 }
@@ -664,9 +664,6 @@ static void clock_determine_max_freq_adj(struct sfptpd_clock *clock)
 		WARNING("clock %s: failed to determine max frequency adjustment- "
 			"assuming %Lf\n",
 			clock->short_name, clock->max_freq_adj_ppb);
-	} else {
-		TRACE_L3("clock %s: max freq adjust (ppb) %Lf\n",
-			 clock->short_name, clock->max_freq_adj_ppb);
 	}
 
 	/* Apply overriding limit if set by user */
@@ -834,10 +831,10 @@ static int renew_clock(struct sfptpd_clock *clock)
 		/* Determine the maximum frequency adjustment for the clock. */
 		clock_determine_max_freq_adj(clock);
 
-		TRACE_L3("clock %s: device idx %d, hw id %s, stratum %s\n",
-			 clock->short_name, clock->u.nic.device_idx,
+		TRACE_L3("clock %s: id %s, max freq adj %.3Lf ppb\n",
+			 clock->short_name,
 			 clock->hw_id_string,
-			 clock->spec->name);
+			 clock->max_freq_adj_ppb);
 	} else {
 		/* Use an old interface as primary placeholder */
 		interface = sfptpd_interface_find_first_by_nic(clock->u.nic.nic_id);

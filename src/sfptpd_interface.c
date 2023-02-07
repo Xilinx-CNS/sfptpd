@@ -22,6 +22,7 @@
 #include <sys/timex.h>
 #include <sys/types.h>
 #include <sys/file.h>
+#include <sys/utsname.h>
 #include <math.h>
 #include <assert.h>
 #include <fts.h>
@@ -432,6 +433,7 @@ static int sfptpd_next_nic_id = 0;
 /* Shared with the clocks module */
 static pthread_mutex_t *sfptpd_interface_lock;
 
+static struct utsname sysinfo = { .release = "uname-failed" };
 
 /****************************************************************************
  * Forward declarations
@@ -632,10 +634,6 @@ static bool interface_check_suitability(const struct sfptpd_link *link,
 		}
 	}
 
-	if (*class == SFPTPD_INTERFACE_SFC || *class == SFPTPD_INTERFACE_XNET)
-		TRACE_L2("interface %s: Xilinx%s device\n", name,
-			 *class == SFPTPD_INTERFACE_SFC ? " (Solarflare)" : "");
-
 	return true;
 }
 
@@ -701,8 +699,6 @@ static int interface_get_hw_address(struct sfptpd_interface *interface)
 		 req->data[3], req->data[4], req->data[5]);
 	memcpy(interface->mac_addr.addr, req->data, sizeof(interface->mac_addr.addr));
 
-	TRACE_L3("interface %s: hardware address %s\n",
-		 interface->name, interface->mac_string);
 	return 0;
 }
 
@@ -721,10 +717,6 @@ static void interface_get_pci_ids(struct sfptpd_interface *interface,
 		interface->pci_vendor_id = id;
 	if (sysfs_read_int(sysfs_dir, interface->name, "device/device", &id))
 		interface->pci_device_id = id;
-
-	TRACE_L3("interface %s: PCI IDs vendor = 0x%hx, device = 0x%hx\n",
-		 interface->name, interface->pci_vendor_id,
-		 interface->pci_device_id);
 
 	for (i = 0; i < sizeof all_nic_models / sizeof *all_nic_models; i++) {
 		const struct nic_model_caps *model = all_nic_models + i;
@@ -764,11 +756,6 @@ static void interface_get_versions(struct sfptpd_interface *interface)
 	sfptpd_strncpy(interface->driver, drv_info.driver,
 		       sizeof(interface->driver));
 	interface->n_stats = drv_info.n_stats;
-
-	TRACE_L3("interface %s: driver version %s, firmware version %s\n",
-		 interface->name, interface->driver_version, interface->fw_version);
-	TRACE_L3("interface %s: bus address %s, driver %s\n",
-		 interface->name, interface->bus_addr, interface->driver);
 }
 
 
@@ -859,10 +846,6 @@ static void interface_check_efx_support(struct sfptpd_interface *interface)
 			interface->driver_supports_efx = true;
 		}
 	}
-
-	TRACE_L2("interface %s: %s efx ioctl\n",
-		 interface->name,
-		 interface->driver_supports_efx ? "supports" : "does not support");
 }
 
 
@@ -1072,8 +1055,9 @@ static int interface_init(const struct sfptpd_link *link, const char *sysfs_dir,
 			  struct sfptpd_interface *interface,
 			  sfptpd_interface_class_t class)
 {
-	int rc;
+	int rc = 0;
 	const char *name;
+	char phc_num[16] = "";
 	int if_index;
 
 	assert(link != NULL);
@@ -1101,10 +1085,8 @@ static int interface_init(const struct sfptpd_link *link, const char *sysfs_dir,
 
 	/* Get the permanent hardware address of the interface */
 	rc = interface_get_hw_address(interface);
-	if (rc != 0) {
+	if (rc != 0)
 		ERROR("interface %s: couldn't get hardware address\n", name);
-		return rc;
-	}
 
 	/* Get the PCI IDs */
 	interface_get_pci_ids(interface, sysfs_dir);
@@ -1118,13 +1100,36 @@ static int interface_init(const struct sfptpd_link *link, const char *sysfs_dir,
 	/* Check whether the driver supports the EFX ioctl */
 	interface_check_efx_support(interface);
 
+	/* Check whether the device supports PHC */
+	(void) interface_is_ptp_capable(interface->name, &interface->ts_info);
+	snprintf(phc_num, sizeof phc_num, "(%d)", interface->ts_info.phc_index);
+
+	TRACE_L3("interface %s: hw %s, flags%s%s%s\n",
+		 interface->name, interface->mac_string,
+		 interface->driver_supports_efx ? " efx" : "",
+		 interface->ts_info.phc_index != -1 ? " phc" :"",
+		 interface->ts_info.phc_index != -1 ? phc_num : "");
+	TRACE_L3("interface %s: device %hx:%hx%s at %s\n",
+		 interface->name,
+		 interface->pci_vendor_id,
+		 interface->pci_device_id,
+		 (interface->class == SFPTPD_INTERFACE_SFC ||
+		  interface->class == SFPTPD_INTERFACE_XNET) ? " (Xilinx)" : "",
+		 interface->bus_addr);
+	TRACE_L3("interface %s: %s %s, fw %s\n",
+		 interface->name,
+		 interface->driver,
+		 (strcmp(interface->driver_version, sysinfo.release) == 0 ?
+		  "in-tree" : interface->driver_version),
+		 interface->fw_version);
+
 	/* Assign NIC ID */
 	interface_assign_nic_id(interface);
 
 	/* Initialise stat-getting capability */
 	interface_driver_stats_init(interface);
 
-	return 0;
+	return rc;
 }
 
 static void interface_delete(struct sfptpd_interface *interface,
@@ -1248,6 +1253,7 @@ int sfptpd_interface_initialise(struct sfptpd_config *config,
 
 	assert(config != NULL);
 
+	(void) uname(&sysinfo);
 	sfptpd_interface_config = config;
 	sfptpd_interface_lock = hardware_state_lock;
 
@@ -1301,13 +1307,6 @@ int sfptpd_interface_initialise(struct sfptpd_config *config,
 				return rc;
 			}
 		}
-
-		if (!interface_is_ptp_capable(new->name, &new->ts_info))
-			TRACE_L3("interface %s: not PTP capable\n",
-				 new->name);
-		else
-			TRACE_L1("interface %s: PTP capable, clock idx %d\n",
-				 new->name, new->ts_info.phc_index);
 
 		/* Add the interface to the database */
 		sfptpd_db_table_insert(sfptpd_interface_table, &new);
@@ -1517,13 +1516,6 @@ int sfptpd_interface_hotplug_insert(const struct sfptpd_link *link)
 		      if_name, strerror(rc));
 		goto finish;
 	}
-
-	if (!interface_is_ptp_capable(interface->name, &interface->ts_info))
-		TRACE_L3("interface %s: not PTP capable\n",
-			 interface->name);
-	else
-		TRACE_L1("interface %s: PTP capable, clock idx %d\n",
-			 interface->name, interface->ts_info.phc_index);
 
  finish:
 	interface_unlock();
