@@ -1368,6 +1368,15 @@ int sfptpd_interface_initialise(struct sfptpd_config *config,
 
 void sfptpd_interface_diagnostics(int trace_level)
 {
+	if (trace_level > 4) {
+		sfptpd_db_table_dump(trace_level, "interfaces-dead-or-alive", false,
+				     sfptpd_interface_table,
+				     SFPTPD_DB_SEL_ORDER_BY,
+				     INTF_KEY_IF_INDEX,
+				     SFPTPD_DB_SEL_END);
+		return;
+	}
+
 	sfptpd_db_table_dump(trace_level, "interfaces", false,
 			     sfptpd_interface_table,
 			     INTF_KEY_DELETED, &(int){ false },
