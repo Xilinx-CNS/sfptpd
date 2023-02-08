@@ -1439,10 +1439,8 @@ int sfptpd_interface_hotplug_insert(const struct sfptpd_link *link)
 
 	interface = interface_find_by_if_index(if_index);
 	if (interface == NULL) {
-		interface = interface_find_by_name(if_name);
-
+		/* Avoid searching by name - that would be unreliable */
 		INFO("interface: hotplug insert for %s (%d)\n", if_name, if_index);
-
 		if (interface != NULL) {
 
 			/* Handle the case of an old interface in the list with the same name */
@@ -1450,7 +1448,6 @@ int sfptpd_interface_hotplug_insert(const struct sfptpd_link *link)
 
 				/* Overwrite this interface object for the new interface */
 				INFO("interface: replacing deleted interface %d\n", interface->if_index);
-
 			} else {
 				WARNING("interface: cannot process insertion of interface %s (%d) while undeleted interface of the same name (%d) still exists\n",
 					 if_name, if_index, interface->if_index);
