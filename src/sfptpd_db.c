@@ -62,6 +62,7 @@ struct selection {
 	int filter_count;
 	int filter_fields [MAX_FIELDS];
 	void *filter_values [MAX_FIELDS];
+	bool filter_invert [MAX_FIELDS];
 
 	/* Parameters for sorting result (ORDER BY) */
 	int sort_count;
@@ -212,8 +213,11 @@ static bool check_selection_matches(struct sfptpd_db_table *table,
 	for (key = 0; key < selection->filter_count; key ++) {
 		int filter_field = selection->filter_fields[key];
 		void *filter_value = selection->filter_values[key];
+		bool filter_invert = selection->filter_invert[key];
+		bool match;
 
-		if (table->def->fields[filter_field].compare_key(filter_value, record) != 0)
+		match = table->def->fields[filter_field].compare_key(filter_value, record) == 0;
+		if (filter_invert ? !match : match)
 			break;
 	}
 	return key == selection->filter_count;
@@ -223,20 +227,26 @@ static bool check_selection_matches(struct sfptpd_db_table *table,
 static void build_selection_params(struct selection *selection, va_list ap)
 {
 	int key;
+	int filter_index;
 
 	assert(selection != NULL);
 
-	selection->filter_count = 0;
 	selection->sort_count = 0;
-	while (true) {
+	for (filter_index = 0; true; filter_index++) {
+		bool invert = false;
 		key = va_arg(ap, int);
+		if (key == SFPTPD_DB_SEL_NOT) {
+			invert = true;
+			key = va_arg(ap, int);
+		}
 		if (key < 0)
 			break;
-		assert(selection->filter_count < MAX_FIELDS);
-		selection->filter_fields[selection->filter_count] = key;
-		selection->filter_values[selection->filter_count] = va_arg(ap, void *);
-		selection->filter_count ++;
+		assert(filter_index < MAX_FIELDS);
+		selection->filter_fields[filter_index] = key;
+		selection->filter_values[filter_index] = va_arg(ap, void *);
+		selection->filter_invert[filter_index] = invert;
 	}
+	selection->filter_count = filter_index;
 
 	if (key == SFPTPD_DB_SEL_ORDER_BY) {
 		while (true) {

@@ -30,6 +30,7 @@
 
 #define SFPTPD_DB_SEL_END -1
 #define SFPTPD_DB_SEL_ORDER_BY -2
+#define SFPTPD_DB_SEL_NOT -3
 
 enum sfptpd_db_store_type {
 	STORE_LINKED_LIST,
