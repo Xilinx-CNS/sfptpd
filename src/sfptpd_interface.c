@@ -979,7 +979,8 @@ static int interface_assign_nic_id(struct sfptpd_interface *interface)
 
 	/* If there is no PHC number then there is no purpose for the
 	   NIC number so leave as the -1 it is initialised to. */
-	if (interface->ts_info.phc_index != -1) {
+	if (interface->ts_info.phc_index != -1 &&
+	    interface->nic_id == -1) {
 		struct sfptpd_interface *other_intf;
 		int my_false = 0;
 
@@ -990,6 +991,7 @@ static int interface_assign_nic_id(struct sfptpd_interface *interface)
 		   just assigned us a different clock id.
 		*/
 		other_intf = FIND_ANY(INTF_KEY_CLOCK, &interface->ts_info.phc_index,
+				      SFPTPD_DB_SEL_NOT, INTF_KEY_IF_INDEX, &interface->if_index,
 				      INTF_KEY_DELETED, &my_false);
 		if (other_intf != NULL) {
 			TRACE_L4("while trying to assign a permanently-unique nic id to new "
@@ -1005,7 +1007,9 @@ static int interface_assign_nic_id(struct sfptpd_interface *interface)
 			interface->nic_id = other_intf->nic_id;
 		} else {
 			/* Then look for any DEAD interfaces with the same mac address */
-			other_intf = FIND_ANY(INTF_KEY_MAC, &interface->mac_addr);
+			other_intf = FIND_ANY(INTF_KEY_MAC, &interface->mac_addr,
+					      SFPTPD_DB_SEL_NOT,
+					      INTF_KEY_IF_INDEX, &interface->if_index);
 			if (other_intf != NULL &&
 			    other_intf->ts_info.phc_index != -1) {
 				TRACE_L4("while trying to assign a permanently-unique nic id to new "
@@ -1024,6 +1028,8 @@ static int interface_assign_nic_id(struct sfptpd_interface *interface)
 				    sfptpd_general_config_get(sfptpd_interface_config)->assume_one_phc_per_nic &&
 				    (other_intf = FIND_ANY(INTF_KEY_BUS_ADDR_NIC,
 							   &interface->bus_addr_nic,
+							   SFPTPD_DB_SEL_NOT,
+							   INTF_KEY_IF_INDEX, &interface->if_index,
 							   INTF_KEY_DELETED,
 							   &my_false)) != NULL &&
 				    other_intf->ts_info.phc_index != -1) {
