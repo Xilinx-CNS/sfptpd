@@ -217,7 +217,7 @@ static bool check_selection_matches(struct sfptpd_db_table *table,
 		bool match;
 
 		match = table->def->fields[filter_field].compare_key(filter_value, record) == 0;
-		if (filter_invert ? !match : match)
+		if (filter_invert ? match : !match)
 			break;
 	}
 	return key == selection->filter_count;
