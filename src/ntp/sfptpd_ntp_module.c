@@ -24,6 +24,7 @@
 #include "sfptpd_sync_module.h"
 #include "sfptpd_logging.h"
 #include "sfptpd_config.h"
+#include "sfptpd_general_config.h"
 #include "sfptpd_constants.h"
 #include "sfptpd_clock.h"
 #include "sfptpd_thread.h"
@@ -548,6 +549,23 @@ void ntp_parse_state(struct ntp_state *state, int rc, bool offset_unsafe)
 			sfptpd_clock_get_system_clock());
 }
 
+
+int ntp_handle_clock_control_conflict(ntp_module_t *ntp, int error)
+{
+	struct sfptpd_config_general *gconf;
+
+	gconf = sfptpd_general_config_get(SFPTPD_CONFIG_TOP_LEVEL(ntp->config));
+	CRITICAL("ntp: no capability to disable clock control\n");
+	if (gconf->ignore_critical[SFPTPD_CRITICAL_CLOCK_CONTROL_CONFLICT]) {
+		NOTICE("ptp: ignoring critical error by configuration\n");
+		return 0;
+	} else {
+		NOTICE("configure \"ignore_critical: clock-control-conflict\" to allow sfptpd to start in spite of this condition\n");
+		return error;
+	}
+}
+
+
 int ntp_configure_ntpd(ntp_module_t *ntp)
 {
 	int rc;
@@ -581,8 +599,10 @@ int ntp_configure_ntpd(ntp_module_t *ntp)
 	 * authenticate transactions with the NTP daemon */
 	if ((ntp->mode == NTP_MODE_ACTIVE) &&
 	    ((config->key_id == 0) || (config->key_value[0] == '\0'))) {
-		ERROR("ntp: active NTP instance created but no key supplied\n");
-		return EINVAL;
+		CRITICAL("ntp: active NTP instance created but no key supplied\n");
+		rc = ntp_handle_clock_control_conflict(ntp, EINVAL);
+		if (rc != 0)
+			return rc;
 	}
 
 	/* Checking for systemd-timesyncd.
@@ -646,16 +666,15 @@ int ntp_configure_ntpd(ntp_module_t *ntp)
 	if (ntp->mode == NTP_MODE_ACTIVE && ntp->state.sys_info.clock_control_enabled) {
 		rc = sfptpd_ntpclient_clock_control(ntp->client, false);
 		if (rc != 0) {
-			ERROR("ntp: failed to disable NTP clock control\n");
+			CRITICAL("ntp: failed to disable NTP clock control\n");
 			SYNC_MODULE_CONSTRAINT_SET(ntp->state.constraints, MUST_BE_SELECTED);
-			goto fail;
+			rc = ntp_handle_clock_control_conflict(ntp, EINVAL);
+			if (rc != 0)
+				return rc;
 		} else {
 			/* Update our local copy of the clock control status */
 			ntp->state.sys_info.clock_control_enabled = false;
 		}
-
-		/* Update our local copy of the clock control status */
-		ntp->state.sys_info.clock_control_enabled = false;
 	}
 
 	/* At this point we have done what we can to get NTP into the right
@@ -675,8 +694,11 @@ int ntp_configure_ntpd(ntp_module_t *ntp)
 				ERROR("ntp: ntpd is disciplining the system clock - cannot continue\n");
 			else
 				ERROR("ntp: ntpd may be disciplining the system clock - cannot continue\n");
-			rc = EBUSY;
-			goto fail;
+			CRITICAL("ntp: failed to disable NTP clock control\n");
+			SYNC_MODULE_CONSTRAINT_SET(ntp->state.constraints, MUST_BE_SELECTED);
+			rc = ntp_handle_clock_control_conflict(ntp, EBUSY);
+			if (rc != 0)
+				return rc;
 		}
 	}
 
