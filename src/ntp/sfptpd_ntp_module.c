@@ -566,6 +566,92 @@ int ntp_handle_clock_control_conflict(ntp_module_t *ntp, int error)
 }
 
 
+static void ntp_send_instance_status(ntp_module_t *ntp, struct ntp_state *new_state)
+{
+	sfptpd_sync_instance_status_t status = { 0 };
+
+	/* Send a status update to the sync engine to let it know
+	 * that the state of the NTP module has changed. */
+	status.state = new_state->state;
+	status.alarms = new_state->alarms;
+	status.constraints = new_state->constraints;
+	status.clock = sfptpd_clock_get_system_clock();
+	status.user_priority = ntp->config->priority;
+
+	sfptpd_time_float_ns_to_timespec(new_state->offset_from_master,
+					 &status.offset_from_master);
+	status.local_accuracy = SFPTPD_ACCURACY_NTP;
+
+	status.master.clock_id = SFPTPD_CLOCK_ID_UNINITIALISED;
+	status.master.accuracy = new_state->root_dispersion;
+	status.master.allan_variance = NAN;
+	status.master.time_traceable = false;
+	status.master.freq_traceable = false;
+
+	status.master.steps_removed = new_state->stratum;
+
+	/* Report the clock class according to the state */
+	if (status.state == SYNC_MODULE_STATE_SLAVE) {
+		status.master.remote_clock = true;
+		status.master.clock_class = SFPTPD_CLOCK_CLASS_LOCKED;
+		status.master.time_source = SFPTPD_TIME_SOURCE_NTP;
+
+	} else {
+		status.master.remote_clock = false;
+		status.master.clock_class = SFPTPD_CLOCK_CLASS_FREERUNNING;
+		status.master.time_source = SFPTPD_TIME_SOURCE_INTERNAL_OSCILLATOR;
+	}
+
+	status.clustering_score = new_state->clustering_score;
+
+	sfptpd_engine_sync_instance_state_changed(ntp->engine,
+						  sfptpd_thread_self(),
+						  (struct sfptpd_sync_instance *)ntp,
+						  &status);
+}
+
+
+static void ntp_send_rt_stats_update(ntp_module_t *ntp, struct sfptpd_log_time time)
+{
+	assert(ntp != NULL);
+
+	if (ntp->mode == NTP_MODE_ACTIVE &&
+	    ntp->state.state == SYNC_MODULE_STATE_SLAVE) {
+		sfptpd_time_t offset = ntp->state.peer_info.peers[ntp->state.selected_peer_idx].offset;
+
+		bool disciplining = (ntp->ctrl_flags & SYNC_MODULE_SELECTED) &&
+			ntp->state.sys_info.clock_control_enabled;
+
+		sfptpd_engine_post_rt_stats(ntp->engine,
+		                     &time,
+		                     SFPTPD_CONFIG_GET_NAME(ntp->config),
+		                     "ntp", NULL, sfptpd_clock_get_system_clock(),
+		                     disciplining, false,
+		                     ntp->synchronized, ntp->state.alarms,
+		                     STATS_KEY_OFFSET, offset,
+		                     STATS_KEY_END);
+	}
+}
+
+
+static void ntp_on_offset_id_change(ntp_module_t *ntp, struct ntp_state *new_state)
+{
+	DBG_L4("ntp: offset ID changed\n");
+
+	if (ntp->offset_unsafe && !offset_id_is_valid(new_state)) {
+		ntp->offset_unsafe = false;
+		INFO("ntp: new ntpd offset detected\n");
+		sfptpd_clock_get_time(sfptpd_clock_get_system_clock(), &ntp->offset_timestamp);
+	}
+
+	/* Send updated stats (offset) to the engine */
+	struct sfptpd_log_time time;
+	sfptpd_log_get_time(&time);
+	ntp_send_rt_stats_update(ntp, time);
+	ntp_send_clustering_input(ntp);
+}
+
+
 int ntp_configure_ntpd(ntp_module_t *ntp)
 {
 	int rc;
@@ -705,7 +791,6 @@ int ntp_configure_ntpd(ntp_module_t *ntp)
 	/* Parse the various state information retrieved from the daemon */
 	ntp_parse_state(&ntp->state, 0, ntp->offset_unsafe);
 	INFO("ntp: currently in state %s\n", ntp_state_text(ntp->state.state, 0));
-	ntp_send_clustering_input(ntp);
 
 fail:
 	return rc;
@@ -763,8 +848,6 @@ bool ntp_state_machine(ntp_module_t *ntp, struct ntp_state *new_state)
 
 static void ntp_handle_state_change(ntp_module_t *ntp, struct ntp_state *new_state)
 {
-	sfptpd_sync_instance_status_t status = { 0 };
-
 	assert(ntp != NULL);
 	assert(new_state != NULL);
 
@@ -812,67 +895,7 @@ static void ntp_handle_state_change(ntp_module_t *ntp, struct ntp_state *new_sta
 	    (new_state->offset_from_master != ntp->state.offset_from_master) ||
 	    (new_state->root_dispersion != ntp->state.root_dispersion) ||
 	    (new_state->stratum != ntp->state.stratum)) {
-		/* Send a status update to the sync engine to let it know
-		 * that the state of the NTP module has changed. */
-		status.state = new_state->state;
-		status.alarms = new_state->alarms;
-		status.constraints = new_state->constraints;
-		status.clock = sfptpd_clock_get_system_clock();
-		status.user_priority = ntp->config->priority;
-
-		sfptpd_time_float_ns_to_timespec(new_state->offset_from_master,
-						 &status.offset_from_master);
-		status.local_accuracy = SFPTPD_ACCURACY_NTP;
-
-		status.master.clock_id = SFPTPD_CLOCK_ID_UNINITIALISED;
-		status.master.accuracy = new_state->root_dispersion;
-		status.master.allan_variance = NAN;
-		status.master.time_traceable = false;
-		status.master.freq_traceable = false;
-
-		status.master.steps_removed = new_state->stratum;
-
-		/* Report the clock class according to the state */
-		if (status.state == SYNC_MODULE_STATE_SLAVE) {
-			status.master.remote_clock = true;
-			status.master.clock_class = SFPTPD_CLOCK_CLASS_LOCKED;
-			status.master.time_source = SFPTPD_TIME_SOURCE_NTP;
-
-		} else {
-			status.master.remote_clock = false;
-			status.master.clock_class = SFPTPD_CLOCK_CLASS_FREERUNNING;
-			status.master.time_source = SFPTPD_TIME_SOURCE_INTERNAL_OSCILLATOR;
-		}
-
-		status.clustering_score = new_state->clustering_score;
-
-		sfptpd_engine_sync_instance_state_changed(ntp->engine,
-							  sfptpd_thread_self(),
-							  (struct sfptpd_sync_instance *)ntp,
-							  &status);
-	}
-}
-
-
-static void ntp_send_rt_stats_update(ntp_module_t *ntp, struct sfptpd_log_time time)
-{
-	assert(ntp != NULL);
-
-	if (ntp->mode == NTP_MODE_ACTIVE &&
-	    ntp->state.state == SYNC_MODULE_STATE_SLAVE) {
-		sfptpd_time_t offset = ntp->state.peer_info.peers[ntp->state.selected_peer_idx].offset;
-
-		bool disciplining = (ntp->ctrl_flags & SYNC_MODULE_SELECTED) &&
-			ntp->state.sys_info.clock_control_enabled;
-
-		sfptpd_engine_post_rt_stats(ntp->engine,
-		                     &time,
-		                     SFPTPD_CONFIG_GET_NAME(ntp->config),
-		                     "ntp", NULL, sfptpd_clock_get_system_clock(),
-		                     disciplining, false,
-		                     ntp->synchronized, ntp->state.alarms,
-		                     STATS_KEY_OFFSET, offset,
-		                     STATS_KEY_END);
+		ntp_send_instance_status(ntp, new_state);
 	}
 }
 
@@ -929,24 +952,6 @@ static void ntp_on_clock_control_change(ntp_module_t *ntp, struct ntp_state *new
 			ERROR("ntp: failed to restore ntpd clock control state!\n");
 		}
 	}
-}
-
-
-static void ntp_on_offset_id_change(ntp_module_t *ntp, struct ntp_state *new_state)
-{
-	DBG_L4("ntp: offset ID changed\n");
-
-	if (ntp->offset_unsafe && !offset_id_is_valid(new_state)) {
-		ntp->offset_unsafe = false;
-		INFO("ntp: new ntpd offset detected\n");
-		sfptpd_clock_get_time(sfptpd_clock_get_system_clock(), &ntp->offset_timestamp);
-	}
-
-	/* Send updated stats (offset) to the engine */
-	struct sfptpd_log_time time;
-	sfptpd_log_get_time(&time);
-	ntp_send_rt_stats_update(ntp, time);
-	ntp_send_clustering_input(ntp);
 }
 
 
@@ -1268,6 +1273,13 @@ static void ntp_on_run(ntp_module_t *ntp)
 	(void)clock_gettime(CLOCK_MONOTONIC, &ntp->next_poll_time);
 	ntp->query_state = NTP_QUERY_STATE_SYS_INFO;
 	ntp->offset_unsafe = false;
+
+	/* Send initial status */
+	if (ntp->mode == NTP_MODE_ACTIVE) {
+		ntp_on_offset_id_change(ntp, &ntp->state);
+		ntp_send_instance_status(ntp, &ntp->state);
+		ntp_stats_update(ntp);
+	}
 }
 
 
