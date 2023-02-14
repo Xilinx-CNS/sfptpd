@@ -1507,6 +1507,13 @@ static struct sfptpd_config_section *ntp_config_create(const char *name,
 		new->key_value[0] = '\0';
 	}
 
+	/* If this is an implicitly created sync instance, give it the lowest
+	   possible user priority. */
+	if (name == NULL) {
+		name = "ntp0";
+		new->priority = INT_MAX;
+	}
+
 	SFPTPD_CONFIG_SECTION_INIT(new, ntp_config_create, ntp_config_destroy,
 				   SFPTPD_CONFIG_CATEGORY_NTP,
 				   scope, allows_instances, name);
