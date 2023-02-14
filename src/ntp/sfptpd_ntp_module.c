@@ -83,6 +83,9 @@ struct ntp_state {
 	/* Alarms */
 	sfptpd_sync_module_alarms_t alarms;
 
+	/* Constraints */
+	sfptpd_sync_module_constraints_t constraints;
+
 	/* Unique information to identify the offset.
 	   This is guaranteed to change each time
 	   that NTP calculates a new offset from the selected peer.
@@ -484,6 +487,8 @@ void ntp_parse_state(struct ntp_state *state, int rc, bool offset_unsafe)
 			state->state = SYNC_MODULE_STATE_LISTENING;
 		else
 			state->state = SYNC_MODULE_STATE_FAULTY;
+		SYNC_MODULE_CONSTRAINT_CLEAR(state->constraints, MUST_BE_SELECTED);
+		SYNC_MODULE_CONSTRAINT_CLEAR(state->constraints, CANNOT_BE_SELECTED);
 		state->sys_info.peer_address_len = 0;
 		state->sys_info.clock_control_enabled = false;
 		state->selected_peer_idx = -1;
@@ -642,7 +647,11 @@ int ntp_configure_ntpd(ntp_module_t *ntp)
 		rc = sfptpd_ntpclient_clock_control(ntp->client, false);
 		if (rc != 0) {
 			ERROR("ntp: failed to disable NTP clock control\n");
+			SYNC_MODULE_CONSTRAINT_SET(ntp->state.constraints, MUST_BE_SELECTED);
 			goto fail;
+		} else {
+			/* Update our local copy of the clock control status */
+			ntp->state.sys_info.clock_control_enabled = false;
 		}
 
 		/* Update our local copy of the clock control status */
@@ -777,6 +786,7 @@ static void ntp_handle_state_change(ntp_module_t *ntp, struct ntp_state *new_sta
 
 	if ((new_state->state != ntp->state.state) ||
 	    (new_state->alarms != ntp->state.alarms) ||
+	    (new_state->constraints != ntp->state.constraints) ||
 	    (new_state->offset_from_master != ntp->state.offset_from_master) ||
 	    (new_state->root_dispersion != ntp->state.root_dispersion) ||
 	    (new_state->stratum != ntp->state.stratum)) {
@@ -784,6 +794,7 @@ static void ntp_handle_state_change(ntp_module_t *ntp, struct ntp_state *new_sta
 		 * that the state of the NTP module has changed. */
 		status.state = new_state->state;
 		status.alarms = new_state->alarms;
+		status.constraints = new_state->constraints;
 		status.clock = sfptpd_clock_get_system_clock();
 		status.user_priority = ntp->config->priority;
 
@@ -880,14 +891,20 @@ static void ntp_on_clock_control_change(ntp_module_t *ntp, struct ntp_state *new
 	/* If we have control, try to stop NTP */
 	if ((ntp->mode == NTP_MODE_ACTIVE) &&
 	    (new_state->state != SYNC_MODULE_STATE_DISABLED)) {
-		INFO("ntp: attempting to restore ntpd clock control...\n");
+		INFO("ntp: attempting to restore ntpd clock control state...\n");
 		rc = sfptpd_ntpclient_clock_control(ntp->client, clock_control);
 		if (rc == 0) {
 			new_state->sys_info.clock_control_enabled = clock_control;
+			SYNC_MODULE_CONSTRAINT_CLEAR(new_state->constraints, MUST_BE_SELECTED);
+			SYNC_MODULE_CONSTRAINT_CLEAR(new_state->constraints, CANNOT_BE_SELECTED);
 			INFO("ntp: successfully %sabled ntpd clock control\n",
 			     clock_control? "en": "dis");
 		} else {
-			ERROR("ntp: failed to restore ntpd clock control!\n");
+			if (clock_control)
+				SYNC_MODULE_CONSTRAINT_SET(new_state->constraints, CANNOT_BE_SELECTED);
+			else
+				SYNC_MODULE_CONSTRAINT_SET(new_state->constraints, MUST_BE_SELECTED);
+			ERROR("ntp: failed to restore ntpd clock control state!\n");
 		}
 	}
 }
@@ -924,6 +941,7 @@ static void ntp_on_get_status(ntp_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 	status = &msg->u.get_status_resp.status;
 	status->state = ntp->state.state;
 	status->alarms = ntp->state.alarms;
+	status->constraints = ntp->state.constraints;
 	/* The reference clock for NTP is always the system clock */
 	status->clock = sfptpd_clock_get_system_clock();
 	status->user_priority = ntp->config->priority;
@@ -991,11 +1009,19 @@ static void ntp_on_control(ntp_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 		rc = sfptpd_ntpclient_clock_control(ntp->client, clock_control);
 		if (rc == 0) {
 			ntp->state.sys_info.clock_control_enabled = clock_control;
+			SYNC_MODULE_CONSTRAINT_CLEAR(ntp->state.constraints, MUST_BE_SELECTED);
+			SYNC_MODULE_CONSTRAINT_CLEAR(ntp->state.constraints, CANNOT_BE_SELECTED);
 			DBG_L2("ntp: successfully %sabled ntpd clock control\n",
 			       clock_control? "en": "dis");
 		} else {
 			ERROR("ntp: failed to change ntpd clock control, %s!\n",
 			      strerror(rc));
+			if (clock_control != ntp->state.sys_info.clock_control_enabled) {
+				if (clock_control)
+					SYNC_MODULE_CONSTRAINT_SET(ntp->state.constraints, CANNOT_BE_SELECTED);
+				else
+					SYNC_MODULE_CONSTRAINT_SET(ntp->state.constraints, MUST_BE_SELECTED);
+			}
 		}
 	}
 
@@ -1034,12 +1060,15 @@ static void ntp_on_save_state(ntp_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 {
 	struct sfptpd_clock *clock;
 	unsigned int num_candidates, i;
-	char alarms[256], flags[256];
+	char constraints[SYNC_MODULE_CONSTRAINT_ALL_TEXT_MAX];
+	char alarms[SYNC_MODULE_ALARM_ALL_TEXT_MAX];
+	char flags[256];
 
 	assert(ntp != NULL);
 	assert(msg != NULL);
 
 	sfptpd_sync_module_alarms_text(ntp->state.alarms, alarms, sizeof(alarms));
+	sfptpd_sync_module_constraints_text(ntp->state.constraints, constraints, sizeof(constraints));
 	sfptpd_sync_module_ctrl_flags_text(ntp->ctrl_flags, flags, sizeof(flags));
 
 	clock = sfptpd_clock_get_system_clock();
@@ -1070,6 +1099,7 @@ static void ntp_on_save_state(ntp_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 			"clock-name: %s\n"
 			"state: %s\n"
 			"alarms: %s\n"
+			"constraints: %s\n"
 			"control-flags: %s\n"
 			"offset-from-peer: " SFPTPD_FORMAT_FLOAT "\n"
 			"in-sync: %d\n"
@@ -1080,7 +1110,7 @@ static void ntp_on_save_state(ntp_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 			SFPTPD_CONFIG_GET_NAME(ntp->config),
 			sfptpd_clock_get_long_name(clock),
 			ntp_state_text(ntp->state.state, 0),
-			alarms, flags, peer->offset,
+			alarms, constraints, flags, peer->offset,
 			ntp->synchronized,
 			host,
 			ntp->state.peer_info.num_peers,
@@ -1093,13 +1123,14 @@ static void ntp_on_save_state(ntp_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 			"clock-name: %s\n"
 			"state: %s\n"
 			"alarms: %s\n"
+			"constraints: %s\n"
 			"control-flags: %s\n"
 			"num-peers: %d\n"
 			"num-candidates: %d\n",
 			SFPTPD_CONFIG_GET_NAME(ntp->config),
 			sfptpd_clock_get_long_name(clock),
 			ntp_state_text(ntp->state.state, 0),
-			alarms, flags,
+			alarms, constraints, flags,
 			ntp->state.peer_info.num_peers,
 			num_candidates);
 	}
