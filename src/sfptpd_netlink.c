@@ -94,9 +94,7 @@ const static struct flag_desc if_flag_descs[] = {
 
 /* Only act on changes in flags that should cause the application to change
  * behaviour. */
-const static int significant_flags = IFF_UP | IFF_RUNNING | IFF_MASTER |
-				     IFF_SLAVE | IFF_MULTICAST | 0x10000 |
-				     IFF_LOOPBACK | IFF_NOARP;
+const static int significant_flags = IFF_RUNNING;
 
 #ifdef HAVE_TEAMING
 #define NUM_GROUPS 2
@@ -190,10 +188,11 @@ static int snprint_flags_delta(char *buf, size_t space, int flags1, int flags2)
 	for (flag = if_flag_descs; flag->flag != 0; flag++) {
 		if ((flags1 & flag->flag) !=
 		    (flags2 & flag->flag)) {
-			len = snprintf(buf, space, "%s%c%s",
+			len = snprintf(buf, space, "%s%c%s%s",
 				       total != 0 ? " " : "",
 				       flags2 & flag->flag ? '+' : '-',
-				       flag->name);
+				       flag->name,
+				       flag->flag & significant_flags ? "*" : "");
 			if (len >= space) {
 				buf = NULL;
 			} else {
@@ -262,10 +261,10 @@ void sfptpd_link_log(const struct sfptpd_link *link, const struct sfptpd_link *p
 		       link_bond_mode(link->bond.bond_mode), link->is_slave ? "slave" : "",
 		       link->if_link, link->bond.if_master,
 		       link->bond.active_slave, link->vlan_id);
-		if (prev != NULL && (prev->if_flags ^ link->if_flags) & significant_flags) {
+		if (prev != NULL && prev->if_flags ^ link->if_flags) {
 			snprint_flags_delta(flags, sizeof flags,
-					    prev->if_flags & significant_flags,
-					    link->if_flags & significant_flags);
+					    prev->if_flags,
+					    link->if_flags);
 			DBG_L1(format_flags,
 			       "________", IF_NAMESIZE, "________________", flags);
 		}
