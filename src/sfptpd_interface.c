@@ -650,6 +650,8 @@ static int interface_get_hw_address(struct sfptpd_interface *interface)
 
 	rc = sfptpd_interface_ioctl(interface, SIOCETHTOOL, req);
 	if (rc != 0) {
+		sfptpd_strncpy(interface->mac_string, "00:00:00:00:00:00",
+			       sizeof interface->mac_string);
 		WARNING("interface %s: failed to get permanent hardware address, %s\n",
 			interface->name, strerror(rc));
 		return rc;
@@ -677,8 +679,12 @@ static void interface_get_pci_ids(struct sfptpd_interface *interface,
 	/* Get the PCI vendor and device ID for this interface */
 	if (sysfs_read_int(sysfs_dir, interface->name, "device/vendor", &id))
 		interface->pci_vendor_id = id;
+	else
+		interface->pci_vendor_id = 0;
 	if (sysfs_read_int(sysfs_dir, interface->name, "device/device", &id))
 		interface->pci_device_id = id;
+	else
+		interface->pci_device_id = 0;
 
 	for (i = 0; i < sizeof all_nic_models / sizeof *all_nic_models; i++) {
 		const struct nic_model_caps *model = all_nic_models + i;
@@ -691,7 +697,7 @@ static void interface_get_pci_ids(struct sfptpd_interface *interface,
 }
 
 
-static void interface_get_versions(struct sfptpd_interface *interface)
+static int interface_get_versions(struct sfptpd_interface *interface)
 {
 	struct ethtool_drvinfo drv_info;
 	int rc;
@@ -703,11 +709,6 @@ static void interface_get_versions(struct sfptpd_interface *interface)
 	drv_info.cmd = ETHTOOL_GDRVINFO;
 
 	rc = sfptpd_interface_ioctl(interface, SIOCETHTOOL, &drv_info);
-	if (rc != 0) {
-		ERROR("interface %s: failed to get driver info via ethtool, %s\n",
-		      interface->name, strerror(rc));
-		return;
-	}
 
 	sfptpd_strncpy(interface->driver_version, drv_info.version,
 		       sizeof(interface->driver_version));
@@ -718,6 +719,12 @@ static void interface_get_versions(struct sfptpd_interface *interface)
 	sfptpd_strncpy(interface->driver, drv_info.driver,
 		       sizeof(interface->driver));
 	interface->n_stats = drv_info.n_stats;
+
+	if (rc != 0)
+		ERROR("interface %s: failed to get driver info via ethtool, %s\n",
+		      interface->name, strerror(rc));
+
+	return rc;
 }
 
 
@@ -986,7 +993,8 @@ static int interface_init(const struct sfptpd_link *link, const char *sysfs_dir,
 			  struct sfptpd_interface *interface,
 			  sfptpd_interface_class_t class)
 {
-	int rc = 0;
+	int ret = 0;
+	int rc;
 	const char *name;
 	char phc_num[16] = "";
 	int if_index;
@@ -1015,15 +1023,17 @@ static int interface_init(const struct sfptpd_link *link, const char *sysfs_dir,
 	interface->static_caps.stratum = SFPTPD_CLOCK_STRATUM_MAX;
 
 	/* Get the permanent hardware address of the interface */
-	rc = interface_get_hw_address(interface);
-	if (rc != 0)
+	ret = interface_get_hw_address(interface);
+	if (ret != 0)
 		ERROR("interface %s: couldn't get hardware address\n", name);
 
 	/* Get the PCI IDs */
 	interface_get_pci_ids(interface, sysfs_dir);
 
 	/* Get the driver and firmware versions */
-	interface_get_versions(interface);
+	rc = interface_get_versions(interface);
+	if (ret == 0)
+		ret = rc;
 
 	/* Get the timestamping capabilities of the interface */
 	interface_get_ts_info(interface);
@@ -1040,19 +1050,21 @@ static int interface_init(const struct sfptpd_link *link, const char *sysfs_dir,
 		 interface->driver_supports_efx ? " efx" : "",
 		 interface->ts_info.phc_index != -1 ? " phc" :"",
 		 interface->ts_info.phc_index != -1 ? phc_num : "");
-	TRACE_L3("interface %s: device %hx:%hx%s at %s\n",
-		 interface->name,
-		 interface->pci_vendor_id,
-		 interface->pci_device_id,
-		 (interface->class == SFPTPD_INTERFACE_SFC ||
-		  interface->class == SFPTPD_INTERFACE_XNET) ? " (Xilinx)" : "",
-		 interface->bus_addr);
-	TRACE_L3("interface %s: %s %s, fw %s\n",
-		 interface->name,
-		 interface->driver,
-		 (strcmp(interface->driver_version, sysinfo.release) == 0 ?
-		  "in-tree" : interface->driver_version),
-		 interface->fw_version);
+	if (interface->pci_vendor_id != 0)
+		TRACE_L3("interface %s: device %hx:%hx%s at %s\n",
+			 interface->name,
+			 interface->pci_vendor_id,
+			 interface->pci_device_id,
+			 (interface->class == SFPTPD_INTERFACE_SFC ||
+			  interface->class == SFPTPD_INTERFACE_XNET) ? " (Xilinx)" : "",
+			 interface->bus_addr);
+	if (interface->driver[0] != '\0')
+		TRACE_L3("interface %s: %s %s, fw %s\n",
+			 interface->name,
+			 interface->driver,
+			 (strcmp(interface->driver_version, sysinfo.release) == 0 ?
+			  "in-tree" : interface->driver_version),
+			 interface->fw_version);
 
 	/* Assign NIC ID */
 	interface_assign_nic_id(interface);
@@ -1060,7 +1072,7 @@ static int interface_init(const struct sfptpd_link *link, const char *sysfs_dir,
 	/* Initialise stat-getting capability */
 	interface_driver_stats_init(interface);
 
-	return rc;
+	return ret;
 }
 
 static void interface_delete(struct sfptpd_interface *interface,
@@ -1378,6 +1390,7 @@ int sfptpd_interface_hotplug_insert(const struct sfptpd_link *link)
 	sfptpd_interface_class_t class;
 	const char *if_name = link->if_name;
 	const int if_index = link->if_index;
+	bool change = false;
 
 	interface_lock();
 
@@ -1432,6 +1445,7 @@ int sfptpd_interface_hotplug_insert(const struct sfptpd_link *link)
 	} else {
 		INFO("interface: handling detected changes: %s (if_index %d)\n",
 		     if_name, if_index);
+		change = true;
 	}
 
 	/* Check that the interface is suitable i.e. an ethernet device
@@ -1446,22 +1460,27 @@ int sfptpd_interface_hotplug_insert(const struct sfptpd_link *link)
 	}
 
 	rc = interface_init(link, SFPTPD_SYSFS_NET_PATH, interface, class);
+	if (rc == ENODEV) {
+		WARNING("interface %s seems to have disappeared, deleting\n",
+			if_name);
+		interface_delete(interface, false);
+		if (change)
+			rc = 0;
+	}
 
 	rescan_interfaces();
 
-	/* Now that we have configured the clock's readonly flag, we can finally apply frequency correction,
-	   stepping etc.
-	*/
+	/* Now that we have configured the clock's readonly flag,
+	 *  we can finally apply frequency correction, stepping etc.
+	 */
 	struct sfptpd_clock* clock = sfptpd_interface_get_clock(interface);
 	sfptpd_clock_correct_new(clock);
 
 	if (rc == ENOTSUP || rc == EOPNOTSUPP) {
 		INFO("skipped over insufficiently capable interface %s\n", if_name);
-		goto finish;
 	} else if (rc != 0) {
 		ERROR("failed to create interface instance for %s, %s\n",
 		      if_name, strerror(rc));
-		goto finish;
 	}
 
  finish:
