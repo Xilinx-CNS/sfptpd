@@ -61,6 +61,9 @@ struct sfptpd_link {
 	} bond;
 	bool is_slave;
 	uint16_t vlan_id;
+
+	/* Not for client use */
+	void *priv;
 };
 
 struct sfptpd_link_table {

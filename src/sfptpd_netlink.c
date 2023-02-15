@@ -186,6 +186,7 @@ static int snprint_flags_delta(char *buf, size_t space, int flags1, int flags2)
 	int total = 0;
 	int len;
 
+	buf[0] = '\0';
 	for (flag = if_flag_descs; flag->flag != 0; flag++) {
 		if ((flags1 & flag->flag) !=
 		    (flags2 & flag->flag)) {
@@ -221,6 +222,54 @@ static void print_link(struct sfptpd_link *link)
                link->if_family, link->bond.if_master, link->type,
                link->bond.bond_mode, link->bond.active_slave, link->is_slave,
                link->vlan_id);
+}
+
+static const char *link_bond_mode(enum sfptpd_bond_mode mode) {
+	if (mode == SFPTPD_BOND_MODE_ACTIVE_BACKUP)
+		return "ab";
+	else if (mode == SFPTPD_BOND_MODE_LACP)
+		return "lacp";
+	else
+		return "";
+}
+
+void sfptpd_link_log(const struct sfptpd_link *link, const struct sfptpd_link *prev)
+{
+	const char *header[] = { "if_index", "if_name", "flags", "kind", "mode", "role", "link", "master", "active", "vlan" };
+	const char *format_header = "| %-8s | %-*s | %-5s | %-8s | %-4s | %-5s | %-6s | %-6s | %-6s | %-5s |\n";
+	const char *format_record = "| %8d%3s%-*s | %05x | %-8s | %-4s | %-5s | %6d | %6d | %6d | %5d |\n";
+	const char *format_flags  = "|_%8s___%-*s_| %-66s |\n";
+	char flags[256];
+
+	if (link == NULL) {
+		DBG_L1(format_header,
+		       header[0], IF_NAMESIZE, header[1], header[2], header[3],
+		       header[4], header[5], header[6], header[7],
+		       header[8], header[9]);
+	} else {
+		if (prev != NULL) {
+			DBG_L1(format_record,
+			       prev->if_index, "<--", IF_NAMESIZE, prev->if_name,
+			       prev->if_flags, prev->if_kind,
+			       link_bond_mode(prev->bond.bond_mode), prev->is_slave ? "slave" : "",
+			       prev->if_link, prev->bond.if_master,
+			       prev->bond.active_slave, prev->vlan_id);
+		}
+
+		DBG_L1(format_record,
+		       link->if_index, prev == NULL ? " | " : "-->", IF_NAMESIZE, link->if_name,
+		       link->if_flags, link->if_kind,
+		       link_bond_mode(link->bond.bond_mode), link->is_slave ? "slave" : "",
+		       link->if_link, link->bond.if_master,
+		       link->bond.active_slave, link->vlan_id);
+		if (prev != NULL && (prev->if_flags ^ link->if_flags) & significant_flags) {
+			snprint_flags_delta(flags, sizeof flags,
+					    prev->if_flags & significant_flags,
+					    link->if_flags & significant_flags);
+			DBG_L1(format_flags,
+			       "________", IF_NAMESIZE, "________________", flags);
+		}
+	}
 }
 
 static int link_attr_cb(const struct nlattr *attr, void *data)
@@ -1306,6 +1355,7 @@ int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 	struct link_db *prev;
 	int row;
 	int old_row;
+	int i;
 	bool change = false;
 
 	DBG_L5("netlink: servicing fds\n");
@@ -1365,20 +1415,25 @@ int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 
 		if (old_row == prev->table.count) {
 			event = SFPTPD_LINK_UP;
-			DBG_L1("added new if_index %d %s\n", cur->table.rows[row].if_index, cur->table.rows[row].if_name);
+			DBG_L3("added new if_index %d %s\n", cur->table.rows[row].if_index, cur->table.rows[row].if_name);
 		} else {
 			struct sfptpd_link *a = prev->table.rows + old_row;
 			struct sfptpd_link *b = cur-> table.rows + row;
+
+			/* Stash a link to the old link for internal use. Not valid
+			 * out of the scope of this function. */
+			b->priv = a;
+
 			if (a->type != b->type) {
-				DBG_L1("if_kind changed %d (%s) -> %d (%s)\n", a->type, a->if_kind, b->type, b->if_kind);
+				DBG_L2("if_kind changed %d (%s) -> %d (%s)\n", a->type, a->if_kind, b->type, b->if_kind);
 				event = SFPTPD_LINK_CHANGE;
 			}
 			if (a->if_type != b->if_type) {
-				DBG_L1("if_type changed %d -> %d\n", a->if_type, b->if_type);
+				DBG_L2("if_type changed %d -> %d\n", a->if_type, b->if_type);
 				event = SFPTPD_LINK_CHANGE;
 			}
 			if (a->if_family != b->if_family) {
-				DBG_L1("if_family changed %d -> %d\n", a->if_family, b->if_family);
+				DBG_L2("if_family changed %d -> %d\n", a->if_family, b->if_family);
 				event = SFPTPD_LINK_CHANGE;
 			}
 			if (a->if_flags != b->if_flags) {
@@ -1388,43 +1443,43 @@ int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 				/* ignore truncation of flag text: this is diagnostic */
 				snprint_flags_delta(flags, sizeof flags, a->if_flags, b->if_flags);
 
-				DBG_L3("if_flags (any) changed %x -> %x (%s)\n", a->if_flags, b->if_flags, flags);
+				DBG_L4("if_flags (any) changed %x -> %x (%s)\n", a->if_flags, b->if_flags, flags);
 				sig_a = a->if_flags & significant_flags;
 				sig_b = b->if_flags & significant_flags;
 				if (sig_a != sig_b) {
 					snprint_flags_delta(flags, sizeof flags, sig_a, sig_b);
 
-					DBG_L1("if_flags (significant) changed %x -> %x (%s)\n", sig_a, sig_b, flags);
+					DBG_L2("if_flags (significant) changed %x -> %x (%s)\n", sig_a, sig_b, flags);
 					       event = SFPTPD_LINK_CHANGE;
 				}
 			}
 			if (a->bond.if_master != b->bond.if_master) {
-				DBG_L1("if_master changed %d -> %d\n", a->bond.if_master, b->bond.if_master);
+				DBG_L2("if_master changed %d -> %d\n", a->bond.if_master, b->bond.if_master);
 				event = SFPTPD_LINK_CHANGE;
 			}
 			if (a->bond.bond_mode != b->bond.bond_mode) {
-				DBG_L1("bond mode changed %d -> %d\n", a->bond.bond_mode, b->bond.bond_mode);
+				DBG_L2("bond mode changed %d -> %d\n", a->bond.bond_mode, b->bond.bond_mode);
 				event = SFPTPD_LINK_CHANGE;
 			}
 			if (a->bond.active_slave != b->bond.active_slave) {
-				DBG_L1("active_slave changed %d -> %d\n", a->bond.active_slave, b->bond.active_slave);
+				DBG_L2("active_slave changed %d -> %d\n", a->bond.active_slave, b->bond.active_slave);
 				event = SFPTPD_LINK_CHANGE;
 			}
 			if (a->is_slave != b->is_slave) {
-				DBG_L1("is_slave changed %d -> %d\n", a->is_slave, b->is_slave);
+				DBG_L2("is_slave changed %d -> %d\n", a->is_slave, b->is_slave);
 				event = SFPTPD_LINK_CHANGE;
 			}
 			if (a->vlan_id != b->vlan_id) {
-				DBG_L1("vlan_id changed %d -> %d\n", a->vlan_id, b->vlan_id);
+				DBG_L2("vlan_id changed %d -> %d\n", a->vlan_id, b->vlan_id);
 				event = SFPTPD_LINK_CHANGE;
 			}
 			if (strcmp(a->if_name, b->if_name)) {
-				DBG_L1("if_name changed %s -> %s\n", a->if_name, b->if_name);
+				DBG_L2("if_name changed %s -> %s\n", a->if_name, b->if_name);
 				event = SFPTPD_LINK_CHANGE;
 			}
 
 			if (event == SFPTPD_LINK_CHANGE) {
-				DBG_L1("^ significant change to %d %s\n", b->if_index, b->if_name);
+				DBG_L2("^ significant change to %d %s\n", b->if_index, b->if_name);
 			} else if (event == SFPTPD_LINK_NONE && (b->event == SFPTPD_LINK_NONE || b->event == SFPTPD_LINK_UP)) {
 				//DBG_L2("minor change to %d %s\n", b->if_index, b->if_name);
 			}
@@ -1436,11 +1491,37 @@ int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 		cur->table.rows[row].event = event;
 	}
 
+	/* Summarise new links */
+	for (row = 0, i = 0; row < cur->table.count; row++) {
+		const struct sfptpd_link *link = cur->table.rows + row;
+
+		if (link->event ==  SFPTPD_LINK_UP) {
+			if (i++ == 0) {
+				DBG_L1("link: new interfaces:\n");
+				sfptpd_link_log(NULL, NULL);
+			}
+			sfptpd_link_log(link, NULL);
+		}
+	}
+
+	/* Summarise changed links */
+	for (row = 0, i = 0; row < cur->table.count; row++) {
+		const struct sfptpd_link *link = cur->table.rows + row;
+
+		if (link->event ==  SFPTPD_LINK_CHANGE) {
+			if (i++ == 0) {
+				DBG_L1("link: changed interfaces:\n");
+				sfptpd_link_log(NULL, NULL);
+			}
+			sfptpd_link_log(link, (const struct sfptpd_link *) link->priv);
+		}
+	}
+
 	/* Handle deletions */
 	for (old_row = 0; old_row < prev->table.count; old_row++) {
 		for (row = 0; row < cur->table.count && cur->table.rows[row].if_index != prev->table.rows[old_row].if_index; row++);
 		if (row == cur->table.count) {
-			DBG_L1("deleted old if_index %d %s\n", prev->table.rows[old_row].if_index, prev->table.rows[old_row].if_name);
+			DBG_L1("link deleted interface %d: %s\n", prev->table.rows[old_row].if_index, prev->table.rows[old_row].if_name);
 			change = true;
 		}
 	}

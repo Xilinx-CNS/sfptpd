@@ -276,6 +276,13 @@ int sfptpd_log_open(struct sfptpd_config *config)
 	trace_levels[SFPTPD_COMPONENT_ID_NTP] = general_config->ntp_trace_level;
 	trace_levels[SFPTPD_COMPONENT_ID_SERVO] = general_config->servo_trace_level;
 
+	/* Ratchet up some component trace levels based on the general level
+	 * where appropriate. */
+	if (trace_levels[SFPTPD_COMPONENT_ID_NETLINK] < 1 &&
+	    trace_levels[SFPTPD_COMPONENT_ID_SFPTPD] >= 1) {
+		trace_levels[SFPTPD_COMPONENT_ID_NETLINK] = 1;
+	}
+
 	/* Make sure that the directory for saved clock state exists */
 	rc_dircreate = (mkdir(state_path, 0777) < 0) ? errno : 0;
 	if (chown(state_path, general_config->uid, general_config->gid))
