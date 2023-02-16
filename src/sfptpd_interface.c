@@ -741,13 +741,11 @@ static void interface_get_versions(struct sfptpd_interface *interface)
 }
 
 
-static void interface_get_ts_info(struct sfptpd_interface *interface,
-				  const char *sysfs_dir)
+static void interface_get_ts_info(struct sfptpd_interface *interface)
 {
 	int rc;
 
 	assert(interface != NULL);
-	assert(sysfs_dir != NULL);
 
 	/* Method 1. Use the ethtool interface to get the timestamping
 	 * capabilities of the NIC. */
@@ -1046,7 +1044,7 @@ static int interface_init(const struct sfptpd_link *link, const char *sysfs_dir,
 	interface_get_versions(interface);
 
 	/* Get the timestamping capabilities of the interface */
-	interface_get_ts_info(interface, sysfs_dir);
+	interface_get_ts_info(interface);
 
 	/* Check whether the driver supports the EFX ioctl */
 	interface_check_efx_support(interface);
@@ -2023,30 +2021,6 @@ void sfptpd_interface_hw_timestamping_disable(struct sfptpd_interface *interface
 	interface_unlock();
 }
 
-
-bool sfptpd_interface_get_sysfs_max_freq_adj(struct sfptpd_interface *interface,
-					     int *max_freq_adj)
-{
-	bool rc;
-
-	if (!interface_get_canonical_with_lock(&interface)) {
-		ERROR("interface: can't read sysfs maximum frequency adjustment "
-		      "on missing interface\n");
-		return false;
-	}
-
-	assert(interface != NULL);
-	assert(interface->magic == SFPTPD_INTERFACE_MAGIC);
-
-	/* We should only be calling this function on SFC interfaces where we can
-	 * guarantee the sysfs file content will be formatted as expected */
-	assert(interface->class == SFPTPD_INTERFACE_SFC);
-
-	rc =  sysfs_read_int(SFPTPD_SYSFS_NET_PATH, interface->name,
-			     "device/max_adjfreq", max_freq_adj);
-	interface_unlock();
-	return rc;
-}
 
 int sfptpd_interface_driver_stats_read(struct sfptpd_interface *interface,
 				       uint64_t stats[SFPTPD_DRVSTAT_MAX])

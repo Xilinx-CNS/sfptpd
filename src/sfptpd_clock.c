@@ -639,16 +639,6 @@ static void clock_determine_max_freq_adj(struct sfptpd_clock *clock)
 	clock->max_freq_adj_ppb = (long double)max_freq_adj;
 	success = true;
 
-	/* If we can't get the frequency adjustment via PHC and this is a
-	 * Solarflare device, attempt to find the max adjustment from sysfs. */
-	if (!success && (clock->type == SFPTPD_CLOCK_TYPE_SFC)) {
-		if (sfptpd_interface_get_sysfs_max_freq_adj(clock->u.nic.primary_if,
-							    &max_freq_adj)) {
-			clock->max_freq_adj_ppb = (long double)max_freq_adj;
-			success = true;
-		}
-	}
-
 	/* If previous attempts to find the maximum frequency adjustment have
 	 * failed, fallback to a default value. */
 	if (!success) {
