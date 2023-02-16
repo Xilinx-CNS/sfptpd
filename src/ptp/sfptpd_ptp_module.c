@@ -184,10 +184,6 @@ struct sfptpd_ptp_bond_info {
 	 * be a VLAN, a bond or a real interface */
 	char logical_if[IF_NAMESIZE];
 
-	/* Number of VLAN tags and set of tags */
-	unsigned int num_vlan_tags;
-	uint16_t vlan_tags[SFPTPD_MAX_VLAN_TAGS];
-
 	/* Bond interface name. Note that if the supplied interface is not part
 	 * of a bond this will be in fact the physical interface name */
 	char bond_if[IF_NAMESIZE];
@@ -1102,15 +1098,14 @@ static void ptp_log_pps_stats(struct sfptpd_engine *engine,
 
 
 static int ptp_is_interface_vlan(const struct sfptpd_link *logical_if, bool *is_vlan,
-				 const struct sfptpd_link **physical_if, uint16_t *vlan_tag,
+				 const struct sfptpd_link **physical_if,
 				 const struct sfptpd_link_table *link_table)
 {
-	bool have_physical_if, have_vlan_tag;
+	bool have_physical_if;
 
 	assert(logical_if != NULL);
 	assert(is_vlan != NULL);
 	assert(physical_if != NULL);
-	assert(vlan_tag != NULL);
 
 	if (logical_if->type != SFPTPD_LINK_VLAN) {
 		TRACE_L1("ptp: interface %s is not a VLAN\n", logical_if->if_name);
@@ -1119,11 +1114,6 @@ static int ptp_is_interface_vlan(const struct sfptpd_link *logical_if, bool *is_
 	}
 
 	have_physical_if = false;
-	have_vlan_tag = false;
-	if (logical_if->vlan_id != 0) {
-		*vlan_tag = logical_if->vlan_id;
-		have_vlan_tag = true;
-	}
 	if (logical_if->if_link > 0) {
 		const struct sfptpd_link *physical_link;
 
@@ -1134,15 +1124,13 @@ static int ptp_is_interface_vlan(const struct sfptpd_link *logical_if, bool *is_
 		}
 	}
 
-	if (have_vlan_tag & have_physical_if) {
-		TRACE_L1("ptp: interface %s is a VLAN. underlying if %s, vid %d\n",
-			  logical_if->if_name, (*physical_if)->if_name, *vlan_tag);
+	if (have_physical_if) {
+		TRACE_L1("ptp: interface %s is a VLAN, underlying if %s, vid %d\n",
+			  logical_if->if_name, (*physical_if)->if_name, logical_if->vlan_id);
 		*is_vlan = true;
 		return 0;
 	}
 
-	if (!have_vlan_tag) 
-		ERROR("ptp: couldn't find vlan tag for %s\n", logical_if->if_name);
 	if (!have_physical_if) 
 		ERROR("ptp: couldn't find physical link for %s\n", logical_if->if_name);
 	
@@ -1467,7 +1455,6 @@ static int ptp_parse_interface_topology(struct sfptpd_ptp_bond_info *bond_info,
 					const struct sfptpd_link_table *link_table)
 {
 	int rc;
-	uint16_t vlan_tag;
 	bool is_vlan;
 	const struct sfptpd_link *logical_link = NULL;
 	const struct sfptpd_link *target_if = NULL;
@@ -1501,24 +1488,12 @@ static int ptp_parse_interface_topology(struct sfptpd_ptp_bond_info *bond_info,
 	 * over-writing it each time round the loop as we dig through any nested
 	 * VLANs. */
 	target_if = logical_link;
-	bond_info->num_vlan_tags = 0;
 	do {
 		rc = ptp_is_interface_vlan(target_if, &is_vlan,
-					   &target_if, &vlan_tag,
+					   &target_if,
 					   link_table);
 		if (rc != 0)
 			return rc;
-
-		if (is_vlan) {
-			if (bond_info->num_vlan_tags >= SFPTPD_MAX_VLAN_TAGS) {
-				ERROR("ptp: too many nested VLANs. sfptpd supports max of %d.\n",
-				      SFPTPD_MAX_VLAN_TAGS);
-				return ENOSPC;
-			}
-
-			bond_info->vlan_tags[bond_info->num_vlan_tags] = vlan_tag;
-			bond_info->num_vlan_tags++;
-		}
 	} while (is_vlan);
 
 	/* Work out if the 'bond' interface is a bond and if so parse the
