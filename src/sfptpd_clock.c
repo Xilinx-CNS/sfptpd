@@ -254,9 +254,6 @@ static struct sfptpd_config *sfptpd_clock_config;
 static struct sfptpd_clock *sfptpd_clock_list_head = NULL;
 static struct sfptpd_clock *sfptpd_clock_system = NULL;
 
-/* This is used to invent clock ids for non-phc systems */
-static int sfptpd_clock_next_idx = 0;
-
 /* Shared with the interfaces module */
 static pthread_mutex_t *sfptpd_clock_lock;
 
@@ -323,7 +320,7 @@ static void clock_dump_record(struct sfptpd_clock *clock, int trace_level) {
 			   clock->type == SFPTPD_CLOCK_TYPE_SFC ? "sfc" :
 				(clock->type == SFPTPD_CLOCK_TYPE_XNET ? "xnet" : "non-sfc"),
 			   clock->u.nic.nic_id, clock->u.nic.device_idx,
-			   clock->u.nic.phc == NULL ? "" : sfptpd_phc_get_diff_method_name(clock->u.nic.phc),
+			   sfptpd_phc_get_diff_method_name(clock->u.nic.phc),
 			   clock->short_name, clock->long_name,
 			   clock->deleted ? " [deleted]" : "",
 			   clock->read_only ? " [read-only]" : "");
@@ -620,10 +617,6 @@ static void clock_determine_stratum(struct sfptpd_clock *clock)
 
 	assert(stratum < SFPTPD_CLOCK_STRATUM_MAX);
 	clock->spec = &sfptpd_clock_specifications[stratum];
-
-	TRACE_L3("clock %s: stratum %s, accuracy %.3Lf ppb, holdover %.3Lf ppb\n",
-		 clock->short_name, clock->spec->name,
-		 clock->spec->accuracy, clock->spec->holdover);
 }
 
 
@@ -634,18 +627,17 @@ static void clock_determine_max_freq_adj(struct sfptpd_clock *clock)
 	struct sfptpd_config_general *general_config;
 
 	assert(clock != NULL);
+	assert(clock->u.nic.phc != NULL);
 	assert(clock->type != SFPTPD_CLOCK_TYPE_SYSTEM);
 
 	clock->max_freq_adj_ppb = 0.0;
 	success = false;
 
-	/* If we have a PHC device, get the maximum frequency adjustment using
-	 * an IOCTL operation to the device. */
-	if (clock->u.nic.phc != NULL) {
-		max_freq_adj = sfptpd_phc_get_max_freq_adj(clock->u.nic.phc);
-		clock->max_freq_adj_ppb = (long double)max_freq_adj;
-		success = true;
-	}
+	/* Get the maximum frequency adjustment using an IOCTL operation
+	 * to the device. */
+	max_freq_adj = sfptpd_phc_get_max_freq_adj(clock->u.nic.phc);
+	clock->max_freq_adj_ppb = (long double)max_freq_adj;
+	success = true;
 
 	/* If we can't get the frequency adjustment via PHC and this is a
 	 * Solarflare device, attempt to find the max adjustment from sysfs. */
@@ -701,6 +693,10 @@ static int renew_clock(struct sfptpd_clock *clock)
 	struct sfptpd_interface *interface, *primary;
 	struct sfptpd_db_query_result interface_index_snapshot;
 	int i, nic_id, rc;
+	int phc_idx;
+	bool supports_phc = false;
+	bool supports_efx;
+	bool change = false;
 
 	assert(clock != NULL);
 
@@ -720,80 +716,76 @@ static int renew_clock(struct sfptpd_clock *clock)
 	/* Find the primary interface associated with the clock. This will be the
 	 * first interface we come to with the matching NIC ID. */
 	primary = NULL;
-	for (i = 0; (i < interface_index_snapshot.num_records) && (primary == NULL); i++) {
+	for (i = 0; (i < interface_index_snapshot.num_records) &&
+		    ((primary == NULL) || !supports_phc); i++) {
 		struct sfptpd_interface **intfp = interface_index_snapshot.record_ptrs[i];
 		interface = *intfp;
 
 		nic_id = sfptpd_interface_get_nic_id(interface);
-		if (nic_id == clock->u.nic.nic_id)
+		if (nic_id == clock->u.nic.nic_id) {
 			primary = interface;
+			sfptpd_interface_get_clock_device_idx(interface,
+							      &supports_phc,
+							      &phc_idx,
+							      &supports_efx);
+		}
 	}
+
+	if (primary != clock->u.nic.primary_if ||
+	    (supports_phc && clock->u.nic.phc == NULL) ||
+	    (!supports_phc && clock->u.nic.phc != NULL) ||
+	    supports_efx != clock->u.nic.supports_efx ||
+	    phc_idx != clock->u.nic.device_idx)
+		change = true;
 
 	/* If we found an interface associated with the clock then the clock
 	 * is alive and active. If we didn't find an interface then this clock
 	 * and the interfaces associated with it have been deleted. */
-	if (primary != NULL) {
-		int id, name_len;
+	if (primary != NULL && supports_phc) {
+		int name_len;
 		sfptpd_mac_addr_t mac;
-		bool supports_phc;
 
-		clock->deleted = false;
+		if (clock->deleted) {
+			change = true;
+			clock->deleted = false;
+		}
 
 		/* Set the primary interface for the clock and get the PHC
 		 * supported flag and device index. */
 		clock->u.nic.primary_if = primary;
 		clock->u.nic.supports_sync_status_reporting = true;
-		sfptpd_interface_get_clock_device_idx(clock->u.nic.primary_if,
-						      &supports_phc,
-						      &clock->u.nic.device_idx,
-						      &clock->u.nic.supports_efx);
+		clock->u.nic.device_idx = phc_idx;
+		clock->u.nic.supports_efx = supports_efx;
 
-		/* If we support PHC, use the device index directly. Otherwise we
-		 * device index we have will actually be the interface index and not
-		 * indexed from 0. In this case, invent indices starting a 0. */
-		id = supports_phc? clock->u.nic.device_idx: sfptpd_clock_next_idx++;
 		snprintf(clock->short_name, sizeof(clock->short_name),
-			 SFPTPD_NIC_NAME_FORMAT, id);
+			 SFPTPD_NIC_NAME_FORMAT, phc_idx);
 
-		/* If the clock does not (no longer) supports PHC and we have
-		 * a PHC device open, close it. If the clock does support PHC
-		 * and we do not have the PHC device open, open it now. */
-		if (!supports_phc) {
-			if (clock->u.nic.phc != NULL)
-				sfptpd_phc_close(clock->u.nic.phc);
-			clock->u.nic.phc = NULL;
-			clock->posix_id = POSIX_ID_NULL;
-		} else if (clock->u.nic.phc == NULL) {
+		if (clock->u.nic.phc == NULL) {
 			rc = sfptpd_phc_open(clock->u.nic.device_idx,
 					     &clock->u.nic.phc);
 			if (rc != 0) {
 				ERROR("clock %s: failed to open PHC device %d, %s\n",
 				      clock->short_name, clock->u.nic.device_idx,
 				      strerror(errno));
-				if (!clock->u.nic.supports_efx)
-					return errno;
-				NOTICE("clock %s: reverting to EFX\n", clock->short_name);
-				clock->u.nic.device_idx = sfptpd_interface_phc_unavailable(clock->u.nic.primary_if);
+				clock->u.nic.device_idx = -1;
 				clock->posix_id = POSIX_ID_NULL;
-			} else {
-				clock->posix_id = sfptpd_phc_get_clock_id(clock->u.nic.phc);
-
-				if (clock->u.nic.supports_efx) {
-					sfptpd_phc_define_diff_method(clock->u.nic.phc,
-								      SFPTPD_DIFF_METHOD_EFX,
-								      clock_compare_using_efx,
-								      clock);
-				}
-
-				sfptpd_phc_start(clock->u.nic.phc);
+				return errno;
 			}
+			clock->posix_id = sfptpd_phc_get_clock_id(clock->u.nic.phc);
+			if (clock->u.nic.supports_efx) {
+				sfptpd_phc_define_diff_method(clock->u.nic.phc,
+							      SFPTPD_DIFF_METHOD_EFX,
+							      clock_compare_using_efx,
+							      clock);
+			}
+			sfptpd_phc_start(clock->u.nic.phc);
 		}
 
 		/* Create the long clock name including the name of the clock and
 		 * all the interfaces associated with it. */
 		name_len = snprintf(clock->long_name, sizeof(clock->long_name),
 				    SFPTPD_NIC_NAME_FORMAT "(%s",
-				    id, sfptpd_interface_get_name(clock->u.nic.primary_if));
+				    phc_idx, sfptpd_interface_get_name(clock->u.nic.primary_if));
 		if (name_len > sizeof(clock->long_name)) name_len = sizeof(clock->long_name);
 		for ( ; i < interface_index_snapshot.num_records; i++) {
 			struct sfptpd_interface **intfp = interface_index_snapshot.record_ptrs[i];
@@ -831,14 +823,23 @@ static int renew_clock(struct sfptpd_clock *clock)
 		/* Determine the maximum frequency adjustment for the clock. */
 		clock_determine_max_freq_adj(clock);
 
-		TRACE_L3("clock %s: id %s, max freq adj %.3Lf ppb\n",
-			 clock->short_name,
-			 clock->hw_id_string,
-			 clock->max_freq_adj_ppb);
+		if (change) {
+			TRACE_L3("clock %s: stratum %s, accuracy %.3Lf ppb, holdover %.3Lf ppb\n",
+				 clock->short_name, clock->spec->name,
+				 clock->spec->accuracy, clock->spec->holdover);
+			TRACE_L3("clock %s: id %s, max freq adj %.3Lf ppb\n",
+				 clock->short_name,
+				 clock->hw_id_string,
+				 clock->max_freq_adj_ppb);
+		}
 	} else {
+		if (!clock->deleted) {
+			change = true;
+			clock->deleted = true;
+		}
+
 		/* Use an old interface as primary placeholder */
 		interface = sfptpd_interface_find_first_by_nic(clock->u.nic.nic_id);
-		clock->deleted = true;
 		clock->u.nic.primary_if = interface;
 		clock->u.nic.supports_sync_status_reporting = false;
 		clock->u.nic.supports_efx = false;
@@ -1029,10 +1030,8 @@ static void clock_record_step(void)
 	clock_lock();
 	for (clock = sfptpd_clock_list_head; clock != NULL; clock = clock->next) {
 		assert(clock->magic == SFPTPD_CLOCK_MAGIC);
-		if (clock->type != SFPTPD_CLOCK_TYPE_SYSTEM &&
-		    clock->u.nic.phc != NULL) {
+		if (clock->type != SFPTPD_CLOCK_TYPE_SYSTEM)
 			sfptpd_phc_record_step(clock->u.nic.phc);
-		}
 	}
 	clock_unlock();
 }
@@ -1618,12 +1617,20 @@ long double sfptpd_clock_get_max_frequency_adjustment(struct sfptpd_clock *clock
 int sfptpd_clock_adjust_time(struct sfptpd_clock *clock, struct timespec *offset)
 {
 	int rc = 0;
+	struct timex t;
 
 	clock_lock();
 
 	assert(clock != NULL);
 	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
 	assert(offset != NULL);
+
+	if (clock->u.nic.phc == NULL) {
+		ERROR("clock %s: unable to step clock - no phc device\n",
+		      clock->long_name);
+		rc = ENODEV;
+		goto finish;
+	}
 
 	if (clock->read_only) {
 		NOTICE("clock %s: adjust time blocked by \"clock-control no-adjust\" or \"clock-readonly\"\n",
@@ -1640,58 +1647,30 @@ int sfptpd_clock_adjust_time(struct sfptpd_clock *clock, struct timespec *offset
 	INFO("clock %s: applying offset %0.9Lf seconds\n",
 	     clock->short_name, sfptpd_time_timespec_to_float_s(offset));
 
-	/* If this is the system clock or we have a PHC capable clock, use the
-	 * clock_adjtime() system call to step the clock.
-	 * Otherwise, if this is a solarflare adapter, fall back to using a
-	 * private ioctl. */
-	if ((clock->type == SFPTPD_CLOCK_TYPE_SYSTEM) ||
-	    (clock->u.nic.phc != NULL)) {
-		struct timex t;
+	memset(&t, 0, sizeof(t));
+	t.modes = ADJ_SETOFFSET | ADJ_NANO;
+	t.time.tv_sec  = offset->tv_sec;
+	t.time.tv_usec = offset->tv_nsec;
 
-		memset(&t, 0, sizeof(t));
-		t.modes = ADJ_SETOFFSET | ADJ_NANO;
-		t.time.tv_sec  = offset->tv_sec;
-		t.time.tv_usec = offset->tv_nsec;
-
-		if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM &&
-		    clock->cfg_rtc_adjust) {
-			t.modes |= ADJ_STATUS;
-			t.status = clock->u.system.kernel_status;
-		}
-
-		rc = clock_adjtime(clock->posix_id, &t);
-		if (rc < 0) {
-			WARNING("clock %s: failed to step clock using clock_adjtime(), %s\n",
-				clock->long_name, strerror(errno));
-			rc = errno;
-			goto finish;
-		}
-
-		/* Record step for all PHC clocks to avoid stale comparisons */
-		clock_record_step();
-
-		/* clock_adjtime() returns a non-negative value on success */
-		rc = 0;
-	} else if (clock->type == SFPTPD_CLOCK_TYPE_SFC) {
-		struct efx_sock_ioctl req;
-
-		memset(&req, 0, sizeof(req));
-		req.cmd = EFX_TS_SETTIME;
-		req.u.ts_settime.iswrite = 1;
-		req.u.ts_settime.ts.tv_sec = offset->tv_sec;
-		req.u.ts_settime.ts.tv_nsec = offset->tv_nsec;
-
-		rc = sfptpd_interface_ioctl(clock->u.nic.primary_if, SIOCEFX, &req);
-		if (rc != 0) {
-			ERROR("clock %s: failed to step clock using ioctl, %s\n",
-			      clock->long_name, strerror(rc));
-		}
-	} else {
-		ERROR("clock %s: unable to step clock- no phc device\n",
-		      clock->long_name);
-		rc = ENODEV;
+	if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM &&
+	    clock->cfg_rtc_adjust) {
+		t.modes |= ADJ_STATUS;
+		t.status = clock->u.system.kernel_status;
 	}
 
+	rc = clock_adjtime(clock->posix_id, &t);
+	if (rc < 0) {
+		WARNING("clock %s: failed to step clock using clock_adjtime(), %s\n",
+			clock->long_name, strerror(errno));
+		rc = errno;
+		goto finish;
+	}
+
+	/* Record step for all PHC clocks to avoid stale comparisons */
+	clock_record_step();
+
+	/* clock_adjtime() returns a non-negative value on success */
+	rc = 0;
 finish:
 	clock_unlock();
 	return rc;
@@ -1707,6 +1686,13 @@ int sfptpd_clock_adjust_frequency(struct sfptpd_clock *clock, long double freq_a
 
 	assert(clock != NULL);
 	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
+
+	if (clock->u.nic.phc == NULL) {
+		ERROR("clock %s: unable to adjust frequency - no phc device\n",
+		      clock->long_name);
+		rc = ENODEV;
+		goto finish;
+	}
 
 	if (clock->read_only) {
 		TRACE_L4("clock %s: adjust freq blocked by \"clock-control no-adjust\" or \"clock-readonly\"\n",
@@ -1736,88 +1722,62 @@ int sfptpd_clock_adjust_frequency(struct sfptpd_clock *clock, long double freq_a
 	if (freq_adj_ppb < -clock->max_freq_adj_ppb)
 		freq_adj_ppb = -clock->max_freq_adj_ppb;
 
-	/* If this is the system clock or we have a PHC capable clock, use the
-	 * clock_adjtime() system call to adjust the frequency.
-	 * Otherwise, if this is a solarflare adapter, fall back to using a
-	 * private ioctl. */
-	if ((clock->type == SFPTPD_CLOCK_TYPE_SYSTEM) ||
-	    (clock->u.nic.phc != NULL)) {
-		struct timex t;
-		long double freq = freq_adj_ppb;
+	struct timex t;
+	long double freq = freq_adj_ppb;
 
-		memset(&t, 0, sizeof(t));
+	memset(&t, 0, sizeof(t));
 
-		if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM) {
-			long double tick;
-			struct sfptpd_clock_system *system = &clock->u.system;
+	if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM) {
+		long double tick;
+		struct sfptpd_clock_system *system = &clock->u.system;
 
-			/* If the frequency adjustment is large, this is achieved by
-			* adjusting the kernel tick length (t.tick) and placing the
-			* remainder in the frequency adjustment (t.freq).
-			*/
-			tick = 0.0;
-			if (freq > system->max_freq_adj) {
-				tick = roundl((freq_adj_ppb - system->max_freq_adj) / system->tick_resolution_ppb);
-				if (tick > system->max_tick)
-					tick = system->max_tick;
-				freq -= tick * system->tick_resolution_ppb;
-			} else if (freq < -system->max_freq_adj) {
-				tick= -roundl((-freq_adj_ppb - system->max_freq_adj) / system->tick_resolution_ppb);
-				if (tick < system->min_tick)
-					tick = system->min_tick;
-				freq -= tick * system->tick_resolution_ppb;
-			}
-
-			/* Saturate the frequency adjustment */
-			if (freq > system->max_freq_adj)
-				freq = system->max_freq_adj;
-			else if (freq < -system->max_freq_adj)
-				freq = -system->max_freq_adj;
-
-			t.modes |= ADJ_TICK;
-			t.tick = (long)roundl(tick + (1000000.0 / system->tick_freq_hz));
-
-			if (clock->cfg_rtc_adjust) {
-				t.modes |= ADJ_STATUS;
-				t.status = clock->u.system.kernel_status;
-			}
+		/* If the frequency adjustment is large, this is achieved by
+		* adjusting the kernel tick length (t.tick) and placing the
+		* remainder in the frequency adjustment (t.freq).
+		*/
+		tick = 0.0;
+		if (freq > system->max_freq_adj) {
+			tick = roundl((freq_adj_ppb - system->max_freq_adj) / system->tick_resolution_ppb);
+			if (tick > system->max_tick)
+				tick = system->max_tick;
+			freq -= tick * system->tick_resolution_ppb;
+		} else if (freq < -system->max_freq_adj) {
+			tick= -roundl((-freq_adj_ppb - system->max_freq_adj) / system->tick_resolution_ppb);
+			if (tick < system->min_tick)
+				tick = system->min_tick;
+			freq -= tick * system->tick_resolution_ppb;
 		}
 
-		/* The 'freq' field in the 'struct timex' is in parts per
-		* million, but with a 16 bit binary fractional field. */
-		t.modes |= ADJ_FREQUENCY;
-		t.freq = (long)roundl(freq * (((1 << 16) + 0.0) / 1000.0));
+		/* Saturate the frequency adjustment */
+		if (freq > system->max_freq_adj)
+			freq = system->max_freq_adj;
+		else if (freq < -system->max_freq_adj)
+			freq = -system->max_freq_adj;
 
-		rc = clock_adjtime(clock->posix_id, &t);
-		if (rc < 0) {
-			WARNING("clock %s: failed to adjust frequency using clock_adjtime(), %s\n",
-				clock->long_name, strerror(errno));
-			rc = errno;
-			goto finish;
+		t.modes |= ADJ_TICK;
+		t.tick = (long)roundl(tick + (1000000.0 / system->tick_freq_hz));
+
+		if (clock->cfg_rtc_adjust) {
+			t.modes |= ADJ_STATUS;
+			t.status = clock->u.system.kernel_status;
 		}
-
-		/* clock_adjtime() returns a non-negative value on success */
-		rc = 0;
-	} else if (clock->type == SFPTPD_CLOCK_TYPE_SFC) {
-		struct efx_sock_ioctl req;
-
-		memset(&req, 0, sizeof(req));
-		req.cmd = EFX_TS_ADJTIME;
-		req.u.ts_adjtime.adjustment = (long long)roundl(freq_adj_ppb);
-		req.u.ts_adjtime.iswrite = 1;
-
-		rc = sfptpd_interface_ioctl(clock->u.nic.primary_if, SIOCEFX, &req);
-		if (rc != 0) {
-			ERROR("clock %s: failed to adjust frequency using ioctl, %s\n",
-			      clock->long_name, strerror(rc));
-			goto finish;
-		}
-	} else {
-		ERROR("clock %s: unable to adjust frequency- no phc device\n",
-		      clock->long_name);
-		rc = ENODEV;
 	}
 
+	/* The 'freq' field in the 'struct timex' is in parts per
+	* million, but with a 16 bit binary fractional field. */
+	t.modes |= ADJ_FREQUENCY;
+	t.freq = (long)roundl(freq * (((1 << 16) + 0.0) / 1000.0));
+
+	rc = clock_adjtime(clock->posix_id, &t);
+	if (rc < 0) {
+		WARNING("clock %s: failed to adjust frequency using clock_adjtime(), %s\n",
+			clock->long_name, strerror(errno));
+		rc = errno;
+		goto finish;
+	}
+
+	/* clock_adjtime() returns a non-negative value on success */
+	rc = 0;
  finish:
 	clock_unlock();
 	return rc;
@@ -1921,46 +1881,19 @@ int sfptpd_clock_get_time(const struct sfptpd_clock *clock, struct timespec *tim
 	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
 	assert(time != NULL);
 
-	/* If this is the system clock or we have a PHC capable clock, use the
-	 * clock_adjtime() system call to read the time.
-	 * Otherwise, if this is a solarflare adapter, fall back to using a
-	 * private ioctl.
-	 * @bug72220. Kernels that have 32bit PHC support expose a bug in our
-	 * net driver. To avoid hitting this issue, use the private IOCTL method
-	 * for Solarflare adapters. */
-	if ((clock->type == SFPTPD_CLOCK_TYPE_SYSTEM) ||
-	    ((clock->u.nic.phc != NULL) &&
-	     ((clock->type != SFPTPD_CLOCK_TYPE_SFC) ||
-	      !clock->u.nic.supports_efx ||
-	       clock->cfg_avoid_efx))) {
-		if (clock_gettime(clock->posix_id, time) < 0) {
-			ERROR("clock %s: error getting system time, %s\n",
-			      clock->long_name, strerror(errno));
-			rc = errno;
-			goto finish;
-		}
-	} else if (clock->type == SFPTPD_CLOCK_TYPE_SFC) {
-		struct efx_sock_ioctl req;
-		
-		memset(&req, 0, sizeof(req));
-		req.cmd = EFX_TS_SETTIME;
-		req.u.ts_settime.iswrite = 0;
-
-		rc = sfptpd_interface_ioctl(clock->u.nic.primary_if, SIOCEFX, &req);
-		if (rc != 0) {
-			ERROR("clock %s: failed to get time using ioctl, %s\n",
-			      clock->long_name, strerror(rc));
-			goto finish;
-		}
-
-		time->tv_sec = req.u.ts_settime.ts.tv_sec;
-		time->tv_nsec = req.u.ts_settime.ts.tv_nsec;
-	} else {
-		ERROR("clock %s: unable to get time- no phc device\n",
+	if (clock->u.nic.phc == NULL) {
+		ERROR("clock %s: unable to get time - no phc device\n",
 		      clock->long_name);
 		rc = ENODEV;
+		goto finish;
 	}
 
+	if (clock_gettime(clock->posix_id, time) < 0) {
+		ERROR("clock %s: error getting system time, %s\n",
+		      clock->long_name, strerror(errno));
+		rc = errno;
+		goto finish;
+	}
  finish:
 	clock_unlock();
 	return rc;
@@ -1995,8 +1928,8 @@ int sfptpd_clock_compare(struct sfptpd_clock *clock1, struct sfptpd_clock *clock
 
 	/* We expect all clocks other than the system clock to have a PHC
 	 * device */
-	if (((clock1->type != SFPTPD_CLOCK_TYPE_SYSTEM) && (clock1->u.nic.phc == NULL) && (!clock1->u.nic.supports_efx)) ||
-	    ((clock2->type != SFPTPD_CLOCK_TYPE_SYSTEM) && (clock2->u.nic.phc == NULL) && (!clock2->u.nic.supports_efx))) {
+	if (((clock1->type != SFPTPD_CLOCK_TYPE_SYSTEM) && (clock1->u.nic.phc == NULL)) |
+	    ((clock2->type != SFPTPD_CLOCK_TYPE_SYSTEM) && (clock2->u.nic.phc == NULL))) {
 		clock_unlock();
 		return ENOSYS;
 	}
