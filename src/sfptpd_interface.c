@@ -49,25 +49,6 @@
 
 
 /****************************************************************************
- * Defines for PTP functionality
- ****************************************************************************/
-
-/* SIOCSHWTSTAMP is defined in linux/sockios.h in recent kernels.
- * Define it for compilation with older kernels.
- */
-#ifndef SIOCSHWTSTAMP
-#define SIOCSHWTSTAMP 0x89b0
-#endif
-
-/* SO_TIMESTAMPING is defined in asm/socket.h in recent kernels.
- * Define it for compilation with older kernels.
- */
-#ifndef SO_TIMESTAMPING
-#define SO_TIMESTAMPING  37
-#endif
-
-
-/****************************************************************************
  * Types, Defines and Structures
  ****************************************************************************/
 
@@ -98,7 +79,6 @@ enum drv_stat_method {
 	DRV_STAT_ETHTOOL,
 	DRV_STAT_SYSFS,
 };
-
 
 /** Structure describing a driver statistic type */
 struct drv_stat_type {
