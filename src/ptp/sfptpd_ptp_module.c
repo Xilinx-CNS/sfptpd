@@ -874,28 +874,15 @@ static void ptp_timestamp_filtering_deconfigure_one(struct sfptpd_interface *int
 
 	if (sfptpd_interface_supports_ptp(interface)) {
 		sfptpd_interface_hw_timestamping_disable(interface);
-
-		/* If the interface is a Solarflare Siena based PTP adapter,
-		 * clear the PTP receive filters */
-		if (sfptpd_interface_is_siena(interface)) {
-			(void)sfptpd_interface_ptp_set_vlan_filter(interface, 0, NULL);
-			(void)sfptpd_interface_ptp_set_domain_filter(interface, false, 0);
-			(void)sfptpd_interface_ptp_set_uuid_filter(interface, false, NULL);
-		}
 	}
 }
 
 
 static int ptp_timestamp_filtering_configure_one(struct sfptpd_ptp_intf *intf,
 						 struct sfptpd_interface *interface,
-						 bool enable_uuid_filtering,
 						 bool already_checked)
 {
 	int rc;
-	sfptpd_ptp_module_config_t *config;
-	struct sfptpd_ptp_bond_info *bond_info;
-	struct sfptpd_ptp_instance *instance;
-	uint8_t *uuid;
 
 	assert(interface != NULL);
 	assert(intf != NULL);
@@ -904,57 +891,11 @@ static int ptp_timestamp_filtering_configure_one(struct sfptpd_ptp_intf *intf,
 		 intf->defined_name,
 		 sfptpd_interface_get_name(interface));
 
-	bond_info = &intf->bond_info;
-	config = ptp_get_config_for_interface(intf);
-
 	/* If we are not using hardware timestamping for this logical PTP
 	 * interface or the physical interface does not support timestamping
          * then do not configure it. */
 	if (!ptp_is_interface_hw_timestamping(intf, interface, PTPD_TIMESTAMP_TYPE_AUTO) && !already_checked)
 		return 0;
-
-	/* If the interface is a Solarflare Siena based PTP adapter, i.e. it
-	 * doesn't support general hw timestamping, configure PTP filters. */
-	if (sfptpd_interface_is_siena(interface)) {
-		/* We have to disable timestamping before configuring the
-		 * receive filtering */
-		sfptpd_interface_hw_timestamping_disable(interface);
-
-		/* Set the VLAN tag information */
-		rc = sfptpd_interface_ptp_set_vlan_filter(interface,
-							  bond_info->num_vlan_tags,
-							  bond_info->vlan_tags);
-		if (rc != 0)
-			goto fail;
-
-		/* If configured to do so, filter by PTP Domain Number */
-		rc = sfptpd_interface_ptp_set_domain_filter(interface,
-							    config->domain_filtering,
-							    config->ptpd_port.domainNumber);
-		if (rc != 0)
-			goto fail;
-
-		/* In order to correctly set up UUID filtering, we need to
-		 * refer to the instance using this interface (in the case of
-		 * Siena we enforce that there can only be one). We enable UUID
-		 * if requested to do so and UUID filtering is configured and
-		 * the PTP port is in slave state. */
-		instance = intf->instance_list;
-		if (enable_uuid_filtering && config->uuid_filtering &&
-		    (instance != NULL) &&
-		    (instance->ptpd_port_snapshot.port.state == PTPD_SLAVE)) {
-			uuid = instance->ptpd_port_snapshot.parent.clock_id;
-		} else {
-			enable_uuid_filtering = false;
-			uuid = NULL;
-		}
-
-		rc = sfptpd_interface_ptp_set_uuid_filter(interface,
-							  enable_uuid_filtering,
-							  uuid);
-		if (rc != 0)
-			goto fail;
-	}
 
 	/* Enable timestamping on this interface */
 	rc = sfptpd_interface_hw_timestamping_enable(interface);
@@ -1011,7 +952,7 @@ static int ptp_timestamp_filtering_configure_all(struct sfptpd_ptp_intf *intf)
 	error = 0;
 	for (i = 0; i < bond_info->num_physical_ifs; i++) {
 		rc = ptp_timestamp_filtering_configure_one(intf, bond_info->physical_ifs[i],
-							   false, false);
+							   false);
 		if (rc != 0)
 			error = rc;
 	}
@@ -1081,52 +1022,13 @@ static void ptp_timestamp_filtering_reconfigure_all(struct sfptpd_ptp_intf *intf
 		if (candidate == new_bond_info->active_if) {
 			if (ptp_is_interface_hw_timestamping(intf, candidate,
 							     new_active_intf_mode))
-				(void)ptp_timestamp_filtering_configure_one(intf, candidate, true, true);
+				(void)ptp_timestamp_filtering_configure_one(intf, candidate, true);
 		} else {
 			if (ptp_is_interface_hw_timestamping(intf, candidate,
 							     PTPD_TIMESTAMP_TYPE_AUTO))
-				(void)ptp_timestamp_filtering_configure_one(intf, candidate, true, true);
+				(void)ptp_timestamp_filtering_configure_one(intf, candidate, true);
 		}
 
-	}
-}
-
-
-static void ptp_timestamp_filtering_set_uuid(struct sfptpd_ptp_intf *intf,
-					     struct sfptpd_ptp_instance *instance)
-{
-	unsigned int i;
-	struct sfptpd_interface *interface;
-	struct sfptpd_ptp_bond_info *bond_info;
-	sfptpd_ptp_module_config_t *config;
-	bool enable;
-
-	assert(intf != NULL);
-	assert(instance != NULL);
-	bond_info = &intf->bond_info;
-	config = ptp_get_config_for_interface(intf);
-	assert(config != NULL);
-
-	/* If we are in PTP slave state, enable UUID filtering. Otherwise,
-	 * disable it */
-	enable = (instance->ptpd_port_snapshot.port.state == PTPD_SLAVE);
-
-	for (i = 0; i < bond_info->num_physical_ifs; i++) {
-		interface = bond_info->physical_ifs[i];
-
-		/* If we are using UUID filtering and this is a Siena based
-		 * PTP adapters, configure the filter. */
-		if (ptp_is_interface_hw_timestamping(intf, interface, PTPD_TIMESTAMP_TYPE_AUTO) &&
-		    config->uuid_filtering &&
-		    sfptpd_interface_is_siena(interface)) {
-			sfptpd_interface_hw_timestamping_disable(interface);
-
-			(void)sfptpd_interface_ptp_set_uuid_filter
-				(interface, enable,
-				 instance->ptpd_port_snapshot.parent.clock_id);
-
-			(void)sfptpd_interface_hw_timestamping_enable(interface);
-		}
 	}
 }
 
@@ -2007,7 +1909,7 @@ static bool ptp_update_instance_state(struct sfptpd_ptp_instance *instance,
 	struct sfptpd_ptp_module *module;
 	struct ptpd_port_snapshot snapshot;
 	sfptpd_time_t ofm;
-	bool update_uuid_filter, state_changed, leap_second_changed, instance_changed, offset_changed;
+	bool state_changed, leap_second_changed, instance_changed, offset_changed;
 	int rc;
 
 	assert(instance!= NULL);
@@ -2015,7 +1917,6 @@ static bool ptp_update_instance_state(struct sfptpd_ptp_instance *instance,
 	module = instance->intf->module;
 	assert(module != NULL);
 
-	update_uuid_filter = false;
 	state_changed = false;
 	leap_second_changed = false;
 
@@ -2040,14 +1941,7 @@ static bool ptp_update_instance_state(struct sfptpd_ptp_instance *instance,
 	 * filter and notify the sync engine. */
 	if (snapshot.port.state != instance->ptpd_port_snapshot.port.state) {
 		state_changed = true;
-		update_uuid_filter = true;
 	}
-
-	/* If the grandmaster ID has changed, modify the packet timestamp UUID
-	 * filter. */
-	if (memcmp(snapshot.parent.clock_id, instance->ptpd_port_snapshot.parent.clock_id,
-		   sizeof(snapshot.parent.clock_id)) != 0)
-		update_uuid_filter = true;
 
 	/* If any of the parent data has changed, generate a state change to
 	 * the engine to ensure that the topology and state files get updated. */
@@ -2173,10 +2067,6 @@ static bool ptp_update_instance_state(struct sfptpd_ptp_instance *instance,
 			sfptpd_engine_cancel_leap_second(module->engine);
 		}
 	}
-
-	/* If the grandmaster has changed, update the filtering */
-	if (update_uuid_filter)
-		ptp_timestamp_filtering_set_uuid(instance->intf, instance);
 
 	return state_changed;
 }
@@ -3613,70 +3503,6 @@ fail:
 }
 
 
-static int ptp_validate_interface(sfptpd_ptp_module_t *ptp,
-				  struct sfptpd_ptp_intf *suspect,
-				  bool already_started)
-{
-	struct sfptpd_ptp_intf *intf;
-	struct sfptpd_interface *interface;
-	unsigned int i, j;
-
-	assert(ptp != NULL);
-	assert(suspect != NULL);
-
-	/* If the interface is already started, then a second instance is using
-	 * the same interface. We disallow this if running on a system that does
-	 * not support so timestamping or one of the underlying physical
-	 * interfaces is siena-based. */
-	if (already_started) {
-		for (i = 0; i < suspect->bond_info.num_physical_ifs; i++) {
-			interface = suspect->bond_info.physical_ifs[i];
-
-			if (sfptpd_interface_is_siena(interface)) {
-				CRITICAL("ptp: more than one ptp instance "
-					 "using physical interface %s. This "
-					 "is not supported on Solarflare "
-					 "SFN5322F and SFN6322F adapters\n",
-					 sfptpd_interface_get_name(interface));
-				return EBUSY;
-			}
-		}
-	}
-
-	/* Iterate through all the started interfaces and check that no other
-	 * interface is using the one of the same physical interfaces. If it
-	 * is, we only allow this if so timestamping is supported and the
-	 * adapter is not siena-based.
-	 *
-	 * Yes this is ugly. The longer term the plan is to extend the
-	 * sfptpd_interface class to include logical interfaces and express the
-	 * bonding/vlan hierarchy through interface objects. At this point,
-	 * usage of physical interfaces can be reference counted. */
-	for (intf = ptp->intf_list; intf != NULL; intf = intf->next) {
-		if ((intf != suspect) && (intf->start_attempted)) {
-			for (i = 0; i < suspect->bond_info.num_physical_ifs; i++) {
-				interface = suspect->bond_info.physical_ifs[i];
-
-				for (j = 0; j < intf->bond_info.num_physical_ifs; j++) {
-					if (interface == intf->bond_info.physical_ifs[j]) {
-						if (sfptpd_interface_is_siena(interface)) {
-							CRITICAL("ptp: more than one ptp instance using "
-								 "physical interface %s. This is not "
-								 "supported on Solarflare SFN5322F and "
-								 "SFN6322F adapters\n",
-								 sfptpd_interface_get_name(interface));
-							return EBUSY;
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return 0;
-}
-
-
 static int ptp_ensure_interface_started(sfptpd_ptp_module_t *ptp,
 					struct sfptpd_ptp_intf *interface) {
 
@@ -3685,9 +3511,8 @@ static int ptp_ensure_interface_started(sfptpd_ptp_module_t *ptp,
 	assert(ptp != NULL);
 	assert(interface != NULL);
 
-	if (interface->start_attempted) {
-		return ptp_validate_interface(ptp, interface, true);
-	}
+	if (interface->start_attempted)
+		return 0;
 
 	/* We don't want to retry if there was an error the first time
 	   we tried to be started. */
@@ -3701,10 +3526,6 @@ static int ptp_ensure_interface_started(sfptpd_ptp_module_t *ptp,
 			 interface->defined_name, strerror(rc));
 		return rc;
 	}
-
-	rc = ptp_validate_interface(ptp, interface, false);
-	if (rc != 0)
-		return rc;
 
 	/* Determine and configure the PTP clock. */
 	rc = ptp_configure_clock(interface);

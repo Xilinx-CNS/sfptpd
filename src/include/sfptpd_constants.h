@@ -60,9 +60,6 @@
 /** Long-term statistics collection */
 #define SFPTPD_STATS_COLLECTION_INTERVAL (60)
 
-/* Siena PCI device ID */
-#define SFPTPD_SIENA_DEVID (0x0803)
-
 /** Minimum and maximum intervals before and after leap second during which
  * timestamp processing and clock updates are suspended */
 #define SFPTPD_LEAP_SECOND_GUARD_INTERVAL_MIN (2.0)

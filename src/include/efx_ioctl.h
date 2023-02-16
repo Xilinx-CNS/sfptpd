@@ -180,28 +180,6 @@ struct efx_ts_set_sync_status {
 	#define ETHTOOL_GET_TS_INFO	0x00000041 /* Get time stamping and PHC info */
 #endif
 
-/* Set the VLAN tags for PTP receive packet filtering ***********************/
-#define EFX_TS_SET_VLAN_FILTER 0xef19
-struct efx_ts_set_vlan_filter {
-#define TS_MAX_VLAN_TAGS 3                   /* Maximum supported VLAN tags */
-	__u32 num_vlan_tags;                 /* Number of VLAN tags */
-	__u16 vlan_tags[TS_MAX_VLAN_TAGS];   /* VLAN tag list */
-};
-
-/* Set the UUID for PTP receive packet filtering ****************************/
-#define EFX_TS_SET_UUID_FILTER 0xef1a
-struct efx_ts_set_uuid_filter {
-	__u32 enable;                        /* 1 == enabled, 0 == disabled */
-	__u8 uuid[8];                        /* UUID to filter against */
-};
-
-/* Set the Domain for PTP receive packet filtering **************************/
-#define EFX_TS_SET_DOMAIN_FILTER 0xef1b
-struct efx_ts_set_domain_filter {
-	__u32 enable;                        /* 1 == enabled, 0 == disabled */
-	__u32 domain;                        /* Domain number to filter against */
-};
-
 /* Return a PPS timestamp ***************************************************/
 #define EFX_TS_GET_PPS 0xef1c
 struct efx_ts_get_pps {
@@ -230,9 +208,6 @@ union efx_ioctl_data {
 	struct efx_ts_sync ts_sync;
 	struct efx_ts_set_sync_status ts_set_sync_status;
 	struct ethtool_ts_info ts_info;
-	struct efx_ts_set_vlan_filter ts_vlan_filter;
-	struct efx_ts_set_uuid_filter ts_uuid_filter;
-	struct efx_ts_set_domain_filter ts_domain_filter;
 	struct efx_ts_get_pps pps_event;
 	struct efx_ts_hw_pps pps_enable;
 };

@@ -878,42 +878,6 @@ static int parse_trace_level(struct sfptpd_config_section *section, const char *
 	return 0;
 }
 
-static int parse_uuid_filtering(struct sfptpd_config_section *section, const char *option,
-				unsigned int num_params, const char * const params[])
-{
-	int rc = 0;
-	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
-	assert(num_params == 1);
-
-	if (strcmp(params[0], "off") == 0) {
-		ptp->uuid_filtering = false;
-	} else if (strcmp(params[0], "on") == 0) {
-		ptp->uuid_filtering = true;
-	} else {
-		rc = EINVAL;
-	}
-
-	return rc;
-}
-
-static int parse_domain_filtering(struct sfptpd_config_section *section, const char *option,
-				  unsigned int num_params, const char * const params[])
-{
-	int rc = 0;
-	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
-	assert(num_params == 1);
-
-	if (strcmp(params[0], "off") == 0) {
-		ptp->domain_filtering = false;
-	} else if (strcmp(params[0], "on") == 0) {
-		ptp->domain_filtering = true;
-	} else {
-		rc = EINVAL;
-	}
-
-	return rc;
-}
-
 static int parse_ptp_delay_resp_ignore_port_id(struct sfptpd_config_section *section, const char *option,
                                                unsigned int num_params,
                                                const char * const params[])
@@ -1468,16 +1432,6 @@ static const sfptpd_config_option_t ptp_config_options[] =
 		"PTP trace level. 0 corresponds to off, 3 corresponds to maximum verbosity.",
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
 		parse_trace_level},
-	{"ptp_uuid_filtering", "<off | on>",
-		"SFN5322F/SFN6322F- specifies hardware packet filtering against parent "
-		"UUID. Enabled by default.",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
-		parse_uuid_filtering},
-	{"ptp_domain_filtering", "<off | on>",
-		"SFN5322F/SFN6322F- specifies hardware packet filtering against PTP "
-		"domain. Enabled by default.",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
-		parse_domain_filtering},
 	{"ptp_delay_resp_ignore_port_id", "<off | on>",
 		"Off by default.  When set to 'on' the clock ID and port "
 		"number in delay responses are not validated.  This can be "

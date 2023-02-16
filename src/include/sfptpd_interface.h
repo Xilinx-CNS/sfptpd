@@ -180,12 +180,6 @@ sfptpd_interface_ts_caps_t sfptpd_interface_rx_ts_caps(struct sfptpd_interface *
  */
 bool sfptpd_interface_supports_pps(struct sfptpd_interface *interface);
 
-/** Is this Solarflare adapter using a Siena chipset
- * @param interface Pointer to instance instance
- * @return True if Solarflare Siena chipset
- */
-bool sfptpd_interface_is_siena(struct sfptpd_interface *interface);
-
 /** Test link status of interface
  * @param interface Pointer to interface instance
  * @param link_detected Returned boolean indicating whether interface has link
@@ -226,34 +220,6 @@ int sfptpd_interface_hw_timestamping_enable(struct sfptpd_interface *interface);
  * @param interface Pointer to the interface instancestruct sfptpd_clock *clock,
  */
 void sfptpd_interface_hw_timestamping_disable(struct sfptpd_interface *interface);
-
-/** Set the VLAN tags for filtering of received timestamped PTP packets
- * @param interface Pointer to the interface instance
- * @param num_vlan_tags Number of VLAN tags
- * @param vlan_tags Array of VLAN tags
- * @return 0 for success otherwise an errno status code.
- */
-int sfptpd_interface_ptp_set_vlan_filter(struct sfptpd_interface *interface,
-					 unsigned int num_vlan_tags,
-					 uint16_t vlan_tags[]);
-
-/** Set the PTP UUID for filtering of received timestamped PTP packets
- * @param interface Pointer to the interface instance
- * @param uuid_enable Boolean indicating whether to enable the filter
- * @param uuid UUID to filter against
- * @return 0 for success otherwise an errno status code.
- */
-int sfptpd_interface_ptp_set_uuid_filter(struct sfptpd_interface *interface,
-					 bool enable, uint8_t uuid[]);
-
-/** Set the PTP Domain number for filtering of received timestamped PTP packets
- * @param interface Pointer to the interface instance
- * @param enable Boolean indicating whether to enable the filter
- * @param domain Domain number to filter against
- * @return 0 for success otherwise an errno status code.
- */
-int sfptpd_interface_ptp_set_domain_filter(struct sfptpd_interface *interface,
-					   bool enable, uint8_t domain);
 
 /** Triggers handling by the interface module of a netlink
  * interface hotplug event designating the insertion or modification
