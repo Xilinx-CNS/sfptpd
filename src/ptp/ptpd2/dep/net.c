@@ -62,6 +62,7 @@
 #include <asm/types.h>
 #include <time.h>
 #include <linux/errqueue.h>
+#include <linux/net_tstamp.h>
 
 /* SO_EE_ORIGIN_TIMESTAMPING is defined in linux/errqueue.h in recent kernels.
  * Define it for compilation with older kernels.

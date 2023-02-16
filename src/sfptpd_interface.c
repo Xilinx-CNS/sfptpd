@@ -30,6 +30,7 @@
 #include <linux/sockios.h>
 #include <linux/socket.h>
 #include <linux/if_ether.h>
+#include <linux/net_tstamp.h>
 #include <linux/pci.h>
 #include <arpa/inet.h>
 #include <regex.h>
@@ -230,25 +231,6 @@ struct sfptpd_interface {
 const uint32_t rx_filters_min = (1 << HWTSTAMP_FILTER_ALL)
 			      | (1 << HWTSTAMP_FILTER_PTP_V2_L4_EVENT)
 			      | (1 << HWTSTAMP_FILTER_PTP_V2_EVENT);
-
-static const struct ethtool_ts_info ts_info_hw_default =
-{
-	.so_timestamping = SOF_TIMESTAMPING_RX_SOFTWARE
-			 | SOF_TIMESTAMPING_SOFTWARE
-			 | SOF_TIMESTAMPING_TX_HARDWARE
-			 | SOF_TIMESTAMPING_RX_HARDWARE
-			 | SOF_TIMESTAMPING_RAW_HARDWARE,
-	.phc_index = -1,
-	.tx_types = (1 << HWTSTAMP_TX_OFF)
-		  | (1 << HWTSTAMP_TX_ON),
-	.rx_filters = (1 << HWTSTAMP_FILTER_NONE)
-		    | (1 << HWTSTAMP_FILTER_PTP_V1_L4_EVENT)
-		    | (1 << HWTSTAMP_FILTER_PTP_V1_L4_SYNC)
-		    | (1 << HWTSTAMP_FILTER_PTP_V1_L4_DELAY_REQ)
-		    | (1 << HWTSTAMP_FILTER_PTP_V2_L4_EVENT)
-		    | (1 << HWTSTAMP_FILTER_PTP_V2_L4_SYNC)
-		    | (1 << HWTSTAMP_FILTER_PTP_V2_L4_DELAY_REQ)
-};
 
 static const struct ethtool_ts_info ts_info_sw_only =
 {
@@ -762,8 +744,7 @@ static void interface_get_versions(struct sfptpd_interface *interface)
 static void interface_get_ts_info(struct sfptpd_interface *interface,
 				  const char *sysfs_dir)
 {
-	int if_index, rc;
-	struct efx_sock_ioctl req;
+	int rc;
 
 	assert(interface != NULL);
 	assert(sysfs_dir != NULL);
@@ -781,42 +762,6 @@ static void interface_get_ts_info(struct sfptpd_interface *interface,
 	if (rc == 0) {
 		interface->clock_supports_phc = (interface->ts_info.phc_index >= 0);
 		return;
-	}
-
-	if (interface->class == SFPTPD_INTERFACE_SFC) {
-		/* Method 2. For Solarflare adapters using newer drivers on
-		 * kernels that don't support PHC, try using a private ioctl to
-		 * get the timestamping capabilities of the NIC. */
-		TRACE_L4("interface %s: getting timestamping caps via private ioctl\n",
-			 interface->name);
-
-		memset(&req, 0, sizeof(req));
-		req.cmd = EFX_GET_TS_INFO;
-		req.u.ts_info.cmd = ETHTOOL_GET_TS_INFO;
-
-		rc = sfptpd_interface_ioctl(interface, SIOCEFX, &req);
-		if (rc == 0) {
-			interface->clock_supports_phc = false;
-			interface->ts_info = req.u.ts_info;
-			interface->driver_supports_efx = true;
-			return;
-		}
-
-		/* Method 3. If we can't find the timestamping capabilities of
-		 * the NIC via ethtool or a private ioctl, try looking for a
-		 * ptp_caps file. This is the method supported by older
-		 * drivers. */
-		TRACE_L4("interface %s: getting timestamping caps via sysfs\n",
-			 interface->name);
-
-		if (sysfs_file_exists(sysfs_dir, interface->name, "device/ptp_caps") &&
-		    sysfs_read_int(sysfs_dir, interface->name, "ifindex", &if_index)) {
-			interface->clock_supports_phc = false;
-			interface->ts_info = ts_info_hw_default;
-			interface->ts_info.phc_index = if_index;
-			interface->driver_supports_efx = true;
-			return;
-		}
 	}
 
 	/* We aren't able to support timestamping on this interface so set the

@@ -74,81 +74,10 @@ struct efx_timespec {
 	__s32	tv_nsec;
 };
 
-#if !defined(__KERNEL__) || defined(__VMKLNX__)
-
-enum {
-	SOF_TIMESTAMPING_TX_HARDWARE = (1<<0),
-	SOF_TIMESTAMPING_TX_SOFTWARE = (1<<1),
-	SOF_TIMESTAMPING_RX_HARDWARE = (1<<2),
-	SOF_TIMESTAMPING_RX_SOFTWARE = (1<<3),
-	SOF_TIMESTAMPING_SOFTWARE = (1<<4),
-	SOF_TIMESTAMPING_SYS_HARDWARE = (1<<5),
-	SOF_TIMESTAMPING_RAW_HARDWARE = (1<<6),
-	SOF_TIMESTAMPING_MASK =
-	(SOF_TIMESTAMPING_RAW_HARDWARE - 1) |
-	SOF_TIMESTAMPING_RAW_HARDWARE
-};
-
-enum hwtstamp_tx_types {
-	HWTSTAMP_TX_OFF,
-	HWTSTAMP_TX_ON,
-	HWTSTAMP_TX_ONESTEP_SYNC,
-};
-
-enum hwtstamp_rx_filters {
-	HWTSTAMP_FILTER_NONE,
-	HWTSTAMP_FILTER_ALL,
-	HWTSTAMP_FILTER_SOME,
-	HWTSTAMP_FILTER_PTP_V1_L4_EVENT,
-	HWTSTAMP_FILTER_PTP_V1_L4_SYNC,
-	HWTSTAMP_FILTER_PTP_V1_L4_DELAY_REQ,
-	HWTSTAMP_FILTER_PTP_V2_L4_EVENT,
-	HWTSTAMP_FILTER_PTP_V2_L4_SYNC,
-	HWTSTAMP_FILTER_PTP_V2_L4_DELAY_REQ,
-	HWTSTAMP_FILTER_PTP_V2_L2_EVENT,
-	HWTSTAMP_FILTER_PTP_V2_L2_SYNC,
-	HWTSTAMP_FILTER_PTP_V2_L2_DELAY_REQ,
-	HWTSTAMP_FILTER_PTP_V2_EVENT,
-	HWTSTAMP_FILTER_PTP_V2_SYNC,
-	HWTSTAMP_FILTER_PTP_V2_DELAY_REQ,
-};
-
-struct hwtstamp_config {
-	int flags;
-	int tx_type;
-	int rx_filter;
-};
-
-#endif /* !__KERNEL__ || __VMKLNX__ */
-
-#if !defined(EFX_HAVE_NET_TSTAMP)
-
-/* Read any transmit or receive timestamps since the last call **************/
-#define EFX_TS_READ 0xef13
-
-struct efx_ts_read {
-	__u32 tx_valid;
-	struct efx_timespec tx_ts;
-	struct efx_timespec tx_ts_hw;
-	__u32 rx_valid;
-	struct efx_timespec rx_ts;
-	struct efx_timespec rx_ts_hw;
-	__u8 uuid[6];
-	__u8 seqid[2];
-};
-#endif
-
 /* Set the NIC time clock offset ********************************************/
 #define EFX_TS_SETTIME 0xef14
 struct efx_ts_settime {
 	struct efx_timespec ts;	/* In and out */
-	__u32 iswrite;		/* 1 == write, 0 == read (only) */
-};
-
-/* Adjust the NIC time frequency ********************************************/
-#define EFX_TS_ADJTIME 0xef15
-struct efx_ts_adjtime {
-	__s64 adjustment;	/* Parts per billion, In and out */
 	__u32 iswrite;		/* 1 == write, 0 == read (only) */
 };
 
@@ -164,21 +93,6 @@ struct efx_ts_set_sync_status {
 	__u32 in_sync;		/* 0 == not in sync, 1 == in sync */
 	__u32 timeout;		/* Seconds until no longer in sync */
 };
-
-/* Get the clock/timestamp capabilities, like ETHTOOL_GET_TS_INFO ***********/
-#define EFX_GET_TS_INFO 0xef24
-#ifndef ETHTOOL_GET_TS_INFO
-	struct ethtool_ts_info {
-		__u32	cmd;
-		__u32	so_timestamping;
-		__s32	phc_index;
-		__u32	tx_types;
-		__u32	tx_reserved[3];
-		__u32	rx_filters;
-		__u32	rx_reserved[3];
-	};
-	#define ETHTOOL_GET_TS_INFO	0x00000041 /* Get time stamping and PHC info */
-#endif
 
 /* Return a PPS timestamp ***************************************************/
 #define EFX_TS_GET_PPS 0xef1c
@@ -199,15 +113,9 @@ struct efx_ts_hw_pps {
 /* Efx private ioctl command structures *************************************/
 
 union efx_ioctl_data {
-	struct hwtstamp_config ts_init;
-#if !defined(EFX_HAVE_NET_TSTAMP)
-	struct efx_ts_read ts_read;
-#endif
 	struct efx_ts_settime ts_settime;
-	struct efx_ts_adjtime ts_adjtime;
 	struct efx_ts_sync ts_sync;
 	struct efx_ts_set_sync_status ts_set_sync_status;
-	struct ethtool_ts_info ts_info;
 	struct efx_ts_get_pps pps_event;
 	struct efx_ts_hw_pps pps_enable;
 };
