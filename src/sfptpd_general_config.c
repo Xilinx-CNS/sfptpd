@@ -1517,6 +1517,10 @@ void sfptpd_config_general_set_verbose(struct sfptpd_config *config)
 	general->stats_log = SFPTPD_STATS_LOG_TO_STDOUT;
 	if (general->trace_level < 3)
 		general->trace_level = 3;
+	if (general->netlink_trace_level < 1)
+		general->netlink_trace_level = 1;
+	if (general->ntp_trace_level < 1)
+		general->ntp_trace_level = 1;
 	sfptpd_log_set_trace_level(SFPTPD_COMPONENT_ID_SFPTPD,
 				   general->trace_level);
 }
