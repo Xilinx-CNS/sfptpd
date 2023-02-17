@@ -1069,6 +1069,9 @@ static void interface_delete(struct sfptpd_interface *interface,
 	assert(interface != NULL);
 	assert(interface->magic == SFPTPD_INTERFACE_MAGIC);
 
+	if (interface->deleted)
+		return;
+
 	if (disable_timestamping)
 		sfptpd_interface_hw_timestamping_disable(interface);
 
@@ -1992,7 +1995,7 @@ void sfptpd_interface_hw_timestamping_disable(struct sfptpd_interface *interface
 	struct hwtstamp_config so_ts_req;
 
 	if (!interface_get_canonical_with_lock(&interface)) {
-		ERROR("interface: can't disable timestamping on missing interface\n");
+		TRACE_L4("interface: can't disable timestamping on missing interface\n");
 		return;
 	}
 
