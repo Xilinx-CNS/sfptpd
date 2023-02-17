@@ -509,7 +509,7 @@ static int phc_compare_by_reading_time_n(struct sfptpd_phc *phc, unsigned int nu
 		if ((clock_gettime(CLOCK_REALTIME, &sys_ts[0]) != 0) ||
 		    (clock_gettime(phc->posix_id, &phc_ts) != 0) ||
 		    (clock_gettime(CLOCK_REALTIME, &sys_ts[1]) != 0)) {
-			ERROR("phc%d: failed to read time, %s\n",
+			ERROR("phc%d read-time: failed to read time, %s\n",
 			      phc->phc_idx, strerror(errno));
 			return errno;
 		}
@@ -521,9 +521,6 @@ static int phc_compare_by_reading_time_n(struct sfptpd_phc *phc, unsigned int nu
 						    &ts, diff))
 			rc = 0;
 	}
-
-	TRACE_L5("phc%d: read_time diff = " SFPTPD_FORMAT_STIMESPEC "\n",
-		 phc->phc_idx, SFPTPD_ARGS_STIMESPEC(*diff));
 
 	if (rc == 0)
 		phc->diff_prev = *diff;
@@ -557,7 +554,7 @@ static int phc_compare_using_pps(void *context, struct timespec *diff)
 
 	/* >900 ms elapsed since last PPS event? */
 	if (since_read < (ONE_BILLION * 0.9)) {
-		TRACE_L6("phc%d: returning previous PPS sample due to short elapsed time %Lf\n",
+		TRACE_L6("phc%d pps: returning previous PPS sample due to short elapsed time %Lf\n",
 				 phc->phc_idx, since_read);
 		*diff = phc->diff_prev;
 		return phc->stepped_since_sample ? EAGAIN : 0;
@@ -568,12 +565,12 @@ static int phc_compare_using_pps(void *context, struct timespec *diff)
 	pps.timeout.flags = ~PPS_TIME_INVALID;
 
 	if (ioctl(phc->pps_fd, PPS_FETCH, &pps) != 0) {
-		ERROR("phc%d: failed to read PPS event, %s\n",
+		ERROR("phc%d pps: failed to read event, %s\n",
 		      phc->phc_idx, strerror(errno));
 		return errno;
 	}
 
-	TRACE_L4("phc%d: pps = " SFPTPD_FORMAT_TIMESPEC "\n",
+	TRACE_L4("phc%d pps: assert = " SFPTPD_FORMAT_TIMESPEC "\n",
 		 phc->phc_idx, pps.info.assert_tu.sec, pps.info.assert_tu.nsec);
 
 	/* If we don't have a new PPS event, just return the last difference
@@ -583,7 +580,7 @@ static int phc_compare_using_pps(void *context, struct timespec *diff)
 		/* Some adapters (e.g. ixgbe X540) never produce any PPS data.
 		 * In this case we fall back to another diff method. */
 		if (pps.info.assert_tu.sec == 0 && pps.info.assert_tu.nsec == 0) {
-			WARNING("phc%d: no initial pps data, changing diff method in %0.1fs\n",
+			WARNING("phc%d pps: no initial pps data, changing diff method in %0.1fs\n",
 				phc->phc_idx, ((double) (PPS_FIRST_ATTEMPT_TIMEOUT_NS - since_attempt)) / ONE_BILLION);
 
 			if (since_attempt < PPS_FIRST_ATTEMPT_TIMEOUT_NS)
@@ -602,7 +599,7 @@ static int phc_compare_using_pps(void *context, struct timespec *diff)
 			assert(phc->diff_method != SFPTPD_DIFF_METHOD_PPS);
 			return sfptpd_phc_compare_to_sys_clk(phc, diff);
 		}
-		TRACE_L6("phc%d: no new pps event, returning previous diff\n",
+		TRACE_L6("phc%d pps: no new event, returning previous diff\n",
 			 phc->phc_idx);
 		*diff = phc->diff_prev;
 		return phc->stepped_since_sample ? EAGAIN : 0;
@@ -614,7 +611,7 @@ static int phc_compare_using_pps(void *context, struct timespec *diff)
 	/* Compare to system time to get seconds offset. */
 	rc = phc_compare_by_reading_time_n(phc, READ_TIME_NUM_SAMPLES, &approx);
 	if (rc != 0) {
-		TRACE_L3("phc%d: read_time for pps failed\n", phc->phc_idx);
+		TRACE_L3("phc%d pps: read_time for pps tod failed\n", phc->phc_idx);
 		return rc;
 	}
 
@@ -628,10 +625,8 @@ static int phc_compare_using_pps(void *context, struct timespec *diff)
 	if (diff->tv_nsec >= 500000000)
 		diff->tv_sec -= 1;
 
-	TRACE_L5("phc%d: phc-sys PPS diff = " SFPTPD_FORMAT_STIMESPEC ", approx "
-		 SFPTPD_FORMAT_STIMESPEC "\n",
+	TRACE_L6("phc%d pps: approx " SFPTPD_FORMAT_STIMESPEC "\n",
 		 phc->phc_idx,
-		 SFPTPD_ARGS_STIMESPEC(*diff),
 		 SFPTPD_ARGS_STIMESPEC(approx));
 
 	/* Store the PPS event time and calculated diff */
@@ -664,14 +659,12 @@ static int phc_compare_using_precise_offset(void *context,
 
 	/* Subtract ( phc - sys ) times. */
 	phc_pct_subtract(diff, &ktimes.device, &ktimes.sys_realtime);
-
-	TRACE_L5("phc%d: PTP_SYS_OFFSET_PRECISE diff: " SFPTPD_FORMAT_STIMESPEC "\n",
-             phc->phc_idx, SFPTPD_ARGS_STIMESPEC(*diff));
-	TRACE_L6("  device:  %10lld.%u\n", ktimes.device.sec, ktimes.device.nsec);
-	TRACE_L6("  real:    %10lld.%u\n", ktimes.sys_realtime.sec,
-					   ktimes.sys_realtime.nsec);
-
 	phc->diff_prev = *diff;
+
+	TRACE_L6("phc%d sys-offset-precise: device:  %10lld.%u\n", phc->phc_idx,
+		 ktimes.device.sec, ktimes.device.nsec);
+	TRACE_L6("phc%d sys-offset-precise: real:    %10lld.%u\n", phc->phc_idx,
+		 ktimes.sys_realtime.sec, ktimes.sys_realtime.nsec);
 #endif
 
 	return rc;
@@ -723,10 +716,8 @@ static int phc_compare_using_extended_offset_n(struct sfptpd_phc *phc,
 			rc = 0;
 	}
 
-	TRACE_L5("phc%d: PTP_SYS_OFFSET_EXTENDED diff: " \
-		 SFPTPD_FORMAT_STIMESPEC " smallest_window: %Lf\n",
+	TRACE_L6("phc%d sys-offset-ext: smallest_window: %Lf\n",
 		 phc->phc_idx,
-		 SFPTPD_ARGS_STIMESPEC(*diff),
 		 smallest_window);
 
 	if (rc == 0)
@@ -772,10 +763,8 @@ static int phc_compare_using_kernel_readings_n(struct sfptpd_phc *phc,
 			rc = 0;
 	}
 
-	TRACE_L5("phc%d: PTP_SYS_OFFSET diff: " \
-		 SFPTPD_FORMAT_STIMESPEC " smallest_window: %Lf\n",
+	TRACE_L6("phc%d sys-offset: smallest_window: %Lf\n",
 		 phc->phc_idx,
-		 SFPTPD_ARGS_STIMESPEC(*diff),
 		 smallest_window);
 
 	if (rc == 0)
@@ -879,7 +868,7 @@ static int phc_set_fallback_diff_method(struct sfptpd_phc *phc)
 	}
 
 no_diff_method_selected:
-	WARNING("phc%d: No configured diff methods available\n", phc->phc_idx);
+	CRITICAL("phc%d: No configured diff methods available\n", phc->phc_idx);
 	assert(method == SFPTPD_DIFF_METHOD_MAX);
 
 diff_method_selected:
@@ -1228,17 +1217,28 @@ static int phc_compare_by_reading_time(void *context, struct timespec *diff)
 int sfptpd_phc_compare_to_sys_clk(struct sfptpd_phc *phc, struct timespec *diff)
 {
 	const struct phc_diff_method *method_def;
+	int rc;
 
 	assert(phc != NULL);
 	assert(diff != NULL);
+
 	assert(phc->diff_method < SFPTPD_DIFF_METHOD_MAX);
 
 	method_def = phc->diff_method_defs + phc->diff_method;
 
 	if (method_def->diff_fn != NULL)
-		return method_def->diff_fn(method_def->context ? method_def->context : phc, diff);
+		rc = method_def->diff_fn(method_def->context ? method_def->context : phc, diff);
 	else
-		return EOPNOTSUPP;
+		rc = EOPNOTSUPP;
+
+	if (rc == 0) {
+		TRACE_L5("phc%d %s: phc-sys diff: " SFPTPD_FORMAT_STIMESPEC "\n",
+			 phc->phc_idx,
+			 sfptpd_phc_get_diff_method_name(phc),
+			 SFPTPD_ARGS_STIMESPEC(*diff));
+	}
+
+	return rc;
 }
 
 
