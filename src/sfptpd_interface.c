@@ -875,13 +875,13 @@ static void free_interface_table(void)
    otherwise they refer to the same quantity, the physical clock. */
 static int interface_assign_nic_id(struct sfptpd_interface *interface)
 {
-	regmatch_t matches[1];
+	regmatch_t matches[2];
 	regex_t regex;
 	int rc;
 
 	/* Extract a portion of the bus address that identifies the NIC,
 	   i.e. excluding the PCI function. Failure is not fatal. */
-	rc = regcomp(&regex, "([[:xdigit:]:]+)", REG_EXTENDED);
+	rc = regcomp(&regex, "^([[:xdigit:]:]{8,}).[[:xdigit:]]+$", REG_EXTENDED);
 	if (rc != 0) {
 		TRACE_L3("interface %s: regcomp() failed\n",
 			 interface->name);
@@ -890,11 +890,13 @@ static int interface_assign_nic_id(struct sfptpd_interface *interface)
 			     sizeof matches / sizeof *matches,
 			     matches, 0);
 		if (rc == 0 &&
-		    matches[0].rm_so != -1) {
+		    matches[1].rm_so != -1) {
 			/* Assumes destination already zeroed. */
 			strncpy(interface->bus_addr_nic,
-				interface->bus_addr + matches[0].rm_so,
-				matches[0].rm_eo - matches[0].rm_so);
+				interface->bus_addr + matches[1].rm_so,
+				matches[1].rm_eo - matches[1].rm_so);
+		} else {
+			strncpy(interface->bus_addr_nic, interface->bus_addr, sizeof interface->bus_addr_nic);
 		}
 
 		regfree(&regex);
