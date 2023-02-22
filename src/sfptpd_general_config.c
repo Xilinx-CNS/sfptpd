@@ -292,10 +292,9 @@ static const sfptpd_config_option_t config_general_options[] =
 		"or diagnostic use cases.",
 		~1, SFPTPD_CONFIG_SCOPE_GLOBAL, false, parse_ignore_critical},
 	{"rtc_adjust", "<off | on>",
-		"Specify whether to let the kernel adjust sync the RTC clock. "
+		"Specify whether to let the kernel sync the RTC clock. "
 		"Enabled by default",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL, true,
-		parse_rtc_adjust},
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL, false, parse_rtc_adjust},
 };
 
 static const sfptpd_config_option_set_t config_general_option_set =
