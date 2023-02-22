@@ -1165,6 +1165,20 @@ struct sfptpd_interface *sfptpd_interface_find_first_by_nic(int nic_id)
 }
 
 
+/* Enable timestamping on an interface if supported. To be used with a database
+ * 'foreach' operation. On error, set shared return code. */
+static void interface_enable_ts_if_supported(void *record, void *context) {
+	struct sfptpd_interface *interface = *((struct sfptpd_interface **) record);
+	int *rc = (int *) context;
+
+	if (sfptpd_interface_rx_ts_caps(interface) & SFPTPD_INTERFACE_TS_CAPS_HW) {
+		int local_rc = sfptpd_interface_hw_timestamping_enable(interface);
+		if (local_rc != 0)
+			*rc = local_rc;
+	}
+}
+
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -1249,15 +1263,8 @@ int sfptpd_interface_initialise(struct sfptpd_config *config,
 	ts = &sfptpd_general_config_get(config)->timestamping;
 	if (ts->all) {
 		int rc = 0;
-		void fn(void *record, void *rcp) {
-			struct sfptpd_interface *interface = *((struct sfptpd_interface **) record);
-			if (sfptpd_interface_rx_ts_caps(interface) & SFPTPD_INTERFACE_TS_CAPS_HW) {
-				int local_rc = sfptpd_interface_hw_timestamping_enable(interface);
-				if (local_rc != 0)
-					*((int *) rcp) = local_rc;
-			}
-		}
-		sfptpd_db_table_foreach(sfptpd_interface_table, fn, &rc);
+		sfptpd_db_table_foreach(sfptpd_interface_table,
+					interface_enable_ts_if_supported, &rc);
 		if (rc != 0)
 			return rc;
 	} else {
