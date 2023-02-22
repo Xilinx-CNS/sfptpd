@@ -759,8 +759,8 @@ static void write_sync_instances(struct sfptpd_engine *engine)
 
 static void write_interfaces(void)
 {
-	const char *format_interface_string = "| %12s | %8s | %21s | %17s |\n";
-	const char *format_interface_data = "| %12s | %8s | %21s | %17s |\n";
+	const char *format_interface_string = "| %16s | %8s | %21s | %17s |\n";
+	const char *format_interface_data = "| %16s | %8s | %21s | %17s |\n";
 	const char *ts_caps[4] = {"-", "sw", "hw", "hw & sw"};
 	struct sfptpd_log *log;
 	FILE *stream;
