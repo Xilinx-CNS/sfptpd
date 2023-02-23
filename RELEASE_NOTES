@@ -1,6 +1,6 @@
 Solarflare Enhanced PTP Daemon (sfptpd) from Xilinx
 ===================================================
-Version: v3.7.0.1000
+Version: v3.7.0.1001
 
 
 Overview
@@ -48,7 +48,6 @@ This package is supported on:
 - SuSE Linux Enterprise Server 12 sp4 and sp5
 - SuSE Linux Enterprise Server 15 sp1 - sp4
 - Canonical Ubuntu Server LTS 18.04, 20.04, 22.04
-- Canonical Ubuntu Server 21.10
 - Debian 10 "Buster"
 - Debian 11 "Bullseye"
 - Linux kernels 3.0 - 6.0
@@ -109,7 +108,7 @@ Advanced notice of possible future changes
 Changelog
 ---------
 
-### v3.7.0.1000 Feature Release
+### v3.7.0.1001 Feature Release
 
 Features:
  ~ Allow running as non-root user with minimum required capabilities (SWPTP-442)
@@ -121,16 +120,21 @@ Features:
  ~ Mix 'efx' clock diff method with list of preferred phc methods (SWPTP-1285)
  ~ Add sync-instances file showing factors influencing selection (SWPTP-1286)
  ~ Add ntp and servo logging modules for targetted diagnostics (SWPTP-1291)
- ~ Reflect external constraints (i.e. on chronyd) as selection rule (SWPTP-1295)
+ ~ Reflect external constraints (ntpd, chronyd) as selection rule (SWPTP-1295)
+ ~ Better quality logging and trace on hotplug events (SWPTP-1300)
+ ~ Special support for SFN5000 and SFN6000 series adapters removed (SWPTP-1306)
+ ~ Support for hardware timestamping without Linux PHC removed (SWPTP-1306)
 
 Issue SWPTP-1278
  ~ Fix retrieval of transmit timestamps to recover from nic reset quicker
+Issue SWPTP-1296
+ ~ Improve logging of timer fd activity to identify system configuration issues
 
 
 ### v3.6.0.1015 Feature Release
 
 Features:
- ~ Support Xilinx ALVEO X3522 NICs (SWPTP-1162)
+ ~ Support Xilinx Alveo X3522 Ethernet adapters (SWPTP-1162)
 
  ~ Support for operating alongside the chronyd service is now provided in a
     separate 'crny' sync module from the 'ntp' module used for ntpd, e.g.
