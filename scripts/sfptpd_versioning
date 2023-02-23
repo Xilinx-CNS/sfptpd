@@ -79,6 +79,10 @@ derive_version () {
   if [ "v$src_version" = "$vcs_tag" ]
   then
     echo -n "Encoded version is tagged: " >&2
+  elif echo $vcs_tag | grep -q "^v[^-]*$"
+  then
+    echo -n "Commit is tagged with viable version: " >&2
+    version="${vcs_tag#v}"
   elif echo $vcs_tag | grep -q "^v$base_version-"
   then
     echo -n "Post-release version: " >&2

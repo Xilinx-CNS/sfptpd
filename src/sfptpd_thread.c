@@ -856,7 +856,11 @@ static void timer_on_expiry(struct sfptpd_timer *timer)
 
 	result = read(timer->fd, &expirations, sizeof(expirations));
 	if (result == -1) {
-		if (errno == ECANCELED) {
+		if (errno == EAGAIN) {
+			WARNING("thread %s timer %d: fd unexpectedly ready when not yet expired\n",
+				thread_get_name(), timer->id);
+			return;
+		} else if (errno == ECANCELED) {
 			WARNING("thread %s timer %d: detected discontinuity in clock\n",
 				thread_get_name(), timer->id);
 		} else {
