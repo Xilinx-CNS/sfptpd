@@ -90,7 +90,7 @@ const char *sfptpd_link_type_str(enum sfptpd_link_type type)
 const struct sfptpd_link *sfptpd_link_by_name(const struct sfptpd_link_table *link_table,
 					      const char *link_name)
 {
-	const struct sfptpd_link *link;
+	const struct sfptpd_link *link = NULL;
 	int row;
 
 	for (row = 0; row < link_table->count; row++) {
@@ -112,7 +112,7 @@ const struct sfptpd_link *sfptpd_link_by_name(const struct sfptpd_link_table *li
 const struct sfptpd_link *sfptpd_link_by_if_index(const struct sfptpd_link_table *link_table,
 					          int if_index)
 {
-	const struct sfptpd_link *link;
+	const struct sfptpd_link *link = NULL;
 	int row;
 
 	for (row = 0; row < link_table->count; row++) {
