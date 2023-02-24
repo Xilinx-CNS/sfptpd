@@ -1381,6 +1381,28 @@ void sfptpd_interface_shutdown(struct sfptpd_config *config)
 }
 
 
+static int interface_handle_rename(struct sfptpd_interface *interface,
+				   const char *if_name)
+{
+	struct sfptpd_interface *other;
+
+	INFO("interface: handling detected rename: %s -> %s (if_index %d)\n",
+	     interface->name, if_name, interface->if_index);
+	other = interface_find_by_name(if_name);
+	if (other != NULL && other->deleted) {
+		TRACE_L3("interface: aliasing deleted interface %d to %d\n",
+			 other->if_index, interface->if_index);
+		other->name[0] = '\0';
+		other->canonical = interface;
+	} else if (other != NULL) {
+		CRITICAL("interface: renamed interface apparently still active as if_index %d\n",
+			 other->if_index);
+		return EEXIST;
+	}
+	return 0;
+}
+
+
 int sfptpd_interface_hotplug_insert(const struct sfptpd_link *link)
 {
 	struct sfptpd_interface *interface;
@@ -1423,23 +1445,7 @@ int sfptpd_interface_hotplug_insert(const struct sfptpd_link *link)
 			sfptpd_db_table_insert(sfptpd_interface_table, &interface);
 		}
 	} else if (0 != strcmp(interface->name, if_name)) {
-		struct sfptpd_interface *other;
-
-		INFO("interface: handling detected rename: %s -> %s (if_index %d)\n",
-		     interface->name, if_name, if_index);
-
-		other = interface_find_by_name(if_name);
-		if (other != NULL && other->deleted) {
-			TRACE_L3("interface: aliasing deleted interface %d to %d\n",
-				 other->if_index, if_index);
-			other->name[0] = '\0';
-			other->canonical = interface;
-		} else if (other != NULL) {
-			CRITICAL("interface: cannot process insertion of interface %s (%d) while undeleted interface of the same name (%d) still exists\n",
-				 if_name, if_index, interface->if_index);
-			rc = EINVAL;
-			goto finish;
-		}
+		rc = interface_handle_rename(interface, if_name);
 	} else {
 		INFO("interface: handling detected changes: %s (if_index %d)\n",
 		     if_name, if_index);
@@ -1872,6 +1878,7 @@ static int interface_check_hotplug_rename(struct sfptpd_interface *interface)
 	INFO("interface %s: hotplug changed name during ioctl -> %s (%d)\n",
 	     interface->name, ifr.ifr_name, interface->if_index);
 
+	interface_handle_rename(interface, ifr.ifr_name);
 	sfptpd_strncpy(interface->name, ifr.ifr_name, sizeof(interface->name));
 
 	return EAGAIN;
