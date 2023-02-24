@@ -603,7 +603,7 @@ int ptpd_change_interface(struct ptpd_intf_context *ptpd_if, Octet *logical_ifac
 		}
 	}
 
-	if (rc != 0 && rc != ENOENT) {
+	if (rc != 0) {
 		ERROR("failed to initialize network\n");
 		toStateAllPorts(PTPD_FAULTY, ptpd_if);
 	}
