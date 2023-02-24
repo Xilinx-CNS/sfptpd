@@ -239,31 +239,33 @@ void sfptpd_link_log(const struct sfptpd_link *link, const struct sfptpd_link *p
 	const char *format_record = "| %8d%3s%-*s | %05x | %-8s | %-4s | %-5s | %6d | %6d | %6d | %5d |\n";
 	const char *format_flags  = "|_%8s___%-*s_| %-66s |\n";
 	char flags[256];
+	int prev_flags = 0;
 
-	if (link == NULL) {
+	if (link == NULL && prev == NULL) {
 		DBG_L1(format_header,
 		       header[0], IF_NAMESIZE, header[1], header[2], header[3],
 		       header[4], header[5], header[6], header[7],
 		       header[8], header[9]);
-	} else {
-		if (prev != NULL) {
-			DBG_L1(format_record,
-			       prev->if_index, "<--", IF_NAMESIZE, prev->if_name,
-			       prev->if_flags, prev->if_kind,
-			       link_bond_mode(prev->bond.bond_mode), prev->is_slave ? "slave" : "",
-			       prev->if_link, prev->bond.if_master,
-			       prev->bond.active_slave, prev->vlan_id);
-		}
-
+	}
+	if (prev != NULL) {
 		DBG_L1(format_record,
-		       link->if_index, prev == NULL ? " | " : "-->", IF_NAMESIZE, link->if_name,
+		       prev->if_index, link == NULL ? " - " : "<--", IF_NAMESIZE, prev->if_name,
+		       prev->if_flags, prev->if_kind,
+		       link_bond_mode(prev->bond.bond_mode), prev->is_slave ? "slave" : "",
+		       prev->if_link, prev->bond.if_master,
+		       prev->bond.active_slave, prev->vlan_id);
+		prev_flags = prev->if_flags;
+	}
+	if (link != NULL) {
+		DBG_L1(format_record,
+		       link->if_index, prev == NULL ? " + " : "-->", IF_NAMESIZE, link->if_name,
 		       link->if_flags, link->if_kind,
 		       link_bond_mode(link->bond.bond_mode), link->is_slave ? "slave" : "",
 		       link->if_link, link->bond.if_master,
 		       link->bond.active_slave, link->vlan_id);
-		if (prev != NULL && prev->if_flags ^ link->if_flags) {
+		if (prev != NULL && prev_flags ^ link->if_flags) {
 			snprint_flags_delta(flags, sizeof flags,
-					    prev->if_flags,
+					    prev_flags,
 					    link->if_flags);
 			DBG_L1(format_flags,
 			       "________", IF_NAMESIZE, "________________", flags);
@@ -1490,38 +1492,47 @@ int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 		cur->table.rows[row].event = event;
 	}
 
-	/* Summarise new links */
-	for (row = 0, i = 0; row < cur->table.count; row++) {
-		const struct sfptpd_link *link = cur->table.rows + row;
+	/* Summarise link changes and detect deletions */
+	int ifi = -1;
+	int pifi = -1;
+	for (row = 0, old_row = 0, i = 0;
+	     row < cur->table.count || old_row < prev->table.count;
+	    ) {
 
-		if (link->event ==  SFPTPD_LINK_UP) {
+		/* These always point to the _next_ link to be examined, never
+		 * one we have already reported on. */
+		const struct sfptpd_link *link = row < cur->table.count ? cur->table.rows + row : NULL;
+		const struct sfptpd_link *old_link = old_row < prev->table.count ? prev->table.rows +old_row : NULL;
+
+		/* We expect to have retrieved data in if_index order */
+		assert(link == NULL || link->if_index > ifi);
+		assert(old_link == NULL || old_link->if_index > pifi);
+		if (link != NULL)
+			ifi = link->if_index;
+		if (old_link != NULL)
+			pifi = old_link->if_index;
+
+		if ((link && link->event != SFPTPD_LINK_NONE) || ifi != pifi)
 			if (i++ == 0) {
-				DBG_L1("link: new interfaces:\n");
+				DBG_L1("link: interface additions (+), deletions (-) and changes (<--, -->):\n");
 				sfptpd_link_log(NULL, NULL);
 			}
+
+		if (link != NULL && (old_link == NULL || link->if_index < old_link->if_index)) {
+			assert(link->event == SFPTPD_LINK_UP);
 			sfptpd_link_log(link, NULL);
-		}
-	}
-
-	/* Summarise changed links */
-	for (row = 0, i = 0; row < cur->table.count; row++) {
-		const struct sfptpd_link *link = cur->table.rows + row;
-
-		if (link->event ==  SFPTPD_LINK_CHANGE) {
-			if (i++ == 0) {
-				DBG_L1("link: changed interfaces:\n");
-				sfptpd_link_log(NULL, NULL);
-			}
-			sfptpd_link_log(link, (const struct sfptpd_link *) link->priv);
-		}
-	}
-
-	/* Handle deletions */
-	for (old_row = 0; old_row < prev->table.count; old_row++) {
-		for (row = 0; row < cur->table.count && cur->table.rows[row].if_index != prev->table.rows[old_row].if_index; row++);
-		if (row == cur->table.count) {
-			DBG_L1("link deleted interface %d: %s\n", prev->table.rows[old_row].if_index, prev->table.rows[old_row].if_name);
+			row++;
+		} else if (old_link != NULL && (link == NULL || old_link->if_index < link->if_index)) {
+			/* Deletions have not yet been reflected in this flag: */
 			change = true;
+			sfptpd_link_log(NULL, old_link);
+			old_row++;
+		} else if (link->event == SFPTPD_LINK_CHANGE) {
+			assert(old_link == link->priv);
+			sfptpd_link_log(link, (const struct sfptpd_link *) link->priv);
+			row++, old_row++;
+		} else { /* no change */
+			row++, old_row++;
 		}
 	}
 
