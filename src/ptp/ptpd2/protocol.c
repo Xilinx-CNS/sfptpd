@@ -203,6 +203,8 @@ static const struct tlv_handling tlv_handlers[] = {
 void
 toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
+	bool valid = true;
+
 	/* Stop all protocol timers */
 	timerStop(ANNOUNCE_INTERVAL_TIMER, ptpClock->itimer);
 	timerStop(ANNOUNCE_RECEIPT_TIMER, ptpClock->itimer);
@@ -236,7 +238,6 @@ toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	case PTPD_INITIALIZING:
 		timerStop(PDELAYREQ_INTERVAL_TIMER, ptpClock->itimer);
 		timerStop(PDELAYRESP_RECEIPT_TIMER, ptpClock->itimer);
-		ptpClock->portState = PTPD_INITIALIZING;
 		break;
 
 	case PTPD_FAULTY:
@@ -244,13 +245,11 @@ toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		timerStop(PDELAYRESP_RECEIPT_TIMER, ptpClock->itimer);
 		timerStart(FAULT_RESTART_TIMER, PTPD_FAULT_RESTART_INTERVAL,
 			   ptpClock->itimer);
-		ptpClock->portState = PTPD_FAULTY;
 		break;
 
 	case PTPD_DISABLED:
 		timerStop(PDELAYREQ_INTERVAL_TIMER, ptpClock->itimer);
 		timerStop(PDELAYRESP_RECEIPT_TIMER, ptpClock->itimer);
-		ptpClock->portState = PTPD_DISABLED;
 		break;
 
 	case PTPD_LISTENING:
@@ -302,13 +301,6 @@ toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 				   powl(2,ptpClock->logMinPdelayReqInterval),
 				   ptpClock->itimer);
 		}
-
-		if (ptpClock->portState != state) {
-			ptpClock->portState = PTPD_LISTENING;
-			displayStatus(ptpClock, "now in state: ");
-		} else {
-			ptpClock->portState = PTPD_LISTENING;
-		}
 		break;
 
 	case PTPD_MASTER:
@@ -350,8 +342,6 @@ toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 				   rtOpts->ifOpts->masterIgmpRefreshInterval,
 				   ptpClock->interface->itimer);
 		}
-		ptpClock->portState = PTPD_MASTER;
-		displayStatus(ptpClock, "now in state: ");
 		break;
 
 	case PTPD_PASSIVE:
@@ -370,13 +360,9 @@ toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 				   powl(2,ptpClock->logMinPdelayReqInterval),
 				   ptpClock->itimer);
 		}
-
-		ptpClock->portState = PTPD_PASSIVE;
-		displayStatus(ptpClock, "now in state: ");
 		break;
 
 	case PTPD_UNCALIBRATED:
-		ptpClock->portState = PTPD_UNCALIBRATED;
 		break;
 
 	case PTPD_SLAVE:
@@ -447,13 +433,17 @@ toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		 */
 		ptpClock->waiting_for_first_sync = TRUE;
 		ptpClock->waiting_for_first_delayresp = TRUE;
-		ptpClock->portState = PTPD_SLAVE;
-		displayStatus(ptpClock, "now in state: ");
 		break;
 
 	default:
 		DBG("to unrecognized state\n");
+		valid = false;
 		break;
+	}
+
+	if (valid && ptpClock->portState != state) {
+		ptpClock->portState = state;
+		displayStatus(ptpClock, "now in state: ");
 	}
 }
 
