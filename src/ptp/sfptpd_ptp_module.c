@@ -987,6 +987,9 @@ static void ptp_timestamp_filtering_reconfigure_all(struct sfptpd_ptp_intf *intf
 		 * configuration, then disable timestamping for this
 		 * interface. */
 		if (j >= new_bond_info->num_physical_ifs) {
+			if (sfptpd_interface_is_deleted(candidate))
+				continue;
+
 			INFO("ptp %s: interface %s removed from bond\n",
 			     old_bond_info->bond_if,
 			     sfptpd_interface_get_name(candidate));

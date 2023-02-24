@@ -578,8 +578,8 @@ int ptpd_change_interface(struct ptpd_intf_context *ptpd_if, Octet *logical_ifac
 
 	/* Initialize networking */
 	if(ifOpts->physIface == NULL) {
-		WARNING("null physical interface supplied for logical interface %s\n",
-			logical_iface_name);
+		NOTICE("no physical interface for logical interface %s\n",
+		       logical_iface_name);
 		rc = ENOENT;
 	} else if (!netInit(&ptpd_if->transport, ifOpts, ptpd_if)) {
 		rc = EIO;

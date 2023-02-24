@@ -652,8 +652,8 @@ static int interface_get_hw_address(struct sfptpd_interface *interface)
 	if (rc != 0) {
 		sfptpd_strncpy(interface->mac_string, "00:00:00:00:00:00",
 			       sizeof interface->mac_string);
-		WARNING("interface %s: failed to get permanent hardware address, %s\n",
-			interface->name, strerror(rc));
+		TRACE_L3("interface %s: failed to get permanent hardware address, %s\n",
+			 interface->name, strerror(rc));
 		return rc;
 	}
 
@@ -721,7 +721,7 @@ static int interface_get_versions(struct sfptpd_interface *interface)
 	interface->n_stats = drv_info.n_stats;
 
 	if (rc != 0)
-		ERROR("interface %s: failed to get driver info via ethtool, %s\n",
+		TRACE_L4("interface %s: failed to get driver info via ethtool, %s\n",
 		      interface->name, strerror(rc));
 
 	return rc;
@@ -805,8 +805,8 @@ static void interface_driver_stats_init(struct sfptpd_interface *interface)
 
 	rc = sfptpd_interface_ioctl(interface, SIOCETHTOOL, gstrings);
 	if (rc != 0) {
-		WARNING("interface %s: failed to obtain ethtool stat strings, %s\n",
-			interface->name, strerror(errno));
+		TRACE_L3("interface %s: failed to obtain ethtool stat strings, %s\n",
+			 interface->name, strerror(errno));
 		interface->n_stats = 0;
 	}
 
@@ -1024,8 +1024,6 @@ static int interface_init(const struct sfptpd_link *link, const char *sysfs_dir,
 
 	/* Get the permanent hardware address of the interface */
 	ret = interface_get_hw_address(interface);
-	if (ret != 0)
-		ERROR("interface %s: couldn't get hardware address\n", name);
 
 	/* Get the PCI IDs */
 	interface_get_pci_ids(interface, sysfs_dir);
@@ -2058,8 +2056,8 @@ int sfptpd_interface_driver_stats_read(struct sfptpd_interface *interface,
 
 		rc = sfptpd_interface_ioctl(interface, SIOCETHTOOL, estats);
 		if (rc != 0) {
-			WARNING("interface %s: failed to obtain ethtool stats, %s\n",
-				interface->name, strerror(errno));
+			TRACE_L3("interface %s: failed to obtain ethtool stats, %s\n",
+				 interface->name, strerror(errno));
 			return errno;
 		}
 	}
