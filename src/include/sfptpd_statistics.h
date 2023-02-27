@@ -41,6 +41,9 @@ struct sfptpd_hash_table;
 /** Max number of entries for hash table */
 #define SFPTPD_HT_STATS_SET_MAX (1024)
 
+/** Max length of transport address to add to nodes table */
+#define SFPTPD_NODES_MAX_ADDRESS_LEN (40)
+
 struct sfptpd_clock_hw_id;
 
 /** struct sfptpd_stats_convergence.
@@ -323,6 +326,7 @@ typedef struct sfptpd_stats_ptp_node {
 	const char *state;
 	unsigned int port_number;
 	unsigned int domain_number;
+	char transport_address[SFPTPD_NODES_MAX_ADDRESS_LEN];
 } sfptpd_stats_ptp_node_t;
 
 
@@ -641,13 +645,15 @@ struct sfptpd_stats_ptp_node *sfptpd_stats_node_ht_get_next(struct sfptpd_ht_ite
  * @param state True if node is master, false if slave
  * @param port_number Port number of node
  * @param domain_number Domain number of node
+ * @param transport_address Numerical transport address of node
  * @return Ptp node created, NULL if unsuccessful
  */
 int sfptpd_stats_add_node(struct sfptpd_hash_table *table,
 			   unsigned char *clock_id,
 			   bool state,
 			   uint16_t port_number,
-			   uint16_t domain_number);
+			   uint16_t domain_number,
+			   const char *transport_address);
 
 
 #endif /* _SFPTPD_STATISTICS_H */

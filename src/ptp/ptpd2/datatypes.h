@@ -587,7 +587,7 @@ struct ptpd_global_context {
 	PtpInterface *interfaces;
 };
 
-/* A structure containing IPv4 transport information. There is one of these
+/* A structure containing IP transport information. There is one of these
    per interface object. It is defined separately because different
    types of transport implementation may in future be required so it is
    useful to retain references in the code to this object as distinct
@@ -631,6 +631,9 @@ struct ptpd_transport {
 	/* used for Hybrid mode */
 	struct sockaddr_storage lastRecvAddr;
 	socklen_t lastRecvAddrLen;
+
+	/* reported to the user */
+	char lastRecvHost[NI_MAXHOST];
 
 	uint64_t sentPackets;
 	uint64_t receivedPackets;

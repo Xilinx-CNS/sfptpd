@@ -1450,7 +1450,8 @@ int sfptpd_stats_add_node(struct sfptpd_hash_table *table,
 			   unsigned char *clock_id,
 			   bool state,
 			   uint16_t port_number,
-			   uint16_t domain_number)
+			   uint16_t domain_number,
+			   const char *transport_address)
 {
 	assert(table != NULL);
 
@@ -1464,7 +1465,9 @@ int sfptpd_stats_add_node(struct sfptpd_hash_table *table,
 	new_node.state = (state) ? "Master" : "Slave";
 	new_node.port_number = port_number;
 	new_node.domain_number = domain_number;
-
+	sfptpd_strncpy(new_node.transport_address,
+		       transport_address,
+		       sizeof new_node.transport_address);
 	rc = sfptpd_ht_add(table, &new_node, true);
 
 	if (rc != 0) {

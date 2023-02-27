@@ -945,11 +945,12 @@ processMessage(InterfaceOpts *ifOpts, PtpInterface *ptpInterface, TimeInternal *
 				ptpInterface->transport.interfaceAddrLen)) {
 
 		struct sockaddr_in *in = ((struct sockaddr_in *) &ptpInterface->transport.lastRecvAddr);
-		char host[NI_MAXHOST] = "";
-
+		ptpInterface->transport.lastRecvHost[0] = '\0';
 		getnameinfo((struct sockaddr *) &ptpInterface->transport.lastRecvAddr,
 			    ptpInterface->transport.lastRecvAddrLen,
-			    host, sizeof host, NULL, 0, NI_NUMERICHOST);
+			    ptpInterface->transport.lastRecvHost,
+			    sizeof ptpInterface->transport.lastRecvHost,
+			    NULL, 0, NI_NUMERICHOST);
 
 		if (ptpInterface->msgTmpHeader.messageType == PTPD_MSG_MANAGEMENT) {
 			if (!checkACL(PTPD_ACL_MANAGEMENT, in->sin_addr,
@@ -3855,7 +3856,8 @@ static void statsAddNode(Octet *buf, MsgHeader *header, PtpInterface *ptpInterfa
 	/* Add node to set or update entry if already have it */
 	clock_id = (unsigned char *)header->sourcePortIdentity.clockIdentity;
 	sfptpd_stats_add_node(ptpInterface->nodeSet, clock_id, master,
-			      portNumber, domainNumber);
+			      portNumber, domainNumber,
+			      ptpInterface->transport.lastRecvHost);
 }
 
 

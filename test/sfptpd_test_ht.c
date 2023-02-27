@@ -25,6 +25,8 @@
 #define SFPTPD_HT_DOMAIN_NUM_MAX	(10)
 #define SFPTPD_HT_BOOL_MAX		(1)
 
+#define TEST_HOST_ADDR_LEN (60)
+
 struct test_details {
 	int test_num;
 	int num_nodes;
@@ -53,6 +55,40 @@ int random_num(int limit) {
 	} while (random_val > limit);
 
 	return random_val;
+}
+
+void random_addr(char addr[TEST_HOST_ADDR_LEN])
+{
+	enum {
+		IPv4,
+		IPv6,
+		IPv6_LINK_SCOPE,
+		TYPES
+	} type = random_num(TYPES - 1);
+	char intf[18] = "";
+
+	switch (type) {
+	case IPv4:
+		snprintf(addr, TEST_HOST_ADDR_LEN,
+			 "%d.%d.%d.%d",
+			 random_num(255), random_num(255),
+			 random_num(255), random_num(255));
+		break;
+	case IPv6_LINK_SCOPE:
+		snprintf(intf, sizeof intf,
+			 "%%enp%ds%df%d",
+			 random_num(15), random_num(15), random_num(15));
+	case IPv6:
+		snprintf(addr, TEST_HOST_ADDR_LEN,
+			 "%x:%x:%x:%x:%x:%x:%x:%x%s",
+			 random_num(0xffff), random_num(0xffff),
+			 random_num(0xffff), random_num(0xffff),
+			 random_num(0xffff), random_num(0xffff),
+			 random_num(0xffff), random_num(0xffff),
+			 intf);
+	case TYPES:
+		break;
+	}
 }
 
 void assign_clock_id(unsigned char *clock_id) {
@@ -84,6 +120,7 @@ bool add_and_check_nodes(struct sfptpd_hash_table *table, struct test_details te
 	int ii, rc, max_entries, entries, nodes_present = 0;
 	uint16_t port_no, domain_no;
 	unsigned char clock_id[SFPTPD_CLOCK_HW_ID_SIZE];
+	char transport_addr[TEST_HOST_ADDR_LEN];
 	bool master, overflow = false, local_success = false, overall_success = true;
 	struct sfptpd_stats_ptp_node *node, *reference_nodes;
 	struct sfptpd_ht_iter iter;
@@ -112,10 +149,11 @@ bool add_and_check_nodes(struct sfptpd_hash_table *table, struct test_details te
 		port_no = random_num(SFPTPD_HT_PORT_NUM_MAX);
 		domain_no = random_num(SFPTPD_HT_DOMAIN_NUM_MAX);
 		master = random_num(SFPTPD_HT_BOOL_MAX) ? true : false;
+		random_addr(transport_addr);
 
 		/* Add nodes into table */
 		rc = sfptpd_stats_add_node(table, clock_id, master,
-					   port_no, domain_no);
+					   port_no, domain_no, transport_addr);
 		if ((ii >= max_entries) && (rc != ENOSPC)) {
 			printf("Incorrect return code on table overflow %s\n", strerror(rc));
 			overall_success = false;
@@ -133,6 +171,9 @@ bool add_and_check_nodes(struct sfptpd_hash_table *table, struct test_details te
 		reference_nodes[ii].state = (master) ? "Master" : "Slave";
 		reference_nodes[ii].domain_number = domain_no;
 		reference_nodes[ii].port_number = port_no;
+		snprintf(reference_nodes[ii].transport_address,
+			 sizeof(reference_nodes[ii].transport_address),
+			 "%s", transport_addr);
 	}
 
 	/* Re-add already added entries */
@@ -147,8 +188,10 @@ bool add_and_check_nodes(struct sfptpd_hash_table *table, struct test_details te
 	while (node != NULL) {
 		for (ii = 0; ii < test.num_nodes; ii++) {
 			if ((memcmp(&reference_nodes[ii].clock_id, &node->clock_id,
-			    sizeof(node->clock_id)) == 0) && (reference_nodes[ii].port_number
-			    == node->port_number)) {
+			    sizeof(node->clock_id)) == 0)
+			    && (reference_nodes[ii].port_number == node->port_number)
+			    && (strncmp(reference_nodes[ii].transport_address,
+					node->transport_address, TEST_HOST_ADDR_LEN) == 0)) {
 				local_success = true;
 				break;
 			}

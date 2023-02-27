@@ -2397,18 +2397,19 @@ static void ptp_on_log_stats(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t 
 static void ptp_write_ptp_nodes(FILE *stream,
 				struct sfptpd_ptp_instance *instance)
 {
-	const char *format_node_string = "| %6s | %24s | %11s | %6s | %11s | %s\n";
-	const char *format_node_data = "| %6s | %24s | %11d | %6d | %11d | %s\n";
+	const char *format_node_string = "| %-12s | %6s | %20s | %5s | %6s | %5s | %-39s |\n";
+	const char *format_node_data = "| %-12s | %6s | %20s | %5d | %6d | %5d | %-39s |\n";
 
 	if (instance == NULL) {
 		sfptpd_log_table_row(stream, true,
 				     format_node_string,
+				     "instance",
 				     "state",
 				     "clock-id",
-				     "port-number",
+				     "port",
 				     "domain",
-				     "local-port",
-				     "instance");
+				     "local",
+				     "transport address");
 	} else {
 		struct sfptpd_hash_table *table;
 		struct sfptpd_stats_ptp_node *node;
@@ -2423,12 +2424,13 @@ static void ptp_write_ptp_nodes(FILE *stream,
 			next = sfptpd_stats_node_ht_get_next(&iter);
 			sfptpd_log_table_row(stream, next == NULL,
 					     format_node_data,
+					     instance->config->hdr.name,
 					     node->state,
 					     node->clock_id_string,
 					     node->port_number,
 					     node->domain_number,
 					     instance->ptpd_port_private->portIdentity.portNumber,
-					     instance->config->hdr.name);
+					     node->transport_address);
 			node = next;
 		}
 	}
