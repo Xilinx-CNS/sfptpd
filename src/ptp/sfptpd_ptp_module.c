@@ -2395,27 +2395,31 @@ static void ptp_on_log_stats(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t 
 }
 
 static void ptp_write_ptp_nodes(FILE *stream,
-				struct sfptpd_ptp_instance *instance)
+				struct sfptpd_ptp_intf *interface)
 {
-	const char *format_node_string = "| %-12s | %6s | %20s | %5s | %6s | %5s | %-39s |\n";
-	const char *format_node_data = "| %-12s | %6s | %20s | %5d | %6d | %5d | %-39s |\n";
+	const char *format_node_string = "| %6s | %19s | %5s | %3s | %-39s |\n";
+	const char *format_intf_string = "| Interface: %-16s Transport: %-45s |\n";
+	const char *format_node_data = "| %6s | %19s | %5d | %3u | %-39s |\n";
 
-	if (instance == NULL) {
+	if (interface == NULL) {
 		sfptpd_log_table_row(stream, true,
 				     format_node_string,
-				     "instance",
 				     "state",
 				     "clock-id",
 				     "port",
-				     "domain",
-				     "local",
-				     "transport address");
+				     "dom",
+				     "transport-address");
 	} else {
 		struct sfptpd_hash_table *table;
 		struct sfptpd_stats_ptp_node *node;
 		struct sfptpd_ht_iter iter;
 
-		table = instance->ptpd_port_private->interface->nodeSet;
+		sfptpd_log_table_row(stream, true,
+				     format_intf_string,
+				     interface->defined_name,
+				     interface->transport_name);
+
+		table = interface->ptpd_intf_private->nodeSet;
 		node = sfptpd_stats_node_ht_get_first(table, &iter);
 
 		while (node != NULL) {
@@ -2424,12 +2428,10 @@ static void ptp_write_ptp_nodes(FILE *stream,
 			next = sfptpd_stats_node_ht_get_next(&iter);
 			sfptpd_log_table_row(stream, next == NULL,
 					     format_node_data,
-					     instance->config->hdr.name,
 					     node->state,
 					     node->clock_id_string,
 					     node->port_number,
 					     node->domain_number,
-					     instance->ptpd_port_private->portIdentity.portNumber,
 					     node->transport_address);
 			node = next;
 		}
@@ -2452,12 +2454,6 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 
 	assert(ptp != NULL);
 	assert(msg != NULL);
-
-	/* Open the stream for the ptp-nodes file and write the header line */
-	nodes_log = sfptpd_log_open_ptp_nodes();
-	if (nodes_log != NULL) {
-		ptp_write_ptp_nodes(sfptpd_log_file_get_stream(nodes_log), NULL);
-	}
 
 	for (instance = ptp_get_first_instance(ptp); instance; instance = ptp_get_next_instance(instance)) {
 		assert(instance->ptpd_port_private != NULL);
@@ -2653,13 +2649,17 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 			(void)sfptpd_clock_save_freq_correction(instance->intf->clock,
 								instance->ptpd_port_snapshot.current.frequency_adjustment);
 		}
-
-		if (nodes_log != NULL) {
-			ptp_write_ptp_nodes(sfptpd_log_file_get_stream(nodes_log), instance);
-		}
 	}
 
-	sfptpd_log_file_close(nodes_log);
+	/* Write the ptp-nodes file */
+	nodes_log = sfptpd_log_open_ptp_nodes();
+	if (nodes_log != NULL) {
+		ptp_write_ptp_nodes(sfptpd_log_file_get_stream(nodes_log), NULL);
+		for(interface = ptp->intf_list; interface; interface = interface->next) {
+			ptp_write_ptp_nodes(sfptpd_log_file_get_stream(nodes_log), interface);
+		}
+		sfptpd_log_file_close(nodes_log);
+	}
 
 	/*Clear the tables*/
 	for(interface = ptp->intf_list; interface; interface = interface->next) {

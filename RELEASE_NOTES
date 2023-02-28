@@ -124,6 +124,7 @@ Features:
  ~ Better quality logging and trace on hotplug events (SWPTP-1300)
  ~ Special support for SFN5000 and SFN6000 series adapters removed (SWPTP-1306)
  ~ Support for hardware timestamping without Linux PHC removed (SWPTP-1306)
+ ~ PTP nodes table format changed with transport addresses added (SWPTP-1312)
 
 Issue SWPTP-1278
  ~ Fix retrieval of transmit timestamps to recover from nic reset quicker

@@ -319,12 +319,13 @@ typedef struct sfptpd_stats_collection_defn
  * @state: Whether node is a master or slave
  * @port_number: Port number of the node
  * @domain_number: Domain number of the node
+ * @transport_address: The transport address for the node
  */
 typedef struct sfptpd_stats_ptp_node {
 	sfptpd_clock_id_t clock_id;
+	uint16_t port_number;
 	char clock_id_string[SFPTPD_CLOCK_HW_ID_STRING_SIZE];
 	const char *state;
-	unsigned int port_number;
 	unsigned int domain_number;
 	char transport_address[SFPTPD_NODES_MAX_ADDRESS_LEN];
 } sfptpd_stats_ptp_node_t;
