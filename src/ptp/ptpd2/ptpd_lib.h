@@ -66,6 +66,8 @@ struct ptpd_port_snapshot {
 		UInteger8 grandmaster_priority1;
 		UInteger8 grandmaster_priority2;
 		UInteger8 grandmaster_time_source;
+		struct sockaddr_storage protocol_address;
+		socklen_t protocol_address_len;
 	} parent;
 
 	struct {

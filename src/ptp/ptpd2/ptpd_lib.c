@@ -677,6 +677,10 @@ int ptpd_get_snapshot(struct ptpd_port_context *ptpd, struct ptpd_port_snapshot 
 			= ptpd->timePropertiesDS.timeSource;
 		snapshot->current.steps_removed = ptpd->stepsRemoved;
 		snapshot->current.two_step = ptpd->twoStepFlag;
+		snapshot->parent.protocol_address_len = ptpd->parentAddressLen;
+		memcpy(&snapshot->parent.protocol_address,
+		       &ptpd->parentAddress,
+		       sizeof snapshot->parent.protocol_address);
 	} else {
 		memset(snapshot->parent.clock_id, 0,
 		       sizeof(snapshot->parent.clock_id));
@@ -692,6 +696,9 @@ int ptpd_get_snapshot(struct ptpd_port_context *ptpd, struct ptpd_port_snapshot 
 			= PTPD_TIME_SOURCE_INTERNAL_OSCILLATOR;
 		snapshot->current.steps_removed = 0;
 		snapshot->current.two_step = FALSE;
+		snapshot->parent.protocol_address_len = 0;
+		memset(&snapshot->parent.protocol_address, 0,
+		       sizeof snapshot->parent.protocol_address);
 	}
 
 	snapshot->time.current_utc_offset = ptpd->timePropertiesDS.currentUtcOffset;

@@ -2451,6 +2451,7 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 	char alarms[256], flags[256];
 	bool hw_ts;
 	struct sfptpd_log *nodes_log;
+	char host[NI_MAXHOST] = "";
 
 	assert(ptp != NULL);
 	assert(msg != NULL);
@@ -2481,6 +2482,10 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 
 		switch (snapshot->port.state) {
 		case PTPD_SLAVE:
+			if (snapshot->parent.protocol_address_len != 0)
+				getnameinfo((struct sockaddr *) &snapshot->parent.protocol_address,
+					    snapshot->parent.protocol_address_len,
+					    host, sizeof host, NULL, 0, NI_NUMERICHOST);
 			format = "instance: %s\n"
 				"clock-name: %s\n"
 				"clock-id: %s\n"
@@ -2499,6 +2504,7 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 				"steps-removed: %d\n"
 				"parent-clock-id: " SFPTPD_FORMAT_EUI64 "\n"
 				"parent-port-num: %d\n"
+				"parent-address: %s\n"
 				"delay-mechanism: %s\n"
 				"two-step: %s\n"
 				"slave-only: %s\n"
@@ -2537,6 +2543,7 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 				p_id[0], p_id[1], p_id[2], p_id[3],
 				p_id[4], p_id[5], p_id[6], p_id[7],
 				snapshot->parent.port_num,
+				host,
 				delay_mechanism,
 				snapshot->current.two_step? "yes": "no",
 				snapshot->port.slave_only? "yes": "no",
