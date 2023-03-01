@@ -406,9 +406,8 @@ static int phc_discover_devpps(struct sfptpd_phc *phc,
 
 	fts_entry = fts_children(fts, 0);
 	if (fts_entry == NULL) {
-		ERROR("phc: failed to get sysfs pps directory listing, %s\n",
-		      strerror(errno));
-		rc = errno;
+		TRACE_L5("phc: failed to get sysfs pps directory listing\n");
+		rc = ENOENT;
 		goto fail1;
 	}
 
@@ -881,6 +880,7 @@ diff_method_selected:
 int phc_enable_devptp(struct sfptpd_phc *phc, bool on)
 {
 	struct ptp_extts_request req = { 0 };
+	struct ptp_pin_desc pin_conf = { "" };
 	const char *indicative = on ? "enable" : "disable";
 	const char *past_participle = on ? "enabled" : "disabled";
 	const int pin = 0;
@@ -892,6 +892,21 @@ int phc_enable_devptp(struct sfptpd_phc *phc, bool on)
 		TRACE_L2("phc%d: no external time stamp channel available to %s\n",
 		phc->phc_idx, indicative);
 		return ENOTSUP;
+	}
+
+	if (on) {
+		pin_conf.index = 0;
+		pin_conf.func = 1; /* external timestamp */
+		pin_conf.chan = 0;
+		rc = ioctl(phc->phc_fd, PTP_PIN_SETFUNC, &pin_conf);
+
+		if (rc != 0) {
+			ERROR("phc%d: could not set pin function: %s\n",
+			      phc->phc_idx, strerror(errno));
+		} else {
+			TRACE_L2("phc%d: set pin %d to function %d (external timestamp)\n",
+				 phc->phc_idx, pin_conf.index, pin_conf.func);
+		}
 	}
 
 	req.index = pin;
