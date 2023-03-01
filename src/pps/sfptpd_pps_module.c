@@ -1148,16 +1148,6 @@ static int pps_configure_clock(pps_module_t *pps,
 	/* Store the clock */
 	instance->clock = clock;
 
-	/* If PPS event retrieval blocks then:
-	   1. record fd for use with epoll()
-	   2. drain any queued events now
-	 */
-	instance->poll_fd = sfptpd_clock_pps_get_fd(clock);
-	if (instance->poll_fd != -1) {
-		pps_drain_events(pps, instance);
-	        rc = sfptpd_thread_user_fd_add(instance->poll_fd, true, false);
-	}
-
 	return 0;
 }
 
@@ -2224,6 +2214,7 @@ static int pps_start_instance(pps_module_t *pps,
 
 static void pps_on_run(pps_module_t *pps)
 {
+	struct sfptpd_pps_instance *instance;
 	struct timespec interval;
 	int rc;
 
@@ -2231,6 +2222,21 @@ static void pps_on_run(pps_module_t *pps)
 
 	interval.tv_sec = 0;
 	interval.tv_nsec = PPS_POLL_INTERVAL_NS;
+
+	/* If PPS event retrieval blocks then:
+	   1. record fd for use with epoll()
+	   2. drain any queued events now
+	 */
+
+	for (instance = pps->instances; instance; instance = instance->next) {
+		instance->poll_fd = sfptpd_clock_pps_get_fd(instance->clock);
+		if (instance->poll_fd != -1) {
+			pps_drain_events(pps, instance);
+			INFO("added user fd %d\n", instance->poll_fd);
+		        rc = sfptpd_thread_user_fd_add(instance->poll_fd, true, false);
+		}
+	}
+
 
 	rc = sfptpd_thread_timer_start(PPS_POLL_TIMER_ID,
 				       true, false, &interval);
