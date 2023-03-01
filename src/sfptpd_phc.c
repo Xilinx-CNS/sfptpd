@@ -430,9 +430,8 @@ static int phc_discover_devpps(struct sfptpd_phc *phc,
 
 	fts_entry = fts_children(fts, 0);
 	if (fts_entry == NULL) {
-		ERROR("phc: failed to get sysfs pps directory listing, %s\n",
-		      strerror(errno));
-		rc = errno;
+		TRACE_L5("phc: failed to get sysfs pps directory listing\n");
+		rc = ENOENT;
 		goto fail1;
 	}
 
