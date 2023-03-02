@@ -2232,8 +2232,7 @@ static void pps_on_run(pps_module_t *pps)
 		instance->poll_fd = sfptpd_clock_pps_get_fd(instance->clock);
 		if (instance->poll_fd != -1) {
 			pps_drain_events(pps, instance);
-			INFO("added user fd %d\n", instance->poll_fd);
-		        rc = sfptpd_thread_user_fd_add(instance->poll_fd, true, false);
+			rc = sfptpd_thread_user_fd_add(instance->poll_fd, true, false);
 		}
 	}
 
