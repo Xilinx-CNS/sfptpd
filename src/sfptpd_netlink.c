@@ -1503,16 +1503,18 @@ int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 		 * one we have already reported on. */
 		const struct sfptpd_link *link = row < cur->table.count ? cur->table.rows + row : NULL;
 		const struct sfptpd_link *old_link = old_row < prev->table.count ? prev->table.rows +old_row : NULL;
+		int next_ifi = ifi;
+		int next_pifi = pifi;
 
 		/* We expect to have retrieved data in if_index order */
 		assert(link == NULL || link->if_index > ifi);
 		assert(old_link == NULL || old_link->if_index > pifi);
 		if (link != NULL)
-			ifi = link->if_index;
+			next_ifi = link->if_index;
 		if (old_link != NULL)
-			pifi = old_link->if_index;
+			next_pifi = old_link->if_index;
 
-		if ((link && link->event != SFPTPD_LINK_NONE) || ifi != pifi)
+		if ((link && link->event != SFPTPD_LINK_NONE) || next_ifi != next_pifi)
 			if (i++ == 0) {
 				DBG_L1("link: interface additions (+), deletions (-) and changes (<--, -->):\n");
 				sfptpd_link_log(NULL, NULL);
@@ -1522,17 +1524,23 @@ int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 			assert(link->event == SFPTPD_LINK_UP);
 			sfptpd_link_log(link, NULL);
 			row++;
+			ifi = next_ifi;
 		} else if (old_link != NULL && (link == NULL || old_link->if_index < link->if_index)) {
 			/* Deletions have not yet been reflected in this flag: */
 			change = true;
 			sfptpd_link_log(NULL, old_link);
 			old_row++;
+			pifi = next_pifi;
 		} else if (link->event == SFPTPD_LINK_CHANGE) {
 			assert(old_link == link->priv);
 			sfptpd_link_log(link, (const struct sfptpd_link *) link->priv);
 			row++, old_row++;
+			ifi = next_ifi;
+			pifi = next_pifi;
 		} else { /* no change */
 			row++, old_row++;
+			ifi = next_ifi;
+			pifi = next_pifi;
 		}
 	}
 
