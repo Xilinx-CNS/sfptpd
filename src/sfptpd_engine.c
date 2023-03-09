@@ -174,6 +174,7 @@ enum engine_timer_ids {
 	ENGINE_TIMER_LEAP_SECOND,
 	ENGINE_TIMER_SELECTION_HOLDOFF,
 	ENGINE_TIMER_NETLINK_RESCAN,
+	ENGINE_TIMER_NETLINK_COALESCE,
 };
 
 /* Leap second states */
@@ -184,6 +185,10 @@ enum leap_second_state {
 	LEAP_SECOND_STATE_ACTIVE_POST,
 	LEAP_SECOND_STATE_TEST
 };
+
+/* Reasons for netlink flow control */
+#define NL_XOFF_SPACE (1 << 1)
+#define NL_XOFF_COALESCE (1 << 2)
 
 struct sfptpd_engine {
 	/* Pointers to overall and general configuration */
@@ -244,7 +249,7 @@ struct sfptpd_engine {
 	const struct sfptpd_link_table *link_table_prev;
 	const struct sfptpd_link_table *link_table;
 	int link_subscribers;
-	bool netlink_xoff;
+	int netlink_xoff;
 };
 
 
@@ -277,6 +282,7 @@ static void on_stats_period_end(void *user_context, unsigned int timer_id);
 static void on_leap_second_timer(void *user_context, unsigned int timer_id);
 static void on_selection_holdoff_timer(void *user_context, unsigned int timer_id);
 static void on_netlink_rescan_timer(void *user_context, unsigned int timer_id);
+static void on_netlink_coalesce_timer(void *user_context, unsigned int timer_id);
 
 struct engine_timer_defn {
 	enum engine_timer_ids timer_id;
@@ -292,7 +298,8 @@ static const struct engine_timer_defn engine_timer_defns[] =
 	{ENGINE_TIMER_STATS_PERIOD_END,  CLOCK_MONOTONIC, on_stats_period_end},
 	{ENGINE_TIMER_LEAP_SECOND,       CLOCK_REALTIME,  on_leap_second_timer},
 	{ENGINE_TIMER_SELECTION_HOLDOFF, CLOCK_MONOTONIC, on_selection_holdoff_timer},
-	{ENGINE_TIMER_NETLINK_RESCAN,    CLOCK_MONOTONIC, on_netlink_rescan_timer}
+	{ENGINE_TIMER_NETLINK_RESCAN,    CLOCK_MONOTONIC, on_netlink_rescan_timer},
+	{ENGINE_TIMER_NETLINK_COALESCE,  CLOCK_MONOTONIC, on_netlink_coalesce_timer},
 };
 
 
@@ -564,7 +571,7 @@ static int create_timers(struct sfptpd_engine *engine)
 		return rc;
 	}
 
-	/* Create the state save timer */
+	/* Start the state save timer */
 	interval.tv_sec = SFPTPD_STATE_SAVE_INTERVAL;
 	interval.tv_nsec = 0;
 
@@ -593,7 +600,7 @@ static int create_timers(struct sfptpd_engine *engine)
 		}
 	}
 
-	/* Create the netlink rescan timer */
+	/* Start the netlink rescan timer */
 	if (engine->general_config->netlink_rescan_interval != 0) {
 
 		interval.tv_sec = engine->general_config->netlink_rescan_interval;
@@ -1424,6 +1431,160 @@ static void on_leap_second_timer(void *user_context, unsigned int timer_id)
 }
 
 
+static int engine_set_netlink_polling(struct sfptpd_engine *engine, bool poll)
+{
+	int rc;
+	int fd;
+	int get_fd_state;
+
+	get_fd_state = 0;
+	do {
+		fd = sfptpd_netlink_get_fd(engine->netlink_state, &get_fd_state);
+		if (fd != -1) {
+			if (poll) {
+				if ((rc = sfptpd_thread_user_fd_add(fd, true, false)))
+					CRITICAL("engine: failed to add netlink socket to thread epoll set, %s\n",
+						 strerror(rc));
+			} else {
+				if ((rc = sfptpd_thread_user_fd_remove(fd)))
+					CRITICAL("engine: failed to remove netlink socket from thread epoll set, %s\n",
+						 strerror(rc));
+			}
+		}
+	} while (fd != -1 && (rc == 0 || !poll));
+
+	return rc;
+}
+
+
+static void engine_handle_new_link_table(struct sfptpd_engine *engine, int version)
+{
+	int rc, rows, i, j;
+	bool new_link_table = false;
+	bool reconfigure = false;
+
+	assert(engine != NULL);
+
+	while (version > 0) {
+		TRACE_L3("engine: link changes - new table version %d\n", version);
+
+		new_link_table = true;
+		engine->link_table_prev = engine->link_table;
+		rows = sfptpd_netlink_get_table(engine->netlink_state, version, &engine->link_table);
+		assert(rows == engine->link_table->count);
+
+		if (engine->link_table_prev == NULL)
+			return;
+
+		for (i = 0; i < engine->link_table->count; i++) {
+			const struct sfptpd_link *link = engine->link_table->rows + i;
+
+			assert(link->event != SFPTPD_LINK_DOWN);
+
+			if (link->event == SFPTPD_LINK_UP ||
+			    link->event == SFPTPD_LINK_CHANGE) {
+				rc = sfptpd_interface_hotplug_insert(link);
+
+				if (rc == 0) {
+					reconfigure = true;
+				}
+			}
+		}
+
+		for (i = 0; engine->link_table_prev &&
+		            i < engine->link_table_prev->count; i++) {
+			const struct sfptpd_link *link = engine->link_table_prev->rows + i;
+			int intf_i = link->if_index;
+			for (j = 0; j < engine->link_table->count; j++) {
+				int intf_j = engine->link_table->rows[j].if_index;
+				if (intf_i == intf_j)
+					break;
+			}
+			if (j == engine->link_table->count) {
+				rc = sfptpd_interface_hotplug_remove(link);
+
+				if (rc == 0) {
+					reconfigure = true;
+				}
+			}
+		}
+
+		version = sfptpd_netlink_release_table(engine->netlink_state,
+						       engine->link_table_prev->version,
+						       engine->link_subscribers + 1);
+		if (engine->netlink_xoff & NL_XOFF_SPACE) {
+			engine->netlink_xoff &= ~NL_XOFF_SPACE;
+			NOTICE("engine: resuming netlink polling\n"),
+			rc = engine_set_netlink_polling(engine, true);
+		}
+	}
+
+	if (version < 0)
+		ERROR("engine: servicing netlink responses, %s\n", strerror(rc));
+
+	if (reconfigure) {
+		TRACE_L3("engine: reconfiguring slave servos after interface hotplugging\n");
+		reconfigure_servos(engine, &(engine->selected->status));
+	}
+
+	if (new_link_table) {
+		/* Send new link table to subscribing sync modules */
+		for (i = 0; i < engine->link_subscribers; i++) {
+			assert(i < SFPTPD_CONFIG_CATEGORY_MAX);
+			assert(engine->link_subscriber[i] != NULL);
+
+			sfptpd_sync_module_link_table(engine->link_subscriber[i], engine->link_table);
+		}
+	}
+}
+
+
+static void engine_on_user_fds(void *context, unsigned int num_fds, int fd[])
+{
+	struct sfptpd_engine *engine = (struct sfptpd_engine *)context;
+	struct timespec interval;
+	int rc;
+
+	assert(engine != NULL);
+
+	if ((engine->netlink_xoff & NL_XOFF_COALESCE) == 0 &&
+	    engine->general_config->netlink_coalesce_ms != 0) {
+
+		/* Start the netlink coalesce timer */
+		interval.tv_sec = engine->general_config->netlink_coalesce_ms / 1000;
+		interval.tv_nsec = (engine->general_config->netlink_coalesce_ms % 1000) * 1000000;
+
+		rc = sfptpd_thread_timer_start(ENGINE_TIMER_NETLINK_COALESCE,
+					       false, false, &interval);
+		if (rc != 0) {
+			ERROR("failed to start netlink coalesce timer, %s\n",
+			      strerror(rc));
+		} else {
+			TRACE_L5("engine: netlink coalesce timer started\n");
+			engine->netlink_xoff |= NL_XOFF_COALESCE;
+		}
+	} else if (num_fds == 0) {
+		/* This is how coalesce timer expiry is indicated. */
+
+		TRACE_L5("engine: netlink coalesce timer expired\n");
+		engine->netlink_xoff &= ~NL_XOFF_COALESCE;
+	}
+
+	rc = sfptpd_netlink_service_fds(engine->netlink_state, fd, num_fds,
+				        engine->link_subscribers + 1,
+					engine->netlink_xoff != 0);
+	if (rc > 0) {
+		engine_handle_new_link_table(engine, rc);
+	} else if (rc == -EAGAIN) {
+		NOTICE("engine: suspending netlink polling until table freed\n");
+		engine->netlink_xoff |= NL_XOFF_SPACE;
+		rc = engine_set_netlink_polling(engine, false);
+	} else if (rc < 0) {
+		ERROR("engine: servicing netlink fds, %s\n", strerror(rc));
+	}
+}
+
+
 static void on_netlink_rescan_timer(void *user_context, unsigned int timer_id)
 {
 	struct sfptpd_engine *engine = (struct sfptpd_engine *)user_context;
@@ -1434,6 +1595,12 @@ static void on_netlink_rescan_timer(void *user_context, unsigned int timer_id)
 		ERROR("engine: netlink rescan, %s\n",
 		      strerror(rc));
 	}
+}
+
+
+static void on_netlink_coalesce_timer(void *user_context, unsigned int timer_id)
+{
+	engine_on_user_fds(user_context, 0, NULL);
 }
 
 
@@ -1934,114 +2101,6 @@ static void on_clustering_input(struct sfptpd_engine *engine,
 }
 
 
-static int engine_set_netlink_polling(struct sfptpd_engine *engine, bool poll)
-{
-	int rc;
-	int fd;
-	int get_fd_state;
-
-	get_fd_state = 0;
-	do {
-		fd = sfptpd_netlink_get_fd(engine->netlink_state, &get_fd_state);
-		if (fd != -1) {
-			if (poll) {
-				if ((rc = sfptpd_thread_user_fd_add(fd, true, false)))
-					CRITICAL("engine: failed to add netlink socket to thread epoll set, %s\n",
-						 strerror(rc));
-			} else {
-				if ((rc = sfptpd_thread_user_fd_remove(fd)))
-					CRITICAL("engine: failed to remove netlink socket from thread epoll set, %s\n",
-						 strerror(rc));
-			}
-		}
-	} while (fd != -1 && (rc == 0 || !poll));
-
-	return rc;
-}
-
-
-static void engine_handle_new_link_table(struct sfptpd_engine *engine, int version)
-{
-	int rc, rows, i, j;
-	bool new_link_table = false;
-	bool reconfigure = false;
-
-	assert(engine != NULL);
-
-	while (version > 0) {
-		TRACE_L3("engine: link changes - new table version %d\n", version);
-
-		new_link_table = true;
-		engine->link_table_prev = engine->link_table;
-		rows = sfptpd_netlink_get_table(engine->netlink_state, version, &engine->link_table);
-		assert(rows == engine->link_table->count);
-
-		if (engine->link_table_prev == NULL)
-			return;
-
-		for (i = 0; i < engine->link_table->count; i++) {
-			const struct sfptpd_link *link = engine->link_table->rows + i;
-
-			assert(link->event != SFPTPD_LINK_DOWN);
-
-			if (link->event == SFPTPD_LINK_UP ||
-			    link->event == SFPTPD_LINK_CHANGE) {
-				rc = sfptpd_interface_hotplug_insert(link);
-
-				if (rc == 0) {
-					reconfigure = true;
-				}
-			}
-		}
-
-		for (i = 0; engine->link_table_prev &&
-		            i < engine->link_table_prev->count; i++) {
-			const struct sfptpd_link *link = engine->link_table_prev->rows + i;
-			int intf_i = link->if_index;
-			for (j = 0; j < engine->link_table->count; j++) {
-				int intf_j = engine->link_table->rows[j].if_index;
-				if (intf_i == intf_j)
-					break;
-			}
-			if (j == engine->link_table->count) {
-				rc = sfptpd_interface_hotplug_remove(link);
-
-				if (rc == 0) {
-					reconfigure = true;
-				}
-			}
-		}
-
-		version = sfptpd_netlink_release_table(engine->netlink_state,
-						       engine->link_table_prev->version,
-						       engine->link_subscribers + 1);
-		if (engine->netlink_xoff) {
-			NOTICE("engine: resuming netlink polling\n");
-			engine->netlink_xoff = false;
-			rc = engine_set_netlink_polling(engine, true);
-		}
-	}
-
-	if (version < 0)
-		ERROR("engine: servicing netlink responses, %s\n", strerror(rc));
-
-	if (reconfigure) {
-		TRACE_L3("engine: reconfiguring slave servos after interface hotplugging\n");
-		reconfigure_servos(engine, &(engine->selected->status));
-	}
-
-	if (new_link_table) {
-		/* Send new link table to subscribing sync modules */
-		for (i = 0; i < engine->link_subscribers; i++) {
-			assert(i < SFPTPD_CONFIG_CATEGORY_MAX);
-			assert(engine->link_subscriber[i] != NULL);
-
-			sfptpd_sync_module_link_table(engine->link_subscriber[i], engine->link_table);
-		}
-	}
-}
-
-
 static void on_link_table_release(struct sfptpd_engine *engine,
 				  engine_msg_t *msg)
 {
@@ -2060,9 +2119,9 @@ static void on_link_table_release(struct sfptpd_engine *engine,
 	else if (rc < 0)
 		ERROR("engine: releasing link table, %s\n", strerror(-rc));
 
-	if (engine->netlink_xoff) {
+	if (engine->netlink_xoff & NL_XOFF_SPACE) {
+		engine->netlink_xoff &= ~NL_XOFF_SPACE;
 		NOTICE("engine: resuming netlink polling\n");
-		engine->netlink_xoff = false;
 		rc = engine_set_netlink_polling(engine, true);
 	}
 }
@@ -2444,27 +2503,6 @@ static void engine_on_message(void *context, struct sfptpd_msg_hdr *hdr)
 	default:
 		WARNING("engine: received unexpected message, id %d\n",
 			sfptpd_msg_get_id(hdr));
-	}
-}
-
-
-static void engine_on_user_fds(void *context, unsigned int num_fds, int fd[])
-{
-	struct sfptpd_engine *engine = (struct sfptpd_engine *)context;
-	int rc;
-
-	assert(engine != NULL);
-
-	rc = sfptpd_netlink_service_fds(engine->netlink_state, fd, num_fds,
-				        engine->link_subscribers + 1);
-	if (rc > 0) {
-		engine_handle_new_link_table(engine, rc);
-	} else if (rc == -EAGAIN) {
-		NOTICE("engine: suspending netlink polling until table freed\n");
-		engine->netlink_xoff = true;
-		rc = engine_set_netlink_polling(engine, false);
-	} else if (rc < 0) {
-		ERROR("engine: servicing netlink fds, %s\n", strerror(rc));
 	}
 }
 

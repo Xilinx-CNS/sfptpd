@@ -105,7 +105,7 @@ static int test_link(void)
 			active_fds[i] = fd;
 		}
 
-		rc = sfptpd_netlink_service_fds(nl_state, active_fds, nfds, consumers);
+		rc = sfptpd_netlink_service_fds(nl_state, active_fds, nfds, consumers, false);
 		while (rc != 0) {
 			int ver;
 

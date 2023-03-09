@@ -39,6 +39,7 @@
 #define SFPTPD_DEFAULT_RTC_ADJUST                  (true)
 #define SFPTPD_DEFAULT_SELECTION_HOLDOFF_INTERVAL  10
 #define SFPTPD_DEFAULT_NETLINK_RESCAN_INTERVAL     31
+#define SFPTPD_DEFAULT_NETLINK_COALESCE_MS         50
 #define SFPTPD_DEFAULT_SERVO_K_PROPORTIONAL        0.4
 #define SFPTPD_DEFAULT_SERVO_K_INTEGRAL            0.03
 #define SFPTPD_DEFAULT_SERVO_K_DIFFERENTIAL        0.0
@@ -194,6 +195,7 @@ typedef struct sfptpd_config_general {
 	char initial_sync_instance[SFPTPD_CONFIG_SECTION_NAME_MAX];
 	unsigned int selection_holdoff_interval;
 	unsigned int netlink_rescan_interval;
+	unsigned int netlink_coalesce_ms;
 	struct {
 		long double kp;
 		long double ki;

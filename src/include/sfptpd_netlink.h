@@ -40,11 +40,14 @@ struct sfptpd_nl_state *sfptpd_netlink_init(void);
  * @param fds the file descriptors on which there are events. Currently ignored.
  * @param num_fds the number of fds with pending events. Currently ignored.
  * @param consumers the number of consumers for whom to lock new link tables.
+ * @param coalescing true if user is coalescing events and wants to hold back
+ *        new tables.
  * @return -errno on error, 0 if no new link tables or the version of the new
  *         link table.
  */
 int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
-			       int *fds, int num_fds, int consumers);
+			       int *fds, int num_fds, int consumers,
+			       bool coalescing);
 
 /** Initiate a fresh dump of all interfaces over netlink.
  * @param state the netlink client context

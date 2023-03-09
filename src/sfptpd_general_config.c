@@ -100,6 +100,8 @@ static int parse_hotplug_detection_mode(struct sfptpd_config_section *section, c
 					unsigned int num_params, const char * const params[]);
 static int parse_netlink_rescan_interval(struct sfptpd_config_section *section, const char *option,
 					 unsigned int num_params, const char * const params[]);
+static int parse_netlink_coalesce_ms(struct sfptpd_config_section *section, const char *option,
+				     unsigned int num_params, const char * const params[]);
 static int parse_clustering(struct sfptpd_config_section *section, const char *option,
 			    unsigned int num_params, const char * const params[]);
 static int parse_clustering_guard_threshold(struct sfptpd_config_section *section, const char *option,
@@ -271,6 +273,13 @@ static const sfptpd_config_option_t config_general_options[] =
 		STRINGIFY(SFPTPD_DEFAULT_NETLINK_RESCAN_INTERVAL) " seconds.",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
 		parse_netlink_rescan_interval},
+	{"netlink_coalesce_ms", "NUMBER",
+		"Specifies period after a significant change is communicated "
+		"by netlink to wait for further changes to avoid excessive "
+		"perturbation. Coalescing is disabled with zero. Default is "
+		STRINGIFY(SFPTPD_DEFAULT_NETLINK_COALESCE_MS) " ms.",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
+		parse_netlink_coalesce_ms},
 	{"clustering", "discriminator <INSTANCE> <THRESHOLD> <NO_DISCRIMINATOR_SCORE>",
 		"Implements clustering based on MODE. Currently only supports "
 		"discriminator mode, which disqualifies sync instances that differ "
@@ -1209,6 +1218,29 @@ static int parse_netlink_rescan_interval(struct sfptpd_config_section *section, 
 }
 
 
+static int parse_netlink_coalesce_ms(struct sfptpd_config_section *section, const char *option,
+				     unsigned int num_params, const char * const params[])
+{
+	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+	assert(num_params == 1);
+	int tokens, interval;
+
+	tokens = sscanf(params[0], "%i", &interval);
+	if (tokens != 1)
+		return EINVAL;
+
+	if (interval < 0) {
+		ERROR("config [%s]: %s must be non-negative\n",
+		      section->name, option);
+		return ERANGE;
+	}
+
+	general->netlink_coalesce_ms = interval;
+
+	return 0;
+}
+
+
 static int parse_clustering(struct sfptpd_config_section *section, const char *option,
 				   unsigned int num_params, const char * const params[])
 {
@@ -1427,6 +1459,7 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		new->initial_sync_instance[0] = '\0';
 		new->selection_holdoff_interval = SFPTPD_DEFAULT_SELECTION_HOLDOFF_INTERVAL;
 		new->netlink_rescan_interval = SFPTPD_DEFAULT_NETLINK_RESCAN_INTERVAL;
+		new->netlink_coalesce_ms = SFPTPD_DEFAULT_NETLINK_COALESCE_MS;
 
 		new->pid_filter.kp = SFPTPD_DEFAULT_SERVO_K_PROPORTIONAL;
 		new->pid_filter.ki = SFPTPD_DEFAULT_SERVO_K_INTEGRAL;

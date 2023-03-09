@@ -1346,7 +1346,8 @@ int sfptpd_netlink_get_fd(struct sfptpd_nl_state *state,
 
 int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 			       int *fds, int num_fds,
-			       int consumers)
+			       int consumers,
+			       bool coalescing)
 {
 	bool any_data;
 	int serviced;
@@ -1400,6 +1401,11 @@ int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 	if (rc != 0) {
 		ERROR("link: servicing fds: %s\n", strerror(rc));
 		return -rc;
+	}
+
+	if (coalescing) {
+		DBG_L4("leaving new link table (ver %d) as wip while coalescing\n", cur->table.version);
+		return 0;
 	}
 
 	/* Rotate history and compare state */
@@ -1550,8 +1556,6 @@ int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 			CRITICAL("cannot rotate link db history, ref count > 0 on oldest version\n");
 			return -ENOSPC;
 		}
-	} else {
-		state->db_hist_count++;
 	}
 
 	if (change) {
@@ -1576,6 +1580,7 @@ int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 		state->db_hist_next = (state->db_hist_next + 1) % MAX_LINK_DB_VERSIONS;
 		next->table.version = state->db_ver_next++;
 		DBG_L4("netlink: table %d, refcnt = %d\n", cur->table.version, cur->refcnt);
+		state->db_hist_count++;
 		return cur->table.version;
 	} else {
 		DBG_L4("abandoning new link table (ver %d) as no significant changes\n", cur->table.version);
@@ -1629,7 +1634,7 @@ int sfptpd_netlink_release_table(struct sfptpd_nl_state *state, int version, int
 
 	if (state->need_service) {
 		state->need_service = false;
-		return sfptpd_netlink_service_fds(state, NULL, 0, consumers);
+		return sfptpd_netlink_service_fds(state, NULL, 0, consumers, false);
 	} else {
 		return 0;
 	}
@@ -1725,7 +1730,7 @@ const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state
 
 		assert(nfds > 0);
 
-		rc = sfptpd_netlink_service_fds(state, NULL, 0, consumers);
+		rc = sfptpd_netlink_service_fds(state, NULL, 0, consumers, false);
 		if (rc > 0) {
 			int rows;
 
