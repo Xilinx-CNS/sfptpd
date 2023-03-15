@@ -321,11 +321,11 @@ struct phy_search_result freerun_find_physical_link(freerun_module_t *fr,
 						  &candidate.holdover);
 			return candidate;
 		} else {
-			TRACE_L4("freerun: %s: candidate physical interface %s does not have a hw clock\n",
+			TRACE_L4("freerun %s: candidate physical interface %s does not have a hw clock\n",
 				 link->if_name, candidate.link->if_name);
 		}
 	} else {
-		TRACE_L4("freerun: %s: candidate physical interface %s does not have an interface object\n",
+		TRACE_L4("freerun %s: candidate physical interface %s does not have an interface object\n",
 			 link->if_name, candidate.link->if_name);
 	}
 
