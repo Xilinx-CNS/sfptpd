@@ -309,8 +309,21 @@ struct phy_search_result freerun_find_physical_link(freerun_module_t *fr,
 
 	if (link == NULL)
 		return best;
-
 	candidate.link = link;
+
+	/* Resolve VLANs first. */
+	while (candidate.link->type == SFPTPD_LINK_VLAN) {
+		other = sfptpd_link_by_if_index(&fr->link_table, candidate.link->if_link);
+		if (other == NULL) {
+			ERROR("freerun %s: inner link not found resolving VLAN %s\n",
+			      link->if_name, candidate.link->if_name);
+		} else {
+			TRACE_L4("freerun %s: resolved VLAN %s to %s\n",
+				 link->if_name, candidate.link->if_name, other->if_name);
+			candidate.link = other;
+		}
+	}
+
 	candidate.interface = sfptpd_interface_find_by_if_index(candidate.link->if_index);
 	if (candidate.interface != NULL) {
 		candidate.clock = sfptpd_interface_get_clock(candidate.interface);
