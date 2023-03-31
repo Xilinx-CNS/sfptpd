@@ -868,8 +868,6 @@ static void team_opt_apply_mode(struct link_db *db, void *value,
 {
 	int row;
 
-	INFO("teamd mode: %d %s\n", team_ifindex, (char *) value);
-
 	/* Find teaming interface */
 	for (row = 0; row < db->table.count && db->table.rows[row].if_index != team_ifindex; row++);
 
