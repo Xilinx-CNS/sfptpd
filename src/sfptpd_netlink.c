@@ -868,7 +868,14 @@ static void team_opt_apply_mode(struct link_db *db, void *value,
 {
 	int row;
 
-	for (row = 0; row < db->table.count && db->table.rows[row].if_index != team_ifindex; row++) {
+	INFO("teamd mode: %d %s\n", team_ifindex, (char *) value);
+
+	/* Find teaming interface */
+	for (row = 0; row < db->table.count && db->table.rows[row].if_index != team_ifindex; row++);
+
+	if (row == db->table.count) {
+		ERROR("could not find link %d applying team mode\n", team_ifindex);
+	} else {
 		struct sfptpd_link *link = db->table.rows + row;
 		if (db->table.rows[row].if_index == team_ifindex) {
 			if(strcmp((char *) value, "activebackup") == 0)
@@ -879,9 +886,6 @@ static void team_opt_apply_mode(struct link_db *db, void *value,
 				link->bond.bond_mode = SFPTPD_BOND_MODE_UNSUPPORTED;
 		}
 	}
-
-	if (row == db->table.count)
-		ERROR("could not find link %d applying team mode\n", team_ifindex);
 }
 
 static void team_opt_apply_activeport(struct link_db *db, void *value,
