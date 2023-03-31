@@ -1268,7 +1268,8 @@ static int parse_bond(struct sfptpd_ptp_bond_info *bond_info, bool verbose,
 			TRACE_L3("ptp %s: mode is bridge\n",
 				 bond_info->bond_if);
 	} else {
-		ERROR("ptp %s: Found bond of unsupported type\n");
+		ERROR("ptp %s: Found bond of unknown type\n",
+		      bond_info->bond_if);
 		rc = EINVAL;
 	}
 
