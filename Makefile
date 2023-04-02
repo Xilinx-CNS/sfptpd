@@ -127,6 +127,7 @@ uninstall:
 	rm -f $(INST_CONFDIR)/sfptpd.conf
 	rm -f $(INST_DEFAULTSDIR)/sfptpd
 	rm -f $(INST_MANDIR)/man8/{sfptpd,sfptpdctl}.8
+	rm -f $(DESTDIR)/etc/init/sfptpd
 	rm -fr $(INST_PKGDOCDIR)
 	rm -fr $(DESTDIR)/var/lib/sfptpd
 
