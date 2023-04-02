@@ -30,7 +30,7 @@
 /* Long-only options need pseudo identifier */
 #define OPT_VERSION   0x10000
 
-static const char *command_line_options_short = "hf:i:vu:";
+static const char *command_line_options_short = "hf:i:tvu:";
 static const struct option command_line_options_long[] = 
 {
 	{"help", 0, NULL, (int)'h'},
@@ -38,6 +38,7 @@ static const struct option command_line_options_long[] =
 	{"interface", 1, NULL, (int)'i'},
 	{"verbose", 0, NULL, (int)'v'},
 	{"user", 1, NULL, (int)'u'},
+	{"test-config", 0, NULL, (int)'t'},
 	{"version", 0, NULL, OPT_VERSION},
 	{NULL, 0, NULL, 0}
 };
@@ -84,6 +85,7 @@ static void config_display_help(void)
 		"-h, --help                   Display help information\n"
 		"-i, --interface=INTERFACE    Default interface that Synchronization Modules will use\n"
 		"-f, --config-file=FILE       Configure from a file\n"
+		"-t, --test-config            Test configuration\n"
 		"-u, --user=USER[:GROUP]      Run as user USER (and group GROUP)\n"
 		"-v, --verbose                Verbose: enable stats, trace and send output to stdout/stderr\n"
 		"    --version                Show version number and exit\n"
@@ -641,6 +643,10 @@ int sfptpd_config_parse_command_line_pass1(struct sfptpd_config *config,
 				return rc;
 			break;
 
+		case 't':
+			/* Handled in second pass */
+			break;
+
 		case '?':
 		default:
 			/* Print out the offending command line option */
@@ -676,13 +682,16 @@ int sfptpd_config_parse_command_line_pass2(struct sfptpd_config *config,
 		case 'i':
 		case 'u':
 		case OPT_VERSION:
-			/* Terminate early: not an error */
 			/* We've already handled these- ignore them */
 			break;
 
 		case 'v':
 			sfptpd_config_general_set_verbose(config);
 			break;
+
+		case 't':
+			/* Terminate early: not an error */
+			return ESHUTDOWN;
 
 		case '?':
 		default:
