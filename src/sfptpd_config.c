@@ -27,8 +27,10 @@
  * Config File Options
  ****************************************************************************/
 
-static const char *command_line_options_short = "hf:i:vu:";
+/* Long-only options need pseudo identifier */
+#define OPT_VERSION   0x10000
 
+static const char *command_line_options_short = "hf:i:vu:";
 static const struct option command_line_options_long[] = 
 {
 	{"help", 0, NULL, (int)'h'},
@@ -36,6 +38,7 @@ static const struct option command_line_options_long[] =
 	{"interface", 1, NULL, (int)'i'},
 	{"verbose", 0, NULL, (int)'v'},
 	{"user", 1, NULL, (int)'u'},
+	{"version", 0, NULL, OPT_VERSION},
 	{NULL, 0, NULL, 0}
 };
 
@@ -83,6 +86,7 @@ static void config_display_help(void)
 		"-f, --config-file=FILE       Configure from a file\n"
 		"-u, --user=USER[:GROUP]      Run as user USER (and group GROUP)\n"
 		"-v, --verbose                Verbose: enable stats, trace and send output to stdout/stderr\n"
+		"    --version                Show version number and exit\n"
 		"\n"
 		"Runtime Signals:\n"
 		"SIGHUP              Rotate message and statistics log (if logging to file)\n"
@@ -611,6 +615,7 @@ int sfptpd_config_parse_command_line_pass1(struct sfptpd_config *config,
 		switch (chr) {
 		case 'h':
 			config_display_help();
+		case OPT_VERSION:
 			/* Terminate early: not an error */
 			return ESHUTDOWN;
 			break;
@@ -670,6 +675,8 @@ int sfptpd_config_parse_command_line_pass2(struct sfptpd_config *config,
 		case 'f':
 		case 'i':
 		case 'u':
+		case OPT_VERSION:
+			/* Terminate early: not an error */
 			/* We've already handled these- ignore them */
 			break;
 
