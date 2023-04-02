@@ -34,7 +34,7 @@ start() {
 
 	# Start daemon.
 	echo -n $"Starting $prog: "
-	sfptpd $OPTIONS $SFPTPD_USER
+	sfptpd --daemon $OPTIONS $SFPTPD_USER
 	retval=$?
 	if [ $retval -eq 0 ]; then
 		echo "OK"

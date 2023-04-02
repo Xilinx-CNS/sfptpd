@@ -1570,5 +1570,16 @@ int sfptpd_config_general_set_user(struct sfptpd_config *config,
 	return parse_user(general, "user", group ? 2 : 1, options);
 }
 
+void sfptpd_config_general_set_daemon(struct sfptpd_config *config,
+				     bool daemon)
+{
+	struct sfptpd_config_general *general = sfptpd_general_config_get(config);
+
+	if (general->daemon && !daemon)
+		WARNING("overriding 'daemon' from config file with '--no-daemon' from command line\n");
+
+	general->daemon = daemon;
+}
+
 
 /* fin */

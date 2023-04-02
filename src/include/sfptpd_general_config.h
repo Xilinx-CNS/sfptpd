@@ -258,4 +258,11 @@ void sfptpd_config_general_set_verbose(struct sfptpd_config *config);
 int sfptpd_config_general_set_user(struct sfptpd_config *config,
 				   const char *user, const char *group);
 
+/** Override daemon setting.
+ * @param config  Pointer to configuration
+ * @param daemon  Whether to run as a daemon
+ */
+void sfptpd_config_general_set_daemon(struct sfptpd_config *config,
+				      bool daemon);
+
 #endif /* _SFPTPD_GENERAL_CONFIG_H */
