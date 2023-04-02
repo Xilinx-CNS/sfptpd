@@ -341,7 +341,7 @@ int sfptpd_log_open(struct sfptpd_config *config)
 		TRACE_L4("could not set version file ownership, %s\n",
 			 strerror(errno));
 
-	fputs(SFPTPD_VERSION_TEXT, file);
+	fprintf(file, "%s\n", SFPTPD_VERSION_TEXT);
 	fclose(file);
 
 	/* Store state file path formats */
