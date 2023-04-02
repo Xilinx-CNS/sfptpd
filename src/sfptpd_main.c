@@ -725,6 +725,8 @@ exit:
 	sfptpd_log_close();
 	lock_delete(lock_fd);
 fail:
+	if (rc == ESHUTDOWN)
+		rc = 0;
 	sfptpd_log_config_abandon();
 	sfptpd_config_destroy(config);
 	return rc;
