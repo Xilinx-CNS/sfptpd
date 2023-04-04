@@ -7,7 +7,7 @@ Documentation=man:sfptpd(8)
 After=network-online.target
 
 [Service]
-Type=exec
+Type=notify
 EnvironmentFile=-/etc/sysconfig/sfptpd
 
 # Override any 'daemon' setting in configuration file as it is systemd's

@@ -16,6 +16,8 @@
 #include <assert.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/stat.h>
 #include <sys/prctl.h>
 #include <sys/utsname.h>
@@ -426,9 +428,69 @@ static int daemonize(struct sfptpd_config *config, int *lock_fd)
 }
 
 
+static int notify_init(int retcode)
+{
+	const char *failure = "could not notify init supervisor: %s: %s\n";
+	struct sockaddr_un addr;
+	const char *path;
+	FILE *stream;
+	int fd;
+	int rc;
+
+	if ((path = getenv("NOTIFY_SOCKET")) == NULL)
+		return 0;
+
+	if (path[0] != '/' && path[0] != '@') {
+		CRITICAL("init notify socket form not handled, change service configuration: %s\n",
+			 path);
+		return ENOTSUP;
+	}
+
+	fd = socket(AF_UNIX, SOCK_DGRAM, 0);
+	if (fd == -1) {
+		CRITICAL(failure, "socket", strerror(errno));
+		return errno;
+	}
+
+	addr.sun_family = AF_UNIX;
+	if (path[0] == '@') {
+		addr.sun_path[0] = '\0';
+		sfptpd_strncpy(addr.sun_path + 1, path, sizeof addr.sun_path - 1);
+	} else {
+		sfptpd_strncpy(addr.sun_path, path, sizeof addr.sun_path);
+	}
+
+	rc = connect(fd, (const struct sockaddr *) &addr, sizeof(addr));
+	if (rc == -1) {
+		CRITICAL(failure, "connect", strerror(errno));
+		goto fail;
+	}
+
+	stream = fdopen(fd, "w");
+	if (stream == NULL) {
+		CRITICAL(failure, "fdopen", strerror(errno));
+		goto fail;
+	}
+
+	if (retcode == 0) {
+		fprintf(stream, "READY=1\n");
+	} else {
+		fprintf(stream, "ERRNO=%d\n", rc);
+	}
+
+	fclose(stream);
+	return 0;
+
+fail:
+	close(fd);
+	return errno;
+}
+
+
 static int main_on_startup(void *not_used)
 {
 	int rc;
+	int ret;
 	int control_fd;
 
 	/* Try to open the sysfs PTP directory */
@@ -460,6 +522,11 @@ static int main_on_startup(void *not_used)
 
 	/* Create an instance of the sync-engine using the configuration */
 	rc = sfptpd_engine_create(config, &engine, netlink, initial_link_table);
+
+	/* Notify init supervisor */
+	ret = notify_init(rc);
+	if (rc == 0)
+		rc = ret;
 
 	return rc; 
 }
