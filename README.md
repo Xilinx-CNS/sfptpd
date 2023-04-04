@@ -21,10 +21,10 @@ as root.
 Some example installation recipes follow.
 
 ### For most recent distributions
-``` sudo make PREFIX=/usr install ```
+``` sudo make prefix=/usr install ```
 
 ### For distributions with sysv init, e.g. RHEL6
-``` sudo make PREFIX=/usr INST_INITS=sysv install ```
+``` sudo make prefix=/usr INST_INITS=sysv install ```
 
 ### Default operation
 Installs to /usr/local

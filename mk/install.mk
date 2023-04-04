@@ -8,9 +8,9 @@
 #   PACKAGE_VERSION
 # These are overriden by anything supplied by the packaging system
 
-ifdef PREFIX
+ifdef prefix
 ifndef INST_PREFIX
-INST_PREFIX = $(PREFIX)
+INST_PREFIX = $(prefix)
 endif
 endif
 
