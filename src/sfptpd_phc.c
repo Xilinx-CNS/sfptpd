@@ -880,7 +880,6 @@ diff_method_selected:
 int phc_enable_devptp(struct sfptpd_phc *phc, bool on)
 {
 	struct ptp_extts_request req = { 0 };
-	struct ptp_pin_desc pin_conf = { "" };
 	const char *indicative = on ? "enable" : "disable";
 	const char *past_participle = on ? "enabled" : "disabled";
 	const int pin = 0;
@@ -894,7 +893,10 @@ int phc_enable_devptp(struct sfptpd_phc *phc, bool on)
 		return ENOTSUP;
 	}
 
+#ifdef PTP_PIN_SETFUNC
 	if (on) {
+		struct ptp_pin_desc pin_conf = { "" };
+
 		pin_conf.index = 0;
 		pin_conf.func = 1; /* external timestamp */
 		pin_conf.chan = 0;
@@ -908,6 +910,7 @@ int phc_enable_devptp(struct sfptpd_phc *phc, bool on)
 				 phc->phc_idx, pin_conf.index, pin_conf.func);
 		}
 	}
+#endif
 
 	req.index = pin;
 	req.flags = on ? (PTP_ENABLE_FEATURE | PTP_RISING_EDGE) : 0;
