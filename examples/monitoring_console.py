@@ -417,13 +417,13 @@ while not(doquit):
     if (smy2 != smy or smx2 != smx):
         smy = smy2
         smx = smx2
-        nodes_win.resize(smy/2, smx)
-        alarms_win.resize(smy - smy/2, smx/2)
-        events_win.resize(smy - smy/2, smx - smx/2)
-        details_win.resize(smy*3/4, smx*3/4)
-        alarms_win.mvwin(smy/2, 0)
-        events_win.mvwin(smy/2, smx/2)
-        details_win.mvwin(smy/8, smx/8)
+        nodes_win.resize(int(smy/2), smx)
+        alarms_win.resize(smy - int(smy/2), int(smx/2))
+        events_win.resize(smy - int(smy/2), smx - int(smx/2))
+        details_win.resize(int(smy*3/4), int(smx*3/4))
+        alarms_win.mvwin(int(smy/2), 0)
+        events_win.mvwin(int(smy/2), int(smx/2))
+        details_win.mvwin(int(smy/8), int(smx/8))
         fullupdate_display()
 
 # Clear up curses so that the terminal is nice again
