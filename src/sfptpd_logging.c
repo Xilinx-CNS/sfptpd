@@ -621,7 +621,7 @@ void sfptpd_log_write_state(struct sfptpd_clock *clock,
 #endif /* SFPTPD_BUILDTIME_CHECKS */
 
 
-void sfptpd_log_write_freq_correction(struct sfptpd_clock *clock, long double freq_adj_ppb)
+int sfptpd_log_write_freq_correction(struct sfptpd_clock *clock, long double freq_adj_ppb)
 {
 	FILE *file;
 	char path[PATH_MAX];
@@ -637,12 +637,14 @@ void sfptpd_log_write_freq_correction(struct sfptpd_clock *clock, long double fr
 
 	file = fopen(path, "w");
 	if (file == NULL) {
-		ERROR("couldn't open %s\n", path);
-		return;
+		ERROR("couldn't open %s for writing, %s\n",
+		      path, strerror(errno));
+		return errno;
 	}
 
 	fprintf(file, "%Lf\n", freq_adj_ppb);
 	fclose(file);
+	return 0;
 }
 
 

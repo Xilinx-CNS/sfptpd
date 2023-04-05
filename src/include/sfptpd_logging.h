@@ -170,8 +170,9 @@ void sfptpd_log_write_state(struct sfptpd_clock *clock,
  * the specified frequency correction.
  * @param clock Instance of clock
  * @param freq_adj_ppb The frequency adjustment in parts-per-billion.
+ * @return 0 on success or an errno otherwise
  */
-void sfptpd_log_write_freq_correction(struct sfptpd_clock *clock, long double freq_adj_ppb);
+int sfptpd_log_write_freq_correction(struct sfptpd_clock *clock, long double freq_adj_ppb);
 
 /** Read frequency correction for a clock. This reads a file in the location
  * SFPTPD_STATE_PATH based on the name of the specified clock and returns

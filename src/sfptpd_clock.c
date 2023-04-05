@@ -1388,11 +1388,13 @@ int sfptpd_clock_save_freq_correction(struct sfptpd_clock *clock, long double fr
 	}
 
 	/* Write the file and update our local copy */
-	sfptpd_log_write_freq_correction(clock, freq_correction_ppb);
+	rc = sfptpd_log_write_freq_correction(clock, freq_correction_ppb);
 	clock->freq_correction_ppb = freq_correction_ppb;
 
-	TRACE_L1("clock %s: saved freq adj %0.3Lf to file\n",
-		 clock->short_name, freq_correction_ppb);
+	TRACE_L1("clock %s: %s freq adj %0.3Lf to file\n",
+		 clock->short_name,
+		 rc == 0 ? "saved" : "could not save",
+		 freq_correction_ppb);
  finish:
 	clock_unlock();
 	return rc;
