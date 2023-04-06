@@ -1026,7 +1026,7 @@ static void write_rt_stats_json(FILE* json_stats_fp,
 		sfptpd_clock_get_time(entry->clock_master, &time);
 		time_t secs = time.tv_sec;
 		sfptpd_local_strftime(ftime, (sizeof ftime) - 1, "%Y-%m-%d %H:%M:%S", &secs);
-		fprintf(json_stats_fp, ",\"time\":\"%s.%06ld\"", ftime, time.tv_nsec);
+		fprintf(json_stats_fp, ",\"time\":\"%s.%09ld\"", ftime, time.tv_nsec);
 
 		/* Extra info about clock interface, mostly useful when using bonds */
 		if (entry->clock_master != sfptpd_clock_get_system_clock())
@@ -1039,7 +1039,7 @@ static void write_rt_stats_json(FILE* json_stats_fp,
 	sfptpd_clock_get_time(entry->clock_slave, &time);
 	time_t secs = time.tv_sec;
 	sfptpd_local_strftime(ftime, (sizeof ftime) - 1, "%Y-%m-%d %H:%M:%S", &secs);
-	fprintf(json_stats_fp, "},\"clock-slave\":{\"name\":\"%s\",\"time\":\"%s.%06ld\"",
+	fprintf(json_stats_fp, "},\"clock-slave\":{\"name\":\"%s\",\"time\":\"%s.%09ld\"",
 			sfptpd_clock_get_long_name(entry->clock_slave), ftime, time.tv_nsec);
 
 	/* Extra info about clock interface, mostly useful when using bonds */
