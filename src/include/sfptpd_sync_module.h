@@ -261,8 +261,9 @@ void sfptpd_sync_module_ctrl_flags_text(sfptpd_sync_module_ctrl_flags_t flags,
 /** Writes a textual representation of a set of alarms to a stream.
  * @param alarm Bitmask of alarms.
  * @param separator Separator printed between each alarm text (if >1).
+ * @return number of characters written.
  */
-void sfptpd_sync_module_alarms_stream(FILE *stream,
+size_t sfptpd_sync_module_alarms_stream(FILE *stream,
 	sfptpd_sync_module_alarms_t alarms, const char *separator);
 
 /** Convert a set of alarms into a textual string

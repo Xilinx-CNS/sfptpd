@@ -1011,11 +1011,22 @@ static void write_rt_stats_json(FILE* json_stats_fp,
 	char* comma = "";
 	char ftime[24];
 	struct timespec time;
+	size_t len = 0;
 
 	assert(json_stats_fp != NULL);
 	assert(entry != NULL);
 
-	fprintf(json_stats_fp, "{\"instance\":\"%s\",\"time\":\"%s\","
+	#define LPRINTF(...) { \
+		int _ret = fprintf(__VA_ARGS__); \
+		if (_ret < 0) { \
+			 TRACE_L4("error writing json stats, %s\n", \
+				  strerror(errno)); \
+			 return; \
+		} \
+		len += _ret; \
+	}
+
+	LPRINTF(json_stats_fp, "{\"instance\":\"%s\",\"time\":\"%s\","
 		"\"clock-master\":{\"name\":\"%s\"",
 		entry->instance_name ? entry->instance_name : "",
 		entry->time.time, entry->clock_master ?
@@ -1026,57 +1037,57 @@ static void write_rt_stats_json(FILE* json_stats_fp,
 		sfptpd_clock_get_time(entry->clock_master, &time);
 		time_t secs = time.tv_sec;
 		sfptpd_local_strftime(ftime, (sizeof ftime) - 1, "%Y-%m-%d %H:%M:%S", &secs);
-		fprintf(json_stats_fp, ",\"time\":\"%s.%09ld\"", ftime, time.tv_nsec);
+		LPRINTF(json_stats_fp, ",\"time\":\"%s.%09ld\"", ftime, time.tv_nsec);
 
 		/* Extra info about clock interface, mostly useful when using bonds */
 		if (entry->clock_master != sfptpd_clock_get_system_clock())
-		 fprintf(json_stats_fp, ",\"primary-interface\":\"%s\"",
-				 sfptpd_interface_get_name(
-					 sfptpd_clock_get_primary_interface(entry->clock_master)));
+			LPRINTF(json_stats_fp, ",\"primary-interface\":\"%s\"",
+				sfptpd_interface_get_name(
+					sfptpd_clock_get_primary_interface(entry->clock_master)));
 	}
 
 	/* Slave clock info */
 	sfptpd_clock_get_time(entry->clock_slave, &time);
 	time_t secs = time.tv_sec;
 	sfptpd_local_strftime(ftime, (sizeof ftime) - 1, "%Y-%m-%d %H:%M:%S", &secs);
-	fprintf(json_stats_fp, "},\"clock-slave\":{\"name\":\"%s\",\"time\":\"%s.%09ld\"",
+	LPRINTF(json_stats_fp, "},\"clock-slave\":{\"name\":\"%s\",\"time\":\"%s.%09ld\"",
 			sfptpd_clock_get_long_name(entry->clock_slave), ftime, time.tv_nsec);
 
 	/* Extra info about clock interface, mostly useful when using bonds */
 	if (entry->clock_slave != sfptpd_clock_get_system_clock())
-		 fprintf(json_stats_fp, ",\"primary-interface\":\"%s\"",
+		 LPRINTF(json_stats_fp, ",\"primary-interface\":\"%s\"",
 				 sfptpd_interface_get_name(
 					 sfptpd_clock_get_primary_interface(entry->clock_slave)));
 
-	fprintf(json_stats_fp, "},\"is-disciplining\":%s,\"in-sync\":%s,"
+	LPRINTF(json_stats_fp, "},\"is-disciplining\":%s,\"in-sync\":%s,"
 			       "\"alarms\":[",
 			entry->is_disciplining ? "true" : "false",
 			entry->is_in_sync ? "true" : "false");
 
 	/* Alarms */
-	sfptpd_sync_module_alarms_stream(json_stats_fp, entry->alarms, ",");
+	len += sfptpd_sync_module_alarms_stream(json_stats_fp, entry->alarms, ",");
 
-	fprintf(json_stats_fp, "],\"stats\":{");
+	LPRINTF(json_stats_fp, "],\"stats\":{");
 
 	/* Print those stats which are present */
 	#define FLOAT_JSON_OUT(k, v) \
 		if (entry->stat_present & (1 << k)) { \
-			fprintf(json_stats_fp, "%s\"%s\":%Lf", comma, RT_STATS_KEY_NAMES[k], v); \
+			LPRINTF(json_stats_fp, "%s\"%s\":%Lf", comma, RT_STATS_KEY_NAMES[k], v); \
 			comma = ","; \
 		}
 	#define INT_JSON_OUT(k, v) \
 		if (entry->stat_present & (1 << k)) { \
-			fprintf(json_stats_fp, "%s\"%s\":%d", comma, RT_STATS_KEY_NAMES[k], v); \
+			LPRINTF(json_stats_fp, "%s\"%s\":%d", comma, RT_STATS_KEY_NAMES[k], v); \
 			comma = ","; \
 		}
 	#define STRING_JSON_OUT(k, v) \
 		if (entry->stat_present & (1 << k)) { \
-			fprintf(json_stats_fp, "%s\"%s\":\"%s\"", comma, RT_STATS_KEY_NAMES[k], v); \
+			LPRINTF(json_stats_fp, "%s\"%s\":\"%s\"", comma, RT_STATS_KEY_NAMES[k], v); \
 			comma = ","; \
 		}
 	#define EUI64_JSON_OUT(k, v) \
 		if (entry->stat_present & (1 << k)) { \
-			fprintf(json_stats_fp, "%s\"%s\":\"" SFPTPD_FORMAT_EUI64 "\"", \
+			LPRINTF(json_stats_fp, "%s\"%s\":\"" SFPTPD_FORMAT_EUI64 "\"", \
 					comma, RT_STATS_KEY_NAMES[k], \
 					v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]); \
 			comma = ","; \
@@ -1101,8 +1112,11 @@ static void write_rt_stats_json(FILE* json_stats_fp,
 	#undef EUI64_JSON_OUT
 
 	/* Close json object and flush stream */
-	fprintf(json_stats_fp, "}}\n");
-	fflush(json_stats_fp);
+	LPRINTF(json_stats_fp, "}}\n");
+
+	#undef LPRINTF
+
+	sfptpd_log_rt_stats_written(len, entry->alarms != 0);
 }
 
 
@@ -1723,6 +1737,7 @@ static void on_log_stats(void *user_context, unsigned int timer_id)
 
 	write_topology(engine);
 	write_sync_instances(engine);
+	sfptpd_log_rt_stats_written(0, true);
 }
 
 

@@ -45,6 +45,11 @@ struct sfptpd_log {
  * Defines & Constants
  ****************************************************************************/
 
+#define APPROX_RT_STATS_LENGTH 512
+#define APPROX_RT_SERVOS 2
+#define APPROX_RT_UPDATES 16
+
+
 /* Message logging uses the linux kernel priority level. Define strings for
  * each level */
 const char *sfptpd_log_priority_text[] = {
@@ -69,7 +74,6 @@ static enum sfptpd_msg_log_config message_log = SFPTPD_MSG_LOG_TO_STDERR;
 static enum sfptpd_stats_log_config stats_log = SFPTPD_STATS_LOG_OFF;
 static int message_log_fd = -1;
 static int stats_log_fd = -1;
-static FILE *json_stats_fp = NULL;
 static FILE *json_remote_monitor_fp = NULL;
 static pthread_mutex_t vmsg_mutex;
 static char freq_correction_file_format[PATH_MAX];
@@ -77,6 +81,12 @@ static char state_file_format[PATH_MAX];
 static char state_next_file_format[PATH_MAX];
 static char sfptpd_config_log_tmpfile[] = "/tmp/sfptpd.conf.lexed.XXXXXX";
 static FILE *config_log_tmp = NULL;
+
+/* JSON stats is block-buffered and we ensure lines get written whole. */
+static FILE *json_stats_fp = NULL;
+static char *json_stats_buf = NULL;
+const static size_t json_stats_bufsz = APPROX_RT_STATS_LENGTH * APPROX_RT_SERVOS * APPROX_RT_UPDATES;
+static int json_stats_ptr = 0;
 
 static unsigned int trace_levels[SFPTPD_COMPONENT_ID_MAX] =
 {
@@ -430,12 +440,19 @@ int sfptpd_log_rotate(struct sfptpd_config *config)
 		/* Close and then reopen the log file */
 		if(json_stats_fp != NULL)
 			fclose(json_stats_fp);
+		else
+			json_stats_buf = malloc(json_stats_bufsz);
 
 		json_stats_fp = fopen(general_config->json_stats_filename, "a");
 		if (json_stats_fp == NULL) {
 			ERROR("Failed to open json stats file %s, error %s\n",
 				  general_config->json_stats_filename, strerror(errno));
+			if (json_stats_buf)
+				free(json_stats_buf);
 			/* We don't set rc = errno because this log is non-critical. */
+		} else {
+			setvbuf(json_stats_fp, json_stats_buf, _IOFBF, json_stats_bufsz);
+			json_stats_ptr = 0;
 		}
 	}
 
@@ -477,6 +494,7 @@ void sfptpd_log_close(void)
 	if (json_stats_fp != NULL) {
 		fclose(json_stats_fp);
 		json_stats_fp = NULL;
+		free(json_stats_buf);
 	}
 
 	if (json_remote_monitor_fp != NULL) {
@@ -578,6 +596,26 @@ void sfptpd_log_stats(const char *format, ...)
 FILE *sfptpd_log_get_rt_stats_out_stream(void)
 {
 	return json_stats_fp;
+}
+
+
+bool sfptpd_log_rt_stats_written(size_t chars, bool flush)
+{
+	size_t headroom;
+	bool flushed = false;
+
+	json_stats_ptr += chars;
+	headroom = json_stats_bufsz - json_stats_ptr;
+
+	if (flush ||
+	    headroom < APPROX_RT_STATS_LENGTH ||
+	    headroom < chars * 2) {
+		fflush(json_stats_fp);
+		json_stats_ptr = 0;
+		flushed = true;
+	}
+
+	return flushed;
 }
 
 

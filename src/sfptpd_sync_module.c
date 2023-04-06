@@ -217,18 +217,23 @@ void sfptpd_sync_module_ctrl_flags_text(sfptpd_sync_module_ctrl_flags_t flags,
 }
 
 
-void sfptpd_sync_module_alarms_stream(FILE *stream,
+size_t sfptpd_sync_module_alarms_stream(FILE *stream,
 	sfptpd_sync_module_alarms_t alarms, const char *separator)
 {
 	int i;
+	int ret;
+	size_t len = 0;
 	const char *sep = "";
 
 	for (i = 0; i < sizeof(alarm_texts)/sizeof(alarm_texts[0]); i++) {
 		if (alarms & alarm_texts[i].bitmask) {
-			fprintf(stream, "%s\"%s\"", sep, alarm_texts[i].text);
+			ret = fprintf(stream, "%s\"%s\"", sep, alarm_texts[i].text);
+			if (ret > 0)
+				len += ret;
 			sep = separator;
 		}
 	}
+	return len;
 }
 
 

@@ -320,6 +320,13 @@ void sfptpd_log_get_time(struct sfptpd_log_time *time);
  */
 FILE* sfptpd_log_get_rt_stats_out_stream(void);
 
+/** Records number of characters of RT stats written.
+ * @param chars The number of characters written.
+ * @param flush Whether to flush the buffer regardless.
+ * @return Whether the buffer was flushed.
+ */
+bool sfptpd_log_rt_stats_written(size_t chars, bool flush);
+
 /** Gets the output stream for remote monitoring. Don't open/close this.
  * @return Stream pointer. May be NULL if remote monitoring is disabled.
  */
