@@ -173,7 +173,7 @@ bool add_and_check_nodes(struct sfptpd_hash_table *table, struct test_details te
 		reference_nodes[ii].port_number = port_no;
 		snprintf(reference_nodes[ii].transport_address,
 			 sizeof(reference_nodes[ii].transport_address),
-			 "%-39.39s", transport_addr);
+			 "%.*s", TEST_HOST_ADDR_LEN - 1, transport_addr);
 	}
 
 	/* Re-add already added entries */
