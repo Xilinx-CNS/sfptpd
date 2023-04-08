@@ -42,7 +42,7 @@ struct sfptpd_hash_table;
 #define SFPTPD_HT_STATS_SET_MAX (1024)
 
 /** Max length of transport address to add to nodes table */
-#define SFPTPD_NODES_MAX_ADDRESS_LEN (40)
+#define SFPTPD_NODES_MAX_ADDRESS_LEN (60)
 
 struct sfptpd_clock_hw_id;
 
