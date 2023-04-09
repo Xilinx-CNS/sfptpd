@@ -928,7 +928,6 @@ static int netlink_handle_genl_team(struct nl_conn_state *conn,
 	int port_ifindex = -1;
 	int opt = CP_TEAM_OPTION_MAX;
 	enum sfptpd_link_event event = SFPTPD_LINK_NONE;
-	void *data;
 
 	assert(conn);
 	assert(nh);
@@ -969,13 +968,10 @@ static int netlink_handle_genl_team(struct nl_conn_state *conn,
 			team_ifindex = mnl_attr_get_u32(attr[TEAM_ATTR_TEAM_IFINDEX]);
 		}
 
-		if (attr[TEAM_ATTR_OPTION_PORT_IFINDEX]) {
-			port_ifindex = mnl_attr_get_u32(attr[TEAM_ATTR_PORT_IFINDEX]);
-		}
-
 		if (attr[TEAM_ATTR_LIST_OPTION]) {
 			assert(team_ifindex > 0);
 			mnl_attr_for_each_nested(option, attr[TEAM_ATTR_LIST_OPTION]) {
+				void *data = NULL;
 				mnl_attr_parse_nested(option, team_opt_cb, nested);
 
 				if (nested[TEAM_ATTR_OPTION_NAME]) {
@@ -997,11 +993,15 @@ static int netlink_handle_genl_team(struct nl_conn_state *conn,
 					event = SFPTPD_LINK_CHANGE;
 
 				if (opt != CP_TEAM_OPTION_MAX) {
-					team_options[opt].apply(conn->state->db_hist + conn->state->db_hist_next,
-								data,
-								team_ifindex,
-							        port_ifindex,
-								event);
+					if (data) {
+						team_options[opt].apply(conn->state->db_hist + conn->state->db_hist_next,
+									data,
+									team_ifindex,
+								        port_ifindex,
+									event);
+					} else {
+						ERROR("netlink: team option %d applied without value\n", opt);
+					}
 				}
 			}
 		}
