@@ -3984,7 +3984,8 @@ int sfptpd_ptp_module_create(struct sfptpd_config *config,
 
 	/* Copy initial link table */
 	*link_table_subscriber = true;
-	if (sfptpd_link_table_copy(link_table, &ptp->link_table) != 0)
+	rc = sfptpd_link_table_copy(link_table, &ptp->link_table);
+	if (rc != 0)
 		goto fail1;
 
 	/* Create all the sync instances */
