@@ -1447,7 +1447,7 @@ static void on_leap_second_timer(void *user_context, unsigned int timer_id)
 
 static int engine_set_netlink_polling(struct sfptpd_engine *engine, bool poll)
 {
-	int rc;
+	int rc = 0;
 	int fd;
 	int get_fd_state;
 
@@ -1534,7 +1534,7 @@ static void engine_handle_new_link_table(struct sfptpd_engine *engine, int versi
 	}
 
 	if (version < 0)
-		ERROR("engine: servicing netlink responses, %s\n", strerror(rc));
+		ERROR("engine: servicing netlink responses, %s\n", strerror(-version));
 
 	if (reconfigure) {
 		TRACE_L3("engine: reconfiguring slave servos after interface hotplugging\n");
