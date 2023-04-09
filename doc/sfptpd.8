@@ -1,4 +1,4 @@
-.Dd April 09, 2023
+.Dd August 31, 2022
 .Os Linux
 .Dt SFPTPD 8 SMM
 .Sh NAME
@@ -7,16 +7,9 @@ sfptpd \- Solarflare Enhanced PTP Daemon
 .Nm sfptpd
 .Op Fl h
 .Nm
-.Op Fl -version
-.Nm
-.Op Fl -test-config
-.Nm
 .Op Fl v
 .Op Fl i Ar interface
 .Op Fl f Ar sfptpd.conf
-.Op Fl u Ar user[:group]
-.Op Fl -no-daemon
-.Op Fl -daemon
 .Sh DESCRIPTION
 Start the Solarflare Enhanced PTP Daemon to manage the synchronisation of
 system and PTP hardware clocks, remote PTP sources and sinks, external
@@ -248,7 +241,7 @@ configuration stanzas can be generated with:
 .D1 $ sfptpd -h
 
 Full documentation is available at:
-.Aq https://docs.xilinx.com/r/en-US/ug1602-ptp-user
+.Aq https://www.xilinx.com/download/drivers
 .Sh COPYRIGHT
 Copyright (c) 2022 Xilinx, Inc.
 

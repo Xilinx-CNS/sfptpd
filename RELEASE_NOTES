@@ -102,7 +102,7 @@ Advanced notice of possible future changes
 
    If chronyd is in use it is recommended to specify an instance of the new
    crny sync module explicitly as a future release may not create the implicit
-   instance.
+   instance or may do so only if chronyd is detected at startup time.
 
 
 Changelog
@@ -112,6 +112,10 @@ Changelog
 
 Features:
  ~ Allow running as non-root user with minimum required capabilities (SWPTP-442)
+     - enable with 'user' configuration or --user command line options
+     - root user required for chronyd clock control script to restart chronyd
+     - example udev rules support hotplug with non-root user
+     - /dev/pps device for X3522 PPS input is openened after root is dropped
  ~ Support bridges including over bonds in similar way to LACP bonds (SWPTP-826)
  ~ Support MACVLANs when timestamping enabled in host netns (SWPTP-992)
  ~ Allow a bond, bridge or vlan to be specified for freerun clock (SWPTP-1169)
@@ -132,6 +136,9 @@ Features:
      --test-config  tests configuration file
      --user USER[:GROUP]
      and synchronises with systemd on startup as 'notify'-type service
+ ~ The 'ntpsec' implementation of ntpd available in the EPEL repositories for
+     RHEL 9 is confirmed to be fully interoperable with sfptpd, allowing
+     system clock disciplining to be controlled at runtime.
 
 Issue SWPTP-1278
  ~ Fix retrieval of transmit timestamps to recover from nic reset quicker
@@ -139,6 +146,8 @@ Issue SWPTP-1296
  ~ Improve logging of timer fd activity to identify system configuration issues
 Issue SWPTP-1314
  ~ Fix issues using PPS via /dev/ptp external timestamping pin
+Issue SWPTP-1326
+ ~ Alter buffering for RT JSON stats output to avoid excessive writes per sec
 
 
 ### v3.6.0.1015 Feature Release
