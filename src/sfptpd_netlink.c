@@ -440,6 +440,7 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 	link->if_type = ifm->ifi_type;
 	link->if_flags = ifm->ifi_flags;
 	link->if_family = ifm->ifi_family;
+	link->is_slave = false;
 
 	mnl_attr_parse(nh, sizeof(*ifm), link_attr_cb, table);
 
@@ -525,14 +526,12 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 #endif
 	}
 
-#ifndef HAVE_TEAMING
-	/* Using the lack of teaming support as a proxy for the
-	 * IFLA_INFO_SLAVE_KIND tag being available, use the interface
-	 * flags to determine if this is a slave interface.
-	 */
-	link->is_slave = (link->if_flags & IFF_SLAVE) ? true : false;
-#endif
+	/* Any indicator of a link's subordinate status sets slave flag. */
+	if (link->if_flags & IFF_SLAVE ||
+	    link->bond.if_master > 0)
+		link->is_slave = true;
 
+	/* Expand link table if full */
 	if (link->event != SFPTPD_LINK_DOWN &&
 	    db->table.count + 1 >= db->capacity) {
 		size_t new_capacity;
@@ -555,6 +554,7 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 		}
 	}
 
+	/* Remove deleted interfaces from the table. */
 	for (row = 0; row < db->table.count; row++) {
 		if (db->table.rows[row].if_index == link->if_index) {
 			if (link->event == SFPTPD_LINK_DOWN) {
@@ -563,8 +563,9 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 					sizeof data * (db->table.count - row - 1));
 				db->table.count--;
 			} else {
-				/* If a team, don't overwrite team info although we will
-				   refetch it. */
+				/* If the updated link is a team then inherit
+				 * the previous settings so that we don't lose
+				 * team characteristics while refetching them */
 				if (link->type == SFPTPD_LINK_TEAM)
 					link->bond = db->table.rows[row].bond;
 				db->table.rows[row] = *link;
