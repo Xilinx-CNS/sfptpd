@@ -452,10 +452,6 @@ typedef struct {
 	/* 16.11.3 DefaultDS.slaveEventMonitoringEventsPer<type>
 	 * Include this many samples in each TLV */
 	Integer16 events_per_tlv;
-
-	/* Unicast address to which to send the data, else multicast */
-	struct sockaddr_storage monitor_address;
-	socklen_t monitor_address_len;
 } SlaveEventMonitoringConfig;
 
 typedef struct {
@@ -538,8 +534,9 @@ typedef struct ptpd_port_config {
 
 	/* @task65531: Slave Status Monitoring (Solarflare extension). */
 	bool slave_status_monitoring_enable;
-	struct sockaddr_storage monitor_address;
-	socklen_t monitor_address_len;
+	int num_monitor_dests;
+	struct sockaddr_storage monitor_address[MAX_SLAVE_EVENT_DESTS];
+	socklen_t monitor_address_len[MAX_SLAVE_EVENT_DESTS];
 
 	/* SWPTP-906: external clock discriminator for BMCA */
 	char discriminator_name[SFPTPD_CONFIG_SECTION_NAME_MAX];

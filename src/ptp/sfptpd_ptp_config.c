@@ -1063,38 +1063,38 @@ static int parse_mon_monitor_address(struct sfptpd_config_section *section, cons
 				     unsigned int num_params, const char * const params[])
 {
 	int rc = 0;
+	int i, j;
 	int gai_rc;
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	struct addrinfo hints = {
-		.ai_family = AF_INET,
+		.ai_family = ptp->ptpd_intf.transportAF,
 		.ai_socktype = SOCK_DGRAM,
 	};
 	struct addrinfo *result;
 
-	assert(num_params == 1);
-
-	gai_rc = getaddrinfo(params[0], NULL, &hints, &result);
-	if (gai_rc != 0 || result == NULL) {
-		ERROR("monitor address lookup for %s failed, %s\n",
-		      params[0], gai_strerror(gai_rc));
-		rc = EINVAL;
-	} else {
-		assert(result->ai_addrlen <= sizeof ptp->ptpd_port.monitor_address);
-		memcpy(&ptp->ptpd_port.monitor_address,
-		       result->ai_addr, result->ai_addrlen);
-		memcpy(&ptp->ptpd_port.rx_sync_timing_data_config.monitor_address,
-		       result->ai_addr, result->ai_addrlen);
-		memcpy(&ptp->ptpd_port.rx_sync_computed_data_config.monitor_address,
-		       result->ai_addr, result->ai_addrlen);
-		memcpy(&ptp->ptpd_port.tx_event_timestamps_config.monitor_address,
-		       result->ai_addr, result->ai_addrlen);
-		ptp->ptpd_port.monitor_address_len = result->ai_addrlen;
-		ptp->ptpd_port.rx_sync_timing_data_config.monitor_address_len = result->ai_addrlen;
-		ptp->ptpd_port.rx_sync_computed_data_config.monitor_address_len = result->ai_addrlen;
-		ptp->ptpd_port.tx_event_timestamps_config.monitor_address_len = result->ai_addrlen;
+	j = ptp->ptpd_port.num_monitor_dests;
+	for (i = 0; rc == 0 && i < num_params; i++, j++) {
+		if (j >= MAX_SLAVE_EVENT_DESTS) {
+			ERROR("too many monitoring destinations specified (%d > %d)\n",
+			      j + num_params - i, MAX_SLAVE_EVENT_DESTS);
+			rc = E2BIG;
+			continue;
+		}
+		gai_rc = getaddrinfo(params[i], NULL, &hints, &result);
+		if (gai_rc != 0 || result == NULL) {
+			ERROR("monitor address lookup for %s failed, %s\n",
+			      params[i], gai_strerror(gai_rc));
+			rc = EINVAL;
+		} else {
+			assert(result->ai_addrlen <= sizeof ptp->ptpd_port.monitor_address);
+			memcpy(ptp->ptpd_port.monitor_address + j,
+			       result->ai_addr, result->ai_addrlen);
+			ptp->ptpd_port.monitor_address_len[j] = result->ai_addrlen;
+		}
+		if (gai_rc == 0)
+			freeaddrinfo(result);
 	}
-	if (gai_rc == 0)
-		freeaddrinfo(result);
+	ptp->ptpd_port.num_monitor_dests = j;
 
 	return rc;
 }
@@ -1496,12 +1496,13 @@ static const sfptpd_config_option_t ptp_config_options[] =
 		"messages.",
 		0, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
 		parse_remote_monitor},
-	{"mon_monitor_address", "<address>",
-		"Address of monitoring station to which to send signaling "
+	{"mon_monitor_address", "<address>*",
+		"Address of up to " STRINGIFY(MAX_SLAVE_EVENT_DESTS) " "
+		"monitoring stations to which to send signaling "
 		"messages with slave event monitoring data for the "
 		"mon_rx_sync_timing_data, mon_rx_sync_computed_data and "
 		"mon_tx_event_timestamps commands. Default is multicast.",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		~1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
 		parse_mon_monitor_address},
 	{"mon_rx_sync_timing_data", "[NUMBER]",
 		"Enable slave event monitoring for rx sync timing data. "

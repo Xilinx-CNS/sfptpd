@@ -90,6 +90,7 @@ section 7.6.2.4, page 55:
 #define	FOREIGN_MASTER_TIME_CHECK	1
 
 #define MAX_SLAVE_EVENT_MONITORING_EVENTS_PER_TLV 10
+#define MAX_SLAVE_EVENT_DESTS 6
 
 /* PTP Protocol version number */
 #define PTPD_PROTOCOL_VERSION 2

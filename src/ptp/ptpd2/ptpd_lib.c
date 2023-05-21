@@ -105,13 +105,13 @@ void ptpd_config_port_initialise(struct ptpd_port_config *config,
 	config->rx_sync_timing_data_config.events_per_tlv = 8;
 
 	/* Default to multicast transmission */
-	config->rx_sync_timing_data_config.monitor_address_len = 0;
 	config->rx_sync_computed_data_config = config->rx_sync_timing_data_config;
 	config->tx_event_timestamps_config = config->rx_sync_timing_data_config;
 
-	/* Slave status monitoring */
+	/* Slave status monitoring. Empty first address implies use PTP multicast */
 	config->slave_status_monitoring_enable = false;
-	config->monitor_address_len = 0;
+	config->num_monitor_dests = 0;
+	config->monitor_address_len[0] = 0;
 
 	/* Clear remote stats logger */
 	memset(&config->remoteStatsLogger, '\0', sizeof config->remoteStatsLogger);
