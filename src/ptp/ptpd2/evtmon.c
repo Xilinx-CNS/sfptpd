@@ -91,6 +91,31 @@ static ptpd_msg_id_e ptpd_tx_ts_type_to_msg_type(ptpd_slave_tx_ts_msg_e tx_ts_ty
 	}
 }
 
+
+/* Send an event monitoring message that has already been prepared */
+static void sendMonitoringMessage(PtpClock *ptpClock, RunTimeOpts *rtOpts)
+{
+	int i, num_dests;
+
+	/* Correct for implicit destination when using PTP multicast address */
+	num_dests = rtOpts->num_monitor_dests;
+	if (num_dests == 0)
+		num_dests = 1;
+
+	for (i = 0; i < num_dests; i++) {
+		if (netSendMonitoring(ptpClock->msgObuf, getHeaderLength(ptpClock->msgObuf),
+				      ptpClock, rtOpts, rtOpts->monitor_address + i,
+				      rtOpts->monitor_address_len[i]) != 0) {
+			handleSendFailure(rtOpts, ptpClock, "Signaling");
+		} else {
+			DBGV("Signaling MSG sent!\n");
+			ptpClock->counters.signalingMessagesSent++;
+		}
+	}
+	ptpClock->sentSignalingSequenceId++;
+}
+
+
 /* @task71778: Slave Event Monitoring (timing data) (IEEE1588-Rev 2017 draft 16.11.4.1) */
 static void
 flushSlaveRxSyncTimingData(PtpClock *ptpClock, RunTimeOpts *rtOpts)
@@ -98,7 +123,6 @@ flushSlaveRxSyncTimingData(PtpClock *ptpClock, RunTimeOpts *rtOpts)
 	SlaveEventMonitoringConfig *config = &rtOpts->rx_sync_timing_data_config;
 	SlaveEventMonitoringState *state = &ptpClock->slave_rx_sync_timing_data_state;
 	SlaveRxSyncTimingDataElement *records = ptpClock->slave_rx_sync_timing_data_records;
-	int dest, dests;
 
 	if (config->tlv_enable) {
 		MsgSignaling msgSignaling = { { 0 } };
@@ -119,25 +143,8 @@ flushSlaveRxSyncTimingData(PtpClock *ptpClock, RunTimeOpts *rtOpts)
 
 		pack_result = appendSlaveRxSyncTimingDataTLV(&data,
 							     ptpClock->msgObuf, sizeof ptpClock->msgObuf);
-
 		state->num_events = 0;
-
-		/* Correct for implicit destination when using PTP multicast address */
-		dests = rtOpts->num_monitor_dests;
-		if (dests == 0)
-			dests = 1;
-
-		for (dest = 0; dest < dests; dest++) {
-			if (netSendMonitoring(ptpClock->msgObuf, getHeaderLength(ptpClock->msgObuf),
-					      ptpClock, rtOpts, rtOpts->monitor_address + dest,
-					      rtOpts->monitor_address_len[dest]) != 0) {
-				handleSendFailure(rtOpts, ptpClock, "Signaling");
-			} else {
-				DBGV("Signaling MSG sent!\n");
-				ptpClock->counters.signalingMessagesSent++;
-			}
-		}
-		ptpClock->sentSignalingSequenceId++;
+		sendMonitoringMessage(ptpClock, rtOpts);
 	}
 }
 
@@ -149,7 +156,6 @@ flushSlaveRxSyncComputedData(PtpClock *ptpClock, RunTimeOpts *rtOpts)
 	SlaveEventMonitoringConfig *config = &rtOpts->rx_sync_computed_data_config;
 	SlaveEventMonitoringState *state = &ptpClock->slave_rx_sync_computed_data_state;
 	SlaveRxSyncComputedDataElement *records = ptpClock->slave_rx_sync_computed_data_records;
-	int dest, dests;
 
 	if (config->tlv_enable) {
 		MsgSignaling msgSignaling = { { 0 } };
@@ -173,25 +179,8 @@ flushSlaveRxSyncComputedData(PtpClock *ptpClock, RunTimeOpts *rtOpts)
 							     records,
 							     state->num_events,
 							     ptpClock->msgObuf, sizeof ptpClock->msgObuf);
-
 		state->num_events = 0;
-
-		/* Correct for implicit destination when using PTP multicast address */
-		dests = rtOpts->num_monitor_dests;
-		if (dests == 0)
-			dests = 1;
-
-		for (dest = 0; dest < dests; dest++) {
-			if (netSendMonitoring(ptpClock->msgObuf, getHeaderLength(ptpClock->msgObuf),
-					      ptpClock, rtOpts, rtOpts->monitor_address + dest,
-					      rtOpts->monitor_address_len[dest]) != 0) {
-				handleSendFailure(rtOpts, ptpClock, "Signaling");
-			} else {
-				DBGV("Signaling MSG sent!\n");
-				ptpClock->counters.signalingMessagesSent++;
-			}
-		}
-		ptpClock->sentSignalingSequenceId++;
+		sendMonitoringMessage(ptpClock, rtOpts);
 	}
 }
 
@@ -316,7 +305,6 @@ flushSlaveTxEventTimestamps(PtpClock *ptpClock, RunTimeOpts *rtOpts, ptpd_slave_
 	SlaveEventMonitoringConfig *config = &rtOpts->tx_event_timestamps_config;
 	SlaveEventMonitoringState *state = &ptpClock->slave_tx_event_timestamps_state[type];
 	SlaveTxEventTimestampsElement *records = &ptpClock->slave_tx_event_timestamps_records[type][0];
-	int dest, dests;
 
 	if (config->tlv_enable) {
 		MsgSignaling msgSignaling = { { 0 } };
@@ -338,25 +326,8 @@ flushSlaveTxEventTimestamps(PtpClock *ptpClock, RunTimeOpts *rtOpts, ptpd_slave_
 							      records,
 							      state->num_events,
 							      ptpClock->msgObuf, sizeof ptpClock->msgObuf);
-
 		state->num_events = 0;
-
-		/* Correct for implicit destination when using PTP multicast address */
-		dests = rtOpts->num_monitor_dests;
-		if (dests == 0)
-			dests = 1;
-
-		for (dest = 0; dest < dests; dest++) {
-			if (netSendMonitoring(ptpClock->msgObuf, getHeaderLength(ptpClock->msgObuf),
-					      ptpClock, rtOpts, rtOpts->monitor_address + dest,
-					      rtOpts->monitor_address_len[dest]) != 0) {
-				handleSendFailure(rtOpts, ptpClock, "Signaling");
-			} else {
-				DBGV("Signaling MSG sent!\n");
-				ptpClock->counters.signalingMessagesSent++;
-			}
-		}
-		ptpClock->sentSignalingSequenceId++;
+		sendMonitoringMessage(ptpClock, rtOpts);
 	}
 }
 
@@ -432,7 +403,6 @@ slaveStatusMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts,
 	ssize_t pack_result;
 	SlaveStatus data;
 	struct timespec report_time;
-	int dest, dests;
 
 	if (rtOpts->slave_status_monitoring_enable) {
 
@@ -457,23 +427,7 @@ slaveStatusMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts,
 		pack_result = appendSlaveStatusTLV(&data,
 						   ptpClock->msgObuf,
 						   sizeof ptpClock->msgObuf);
-
-		/* Correct for implicit destination when using PTP multicast address */
-		dests = rtOpts->num_monitor_dests;
-		if (dests == 0)
-			dests = 1;
-
-		for (dest = 0; dest < dests; dest++) {
-			if (netSendMonitoring(ptpClock->msgObuf, getHeaderLength(ptpClock->msgObuf),
-					      ptpClock, rtOpts, rtOpts->monitor_address + dest,
-					      rtOpts->monitor_address_len[dest]) != 0) {
-				handleSendFailure(rtOpts, ptpClock, "Signaling");
-			} else {
-				DBGV("Signaling MSG sent!\n");
-				ptpClock->counters.signalingMessagesSent++;
-			}
-		}
-		ptpClock->sentSignalingSequenceId++;
+		sendMonitoringMessage(ptpClock, rtOpts);
 	}
 }
 
