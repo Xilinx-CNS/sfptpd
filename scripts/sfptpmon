@@ -1,0 +1,331 @@
+#!/usr/bin/python3
+#
+# SPDX-License: BSD-3-Clause
+# (c) Copyright 2023 Advanced Micro Devices, Inc.
+#
+# Receive slave event monitoring requests per IEEE1588-2019 16.10
+
+import re
+import sys
+import struct
+import socket
+import selectors
+import json
+import time
+from enum import Enum
+from itertools import chain
+from optparse import OptionParser
+from collections import namedtuple
+
+DEFAULT_LADDR = ""
+DEFAULT_MULTICAST_LADDR = "224.0.1.229"
+DEFAULT_SERVICE = "ptp-general"
+
+MAX_PKT = 1500
+
+# PTP protocol definitions
+PTP_SIGNALING = 0xC
+PTP_MESSAGE_TYPES = [ "Sync", "Delay_Req", "Pdelay_Req", "Pdelay_resp",
+                      "Reserved_4", "Reserved_5", "Reserved_6", "Reserved_7",
+                      "Follow_Up", "Delay_Resp", "PdelayResp_Follow_Up", "Announce",
+                      "Signaling", "Management", "Reserved_E", "Reserved_F" ]
+PTP_STATES = [ "UNINITIALIZED", "INITIALIZING", "FAULTY", "DISABLED",
+               "LISTENING", "PRE_MASTER", "MASTER", "PASSIVE",
+               "UNCALIBRATED", "SLAVE", "UNKNOWN_A", "UNKNOWN_B",
+               "UNKNOWN_C", "UNKNOWN_D", "UNKNOWN_E", "UNKNOWN_F" ]
+
+# Sfc status extension
+SFC_ALARMS = [ "no-tx-timestmaps", "no-rx-timestamps", "no-interface", "servo-fail" ]
+EVENT_BOND_CHANGED = 1
+FLAG_IN_SYNC = 1
+FLAG_SELECTED = 2
+
+# Packing definitions for PTP protocol structures
+struct_ptp = struct.Struct("!BBHBBHqL10sHBB")
+struct_signaling = struct.Struct("!10s")
+struct_tlv = struct.Struct("!HH")
+struct_orgtlv = struct.Struct("!3s3s")
+struct_ssa4 = struct.Struct("=BH4s")
+struct_ssa6 = struct.Struct("=BHI16sI")
+struct_rx_timing = struct.Struct("!10s")
+struct_rx_timing_entry = struct.Struct("!H10sql10sH")
+struct_rx_comp = struct.Struct("!10sBB")
+struct_rx_comp_entry = struct.Struct("!Hqql")
+struct_tx_events = struct.Struct("!10sBB")
+struct_tx_events_entry = struct.Struct("!H10s")
+struct_sfc_status = struct.Struct("!8s10sHHHHB")
+struct_clockid = struct.Struct("!HHHH")
+struct_portid = struct.Struct("!HHHHH")
+struct_timestamp = struct.Struct("!HLL")
+
+# Tuple for each request unicast or multicast listener specification
+lspec = namedtuple("lspec", ["intf", "maddr", "node", "service"])
+
+# Tuples for PTP protocol structures
+ptp_header = namedtuple("ptp",
+                        ["messageType", "versionPTP", "messageLength", "domainNumber", "minorSdoId",
+                         "flagField", "correctionField", "messageTypeSpecific", "sourcePortIdentity",
+                         "sequenceId", "controlField", "logMessageInterval"])
+signaling_header = namedtuple("signaling", ["targetPortIdentity"])
+tlv_header = namedtuple("tlv", ["tlvType", "lengthField"])
+orgtlv_header = namedtuple("orgtlv", ["organizationId", "organizationSubType"])
+rx_timing = namedtuple("rx_timing", ["syncSourcePortIdentity"])
+rx_timing_entry = namedtuple("rx_timing_entry", ["sequenceId",
+                                     "syncOriginTimestamp",
+                                     "totalCorrectionField", "scaledCumulativeRateOffset",
+                                     "syncEventIngressTimestamp", "reserved"])
+rx_comp = namedtuple("rx_comp", ["sourcePortIdentity", "computedFlags", "reserved"])
+rx_comp_entry = namedtuple("rx_comp_entry", ["sequenceId", "offsetFromMaster",
+                                             "meanPathDelay", "scaledNeighborRateRatio"])
+tx_events = namedtuple("tx_events", ["sourcePortIdentity", "eventMessageType", "reserved"])
+tx_events_entry = namedtuple("tx_events_entry", ["sequenceId", "eventEgressTimestamp"])
+sfc_status = namedtuple("sfc_status", ["grandmasterIdentity", "reportTimestamp",
+                                       "missingMessageAlarms", "otherAlarms",
+                                       "events", "flags", "portState"])
+
+# TLV definitions
+TLV = namedtuple("TLV", ["type", "length", "data"])
+
+def decode_clock(clock_bytes):
+    return "%04x:%04x:%04x:%04x" % struct_clockid.unpack(clock_bytes)
+
+def decode_port(port_bytes):
+    return "%04x:%04x:%04x:%04x.%d" % struct_portid.unpack(port_bytes)
+
+def decode_timestamp(timestamp_bytes):
+    (sechi, seclo, nsec) = struct_timestamp.unpack(timestamp_bytes)
+    return "%d.%09d" % ((sechi << 32) | seclo, nsec)
+
+def tlv_org_ext(tlv):
+    (ptr, end) = (0, struct_orgtlv.size)
+    hdr_raw = struct_orgtlv.unpack(tlv.data[ptr:end])
+    hdr = orgtlv_header(int.from_bytes(hdr_raw[0], 'big'),
+                        int.from_bytes(hdr_raw[1], 'big'))
+    orgid = hdr.organizationId << 24 | hdr.organizationSubType
+    if orgid in tlvs:
+        return tlvs[orgid](TLV(orgid, tlv.length - 6, tlv.data[end:]))
+    else:
+        return []
+
+def tlv_rx_sync_timing_data(tlv):
+    events = []
+    (ptr, end) = (0, struct_rx_timing.size)
+    hdr = rx_timing._make(struct_rx_timing.unpack(tlv.data[ptr:end]))
+    while end < len(tlv.data):
+        (ptr, end) = (end, end + struct_rx_timing_entry.size)
+        entry = rx_timing_entry._make(struct_rx_timing_entry.unpack(tlv.data[ptr:end]))
+        datum = {
+            'sync-seq': entry.sequenceId,
+            'sync-ingress-timestamp': decode_timestamp(entry.syncEventIngressTimestamp),
+        }
+        events.append(( "rx-event", datum ))
+    return events
+
+def tlv_rx_sync_computed_data(tlv):
+    events = []
+    (ptr, end) = (0, struct_rx_comp.size)
+    hdr = rx_comp._make(struct_rx_comp.unpack(tlv.data[ptr:end]))
+    flags = {
+        'scaledNeighborRateValid': not not(hdr.computedFlags & 1),
+        'meanPathDelayValid': not not(hdr.computedFlags & 2),
+        'offsetFromMasterValid': not not(hdr.computedFlags & 4),
+    }
+    while end < len(tlv.data):
+        (ptr, end) = (end, end + struct_rx_comp_entry.size)
+        entry = rx_comp_entry._make(struct_rx_comp_entry.unpack(tlv.data[ptr:end]))
+        datum = {
+            'sync-seq': entry.sequenceId
+        }
+        if flags['meanPathDelayValid']:
+            datum['mean-path-delay'] = float(entry.meanPathDelay) / 65536.0
+        if flags['offsetFromMasterValid']:
+            datum['offset-from-master'] = float(entry.offsetFromMaster) / 65536.0
+        events.append(( "rx-event", datum ))
+    return events
+
+def tlv_tx_event_timestamps(tlv):
+    events = []
+    (ptr, end) = (0, struct_tx_events.size)
+    hdr = tx_events._make(struct_tx_events.unpack(tlv.data[ptr:end]))
+    while end < len(tlv.data):
+        (ptr, end) = (end, end + struct_tx_events_entry.size)
+        entry = tx_events_entry._make(struct_tx_events_entry.unpack(tlv.data[ptr:end]))
+        datum = {
+            'source-port': decode_port(hdr.sourcePortIdentity),
+            'message-type': PTP_MESSAGE_TYPES[hdr.eventMessageType & 15],
+            'event-seq-id': entry.sequenceId,
+            'egress-timestamp': decode_timestamp(entry.eventEgressTimestamp),
+        }
+        events.append(( "tx-event", datum ))
+    return events
+
+def tlv_sfc_slave_status(tlv):
+    (ptr, end) = (0, struct_sfc_status.size)
+    hdr = sfc_status._make(struct_sfc_status.unpack(tlv.data[ptr:end]))
+    a = hdr.otherAlarms
+    alarms = []
+    for i in range(0, len(SFC_ALARMS)):
+        if hdr.otherAlarms & (1 << i):
+            alarms.append(SFC_ALARMS[i])
+    m = hdr.otherAlarms
+    missing = []
+    for i in range(0, len(PTP_MESSAGE_TYPES)):
+        if hdr.missingMessageAlarms & (1 << i):
+            missing.append(PTP_MESSAGE_TYPES[i])
+    datum = {
+        'gm-id': decode_clock(hdr.grandmasterIdentity),
+        'state': PTP_STATES[hdr.portState & 15],
+        'bond-changed': not not (hdr.events & EVENT_BOND_CHANGED),
+        'selected': not not(hdr.flags & FLAG_SELECTED),
+        'in-sync': not not(hdr.flags & FLAG_IN_SYNC),
+        'msg-alarms': missing,
+        'alarms': alarms,
+    }
+    return [( "slave-status", datum )]
+
+# Define TLV as 24-bit organisation ID concatentated with
+# 24-bit organisation sub type. For standard TLV's, just pad
+# type to 48 bits.
+tlvs = {
+    0x000000000003: tlv_org_ext,
+    0x000000004000: tlv_org_ext,
+    0x000000008000: tlv_org_ext,
+    0x000000008004: tlv_rx_sync_timing_data,
+    0x000000008005: tlv_rx_sync_computed_data,
+    0x000000008006: tlv_tx_event_timestamps,
+    0x000000008008: lambda tlv: [], # PAD
+    0x000f53000001: tlv_sfc_slave_status,
+}
+
+# Parse listener in the form <host>[:<port>] or "["<host"]"[:<port>]
+def parse_listen_address(laddr):
+    quoted = re.match(r'\[(.*)\](?::(.*))?', laddr)
+    if quoted:
+        (node, service) = (quoted[1], quoted[2])
+    else:
+        (node, _, service) = laddr.partition(":")
+    return lspec._make([None, None,
+                        node if node else None,
+                        service if service else DEFAULT_SERVICE])
+
+# Parse multicast listener in the form [<intf>][:[=]<host>[:<port>]]
+# where '=' implies bind to the multicast address rather than _ANY
+def parse_multicast_address(maddr, default_intf):
+    m = re.match(r'([^:]*)(?::(=?)(.*))?', maddr)
+    (_, _, node, service) = parse_listen_address(m[3] if m[3] else DEFAULT_MULTICAST_LADDR)
+    if not m[1]:
+        if default_intf:
+            intf = default_intf
+        else:
+            print("no default interface specified", file=sys.stderr)
+            sys.exit(1)
+    else:
+        intf = m[1]
+    return lspec._make([intf, node, node if m[2] == "=" else None, service])
+
+def recv(s, spec):
+    events = []
+    (rawmsg, peer) = s.recvfrom(MAX_PKT)
+    (ptr, end) = (0, struct_ptp.size)
+    hdr = ptp_header._make(struct_ptp.unpack(rawmsg[ptr:end]))
+    if hdr.messageType & 0xF == PTP_SIGNALING:
+        (ptr, end) = (end, end + struct_signaling.size)
+        sig = signaling_header._make(struct_signaling.unpack(rawmsg[ptr:end]))
+        while end < len(rawmsg):
+            (ptr, end) = (end, end + struct_tlv.size)
+            tlv = tlv_header._make(struct_tlv.unpack(rawmsg[ptr:end]))
+            (ptr, end) = (end, end + tlv.lengthField)
+            if tlv.tlvType:
+                evt_records = tlvs[tlv.tlvType](TLV(tlv.tlvType, tlv.lengthField, rawmsg[ptr:end]))
+                if evt_records:
+                    node_record = {
+                        "port-id": decode_port(hdr.sourcePortIdentity),
+                        "domain": hdr.domainNumber,
+                        "address": socket.getnameinfo(peer, socket.NI_NUMERICHOST | socket.NI_NUMERICSERV)[0],
+                    }
+                    events.append(( "node", node_record ))
+                    events.extend(evt_records)
+    return events
+
+def main():
+    parser = OptionParser()
+    parser.add_option("-i", "--interface", type="string", dest="intf",
+                      help="default interface")
+    parser.add_option("-l", "--listen", action="append", type="string", dest="laddrs",
+                      help="address[:port] on which to listen for messages")
+    parser.add_option("-m", "--multicast", action="append", type="string", dest="maddrs",
+                      help="intf[:[=]address[:port]] on which to listen for multicast messages")
+    (options, args) = parser.parse_args()
+    if args:
+        print("did not expect any positional arguments", file=sys.stderr)
+        return 1
+
+    laddrspecs = []
+    if options.laddrs:
+        laddrspecs.extend(map(parse_listen_address, options.laddrs))
+    if options.maddrs:
+        laddrspecs.extend(map(lambda x:parse_multicast_address(x, options.intf), options.maddrs))
+    if not laddrspecs:
+        laddrspecs.extend(map(parse_listen_address, [DEFAULT_LADDR]))
+    def get_addrs(spec):
+        if spec.node or not spec.maddr:
+            aa = socket.getaddrinfo(spec.node, spec.service, type=socket.SOCK_DGRAM, flags=socket.AI_PASSIVE)
+            return [(spec, a, socket.getaddrinfo(spec.maddr, None, family=a[0], type=a[1], proto=a[2])[0] if spec.maddr else None) for a in aa]
+        else:
+            aa = socket.getaddrinfo(spec.maddr, None, type=socket.SOCK_DGRAM)
+            return [(spec, socket.getaddrinfo(None, spec.service, family=a[0], type=a[1], proto=a[2], flags=socket.AI_PASSIVE)[0], a) for a in aa]
+    addrinfos = chain.from_iterable([get_addrs(spec) for spec in laddrspecs])
+
+    ss = []
+    poll = selectors.DefaultSelector()
+    for (spec, la, ma) in addrinfos:
+        (af, stype, proto, lcname, lsaddr) = la
+        s = socket.socket(af, stype, proto)
+        print("Receiving PTP event monitoring messages on %s:%d" % lsaddr[0:2], file=sys.stderr)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, struct.pack("i", 1))
+        if af == socket.AF_INET6:
+            s.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, struct.pack("i", 1))
+        if ma:
+            print("..joining multicast group %s on %s" % (ma[4][0], spec.intf), file=sys.stderr)
+            if af == socket.AF_INET6:
+                ssa = struct_ssa6.pack(af, 0, 0, socket.inet_pton(af, ma[4][0]), 0)
+            else:
+                ssa = struct_ssa4.pack(af, 0, socket.inet_pton(af, ma[4][0]))
+            MCAST_JOIN_GROUP = 42
+            s.setsockopt(socket.SOL_SOCKET, MCAST_JOIN_GROUP,
+                         struct.pack("=i", socket.if_nametoindex(spec.intf)) + ssa)
+        s.bind(lsaddr)
+        s.setblocking(False)
+        poll.register(s, selectors.EVENT_READ, spec)
+
+    seqs = {
+        'rx-event': 0,
+        'tx-event': 0,
+        'slave-status': 0,
+    }
+
+    while True:
+        poll_events = poll.select()
+
+        t = time.clock_gettime(time.CLOCK_REALTIME)
+        tstr = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(t)) + (".%06d" % (int(t * 1000000) % 1000000))
+
+        for key, _ in poll_events:
+            mon_events = recv(key.fileobj, key.data)
+            for typ, rec in mon_events:
+                if typ == 'node':
+                    curnode = rec
+                elif typ in seqs:
+                    seq = seqs[typ]
+                    seqs[typ] = seq + 1
+                    rec['node'] = curnode['port-id']
+                    rec['monitor-seq-id'] = seq
+                    rec['monitor-timestamp'] = tstr
+                print(json.dumps({typ: rec}))
+
+    poll.close()
+    for s in ss:
+        s.close()
+
+if __name__ == '__main__':
+    main()
