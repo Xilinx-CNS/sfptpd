@@ -1528,7 +1528,7 @@ static const sfptpd_config_option_t ptp_config_options[] =
 		parse_fir_filter_size},
 	{"remote_monitor", "",
 		"Enable the remote monitor. Collects Slave Event Monitoring "
-		"messages.",
+		"messages. DEPRECATED since v3.7.0.",
 		0, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
 		parse_remote_monitor},
 	{"mon_monitor_address", "ADDRESS[:PORT]*",

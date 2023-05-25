@@ -259,7 +259,9 @@ static const sfptpd_config_option_t config_general_options[] =
 		"Output realtime module statistics in JSON-lines format to this file (http://jsonlines.org). Disabled by default.",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, false, parse_json_stats},
 	{"json_remote_monitor", "<filename>",
-		"Output realtime information collected by the PTP remote monitor in JSON-lines format to this file (http://jsonlines.org). Disabled by default.",
+		"Output realtime information collected by the PTP remote monitor in "
+		"JSON-lines format to this file (http://jsonlines.org). "
+		"Disabled by default. DEPRECATED since v3.7.0.",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, false, parse_json_remote_monitor},
 	{"hotplug_detection_mode", "<netlink | auto>",
 		"Deprecated option to configure how the daemon should detect "

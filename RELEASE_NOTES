@@ -43,8 +43,8 @@ Linux distribution support
 This package is supported on:
 - Red Hat Enterprise Linux 6.9 - 6.10
 - Red Hat Enterprise Linux 7.5 - 7.9
-- Red Hat Enterprise Linux 8.1 - 8.7
-- Red Hat Enterprise Linux 9.0 - 9.1
+- Red Hat Enterprise Linux 8.1 - 8.8
+- Red Hat Enterprise Linux 9.0 - 9.2
 - SuSE Linux Enterprise Server 12 sp4 and sp5
 - SuSE Linux Enterprise Server 15 sp1 - sp4
 - Canonical Ubuntu Server LTS 18.04, 20.04, 22.04
@@ -104,6 +104,15 @@ Advanced notice of possible future changes
    crny sync module explicitly as a future release may not create the implicit
    instance or may do so only if chronyd is detected at startup time.
 
+ * Deprecation of remote monitor
+
+   The built-in receiver for PTP event monitoring messages (controlled by the
+   'remote_monitor' and 'json_remote_monitor' configuration options) is
+   deprecated in favour of the 'sfptpmon' script, which is a more appropriate
+   solution for production use. The built-in receiver may be disabled in
+   future feature releases of sfptpd. The option for sending these event
+   messages remains supported.
+
 
 Changelog
 ---------
@@ -136,6 +145,9 @@ Features:
      --test-config  tests configuration file
      --user USER[:GROUP]
      and synchronises with systemd on startup as 'notify'-type service
+ ~ Support up to 6 destinations for PTP event monitoring messages (SWPTP-1340)
+ ~ Add 'sfptpmon' script to receive PTP event monitoring messages (SWPTP-1342)
+ ~ Accept any port for unicast PTP event monitoring destinations (SWPTP-1346)
  ~ The 'ntpsec' implementation of ntpd available in the EPEL repositories for
      RHEL 9 is confirmed to be fully interoperable with sfptpd, allowing
      system clock disciplining to be controlled at runtime.
@@ -148,6 +160,10 @@ Issue SWPTP-1314
  ~ Fix issues using PPS via /dev/ptp external timestamping pin
 Issue SWPTP-1326
  ~ Alter buffering for RT JSON stats output to avoid excessive writes per sec
+Issue SWPTP-1347
+ ~ Remove bogus reserved field from rx timing event monitoring TLV
+   ** NOTE ** Faulty senders and receivers need updating together.
+              This only applies to users of the mon_rx_sync_timing_data option.
 
 
 ### v3.6.0.1015 Feature Release
