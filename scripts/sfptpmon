@@ -48,7 +48,7 @@ struct_orgtlv = struct.Struct("!3s3s")
 struct_ssa4 = struct.Struct("=BH4s")
 struct_ssa6 = struct.Struct("=BHI16sI")
 struct_rx_timing = struct.Struct("!10s")
-struct_rx_timing_entry = struct.Struct("!H10sql10sH")
+struct_rx_timing_entry = struct.Struct("!H10sql10s")
 struct_rx_comp = struct.Struct("!10sBB")
 struct_rx_comp_entry = struct.Struct("!Hqql")
 struct_tx_events = struct.Struct("!10sBB")
@@ -73,7 +73,7 @@ rx_timing = namedtuple("rx_timing", ["syncSourcePortIdentity"])
 rx_timing_entry = namedtuple("rx_timing_entry", ["sequenceId",
                                      "syncOriginTimestamp",
                                      "totalCorrectionField", "scaledCumulativeRateOffset",
-                                     "syncEventIngressTimestamp", "reserved"])
+                                     "syncEventIngressTimestamp"])
 rx_comp = namedtuple("rx_comp", ["sourcePortIdentity", "computedFlags", "reserved"])
 rx_comp_entry = namedtuple("rx_comp_entry", ["sequenceId", "offsetFromMaster",
                                              "meanPathDelay", "scaledNeighborRateRatio"])
