@@ -16,6 +16,7 @@
 #include <assert.h>
 #include <math.h>
 #include <stdint.h>
+#include <regex.h>
 
 #include "sfptpd_ptp_module.h"
 #include "sfptpd_logging.h"
@@ -1071,6 +1072,15 @@ static int parse_mon_monitor_address(struct sfptpd_config_section *section, cons
 		.ai_socktype = SOCK_DGRAM,
 	};
 	struct addrinfo *result;
+	regex_t rquot;
+	regex_t runquot;
+	regmatch_t matches[4];
+	char *spec = NULL;
+	regoff_t node;
+	regoff_t serv;
+
+	assert(regcomp(&rquot, "^\\[(.*)](:([^:]*))?$", REG_EXTENDED) == 0);
+	assert(regcomp(&runquot, "^([^:]*)(:([^:]*))?$", REG_EXTENDED) == 0);
 
 	j = ptp->ptpd_port.num_monitor_dests;
 	for (i = 0; rc == 0 && i < num_params; i++, j++) {
@@ -1080,7 +1090,25 @@ static int parse_mon_monitor_address(struct sfptpd_config_section *section, cons
 			rc = E2BIG;
 			continue;
 		}
-		gai_rc = getaddrinfo(params[i], NULL, &hints, &result);
+
+		spec = strdup(params[i]);
+		rc = regexec(&rquot, spec, sizeof matches / sizeof *matches, matches, 0);
+		if (rc != 0)
+			rc = regexec(&runquot, params[i], sizeof matches / sizeof *matches, matches, 0);
+		node = matches[1].rm_so;
+		serv = matches[3].rm_so;
+		if (rc != 0 || node == -1) {
+			ERROR("invalid monitor address: %s\n", params[i]);
+			rc = EINVAL;
+			goto finish;
+		}
+		spec[matches[1].rm_eo] = '\0';
+		if (serv != -1)
+			spec[matches[3].rm_eo] = '\0';
+
+		gai_rc = getaddrinfo(spec + node,
+				     serv == -1 ? NULL : spec + serv,
+				     &hints, &result);
 		if (gai_rc != 0 || result == NULL) {
 			ERROR("monitor address lookup for %s failed, %s\n",
 			      params[i], gai_strerror(gai_rc));
@@ -1093,9 +1121,16 @@ static int parse_mon_monitor_address(struct sfptpd_config_section *section, cons
 		}
 		if (gai_rc == 0)
 			freeaddrinfo(result);
+		free(spec);
+		spec = NULL;
 	}
 	ptp->ptpd_port.num_monitor_dests = j;
 
+finish:
+	if (spec != NULL)
+		free(spec);
+	regfree(&rquot);
+	regfree(&runquot);
 	return rc;
 }
 
@@ -1496,12 +1531,11 @@ static const sfptpd_config_option_t ptp_config_options[] =
 		"messages.",
 		0, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
 		parse_remote_monitor},
-	{"mon_monitor_address", "<address>*",
+	{"mon_monitor_address", "ADDRESS[:PORT]*",
 		"Address of up to " STRINGIFY(MAX_SLAVE_EVENT_DESTS) " "
-		"monitoring stations to which to send signaling "
-		"messages with slave event monitoring data for the "
-		"mon_rx_sync_timing_data, mon_rx_sync_computed_data and "
-		"mon_tx_event_timestamps commands. Default is multicast.",
+		"monitoring stations to which to send unicast signaling "
+		"messages with event monitoring data. "
+		"Default is multicast to the standard PTP address.",
 		~1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
 		parse_mon_monitor_address},
 	{"mon_rx_sync_timing_data", "[NUMBER]",

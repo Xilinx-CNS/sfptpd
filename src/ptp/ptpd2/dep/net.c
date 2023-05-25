@@ -139,6 +139,19 @@ void copyPort(struct sockaddr_storage *dest,
 	}
 }
 
+Boolean isPortSet(struct sockaddr_storage *addr) {
+
+	switch (addr->ss_family) {
+	case AF_INET:
+		return (((struct sockaddr_in *) addr)->sin_port) != 0;
+	case AF_INET6:
+		return (((struct sockaddr_in6 *) addr)->sin6_port) != 0;
+	default:
+		return TRUE;
+	}
+}
+
+
 void setLoopback(struct sockaddr_storage *dest,
 		 socklen_t destLen) {
 
@@ -1764,7 +1777,7 @@ netSendEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 int
 netSendGeneralImpl(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 		   RunTimeOpts *rtOpts, const struct sockaddr_storage *altDst,
-		   socklen_t altDstLen, bool unbound)
+		   socklen_t altDstLen, bool unbound, bool withPort)
 {
 	int ret;
 	struct sockaddr_storage addr;
@@ -1778,7 +1791,8 @@ netSendGeneralImpl(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 			assert(altDst != NULL);
 			copyAddress(&addr, &addrLen, altDst, altDstLen);
 		}
-		copyPort(&addr, &transport->generalAddr);
+		if (!withPort || !isPortSet(&addr))
+			copyPort(&addr, &transport->generalAddr);
 
 		/* If we're sending to a unicast address, set the UNICAST flag */
 		*(char *)(buf + 6) |= PTPD_FLAG_UNICAST;
@@ -1818,7 +1832,7 @@ netSendGeneral(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 	       RunTimeOpts *rtOpts, const struct sockaddr_storage *altDst,
 	       socklen_t altDstLen)
 {
-	return netSendGeneralImpl(buf, length, ptpClock, rtOpts, altDst, altDstLen, false);
+	return netSendGeneralImpl(buf, length, ptpClock, rtOpts, altDst, altDstLen, false, false);
 }
 
 
@@ -1827,7 +1841,7 @@ netSendMonitoring(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 		  RunTimeOpts *rtOpts, const struct sockaddr_storage *altDst,
 		  socklen_t altDstLen)
 {
-	return netSendGeneralImpl(buf, length, ptpClock, rtOpts, altDst, altDstLen, true);
+	return netSendGeneralImpl(buf, length, ptpClock, rtOpts, altDst, altDstLen, true, true);
 }
 
 
