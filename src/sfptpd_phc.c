@@ -630,7 +630,7 @@ static int phc_compare_using_precise_offset(void *context,
 	memset(&ktimes, 0, sizeof(ktimes));
 	rc = ioctl(phc->phc_fd, PTP_SYS_OFFSET_PRECISE, &ktimes);
 	if (rc != 0)
-		return rc;
+		return errno;
 
 	/* Subtract ( phc - sys ) times. */
 	phc_pct_subtract(diff, &ktimes.device, &ktimes.sys_realtime);
@@ -673,7 +673,7 @@ static int phc_compare_using_extended_offset_n(struct sfptpd_phc *phc,
 	sysoff.n_samples = n_samples;
 	rc = ioctl(phc->phc_fd, PTP_SYS_OFFSET_EXTENDED, &sysoff);
 	if (rc != 0 || test_mode)
-		return rc;
+		return errno;
 
 	rc = EAGAIN;
 	smallest_window = INFINITY;
@@ -720,7 +720,7 @@ static int phc_compare_using_kernel_readings_n(struct sfptpd_phc *phc,
 	sysoff.n_samples = n_samples;
 	rc = ioctl(phc->phc_fd, PTP_SYS_OFFSET, &sysoff);
 	if (rc != 0)
-		return rc;
+		return errno;
 
 	rc = EAGAIN;
 	smallest_window = INFINITY;
@@ -879,8 +879,9 @@ int phc_enable_devptp(struct sfptpd_phc *phc, bool on)
 		rc = ioctl(phc->phc_fd, PTP_PIN_SETFUNC, &pin_conf);
 
 		if (rc != 0) {
+			rc = errno;
 			ERROR("phc%d: could not set pin function: %s\n",
-			      phc->phc_idx, strerror(errno));
+			      phc->phc_idx, strerror(rc));
 		} else {
 			TRACE_L2("phc%d: set pin %d to function %d (external timestamp)\n",
 				 phc->phc_idx, pin_conf.index, pin_conf.func);
@@ -893,8 +894,9 @@ int phc_enable_devptp(struct sfptpd_phc *phc, bool on)
 	rc = ioctl(phc->phc_fd, PTP_EXTTS_REQUEST, &req);
 
 	if (rc != 0) {
+		rc = errno;
 		ERROR("phc%d: could not %s PPS via PHC: %s\n",
-		      phc->phc_idx, indicative, strerror(errno));
+		      phc->phc_idx, indicative, strerror(rc));
 		return rc;
 	} else {
 		TRACE_L2("phc%d: %s external time stamp channel %d\n",
@@ -960,9 +962,9 @@ int phc_enable_devpps(struct sfptpd_phc *phc, bool on)
 	assert(phc->devpps_fd >= 0);
 
 	if (ioctl(phc->phc_fd, PTP_ENABLE_PPS, on ? 1 : 0) != 0) {
-		ERROR("phc%d: failed to %s external PPS events, %s\n",
-		      phc->phc_idx, indicative, strerror(errno));
 		rc = errno;
+		ERROR("phc%d: failed to %s external PPS events, %s\n",
+		      phc->phc_idx, indicative, strerror(rc));
 	}
 
 	if (!on)
