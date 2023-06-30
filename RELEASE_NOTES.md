@@ -101,13 +101,6 @@ Known Issues
 Advanced notice of possible future changes
 ------------------------------------------
 
-- Future change to default for `non_xilinx_nics`
-
-  Future feature releases may change the default setting of `non_xilinx_nics`
-  from `off` to `on`, enabling support for all NICs with suitable capabilities
-  by default. Where this change is not desired, it is recommended to change
-  configurations now to be explicit about the desired behaviour.
-
 - Explicit declaration of crny sync module
 
   If chronyd is in use it is recommended to specify an instance of the new

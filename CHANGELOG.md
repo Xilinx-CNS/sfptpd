@@ -84,6 +84,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Removed
 
+- The default value of `one_phc_per_nic` is now `off`. (SWPTP-1348)
+   - See note under [v3.5.0.1004](#3501004---2022-05-13-feature-release)
+     and the [README](README.md#using-non-solarflare-ptp-capable-network-adapters).
 - The source can no longer be built for RHEL 6 without backported kernel
   headers (SWPTP-1371)
 
