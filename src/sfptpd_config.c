@@ -801,7 +801,7 @@ int sfptpd_config_parse_file(struct sfptpd_config *config)
 				TRACE_L3("config: entering section \'%s\'\n",
 					 section_name);
 				sfptpd_log_lexed_config("\n[%s]\n", section_name);
-			} else {
+			} else if (section != NULL) {
 				int i;
 
 				/* Parse the option. The function returns ENOENT
@@ -822,6 +822,9 @@ int sfptpd_config_parse_file(struct sfptpd_config *config)
 								tokens[i],
 								(i < num_tokens - 1) ? ' ' : '\n');
 				}
+			} else {
+				ERROR("config: stanza specified outside a section\n");
+				return EINVAL;
 			}
 		}
 	}
