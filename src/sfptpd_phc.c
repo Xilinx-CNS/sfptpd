@@ -672,8 +672,10 @@ static int phc_compare_using_extended_offset_n(struct sfptpd_phc *phc,
 	memset(&sysoff, 0, sizeof(sysoff));
 	sysoff.n_samples = n_samples;
 	rc = ioctl(phc->phc_fd, PTP_SYS_OFFSET_EXTENDED, &sysoff);
-	if (rc != 0 || test_mode)
+	if (rc != 0)
 		return errno;
+	if (test_mode)
+		return 0;
 
 	rc = EAGAIN;
 	smallest_window = INFINITY;
