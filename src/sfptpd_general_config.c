@@ -618,8 +618,10 @@ static int parse_user(struct sfptpd_config_section *section, const char *option,
 	struct group grp, *gresult = NULL;
 	char *buf;
 	size_t buf_sz;
+	int n_groups;
 	int tokens;
 	long nid;
+	int ret;
 	int rc;
 
 	assert(general != NULL);
@@ -705,6 +707,27 @@ static int parse_user(struct sfptpd_config_section *section, const char *option,
 		     grp.gr_name,
 		     general->gid);
 	}
+
+	/* Fill out list of groups to join */
+	n_groups = 0;
+	ret = getgrouplist(pwd.pw_name, general->gid, NULL, &n_groups);
+	if (ret == -1) {
+		general->num_groups = n_groups;
+		general->groups = calloc(n_groups, sizeof(gid_t));
+		if (general->groups == NULL) {
+			CRITICAL("allocating groups list, %s\n", strerror(errno));
+			rc = errno;
+			goto finish;
+		}
+
+		ret = getgrouplist(pwd.pw_name, general->gid, general->groups, &n_groups);
+		if (general->num_groups != n_groups) {
+			CRITICAL("groups list size changed during startup\n");
+			rc = EACCES;
+			goto finish;
+		}
+	}
+	TRACE_L5("found %d groups to join\n", general->num_groups);
 
 finish:
 	free(buf);
@@ -1403,8 +1426,13 @@ static int validate_config(struct sfptpd_config_section *parent)
 
 static void general_config_destroy(struct sfptpd_config_section *section)
 {
+	sfptpd_config_general_t *general = (sfptpd_config_general_t *) section;
+
 	assert(section != NULL);
 	assert(section->category == SFPTPD_CONFIG_CATEGORY_GENERAL);
+
+	if (general->groups != NULL)
+		free(general->groups);
 	free(section);
 }
 

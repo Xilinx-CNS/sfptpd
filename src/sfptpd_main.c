@@ -16,6 +16,7 @@
 #include <assert.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <grp.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/stat.h>
@@ -180,6 +181,15 @@ static int drop_user(struct sfptpd_config *config)
 		if (rc == -1)
 			CRITICAL("failed to keep capabilities via prctl: %s\n",
 				 strerror(errno));
+	}
+
+	if (gconf->uid != 0) {
+		TRACE_L4("joining %d groups\n", gconf->num_groups);
+		rc = setgroups(gconf->num_groups, gconf->groups);
+		if (rc != 0) {
+			CRITICAL("could not set group list: %s\n", strerror(errno));
+			return errno;
+		}
 	}
 
 	if (gconf->gid != 0) {
@@ -796,6 +806,7 @@ fail:
 		rc = 0;
 	sfptpd_log_config_abandon();
 	sfptpd_config_destroy(config);
+
 	return rc;
 }
 

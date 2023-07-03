@@ -188,6 +188,8 @@ typedef struct sfptpd_config_general {
 	bool rtc_adjust;
 	uid_t uid;
 	gid_t gid;
+	gid_t *groups;
+	int num_groups;
 	char state_path[PATH_MAX];
 	char control_path[PATH_MAX];
 	sfptpd_config_timestamping_t timestamping;
