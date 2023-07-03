@@ -436,7 +436,7 @@ static int phc_discover_devpps(struct sfptpd_phc *phc,
 		}
 
 		if (state == STATE_FOUND_EXTPPS) {
-			TRACE_L3("phc%d: found %s (\"%s\") for external PPS input\n",
+			TRACE_L5("phc%d: found %s (\"%s\") for external PPS input\n",
 				 phc->phc_idx, fts_entry->fts_name, candidate_name);
 			break;
 		}
@@ -462,21 +462,22 @@ fail1:
 }
 
 
-static int phc_configure_devpps(struct sfptpd_phc *phc)
+static int phc_open_devpps(struct sfptpd_phc *phc)
 {
-	int rc;
+	if (phc->devpps_fd >= 0) {
+		TRACE_L4("phc%d: devpps already open\n", phc->phc_idx);
+		return 0;
+	}
 
 	/* Open the PPS device */
 	phc->devpps_fd = open(phc->devpps_path, O_RDWR);
 	if (phc->devpps_fd < 0) {
 		ERROR("phc%d: failed to open external PPS device %s, %s\n",
 		      phc->phc_idx, phc->devpps_path, strerror(errno));
-		rc = errno;
-	} else {
-		rc = 0;
+		return errno;
 	}
 
-	return rc;
+	return 0;
 }
 
 
@@ -855,7 +856,7 @@ diff_method_selected:
 }
 
 
-int phc_enable_devptp(struct sfptpd_phc *phc, bool on)
+static int phc_enable_devptp(struct sfptpd_phc *phc, bool on)
 {
 	struct ptp_extts_request req = { 0 };
 	const char *indicative = on ? "enable" : "disable";
@@ -909,7 +910,7 @@ int phc_enable_devptp(struct sfptpd_phc *phc, bool on)
 }
 
 
-int phc_get_devptp_event(struct sfptpd_phc *phc, struct timespec *timestamp)
+static int phc_get_devptp_event(struct sfptpd_phc *phc, struct timespec *timestamp)
 {
 	struct ptp_extts_event event;
 	const int pin = 0;
@@ -936,7 +937,7 @@ int phc_get_devptp_event(struct sfptpd_phc *phc, struct timespec *timestamp)
 }
 
 
-int phc_enable_devpps(struct sfptpd_phc *phc, bool on)
+static int phc_enable_devpps(struct sfptpd_phc *phc, bool on)
 {
 	const char *indicative = on ? "enable" : "disable";
 	const char *past_participle = on ? "enabled" : "disabled";
@@ -952,13 +953,10 @@ int phc_enable_devpps(struct sfptpd_phc *phc, bool on)
 	}
 
 	if (on) {
-		/* Find the PPS device and open it */
-		rc = phc_configure_devpps(phc);
-		if (rc != 0) {
-			ERROR("phc%d: failed to open external PPS device: %s\n",
-			      phc->phc_idx, strerror(errno));
-			return ENOTSUP;
-		}
+		/* Find the PPS device and open it, but don't duplicate error */
+		rc = phc_open_devpps(phc);
+		if (rc != 0)
+			return rc;
 	}
 
 	assert(phc->devpps_fd >= 0);
@@ -968,9 +966,6 @@ int phc_enable_devpps(struct sfptpd_phc *phc, bool on)
 		ERROR("phc%d: failed to %s external PPS events, %s\n",
 		      phc->phc_idx, indicative, strerror(rc));
 	}
-
-	if (!on)
-		close(phc->devpps_fd);
 
 	if (rc != 0)
 		ERROR("phc%d: could not %s PPS via PPS: %s\n",
@@ -984,7 +979,7 @@ int phc_enable_devpps(struct sfptpd_phc *phc, bool on)
 }
 
 
-int phc_get_devpps_event(struct sfptpd_phc *phc, struct timespec *timestamp, uint32_t *seq)
+static int phc_get_devpps_event(struct sfptpd_phc *phc, struct timespec *timestamp, uint32_t *seq)
 {
 	struct pps_fdata pps_data;
 	int rc;
@@ -1021,6 +1016,47 @@ int phc_get_devpps_event(struct sfptpd_phc *phc, struct timespec *timestamp, uin
 		phc->devpps_prev = pps_data.info;
 	}
 	return 0;
+}
+
+
+static void phc_discover_pps(struct sfptpd_phc *phc)
+{
+	int i;
+
+	/* Check external time stamp capabilities */
+	TRACE_L2("phc%d: %d external time stamp channels\n",
+		 phc->phc_idx, phc->caps.n_ext_ts);
+
+	/* Discover external PPS device */
+	if (phc_discover_devpps(phc, phc->devpps_path, sizeof phc->devpps_path) == 0) {
+		TRACE_L2("phc%d: discovered related external PPS device %s\n",
+			 phc->phc_idx, phc->devpps_path);
+	} else {
+		phc->devpps_path[0] = '\0';
+	}
+
+	for (i = 0; i < SFPTPD_PPS_METHOD_MAX; i++) {
+		sfptpd_phc_pps_method_t method = phc_pps_methods[i];
+		switch (method) {
+		case SFPTPD_PPS_METHOD_DEV_PTP:
+			if (phc->caps.n_ext_ts >= 1) {
+				phc->pps_method = method;
+				return;
+			}
+			break;
+		case SFPTPD_PPS_METHOD_DEV_PPS:
+			if (phc->devpps_path[0]) {
+				if (phc_open_devpps(phc) == 0) {
+					phc->pps_method = method;
+					return;
+				}
+			}
+			break;
+		case SFPTPD_PPS_METHOD_MAX:
+			phc->pps_method = method;
+			return;
+		}
+	}
 }
 
 
@@ -1064,6 +1100,7 @@ int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc)
 		return ENOMEM;
 
 	new->diff_method_index = SFPTPD_DIFF_METHOD_MAX;
+	new->pps_method = SFPTPD_PPS_METHOD_MAX;
 
 	/* Open the PHC device */
 	snprintf(path, sizeof(path), SFPTPD_PHC_DEVICE_FORMAT, phc_index);
@@ -1098,6 +1135,8 @@ int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc)
 	if (sizeof(long) == 4)
 		new->caps.max_adj = timex_max_adj_32bit;
 
+	phc_discover_pps(new);
+
 	*phc = new;
 	return 0;
 
@@ -1111,55 +1150,19 @@ fail1:
 
 int sfptpd_phc_start(struct sfptpd_phc *phc)
 {
-	int rc;
-	int i;
 
 	phc->diff_method_index = -1;
-	rc = phc_set_fallback_diff_method(phc);
-	if (rc != 0)
-		return rc;
-
-	/* Check external time stamp capabilities */
-	TRACE_L2("phc%d: %d external time stamp channels\n",
-		 phc->phc_idx, phc->caps.n_ext_ts);
-
-	/* Discover external PPS device */
-	if (phc_discover_devpps(phc, phc->devpps_path, sizeof phc->devpps_path) == 0) {
-		TRACE_L2("phc%d: discovered related external PPS device %s\n",
-			 phc->phc_idx, phc->devpps_path);
-	} else {
-		phc->devpps_path[0] = '\0';
-	}
-
-	for (i = 0; i < SFPTPD_PPS_METHOD_MAX; i++) {
-		sfptpd_phc_pps_method_t method = phc_pps_methods[i];
-		switch (method) {
-		case SFPTPD_PPS_METHOD_DEV_PTP:
-			if (phc->caps.n_ext_ts >= 1) {
-				phc->pps_method = method;
-				goto pps_method_selected;
-			}
-			break;
-		case SFPTPD_PPS_METHOD_DEV_PPS:
-			if (phc->devpps_path[0]) {
-				phc->pps_method = method;
-				goto pps_method_selected;
-			}
-			break;
-		case SFPTPD_PPS_METHOD_MAX:
-			phc->pps_method = method;
-			goto pps_method_selected;
-		}
-	}
-
-pps_method_selected:
-	return rc;
+	return phc_set_fallback_diff_method(phc);
 }
-
 
 void sfptpd_phc_close(struct sfptpd_phc *phc)
 {
 	assert(phc != NULL);
+
+	if (phc->devpps_fd >= 0) {
+		/* Close the external PPS device */
+		(void)close(phc->devpps_fd);
+	}
 
 	if (phc->pps_fd >= 0) {
 		/* Disable PPS and close the PPS device */
