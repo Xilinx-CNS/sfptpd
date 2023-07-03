@@ -58,6 +58,7 @@ const char *sfptpd_log_priority_text[] = {
 const char *sfptpd_state_file_format = "state-%s";
 const char *sfptpd_statistics_file_format = "stats-%s";
 const char *sfptpd_statistics_json_file_format = "stats-%s.json";
+const char *sfptpd_freq_correction_file_format = "freq-correction-%s";
 const char *sfptpd_topology_file = "topology";
 const char *sfptpd_interfaces_file = "interfaces";
 const char *sfptpd_nodes_file = "ptp-nodes";
@@ -357,7 +358,7 @@ int sfptpd_log_open(struct sfptpd_config *config)
 	/* Store state file path formats */
 	rc = snprintf(freq_correction_file_format,
 		      sizeof freq_correction_file_format,
-		      "%s/freq-correction-%%s", state_path);
+		      "%s/%s", state_path, sfptpd_freq_correction_file_format);
 	if (rc >= sizeof path) return ENOMEM;
 
 	rc = snprintf(state_file_format,
@@ -661,8 +662,7 @@ void sfptpd_log_write_state(struct sfptpd_clock *clock,
 
 int sfptpd_log_write_freq_correction(struct sfptpd_clock *clock, long double freq_adj_ppb)
 {
-	FILE *file;
-	char path[PATH_MAX];
+	struct sfptpd_log *log;
 	
 	assert(clock != NULL);
 	
@@ -670,19 +670,15 @@ int sfptpd_log_write_freq_correction(struct sfptpd_clock *clock, long double fre
 	 *      /var/lib/sfptpd/freq-correction-system or
 	 *      /var/lib/sfptpd/freq-correction-1122:3344:5566:7788 or
 	 */
-	snprintf(path, sizeof(path), freq_correction_file_format,
-		 sfptpd_clock_get_hw_id_string(clock));
-
-	file = fopen(path, "w");
-	if (file == NULL) {
-		ERROR("couldn't open %s for writing, %s\n",
-		      path, strerror(errno));
-		return errno;
+	log = create_log("freq-correction", sfptpd_freq_correction_file_format,
+			 sfptpd_clock_get_hw_id_string(clock));
+	if (log != NULL) {
+		fprintf(sfptpd_log_file_get_stream(log),
+			"%Lf\n", freq_adj_ppb);
+		sfptpd_log_file_close(log);
 	}
 
-	fprintf(file, "%Lf\n", freq_adj_ppb);
-	fclose(file);
-	return 0;
+	return log == NULL ? EIO : 0;
 }
 
 
