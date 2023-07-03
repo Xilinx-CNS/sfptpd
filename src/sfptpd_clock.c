@@ -682,11 +682,12 @@ static int renew_clock(struct sfptpd_clock *clock)
 {
 	struct sfptpd_interface *interface, *primary;
 	struct sfptpd_db_query_result interface_index_snapshot;
-	int i, nic_id, rc;
+	int i, nic_id;
 	int phc_idx;
 	bool supports_phc = false;
 	bool supports_efx;
 	bool change = false;
+	int rc = 0;
 
 	assert(clock != NULL);
 
@@ -768,7 +769,11 @@ static int renew_clock(struct sfptpd_clock *clock)
 							      clock_compare_using_efx,
 							      clock);
 			}
-			sfptpd_phc_start(clock->u.nic.phc);
+
+			/* Capture the return code to propagate critical startup
+			   failures but continue function to complete
+			   housekeeping: caller can decide what to do. */
+			rc = sfptpd_phc_start(clock->u.nic.phc);
 		}
 
 		/* Create the long clock name including the name of the clock and
@@ -852,7 +857,7 @@ static int renew_clock(struct sfptpd_clock *clock)
 
 	interface_index_snapshot.free(&interface_index_snapshot);
 
-	return 0;
+	return rc;
 }
 
 

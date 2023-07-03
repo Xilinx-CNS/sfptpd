@@ -29,6 +29,7 @@
 #include "sfptpd_logging.h"
 #include "sfptpd_time.h"
 #include "sfptpd_phc.h"
+#include "sfptpd_thread.h"
 
 
 /****************************************************************************
@@ -849,6 +850,12 @@ no_diff_method_selected:
 	CRITICAL("phc%d: No configured diff methods available\n", phc->phc_idx);
 	assert(method == SFPTPD_DIFF_METHOD_MAX);
 
+	/* This should never happen in any serious configuration (there's
+	   no excuse not to include the 'read-time' method for fallback)
+	   and we can't be sure this will be found in startup call sequence
+	   so we'd better force an exit. */
+	sfptpd_thread_exit(EOPNOTSUPP);
+
 diff_method_selected:
 	phc->diff_method = method;
 
@@ -1223,7 +1230,12 @@ int sfptpd_phc_compare_to_sys_clk(struct sfptpd_phc *phc, struct timespec *diff)
 	assert(phc != NULL);
 	assert(diff != NULL);
 
-	assert(phc->diff_method < SFPTPD_DIFF_METHOD_MAX);
+	if (phc->diff_method == SFPTPD_DIFF_METHOD_MAX)
+		return EOPNOTSUPP;
+
+	assert(phc->diff_method <= SFPTPD_DIFF_METHOD_MAX);
+        if (phc->diff_method > SFPTPD_DIFF_METHOD_MAX)
+		return EINVAL;
 
 	method_def = phc->diff_method_defs + phc->diff_method;
 
