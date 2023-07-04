@@ -1,0 +1,80 @@
+.Dd July 04, 2023
+.Os Linux
+.Dt SFPTPMON 8 SMM
+.Sh NAME
+sfptpmon \- Solarflare Enhanced PTP Monitor
+.Sh SYNOPSIS
+.Nm sfptpmon
+.Op Fl h
+.Nm
+.Op Fl i Ar intf
+.Op Fl l Ar address[:port]
+.Op Fl m Ar intf[:[=]address[:port]]
+.Sh DESCRIPTION
+Capture PTP event monitoring messages and convert into sfptpd remote monitoring
+JSON format records on stdout, one per line, for consumption with the
+monitoring_console.py example script or users' own tools.
+.Pp
+This tool replaces the remote_monitor functionality within sfptpd which is now
+deprecated.
+.Ss Options
+.Bl -tag -width -m
+.It Fl i
+Specify default interface.
+.It Fl l
+Specify unicast listen address, port or both.
+.It Fl m
+Specify multicast interface, address, port or combination. If '=' precedes the
+multicast address then also bind to that address.
+.El
+.Sh CONFORMING TO
+This tool implements a receiver for the optional 'Slave Event Monitoring'
+feature of IEEE Std 1588-2019, section 16.11.
+.Pp
+The sfptpd extension TLV to monitor status information is also supported.
+.Sh BUGS
+The script does not perform access control; system firewalls can be deployed
+to limit access as required.
+.Pp
+Please note that this type of event monitoring is intended for diagnosing issues
+within a PTP network. Other methods are better suited to and more comprehensive
+for stats collection and use over a WAN. Users should consider consuming
+the real time JSON stats emitted by individual sfptpd instances for continual
+monitoring of time sync performance over an estate.
+.Pp
+Please raise bug reports at:
+.Aq https://github.com/Xilinx-CNS/sfptpd/issues
+.Pp
+Support for users of Xilinx NICs is available from:
+.Aq support-nic@xilinx.com
+.Sh EXAMPLES
+.Ss Sender
+The following example sfptpd configuration will send the more useful types of
+event monitoring message unicast to a monitoring node on port 10320.
+.Bd -literal
+[general]
+sync_module ptp ptp1
+
+[ptp1]
+mon_monitor_address monitor.example.com:10320
+mon_rx_sync_computed_data
+mon_slave_status
+.Ed
+.Ss Monitoring node
+.Bd -literal
+sfptpmon -l :10320
+.Ed
+.Ss Broad multicast monitor
+.Bd -literal
+sfptpmon -i eth1 -m :[ff02::181] -m :[ff0e::181] -m :
+.Ed
+
+.Sh AUTHORS
+Advanced Micro Devices, Inc.
+
+.Sh SEE ALSO
+.Xr sfptpd 8 .
+
+.Sh COPYRIGHT
+Copyright (c) 2023 Advanced Micro Devices, Inc.
+

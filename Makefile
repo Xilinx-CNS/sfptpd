@@ -117,7 +117,7 @@ install: sfptpd sfptpdctl
 	install -m 755 -p -t $(INST_PKGDOCDIR)/examples $(wildcard examples/*.py)
 	install -m 644 -p -t $(INST_PKGDOCDIR)/examples $(wildcard examples/*.html)
 	install -m 644 -p -t $(INST_PKGDOCDIR)/examples src/sfptpdctl/sfptpdctl.c
-	install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/sfptpd*.8)
+	install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/sfptp*.8)
 
 .PHONY: uninstall
 uninstall:
