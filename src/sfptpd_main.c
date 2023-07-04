@@ -187,8 +187,9 @@ static int drop_user(struct sfptpd_config *config)
 		TRACE_L4("joining %d groups\n", gconf->num_groups);
 		rc = setgroups(gconf->num_groups, gconf->groups);
 		if (rc != 0) {
-			CRITICAL("could not set group list: %s\n", strerror(errno));
-			return errno;
+			rc = errno;
+			CRITICAL("could not set group list: %s\n", strerror(rc));
+			return rc;
 		}
 	}
 
@@ -196,9 +197,10 @@ static int drop_user(struct sfptpd_config *config)
 		INFO("dropping to group %d\n", gconf->gid);
 		rc = setresgid(gconf->gid, gconf->gid, gconf->gid);
 		if (rc == -1) {
+			rc = errno;
 			CRITICAL("could not drop group to gid %d: %s\n",
-				 gconf->gid, strerror(errno));
-			return errno;
+				 gconf->gid, strerror(rc));
+			return rc;
 		}
 	}
 
@@ -209,9 +211,10 @@ static int drop_user(struct sfptpd_config *config)
 		       "for the user or group running sfptpd\n");
 		rc = setresuid(gconf->uid, gconf->uid, gconf->uid);
 		if (rc == -1) {
+			rc = errno;
 			CRITICAL("could not drop user to uid %d: %s\n",
-				 gconf->uid, strerror(errno));
-			return errno;
+				 gconf->uid, strerror(rc));
+			return rc;
 		}
 	}
 

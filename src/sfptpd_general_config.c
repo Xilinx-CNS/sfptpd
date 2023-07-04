@@ -708,15 +708,18 @@ static int parse_user(struct sfptpd_config_section *section, const char *option,
 		     general->gid);
 	}
 
-	/* Fill out list of groups to join */
+	/* Fill out list of groups to join.
+	 * Size the list first. Returns value of n_groups or -1.
+	 * Expect -1 return code as there should be insufficient
+	 * space for the >= 1 groups expected. */
 	n_groups = 0;
 	ret = getgrouplist(pwd.pw_name, general->gid, NULL, &n_groups);
 	if (ret == -1) {
 		general->num_groups = n_groups;
 		general->groups = calloc(n_groups, sizeof(gid_t));
 		if (general->groups == NULL) {
-			CRITICAL("allocating groups list, %s\n", strerror(errno));
 			rc = errno;
+			CRITICAL("allocating groups list, %s\n", strerror(rc));
 			goto finish;
 		}
 
@@ -727,6 +730,8 @@ static int parse_user(struct sfptpd_config_section *section, const char *option,
 			goto finish;
 		}
 	}
+	/* No other case is expected from the initial call but if there is,
+	 * the empty list is the right fallback. */
 	TRACE_L5("found %d groups to join\n", general->num_groups);
 
 finish:
