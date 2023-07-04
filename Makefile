@@ -103,6 +103,7 @@ install: sfptpd sfptpdctl
 	install -d $(INST_MANDIR)/man8
 	install -m 755 -p -D build/sfptpd $(INST_SBINDIR)/sfptpd
 	install -m 755 -p -D build/sfptpdctl $(INST_SBINDIR)/sfptpdctl
+	install -m 755 -p -D scripts/sfptpmon $(INST_SBINDIR)/sfptpmon
 	install -m 644 -p -D scripts/sfptpd.env $(INST_DEFAULTSDIR)/sfptpd
 	[ -z "$(filter systemd,$(INST_INITS))" ] || install -m 644 -p -D scripts/systemd/sfptpd.service $(INST_UNITDIR)/sfptpd.service
 	[ -z "$(filter sysv,   $(INST_INITS))" ] || install -m 755 -p -D scripts/init.d/sfptpd $(INST_CONFDIR)/init.d/sfptpd
