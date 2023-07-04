@@ -1995,6 +1995,15 @@ int sfptpd_clock_compare(struct sfptpd_clock *clock1, struct sfptpd_clock *clock
 
  finish:
 	clock_unlock();
+
+	if (rc == EOPNOTSUPP) {
+		/* This should never happen in any serious configuration (there's
+		   no excuse not to include the 'read-time' method for fallback)
+		   and we can't be sure this will be found in startup call sequence
+		   so we'd better force an exit. */
+		sfptpd_thread_exit(rc);
+	}
+
 	return rc;
 }
 
