@@ -115,6 +115,7 @@ Features:
      - enable with 'user' configuration or --user command line options
      - root user required for chronyd clock control script to restart chronyd
      - example udev rules support hotplug with non-root user
+ ~ Support multiple PPS sources (SWPTP-776)
  ~ Support bridges including over bonds in similar way to LACP bonds (SWPTP-826)
  ~ Support MACVLANs when timestamping enabled in host netns (SWPTP-992)
  ~ Allow a bond, bridge or vlan to be specified for freerun clock (SWPTP-1169)
