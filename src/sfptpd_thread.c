@@ -1089,6 +1089,16 @@ int sfptpd_msg_reply(sfptpd_msg_hdr_t *msg)
  * Threading - Internal Functions
  ****************************************************************************/
 
+struct sfptpd_thread *thread_self(void)
+{
+	struct sfptpd_thread *self
+		= (struct sfptpd_thread *)pthread_getspecific(sfptpd_thread_lib.key);
+
+	assert(self == NULL || self->magic == SFPTPD_THREAD_MAGIC);
+	return self;
+}
+
+
 static const char *thread_get_name(void)
 {
 	struct sfptpd_thread *self
@@ -1773,13 +1783,24 @@ void sfptpd_thread_exit(int exit_errno)
 }
 
 
+int sfptpd_thread_error(int exit_errno)
+{
+	struct sfptpd_thread *self = thread_self();
+
+	if (self != NULL) {
+		sfptpd_thread_exit(exit_errno);
+		return ENOTRECOVERABLE;
+	} else {
+		return exit_errno;
+	}
+}
+
+
 struct sfptpd_thread *sfptpd_thread_self(void)
 {
-	struct sfptpd_thread *self
-		= (struct sfptpd_thread *)pthread_getspecific(sfptpd_thread_lib.key);
+	struct sfptpd_thread *self = thread_self();
 
 	assert(self != NULL);
-	assert(self->magic == SFPTPD_THREAD_MAGIC);
 	return self;
 }
 

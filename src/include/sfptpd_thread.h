@@ -141,6 +141,14 @@ int sfptpd_thread_destroy(struct sfptpd_thread *thread);
  */
 void sfptpd_thread_exit(int exit_errno);
 
+/** This function causes the current thread to exit with the specified return
+ * code using sfptpd_thread_exit() if running in a thread. Otherwise return
+ * an error code for the caller to use as its return code.
+ * @param exit_errno Thread exit code: 0 or an errno
+ * @return An error code for the caller to return
+ */
+int sfptpd_thread_error(int exit_errno);
+
 /** Get a handle to the current thread
  * @return A pointer to the current thread
  */

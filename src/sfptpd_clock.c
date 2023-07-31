@@ -2001,7 +2001,7 @@ int sfptpd_clock_compare(struct sfptpd_clock *clock1, struct sfptpd_clock *clock
 		   no excuse not to include the 'read-time' method for fallback)
 		   and we can't be sure this will be found in startup call sequence
 		   so we'd better force an exit. */
-		sfptpd_thread_exit(rc);
+		rc = sfptpd_thread_error(rc);
 	}
 
 	return rc;
