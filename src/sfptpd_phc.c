@@ -942,7 +942,7 @@ static int phc_enable_devpps(struct sfptpd_phc *phc, bool on)
 {
 	const char *indicative = on ? "enable" : "disable";
 	const char *past_participle = on ? "enabled" : "disabled";
-	int rc;
+	int rc = 0;
 
 	assert(phc != NULL);
 
@@ -970,7 +970,7 @@ static int phc_enable_devpps(struct sfptpd_phc *phc, bool on)
 
 	if (rc != 0)
 		ERROR("phc%d: could not %s PPS via PPS: %s\n",
-		      phc->phc_idx, indicative, strerror(errno));
+		      phc->phc_idx, indicative, strerror(rc));
 	else
 		TRACE_L2("phc%d: %s external PPS device: %s\n",
 			 phc->phc_idx, past_participle,
