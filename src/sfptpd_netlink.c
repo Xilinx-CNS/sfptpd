@@ -1352,7 +1352,7 @@ int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 			       int consumers,
 			       bool coalescing)
 {
-	bool any_data;
+	bool any_data = false;
 	int serviced;
 	int rc;
 	struct link_db *next;
