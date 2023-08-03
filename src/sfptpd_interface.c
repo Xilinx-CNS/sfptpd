@@ -792,7 +792,7 @@ static void interface_driver_stats_init(struct sfptpd_interface *interface)
 	TRACE_L4("interface %s: initialising driver stats-getting via ethtool\n",
 		 interface->name);
 
-	gstrings = malloc(ETH_GSTRING_LEN * interface->n_stats + sizeof *gstrings);
+	gstrings = calloc(1, ETH_GSTRING_LEN * interface->n_stats + sizeof *gstrings);
 	if (gstrings == NULL) {
 		ERROR("interface %s: could not allocate ethtool stat strings buffer, %s\n",
 		      interface->name, strerror(errno));

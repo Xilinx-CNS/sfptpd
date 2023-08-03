@@ -1690,7 +1690,7 @@ const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state
 	int fd;
 	int get_fd_state;
 	#define max_events 5
-	struct epoll_event ev;
+	struct epoll_event ev = {};
 	struct epoll_event events[max_events];
 	int nfds = 0;
 	int epollfd;
