@@ -3,7 +3,7 @@
 The Solarflare Enhanced PTP Daemon works on Linux systems for 3.0 kernels and
 later.
 
-(c) Copyright 2013-2022 Xilinx, Inc.
+(c) Copyright 2013-2023 Xilinx, Inc.
 
 ## Building
 
