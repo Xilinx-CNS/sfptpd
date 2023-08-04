@@ -1412,6 +1412,11 @@ static int mode7_get_peer_info(struct sfptpd_ntpclient_state *ntpclient,
 				 1, sizeof(list), &list,
 				 &num_items, sizeof(*stats), (void **)&stats);
 		if (rc != 0) {
+			if (rc == ENODATA) {
+				TRACE_L5("ntpclient: mode7: no data available from peer\n");
+				rc = 0;
+				continue;
+			}
 			if (rc != ECONNREFUSED) {
 				TRACE_L3("ntpclient: mode7: failed to get peer stats from NTP daemon, %s\n",
 					 strerror(rc));
