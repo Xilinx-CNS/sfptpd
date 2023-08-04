@@ -2107,6 +2107,7 @@ static void ntp_on_run(crny_module_t *ntp)
 	}
 
 	/* Kick off the state machine */
+	ntp->next_state = ntp->state;
 	if (crny_state_machine(ntp, NTP_QUERY_EVENT_RUN))
 		update_state(ntp);
 }
@@ -2172,6 +2173,8 @@ static int ntp_on_startup(void *context)
 
 	if (crny_resolve(ntp) != 0)
 		ntp->state.state = SYNC_MODULE_STATE_DISABLED;
+
+	ntp->next_state = ntp->state;
 
 	return 0;
 
