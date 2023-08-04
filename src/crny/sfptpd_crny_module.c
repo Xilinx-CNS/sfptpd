@@ -585,6 +585,8 @@ void crny_stats_update(crny_module_t *ntp)
 	/* The offset is only available if we are in slave mode */
 	if (ntp->state.state == SYNC_MODULE_STATE_SLAVE) {
 		assert(ntp->state.selected_peer_idx != -1);
+		assert(ntp->state.selected_peer_idx < SFPTPD_NTP_PEERS_MAX);
+		assert(ntp->state.selected_peer_idx < ntp->state.peer_info.num_peers);
 		peer = &ntp->state.peer_info.peers[ntp->state.selected_peer_idx];
 		/* Offset, frequency correction, one-way-delay */
 		sfptpd_stats_collection_update_range(stats, NTP_STATS_ID_OFFSET, peer->offset,
@@ -605,6 +607,7 @@ void crny_parse_state(struct ntp_state *state, int rc, bool offset_unsafe)
 	unsigned int i;
 	bool candidates;
 	struct sfptpd_ntpclient_peer *peer;
+
 	assert(state != NULL);
 
 	/* We derive the current state using the following rules in this order:
@@ -637,6 +640,7 @@ void crny_parse_state(struct ntp_state *state, int rc, bool offset_unsafe)
 
 	candidates = false;
 	state->selected_peer_idx = -1;
+	assert(state->peer_info.num_peers <= SFPTPD_NTP_PEERS_MAX);
 	for (i = 0; i < state->peer_info.num_peers; i++) {
 		peer = &state->peer_info.peers[i];
 
@@ -656,10 +660,13 @@ void crny_parse_state(struct ntp_state *state, int rc, bool offset_unsafe)
 			candidates = true;
 	}
 
-	if (state->selected_peer_idx != -1)
+	if (state->selected_peer_idx != -1) {
+		assert(state->selected_peer_idx < SFPTPD_NTP_PEERS_MAX);
+		assert(state->selected_peer_idx < state->peer_info.num_peers);
 		set_offset_id(state, &state->peer_info.peers[state->selected_peer_idx]);
-	else
+	} else {
 		reset_offset_id(state);
+	}
 
 	/* We will only report being in the slave state if there is a selected
 	 * peer and the offset is safe i.e. there has been an update since the
@@ -2136,6 +2143,7 @@ static void ntp_on_run(crny_module_t *ntp)
 	}
 
 	/* Kick off the state machine */
+	ntp->next_state = ntp->state;
 	if (crny_state_machine(ntp, NTP_QUERY_EVENT_RUN))
 		update_state(ntp);
 }
@@ -2201,6 +2209,8 @@ static int ntp_on_startup(void *context)
 
 	if (crny_resolve(ntp) != 0)
 		ntp->state.state = SYNC_MODULE_STATE_DISABLED;
+
+	ntp->next_state = ntp->state;
 
 	return 0;
 

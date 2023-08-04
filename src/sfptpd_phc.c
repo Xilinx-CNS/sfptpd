@@ -68,7 +68,6 @@ int clock_adjtime(clockid_t clock, struct timex *timex_block)
 /* Number of samples to take when comparing with PTP_SYS_OFFSET (1-25) */
 #define SYS_OFFSET_NUM_SAMPLES             (4)
 
-
 struct phc_diff_method {
 	sfptpd_phc_diff_fn diff_fn;
 	void *context; /* If NULL, phc context is used */
