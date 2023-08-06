@@ -147,6 +147,7 @@ Features:
      and synchronises with systemd on startup as 'notify'-type service
  ~ Support up to 6 destinations for PTP event monitoring messages (SWPTP-1340)
  ~ Add 'sfptpmon' script to receive PTP event monitoring messages (SWPTP-1342)
+     This script requires python3 so is not available for RHEL 6
  ~ Accept any port for unicast PTP event monitoring destinations (SWPTP-1346)
  ~ The 'ntpsec' implementation of ntpd available in the EPEL repositories for
      RHEL 9 is confirmed to be fully interoperable with sfptpd, allowing
