@@ -38,8 +38,8 @@ Some example installation recipes follow.
 ### For most recent distributions
 ``` sudo make prefix=/usr install ```
 
-### For distributions with sysv init, e.g. RHEL6
-``` sudo make prefix=/usr INST_INITS=sysv install ```
+### Example for an old distribution like RHEL6
+``` sudo make prefix=/usr INST_INITS=sysv INST_OMIT=sfptpmon install ```
 
 ### Default operation
 Installs to /usr/local
@@ -54,6 +54,6 @@ Installs to /usr/local
 mkdir -p ~/rpmbuild/SOURCES
 ver="$(scripts/sfptpd_versioning derive)"
 git archive --prefix="sfptpd-$ver/" --format=tgz -o ~/rpmbuild/SOURCES/sfptpd-$ver.tgz HEAD
-curl https://raw.githubusercontent.com/Xilinx-CNS/sfptpd-rpm/generic/sfptpd.spec | sed "s/^\(Version: \).*/\1 $ver/g" > sfptpd.spec
+curl https://raw.githubusercontent.com/Xilinx-CNS/sfptpd-rpm/v3_7/generic/sfptpd.spec | sed "s/^\(Version: \).*/\1 $ver/g" > sfptpd.spec
 rpmbuild -bs sfptpd.spec
 ```
