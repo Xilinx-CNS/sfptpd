@@ -1,7 +1,7 @@
 Solarflare Enhanced PTP Daemon (sfptpd)
 Advanced Micro Devices, Inc.
 =======================================
-Version: v3.7.0.1004
+Version: v3.7.0.1005
 
 
 Overview
@@ -106,6 +106,12 @@ Advanced notice of possible future changes
    crny sync module explicitly as a future release may not create the implicit
    instance or may do so only if chronyd is detected at startup time.
 
+ * Supporting new IEEE1588 specifications
+
+   Future releases may default to supporting new PTP specs out of the box. If
+   it is required to avoid new features for interoperability reasons it is
+   recommended to specify 'ptp_version 2.0' in the 'ptp' configuration section.
+
  * Deprecation of remote monitor
 
    The built-in receiver for PTP event monitoring messages (controlled by the
@@ -119,7 +125,7 @@ Advanced notice of possible future changes
 Changelog
 ---------
 
-### v3.7.0.1004 Feature Release
+### v3.7.0.1005 Feature Release
 
 Features:
  ~ Allow running as non-root user with minimum required capabilities (SWPTP-442)
@@ -130,7 +136,6 @@ Features:
  ~ Support bridges including over bonds in similar way to LACP bonds (SWPTP-826)
  ~ Support MACVLANs when timestamping enabled in host netns (SWPTP-992)
  ~ Allow a bond, bridge or vlan to be specified for freerun clock (SWPTP-1169)
- ~ Default to IEEE Std 1588-2019, PTP revision 2.1 (SWPTP-1251)
  ~ Replace bond, team and interface probing with netlink scanning (SWPTP-1269)
  ~ Mix 'efx' clock diff method with list of preferred phc methods (SWPTP-1285)
  ~ Add sync-instances file showing factors influencing selection (SWPTP-1286)
