@@ -38,8 +38,8 @@ Some example installation recipes follow.
 ### For most recent distributions
 ``` sudo make prefix=/usr install ```
 
-### For distributions with sysv init, e.g. RHEL6
-``` sudo make prefix=/usr INST_INITS=sysv install ```
+### Example for an old distribution like RHEL6
+``` sudo make prefix=/usr INST_INITS=sysv INST_OMIT=sfptpmon install ```
 
 ### Default operation
 Installs to /usr/local

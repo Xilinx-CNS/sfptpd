@@ -103,7 +103,7 @@ install: sfptpd sfptpdctl
 	install -d $(INST_MANDIR)/man8
 	install -m 755 -p -D build/sfptpd $(INST_SBINDIR)/sfptpd
 	install -m 755 -p -D build/sfptpdctl $(INST_SBINDIR)/sfptpdctl
-	install -m 755 -p -D scripts/sfptpmon $(INST_SBINDIR)/sfptpmon
+	[ -n "$(filter sfptpmon,$(INST_OMIT))" ] || install -m 755 -p -D scripts/sfptpmon $(INST_SBINDIR)/sfptpmon
 	install -m 644 -p -D scripts/sfptpd.env $(INST_DEFAULTSDIR)/sfptpd
 	[ -z "$(filter systemd,$(INST_INITS))" ] || install -m 644 -p -D scripts/systemd/sfptpd.service $(INST_UNITDIR)/sfptpd.service
 	[ -z "$(filter sysv,   $(INST_INITS))" ] || install -m 755 -p -D scripts/init.d/sfptpd $(INST_CONFDIR)/init.d/sfptpd
@@ -117,16 +117,17 @@ install: sfptpd sfptpdctl
 	install -m 755 -p -t $(INST_PKGDOCDIR)/examples $(wildcard examples/*.py)
 	install -m 644 -p -t $(INST_PKGDOCDIR)/examples $(wildcard examples/*.html)
 	install -m 644 -p -t $(INST_PKGDOCDIR)/examples src/sfptpdctl/sfptpdctl.c
-	install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/sfptp*.8)
+	install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/sfptpd.8)
+	install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/sfptpdctl.8)
+	[ -n "$(filter sfptpmon,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/sfptpmon.8)
 
 .PHONY: uninstall
 uninstall:
-	rm -f $(INST_SBINDIR)/sfptpd
-	rm -f $(INST_SBINDIR)/sfptpdctl
+	rm -f $(INST_SBINDIR)/{sfptpd,sfptpdctl,sfptpmon}
 	rm -f $(INST_UNITDIR)/sfptpd.service
 	rm -f $(INST_CONFDIR)/sfptpd.conf
 	rm -f $(INST_DEFAULTSDIR)/sfptpd
-	rm -f $(INST_MANDIR)/man8/{sfptpd,sfptpdctl}.8
+	rm -f $(INST_MANDIR)/man8/{sfptpd,sfptpdctl,sfptpmon}.8
 	rm -f $(DESTDIR)/etc/init/sfptpd
 	rm -fr $(INST_PKGDOCDIR)
 	rm -fr $(DESTDIR)/var/lib/sfptpd
