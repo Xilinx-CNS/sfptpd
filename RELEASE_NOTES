@@ -143,7 +143,7 @@ Features:
  ~ Reflect external constraints (ntpd, chronyd) as selection rule (SWPTP-1295)
  ~ Better quality logging and trace on hotplug events (SWPTP-1300)
  ~ IP address of parent clock added to state and nodes files (SWPTP-1312)
- ~ Better init system integration with new command line options (SWPTP-1323)
+ ~ Better init system integration with new command line options (SWPTP-1321)
      --daemon       supersedes now-deprecated 'daemon' config file option
      --no-daemon    overrides now-deprecated 'daemon' config file option
      --version      outputs version number
