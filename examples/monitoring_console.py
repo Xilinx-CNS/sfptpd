@@ -151,7 +151,7 @@ def update_window(win, pad):
 
 def time_delta(timestr):
     t = datetime.strptime(timestr, "%Y-%m-%d %H:%M:%S.%f")
-    td = (datetime.now() - t).seconds
+    td = (datetime.utcnow() - t).seconds
     if td == 0:
         return "now"
     if td < 61:
