@@ -194,8 +194,11 @@ def update_nodes():
         last_rx = "never"
         if 'last_rx_event_comp' in node:
             rx_event = node['last_rx_event_comp']
-            offset = rx_event['offset-from-master']
-            mpd = rx_event['mean-path-delay']
+            # offset and mpd are only in the event if reported valid
+            if 'offset-from-master' in rx_event:
+                offset = rx_event['offset-from-master']
+            if 'mean-path-delay' in rx_event:
+                mpd = rx_event['mean-path-delay']
             last_rx = time_delta(rx_event['monitor-timestamp'])
         state = ""
         sel_str = ""
