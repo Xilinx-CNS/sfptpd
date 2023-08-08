@@ -373,7 +373,7 @@ static const int ntp_cerr2errno[CERR_MAX] =
 	EACCES,			/* CERR_PERMISSION / CERR_NORESOURCE */
 	EBADMSG,		/* CERR_BADFMT */
 	ENOSYS,			/* CERR_BADOP */
-	EINVAL,   		/* CERR_UNKNOWNVAR */
+	ENOENT,   		/* CERR_UNKNOWNVAR */
 	EINVAL,			/* CERR_BADVALUE */
 	EPERM,			/* CERR_RESTRICT */
 };
@@ -720,7 +720,7 @@ static int mode6_response(struct sfptpd_ntpclient_state *ntpclient,
 			printf("ntpclient: mode6: Response packet claims %u octets payload,"
 			       "above %ld received\n", count,
 			       (long)len - CTL_HEADER_LEN);
-			return 1; // ERR_INCOMPLETE, should probably use the conversion here;
+			return EPROTO;
 		}
 
 		/* Packet fragment checks */
@@ -1043,15 +1043,17 @@ next_var(size_t *data_len,
  ****************************************************************************/
 
 /* Convert from ip4/6 numeric string to sockaddr */
-static void parse_addr_string(struct sockaddr_storage *sockaddr,
-			      socklen_t *length, char *address,
-			      uint32_t address_len)
+static int parse_addr_string(struct sockaddr_storage *sockaddr,
+			     socklen_t *length, char *address,
+			     uint32_t address_len)
 {
-	int rc;
-	*length = 0;
+	int gai_rc;
 	struct addrinfo *result;
 	const struct addrinfo hints = {	.ai_flags = AI_NUMERICHOST };
 	int i = 0;
+
+	sockaddr->ss_family = AF_UNSPEC;
+	*length = 0;
 
 	/* NTPD can append port number (and brackets for ipv6) which must be
 	 * stripped. Possible address strings are:
@@ -1068,7 +1070,7 @@ static void parse_addr_string(struct sockaddr_storage *sockaddr,
 				DBG_L5("ntpclient: mode6: parse_addr_string: "
 				       "address starting with '[' terminated "
 				       "without matching ']'\n");
-				break;
+				return EINVAL;
 			}
 			i++;
 		}
@@ -1095,10 +1097,11 @@ static void parse_addr_string(struct sockaddr_storage *sockaddr,
 		}
 	}
 
-	rc = getaddrinfo(address, NULL, &hints, &result);
-	if (rc != 0) {
+	gai_rc = getaddrinfo(address, NULL, &hints, &result);
+	if (gai_rc != 0) {
 		ERROR("ntpclient: mode6: failed to interpret NTP peer address "
-		      "%s, %s\n", address, gai_strerror(rc));
+		      "%s, %s\n", address, gai_strerror(gai_rc));
+		return (gai_rc == EAI_NODATA || gai_rc == EAI_NONAME) ? ENOENT : EINVAL;
 	} else {
 		if (result != NULL) {
 			assert(result->ai_addrlen <= sizeof *sockaddr);
@@ -1106,6 +1109,7 @@ static void parse_addr_string(struct sockaddr_storage *sockaddr,
 			memcpy(sockaddr, result->ai_addr, *length);
 		}
 		freeaddrinfo(result);
+		return 0;
 	}
 }
 
@@ -1220,6 +1224,7 @@ static int mode6_get_sys_info(struct sfptpd_ntpclient_state *ntpclient,
 			      struct sfptpd_ntpclient_sys_info *sys_info)
 {
 	int rc;
+	int gai_rc;
 	void *req_data;
 	size_t req_datalen;
 	const char *resp_data;
@@ -1256,45 +1261,48 @@ static int mode6_get_sys_info(struct sfptpd_ntpclient_state *ntpclient,
 			 &resp_status, &resp_size, (void **)&resp_data);
 
 	/* Populate sys_info object */
-	if (rc == 0)
-	{
+	if (rc == 0) {
+
 		/* get peer address */
-		while (next_var(&resp_size, &resp_data, &name, &value))
-		{
-			if (strcmp("peeradr", name) == 0)
-			{
-				parse_addr_string(&sys_info->peer_address,
-						  &sys_info->peer_address_len,
-						  value, MAXVALLEN);
+		rc = ENOENT;
+		while (next_var(&resp_size, &resp_data, &name, &value)) {
+			if (strcmp("peeradr", name) == 0) {
+				rc = parse_addr_string(&sys_info->peer_address,
+						       &sys_info->peer_address_len,
+						       value, MAXVALLEN);
+				goto finish;
 			}
 		}
 
 		/* Turn the address back into a string for presentation. We could
 		 * use the string from the protocol but this will be a canonically-
 		 * formatted representation. */
-		rc = getnameinfo((struct sockaddr *) &sys_info->peer_address,
-				 sys_info->peer_address_len,
-				 host, sizeof host,
-				 NULL, 0, NI_NUMERICHOST);
-		if (rc != 0) {
-			DBG_L4("ntpclient: mode6: getnameinfo: %s\n", gai_strerror(rc));
+		gai_rc = getnameinfo((struct sockaddr *) &sys_info->peer_address,
+				    sys_info->peer_address_len,
+				    host, sizeof host,
+				    NULL, 0, NI_NUMERICHOST);
+		if (gai_rc != 0) {
+			DBG_L4("ntpclient: mode6: getnameinfo: %s\n", gai_strerror(gai_rc));
+			rc = ENOENT;
+		} else {
+			DBG_L6("ntp-sys-info: selected-peer-address %s\n", host);
 		}
-		
-		DBG_L6("ntp-sys-info: selected-peer-address %s\n", host);
-	} else {
-		if (rc == CERR_UNKNOWNVAR) {
-			/* In cases where mode 7 is not available and the 'peeradr' variable
-			 * does not exist, we output a WARNING. */
-			WARNING("ntpclient: mode6: mode 6 is being used but there is no support for "
-				"the peeradr variable. %s\n",
-				 strerror(rc));
-		}
-		if (rc != ECONNREFUSED) {
-			/* this may be because peeradr is not implemented in this
-			 * instance of ntpd, as I found with rhel 7.1 */
-			DBG_L3("ntpclient: mode6: failed to get system info from NTP daemon, %s\n",
-			       strerror(rc));
-		}
+	}
+
+finish:
+	/* Overall error handling */
+	if (rc == ENOENT) {
+		/* In cases where mode 7 is not available and the 'peeradr' variable
+		 * does not exist, we output a WARNING. */
+		WARNING("ntpclient: mode6: mode 6 is being used but there is no support for "
+			"the peeradr variable. %s\n",
+			 strerror(rc));
+	} else if (rc != 0 && rc != ECONNREFUSED) {
+		/* this may be because peeradr is not implemented in this
+		 * instance of ntpd, as I found with rhel 7.1 */
+		DBG_L3("ntpclient: mode6: failed to get system info from NTP daemon, %s\n",
+			strerror(abs(rc)));
+		rc = ENOENT;
 	}
 
 	return rc;
