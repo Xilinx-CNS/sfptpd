@@ -55,9 +55,17 @@ def process_node(record):
     if not (record['port-id'] in nodes):
         nodes[record['port-id']] = record
 
-def process_rx_event(record):
+# Process rx event with timestamp data
+#   this example monitor does not actually use the timestamp, which is more
+#   useful for debugging than monitoring
+def process_rx_event_ts(record):
     node = nodes[record['node']]
-    node['last_rx_event'] = record
+    node['last_rx_event_ts'] = record
+
+# Process rx event with computed data
+def process_rx_event_comp(record):
+    node = nodes[record['node']]
+    node['last_rx_event_comp'] = record
 
 def process_tx_event(record):
     node = nodes[record['node']]
@@ -107,7 +115,12 @@ def process_line(line):
     if 'node' in obj:
         process_node(obj['node'])
     if 'rx-event' in obj:
-        process_rx_event(obj['rx-event'])
+        evt = obj['rx-event']
+        if ('offset-from-master' in evt or
+            'mean-path-delay' in evt):
+            process_rx_event_comp(evt)
+        if ('sync-ingress-timestamp' in evt):
+            process_rx_event_ts(evt)
     if 'tx-event' in obj:
         process_tx_event(obj['tx-event'])
     if 'slave-status' in obj:
@@ -179,8 +192,8 @@ def update_nodes():
         offset = float('nan')
         mpd = float('nan')
         last_rx = "never"
-        if 'last_rx_event' in node:
-            rx_event = node['last_rx_event']
+        if 'last_rx_event_comp' in node:
+            rx_event = node['last_rx_event_comp']
             offset = rx_event['offset-from-master']
             mpd = rx_event['mean-path-delay']
             last_rx = time_delta(rx_event['monitor-timestamp'])
