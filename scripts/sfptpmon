@@ -321,7 +321,7 @@ def main():
                     rec['node'] = curnode['port-id']
                     rec['monitor-seq-id'] = seq
                     rec['monitor-timestamp'] = tstr
-                print(json.dumps({typ: rec}))
+                print(json.dumps({typ: rec}), flush=True)
 
     poll.close()
     for s in ss:
