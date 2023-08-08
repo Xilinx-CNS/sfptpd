@@ -950,6 +950,7 @@ next_var(size_t *data_len,
 	const char *cp;
 	const char *np;
 	const char *cp_end;
+	const char *val_end;
 	size_t src_len;
 	size_t len;
 	static char name[MAXVARLEN];
@@ -1005,16 +1006,19 @@ next_var(size_t *data_len,
 		cp++;
 	np = cp;
 	if ('"' == *np) {
+		cp++;
 		do {
 			np++;
 		} while (np < cp_end && '"' != *np);
+		val_end = np;
 		if (np < cp_end && '"' == *np)
 			np++;
 	} else {
 		while (np < cp_end && ',' != *np && '\r' != *np)
 			np++;
+		val_end = np;
 	}
-	len = np - cp;
+	len = val_end - cp;
 	if (np > cp_end || len >= sizeof(value) ||
 	    (np < cp_end && ',' != *np && '\r' != *np))
 		return 0;
