@@ -186,7 +186,7 @@ def time_delta(timestr):
 def update_nodes():
     nlist = sorted(nodes, key=lambda x: nodes[x]['port-id'])
     nodes_pad.erase()
-    nodes_pad.addstr("%-25s | %-6s | %13s | %13s | %9s | %3s | %3s | %4s | %7s | %7s | %-44s\n" % ("port", "domain", "offset", "mpd", "state", "sel", "syn", "alrm", "last rx", "last st", "address"))
+    nodes_pad.addstr("%-25s | %-6s | %13s | %13s | %9s | %3s | %3s | %4s | %7s | %7s | %-44s\n" % ("port", "domain", "offset", "mpd", "state", "sel", "syn", "alrm", "last of", "last st", "address"))
     for port in nlist:
         node = nodes[port]
         offset = float('nan')
