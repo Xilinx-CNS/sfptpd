@@ -1,7 +1,7 @@
 Solarflare Enhanced PTP Daemon (sfptpd)
 Advanced Micro Devices, Inc.
 =======================================
-Version: v3.7.0.1005
+Version: v3.7.0.1006
 
 
 Overview
@@ -125,7 +125,7 @@ Advanced notice of possible future changes
 Changelog
 ---------
 
-### v3.7.0.1005 Feature Release
+### v3.7.0.1006 Feature Release
 
 Features:
  ~ Allow running as non-root user with minimum required capabilities (SWPTP-442)
