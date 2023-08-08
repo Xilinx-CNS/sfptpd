@@ -42,7 +42,6 @@ under the Linux category at: <https://www.xilinx.com/download/drivers>
 Linux distribution support
 --------------------------
 This package is supported on:
-- Red Hat Enterprise Linux 6.9 - 6.10
 - Red Hat Enterprise Linux 7.5 - 7.9
 - Red Hat Enterprise Linux 8.1 - 8.8
 - Red Hat Enterprise Linux 9.0 - 9.2
@@ -96,10 +95,6 @@ Advanced notice of possible future changes
    by default. Where this change is not desired, it is recommended to change
    configurations now to be explicit about the desired behaviour.
 
- * Deprecation of RHEL 6
-
-   Future feature releases may not support or may not be tested with RHEL 6.
-
  * Explicit declaration of crny sync module
 
    If chronyd is in use it is recommended to specify an instance of the new
@@ -152,15 +147,15 @@ Features:
      and synchronises with systemd on startup as 'notify'-type service
  ~ Support up to 6 destinations for PTP event monitoring messages (SWPTP-1340)
  ~ Add 'sfptpmon' script to receive PTP event monitoring messages (SWPTP-1342)
-     This script requires python3 so is not available for RHEL 6
  ~ Accept any port for unicast PTP event monitoring destinations (SWPTP-1346)
  ~ The 'ntpsec' implementation of ntpd available in the EPEL repositories for
      RHEL 9 is confirmed to be fully interoperable with sfptpd, allowing
      system clock disciplining to be controlled at runtime.
 
 Removed support:
- ~ Special support for SFN5000 and SFN6000 series adapters removed (SWPTP-1306)
- ~ Support for hardware timestamping without Linux PHC removed (SWPTP-1306)
+ ~ Special provision for SFN5000 and SFN6000 series adapters removed (SWPTP-1306)
+ ~ Provision for hardware timestamping without Linux PHC removed (SWPTP-1306)
+ ~ Support, testing and packaging for RHEL6 is dropped (SWPTP-1371)
 
 Issue SWPTP-1278
  ~ Fix retrieval of transmit timestamps to recover from nic reset quicker
