@@ -111,7 +111,7 @@ void sfptpd_ntpclient_print_peers(struct sfptpd_ntpclient_peer_info *peer_info,
 		       "local-address %s, sent %u, received %u, "
 		       "candidate %d, stratum %d, offset %0.3Lf ns, "
 		       "root disp %0.3Lf ns\n",
-		       subsystem,
+		       subsystem, i,
 		       remote_host, local_host,
 		       peer->pkts_sent, peer->pkts_received,
 		       peer->candidate, peer->stratum,
