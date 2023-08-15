@@ -94,9 +94,11 @@ const static struct flag_desc if_flag_descs[] = {
  * behaviour. */
 const static int significant_flags = IFF_RUNNING;
 
-#define NUM_GROUPS 2
-#define GRP_CTRL 0
-#define GRP_TEAM 1
+enum nl_grp {
+	GRP_CTRL,
+	GRP_TEAM,
+	GRP_MAX
+};
 
 struct link_db {
 	struct sfptpd_link_table table;
@@ -107,8 +109,8 @@ struct link_db {
 enum nl_conn {
 	NL_CONN_RT,
 	NL_CONN_TEAM_DUMP,
-	NL_CONN_TEAM_NOTIFY, /* required to follow _DUMP */
-	NL_CONN_MAX,
+	NL_CONN_GE, /* required to follow _DUMP */
+	NL_CONN_MAX
 };
 
 struct sfptpd_nl_state;
@@ -139,14 +141,18 @@ struct sfptpd_nl_state {
 };
 
 struct nl_ge_group {
+	/* Defined */
 	const char *name;
+	bool subscribe;
+
+	/* Derived */
 	int group_id;
 	int family;
 };
 
-static struct nl_ge_group nl_ge_groups[NUM_GROUPS] = {
-	{ "nlctrl", 0, 0 },
-	{ TEAM_GENL_NAME, 0, 0 },
+static struct nl_ge_group nl_ge_groups[GRP_MAX] = {
+	[GRP_CTRL]    = { "nlctrl", false },
+	[GRP_TEAM]    = { TEAM_GENL_NAME, true },
 };
 
 
@@ -385,18 +391,18 @@ static bool netlink_send_team_query(struct sfptpd_nl_state *state, struct sfptpd
 	assert(link->type == SFPTPD_LINK_TEAM);
 
 	if (nl_ge_groups[GRP_TEAM].family > 0 &&
-	    (new_hdr = netlink_create_team_query(state->conn + NL_CONN_TEAM_NOTIFY,
+	    (new_hdr = netlink_create_team_query(state->conn + NL_CONN_GE,
 						 state->buf,
 						 state->buf_sz,
 						 link->if_index)) != NULL) {
-		if (mnl_socket_sendto(state->conn[NL_CONN_TEAM_NOTIFY].mnl, new_hdr, new_hdr->nlmsg_len) < 0)
+		if (mnl_socket_sendto(state->conn[NL_CONN_GE].mnl, new_hdr, new_hdr->nlmsg_len) < 0)
 			ERROR("netlink: sending team dump query, %s\n", strerror(errno));
 		else
 			query_requested = true;
 	}
 
 	if (query_requested) {
-		DBG_L5("netlink: sent team query for %d: %d\n", link->if_index, state->conn[NL_CONN_TEAM_NOTIFY].seq);
+		DBG_L5("netlink: sent team query for %d: %d\n", link->if_index, state->conn[NL_CONN_GE].seq);
 	} else {
 		DBG_L4("netlink: deferring team query for %d\n", link->if_index);
 	}
@@ -703,7 +709,7 @@ static int netlink_handle_genl_ctrl(struct nl_conn_state *conn,
 	mnl_attr_parse(nh, sizeof(*genl), ctrl_attr_cb, attr);
 
 	if (attr[CTRL_ATTR_FAMILY_NAME]) {
-		for (i = 0; i < NUM_GROUPS; i++) {
+		for (i = 0; i < GRP_MAX; i++) {
 			if (strcmp(nl_ge_groups[i].name, mnl_attr_get_str(attr[CTRL_ATTR_FAMILY_NAME])) == 0) {
 				assert(group == -1 || group == i);
 				group = i;
@@ -715,7 +721,7 @@ static int netlink_handle_genl_ctrl(struct nl_conn_state *conn,
 	if (attr[CTRL_ATTR_FAMILY_ID]) {
 		family = mnl_attr_get_u16(attr[CTRL_ATTR_FAMILY_ID]);
 		if (family == GENL_ID_CTRL) {
-			assert(group != GRP_TEAM);
+			assert(group <= GRP_CTRL);
 			group = GRP_CTRL;
 		}
 	}
@@ -738,9 +744,12 @@ static int netlink_handle_genl_ctrl(struct nl_conn_state *conn,
 			grp->family = family;
 
 		if (grp->group_id > 0 && grp->family >= 0) {
+			DBG_L1("netlink: %ssubscribing to %s genetlink events\n",
+			       grp->subscribe ? "" : "not ", grp->name);
 			if (setsockopt(team_conn->fd, SOL_NETLINK, NETLINK_ADD_MEMBERSHIP,
 				       &grp->group_id, sizeof grp->group_id) != 0) {
-				ERROR("ctrl: subscribing to teamd events, %s\n", strerror(errno));
+				ERROR("netlink: subscribing to %s events, %s\n",
+				      grp->name, strerror(errno));
 			}
 		}
 	}
@@ -1270,11 +1279,11 @@ struct sfptpd_nl_state *sfptpd_netlink_init(void)
 	state->conn[NL_CONN_TEAM_DUMP].cb = netlink_ge1_cb;
 	state->conn[NL_CONN_TEAM_DUMP].state = state;
 
-	rc = netlink_open_conn(state->conn + NL_CONN_TEAM_NOTIFY,
+	rc = netlink_open_conn(state->conn + NL_CONN_GE,
 			       "genetlink2", NETLINK_GENERIC, 0);
 	if (rc < 0) goto fail4;
-	state->conn[NL_CONN_TEAM_NOTIFY].cb = netlink_ge2_cb;
-	state->conn[NL_CONN_TEAM_NOTIFY].state = state;
+	state->conn[NL_CONN_GE].cb = netlink_ge2_cb;
+	state->conn[NL_CONN_GE].state = state;
 
 	hdr = netlink_create_team_ctrl_query(state->conn + NL_CONN_TEAM_DUMP,
 					state->buf,
@@ -1289,7 +1298,7 @@ struct sfptpd_nl_state *sfptpd_netlink_init(void)
 	return state;
 
 fail5:
-	mnl_socket_close(state->conn[NL_CONN_TEAM_NOTIFY].mnl);
+	mnl_socket_close(state->conn[NL_CONN_GE].mnl);
 fail4:
 	mnl_socket_close(state->conn[NL_CONN_TEAM_DUMP].mnl);
 fail3:
