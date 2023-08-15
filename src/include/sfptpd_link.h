@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <net/if.h>
+#include <linux/ethtool.h>
 
 /****************************************************************************
  * Structures, Types, Defines
@@ -42,6 +43,13 @@ enum sfptpd_bond_mode {
 	SFPTPD_NUM_BOND_TYPES = SFPTPD_BOND_MODE_UNSUPPORTED
 };
 
+enum sfptpd_link_fulfillment_state {
+	QRY_NOT_REQUESTED,
+	QRY_REQUESTED,
+	QRY_NACKED,
+	QRY_POPULATED,
+};
+
 struct sfptpd_link {
 	enum sfptpd_link_type type;
 	enum sfptpd_link_event event;
@@ -61,6 +69,9 @@ struct sfptpd_link {
 	} bond;
 	bool is_slave;
 	uint16_t vlan_id;
+
+	enum sfptpd_link_fulfillment_state ts_info_state;
+	struct ethtool_ts_info ts_info;
 
 	/* Not for client use */
 	void *priv;

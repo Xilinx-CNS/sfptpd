@@ -18,7 +18,8 @@ NO_GPS = 1
 if_header_then = echo "\#include <$1>" | $(CC) -E -x c - > /dev/null 2>&1 && echo $2
 
 CONDITIONAL_DEFS := \
- $(shell $(call if_header_then,sys/capability.h,-DHAVE_CAPS))
+ $(shell $(call if_header_then,sys/capability.h,-DHAVE_CAPS)) \
+ $(shell $(call if_header_then,linux/ethtool_netlink.h,-DHAVE_ETHTOOL_NETLINK))
 CONDITIONAL_LIBS := \
  $(shell $(call if_header_then,sys/capability.h,-lcap))
 
