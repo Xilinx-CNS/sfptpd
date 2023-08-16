@@ -13,6 +13,9 @@
  * Structures, Types, Defines
  ****************************************************************************/
 
+#define SFPTPD_L2ADDR_MAX 10
+#define SFPTPD_L2ADDR_STR_MAX SFPTPD_L2ADDR_MAX * 3
+
 enum sfptpd_link_type {
 	SFPTPD_LINK_PHYSICAL,
 	SFPTPD_LINK_VLAN,
@@ -61,6 +64,10 @@ struct sfptpd_link {
 	char if_name[IF_NAMESIZE];
 	char if_kind[16];
 	int if_link;
+
+	size_t permaddr_len;
+	uint8_t permaddr[SFPTPD_L2ADDR_MAX];
+	char permaddr_repr[SFPTPD_L2ADDR_STR_MAX];
 
 	struct {
 		int if_master;

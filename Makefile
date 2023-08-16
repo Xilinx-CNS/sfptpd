@@ -16,10 +16,12 @@ NO_GPS = 1
 
 ### Definitions conditional on build environment
 if_header_then = echo "\#include <$1>" | $(CC) -E -x c - > /dev/null 2>&1 && echo $2
+if_defn_then = echo -e "\#include <$1>\nint a=$2;"| $(CC) -c -S -x c -o - - > /dev/null 2>&1 && echo -DHAVE_$2
 
 CONDITIONAL_DEFS := \
  $(shell $(call if_header_then,sys/capability.h,-DHAVE_CAPS)) \
- $(shell $(call if_header_then,linux/ethtool_netlink.h,-DHAVE_ETHTOOL_NETLINK))
+ $(shell $(call if_header_then,linux/ethtool_netlink.h,-DHAVE_ETHTOOL_NETLINK)) \
+ $(shell $(call if_defn_then,linux/if_link.h,IFLA_PERM_ADDRESS))
 CONDITIONAL_LIBS := \
  $(shell $(call if_header_then,sys/capability.h,-lcap))
 

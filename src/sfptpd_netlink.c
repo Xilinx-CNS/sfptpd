@@ -256,16 +256,24 @@ static const char *link_bond_mode(enum sfptpd_bond_mode mode) {
 
 void sfptpd_link_log(const struct sfptpd_link *link, const struct sfptpd_link *prev)
 {
-	const char *header[] = { "if_index", "if_name", "flags", "kind", "mode", "role", "link", "master", "active", "vlan",
+	const char *header[] = { "if_index", "if_name", "flags", "kind", "mode", "role", "link", "master", "active", "vlan"};
+	const char *format_header = "| %-8s | %-*s | %-5s | %-8s | %-4s | %-5s | %-6s | %-6s | %-6s | %-5s"
 #ifdef HAVE_ETHTOOL_NETLINK
-				 "phc"
-#else
-				 "rsv"
+				    " | phc"
 #endif
-	};
-	const char *format_header = "| %-8s | %-*s | %-5s | %-8s | %-4s | %-5s | %-6s | %-6s | %-6s | %-5s | %-3s |\n";
-	const char *format_record = "| %8d%3s%-*s | %05x | %-8s | %-4s | %-5s | %6d | %6d | %6d | %5d | %3d |\n";
-	const char *format_flags  = "|_%8s___%-*s_| %-72s |\n";
+#ifdef HAVE_IFLA_PERM_ADDRESS
+				    " | permaddr         "
+#endif
+				    " |\n";
+	const char *format_record = "| %8d%3s%-*s | %05x | %-8s | %-4s | %-5s | %6d | %6d | %6d | %5d"
+#ifdef HAVE_ETHTOOL_NETLINK
+				    " | %3d"
+#endif
+#ifdef HAVE_IFLA_PERM_ADDRESS
+				    " | %-17s"
+#endif
+				    " |\n";
+	const char *format_flags  = "|_%8s___%-*s_|\n";
 	char flags[256];
 	int prev_flags = 0;
 
@@ -273,7 +281,7 @@ void sfptpd_link_log(const struct sfptpd_link *link, const struct sfptpd_link *p
 		DBG_L1(format_header,
 		       header[0], IF_NAMESIZE, header[1], header[2], header[3],
 		       header[4], header[5], header[6], header[7],
-		       header[8], header[9], header[10]);
+		       header[8], header[9]);
 	}
 	if (prev != NULL) {
 		DBG_L1(format_record,
@@ -281,8 +289,14 @@ void sfptpd_link_log(const struct sfptpd_link *link, const struct sfptpd_link *p
 		       prev->if_flags, prev->if_kind,
 		       link_bond_mode(prev->bond.bond_mode), prev->is_slave ? "slave" : "",
 		       prev->if_link, prev->bond.if_master,
-		       prev->bond.active_slave, prev->vlan_id,
-		       prev->ts_info.phc_index);
+		       prev->bond.active_slave, prev->vlan_id
+#ifdef HAVE_ETHTOOL_NETLINK
+		       , prev->ts_info.phc_index
+#endif
+#ifdef HAVE_IFLA_PERM_ADDRESS
+		       , prev->permaddr_repr
+#endif
+		       );
 		prev_flags = prev->if_flags;
 	}
 	if (link != NULL) {
@@ -291,8 +305,14 @@ void sfptpd_link_log(const struct sfptpd_link *link, const struct sfptpd_link *p
 		       link->if_flags, link->if_kind,
 		       link_bond_mode(link->bond.bond_mode), link->is_slave ? "slave" : "",
 		       link->if_link, link->bond.if_master,
-		       link->bond.active_slave, link->vlan_id,
-		       link->ts_info.phc_index);
+		       link->bond.active_slave, link->vlan_id
+#ifdef HAVE_ETHTOOL_NETLINK
+		       , link->ts_info.phc_index
+#endif
+#ifdef HAVE_IFLA_PERM_ADDRESS
+		       , link->permaddr_repr
+#endif
+		       );
 		if (prev != NULL && prev_flags ^ link->if_flags) {
 			snprint_flags_delta(flags, sizeof flags,
 					    prev_flags,
@@ -324,6 +344,12 @@ static int link_attr_cb(const struct nlattr *attr, void *data)
 		break;
 	case IFLA_LINKINFO:
 		if (mnl_attr_validate(attr, MNL_TYPE_NESTED) < 0)
+			rc = MNL_CB_ERROR;
+	case IFLA_ADDRESS:
+#ifdef HAVE_IFLA_PERM_ADDRESS
+	case IFLA_PERM_ADDRESS:
+#endif
+		if (mnl_attr_validate(attr, MNL_TYPE_BINARY) < 0)
 			rc = MNL_CB_ERROR;
 	}
 
@@ -582,6 +608,26 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 		if (nested[IFLA_INFO_SLAVE_KIND])
 			link->is_slave = true;
 	}
+
+#ifdef HAVE_IFLA_PERM_ADDRESS
+	if (table[IFLA_PERM_ADDRESS]) {
+		uint32_t len = mnl_attr_get_payload_len(table[IFLA_PERM_ADDRESS]);
+		void *data = mnl_attr_get_payload(table[IFLA_PERM_ADDRESS]);
+		if (len > sizeof link->permaddr) {
+			/* Silently ignore - irrelevant scenario for esoteric link types */
+			TRACE_L3("netlink: permaddr too big (%d > %d)\n", len, sizeof link->permaddr);
+		} else {
+			int ptr;
+			link->permaddr_len = len;
+			memcpy(link->permaddr, data, len);
+			for (ptr = 0; ptr < len; ptr++)
+				snprintf(link->permaddr_repr + ptr * 3,
+					 (sizeof link->permaddr_repr) - ptr * 3,
+					 ptr == len - 1 ? "%02hhx" : "%02hhx:",
+					 link->permaddr[ptr]);
+		}
+	}
+#endif
 
 	/* Any indicator of a link's subordinate status sets slave flag. */
 	if (link->if_flags & IFF_SLAVE ||
