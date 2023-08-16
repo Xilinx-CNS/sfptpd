@@ -730,29 +730,36 @@ static int interface_get_versions(struct sfptpd_interface *interface)
 
 static void interface_get_ts_info(struct sfptpd_interface *interface)
 {
-	int rc;
+	int rc = 0;
 
 	assert(interface != NULL);
 
-	/* Method 1. Use the ethtool interface to get the timestamping
-	 * capabilities of the NIC. */
-	TRACE_L4("interface %s: getting timestamping caps via ethtool\n",
-		 interface->name);
+	/* Method 1. Already have acquired via netlink. */
+	if (interface->link.ts_info_state == QRY_POPULATED) {
+		TRACE_L4("interface %s: got timestamping caps via ethtool netlink\n",
+			 interface->name);
+		interface->ts_info = interface->link.ts_info;
+	} else {
+		/* Method 2. Use the ethtool interface to get the timestamping
+		 * capabilities of the NIC. */
+		TRACE_L4("interface %s: getting timestamping caps via ethtool\n",
+			 interface->name);
 
-	/* Set up the ethtool request */
-	memset(&interface->ts_info, 0, sizeof(interface->ts_info));
-	interface->ts_info.cmd = ETHTOOL_GET_TS_INFO;
+		/* Set up the ethtool request */
+		memset(&interface->ts_info, 0, sizeof(interface->ts_info));
+		interface->ts_info.cmd = ETHTOOL_GET_TS_INFO;
 
-	rc = sfptpd_interface_ioctl(interface, SIOCETHTOOL, &interface->ts_info);
-	if (rc == 0) {
-		interface->clock_supports_phc = (interface->ts_info.phc_index >= 0);
-		return;
+		rc = sfptpd_interface_ioctl(interface, SIOCETHTOOL, &interface->ts_info);
 	}
 
-	/* We aren't able to support timestamping on this interface so set the
-	 * timestamping info to indicate software only and no PHC support */
-	interface->clock_supports_phc = false;
-	interface->ts_info = ts_info_sw_only;
+	if (rc == 0) {
+		interface->clock_supports_phc = (interface->ts_info.phc_index >= 0);
+	} else {
+		/* We aren't able to support timestamping on this interface so set the
+		 * timestamping info to indicate software only and no PHC support */
+		interface->clock_supports_phc = false;
+		interface->ts_info = ts_info_sw_only;
+	}
 }
 
 
