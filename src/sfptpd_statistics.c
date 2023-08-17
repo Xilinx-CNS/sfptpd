@@ -77,6 +77,19 @@ const struct sfptpd_stats_period_info sfptpd_stats_periods[SFPTPD_STATS_PERIOD_M
 
 const struct timespec zero_time = { 0, 0 };
 
+const char *sfptpd_stats_ethtool_names[SFPTPD_DRVSTAT_MAX] = {
+	[ SFPTPD_DRVSTAT_PPS_OFLOW ]    = "pps_in_oflow",
+	[ SFPTPD_DRVSTAT_PPS_BAD ]      = "pps_in_bad",
+	[ SFPTPD_DRVSTAT_PPS_OFF_LAST ] = "pps_in_offset_last",
+	[ SFPTPD_DRVSTAT_PPS_OFF_MEAN ] = "pps_in_offset_mean",
+	[ SFPTPD_DRVSTAT_PPS_OFF_MIN ]  = "pps_in_offset_min",
+	[ SFPTPD_DRVSTAT_PPS_OFF_MAX ]  = "pps_in_offset_max",
+	[ SFPTPD_DRVSTAT_PPS_PER_LAST ] = "pps_in_period_last",
+	[ SFPTPD_DRVSTAT_PPS_PER_MEAN ] = "pps_in_period_mean",
+	[ SFPTPD_DRVSTAT_PPS_PER_MIN ]  = "pps_in_period_min",
+	[ SFPTPD_DRVSTAT_PPS_PER_MAX ]  = "pps_in_period_max",
+};
+
 /* Forward declarations */
 static const struct sfptpd_stats_item_ops stats_range_ops;
 static const struct sfptpd_stats_item_ops stats_count_ops;

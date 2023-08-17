@@ -117,4 +117,14 @@ const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state
 							  int consumers,
 							  int timeout_ms);
 
+/** Set desired set of driver statistics for which string indexes are
+ *  required. The indexes will be returned in link tables.
+ * @param state the netlink client context
+ * @param keys list of key names
+ * @param num_keys number of keys
+ * @return 0 on success, else errno
+ */
+int sfptpd_netlink_set_driver_stats(struct sfptpd_nl_state *state,
+				    const char **keys, size_t num_keys);
+
 #endif /* SFPTPD_NETLINK_H */

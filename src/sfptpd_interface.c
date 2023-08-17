@@ -82,17 +82,8 @@ enum drv_stat_method {
 
 /** Structure describing a driver statistic type */
 struct drv_stat_type {
-	const char *ethtool_name;
 	const char *sysfs_name;
 	bool counter;
-};
-
-/** Structure governing how to obtain driver statistics for an interface */
-struct drv_stat_access {
-	enum drv_stat_method method;
-	union {
-		int ethtool_stat_index;
-	} detail;
 };
 
 /** Structure to hold details of interfaces.
@@ -188,7 +179,8 @@ struct sfptpd_interface {
 	struct nic_model_caps static_caps;
 
 	/* Methods for driver statistic recovery */
-	struct drv_stat_access drv_stat[SFPTPD_DRVSTAT_MAX];
+	enum drv_stat_method drv_stat_method[SFPTPD_DRVSTAT_MAX];
+	int drv_stat_ethtool_index[SFPTPD_DRVSTAT_MAX];
 
 	/* Bitfield of methods needed for driver stats */
 	int drv_stat_methods;
@@ -238,18 +230,17 @@ static const struct nic_model_caps all_nic_models[] = {
 	{ SFPTPD_SOLARFLARE_PCI_VENDOR_ID , 0x0903, SFPTPD_NIC_XO_CLOCK_STRATUM },
 };
 
-/* Must be in same order as enum drv_stat */
-static const struct drv_stat_type drv_stats [] = {
-	{ "pps_in_oflow", "pps_stats/pps_oflow", true },
-	{ "pps_in_bad", "pps_stats/pps_bad", true },
-	{ "pps_in_offset_last", "pps_stats/pps_off_last", false },
-	{ "pps_in_offset_mean", "pps_stats/pps_off_mean", false },
-	{ "pps_in_offset_min", "pps_stats/pps_off_min", false },
-	{ "pps_in_offset_max", "pps_stats/pps_off_max", false },
-	{ "pps_in_period_last", "pps_stats/pps_per_last", false },
-	{ "pps_in_period_mean", "pps_stats/pps_per_mean", false },
-	{ "pps_in_period_min", "pps_stats/pps_per_min", false },
-	{ "pps_in_period_max", "pps_stats/pps_per_max", false },
+static const struct drv_stat_type drv_stats[SFPTPD_DRVSTAT_MAX] = {
+	[ SFPTPD_DRVSTAT_PPS_OFLOW ]    = { "pps_stats/pps_oflow", true },
+	[ SFPTPD_DRVSTAT_PPS_BAD ]      = { "pps_stats/pps_bad", true },
+	[ SFPTPD_DRVSTAT_PPS_OFF_LAST ] = { "pps_stats/pps_off_last", false },
+	[ SFPTPD_DRVSTAT_PPS_OFF_MEAN ] = { "pps_stats/pps_off_mean", false },
+	[ SFPTPD_DRVSTAT_PPS_OFF_MIN ]  = { "pps_stats/pps_off_min", false },
+	[ SFPTPD_DRVSTAT_PPS_OFF_MAX ]  = { "pps_stats/pps_off_max", false },
+	[ SFPTPD_DRVSTAT_PPS_PER_LAST ] = { "pps_stats/pps_per_last", false },
+	[ SFPTPD_DRVSTAT_PPS_PER_MEAN ] = { "pps_stats/pps_per_mean", false },
+	[ SFPTPD_DRVSTAT_PPS_PER_MIN ]  = { "pps_stats/pps_per_min", false },
+	[ SFPTPD_DRVSTAT_PPS_PER_MAX ]  = { "pps_stats/pps_per_max", false },
 };
 
 
@@ -714,25 +705,39 @@ static void interface_get_pci_ids(struct sfptpd_interface *interface,
 static int interface_get_versions(struct sfptpd_interface *interface)
 {
 	struct ethtool_drvinfo drv_info;
-	int rc;
+	bool have_bus_addr;
+	bool have_stats_strs;
+	int rc = 0;
 
 	assert(interface != NULL);
 
-	/* Set up the ethtool request */
-	memset(&drv_info, 0, sizeof(drv_info));
-	drv_info.cmd = ETHTOOL_GDRVINFO;
+	/* Only make the ioctl() if we actually need it, i.e.
+	   we haven't got everything essential via netlink already. */
+	have_bus_addr = interface->link.bus_addr[0] != '\0';
+	have_stats_strs = interface->link.drv_stats_ids_state == QRY_POPULATED;
 
-	rc = sfptpd_interface_ioctl(interface, SIOCETHTOOL, &drv_info);
+	if (!have_bus_addr || !have_stats_strs) {
+		/* Set up the ethtool request */
+		memset(&drv_info, 0, sizeof(drv_info));
+		drv_info.cmd = ETHTOOL_GDRVINFO;
 
-	sfptpd_strncpy(interface->driver_version, drv_info.version,
-		       sizeof(interface->driver_version));
-	sfptpd_strncpy(interface->fw_version, drv_info.fw_version,
-		       sizeof(interface->fw_version));
-	sfptpd_strncpy(interface->driver, drv_info.driver,
-		       sizeof(interface->driver));
-	interface->n_stats = drv_info.n_stats;
+		rc = sfptpd_interface_ioctl(interface, SIOCETHTOOL, &drv_info);
 
-	if (interface->link.bus_addr[0] == '\0') {
+		sfptpd_strncpy(interface->driver_version, drv_info.version,
+			       sizeof(interface->driver_version));
+		sfptpd_strncpy(interface->fw_version, drv_info.fw_version,
+			       sizeof(interface->fw_version));
+		sfptpd_strncpy(interface->driver, drv_info.driver,
+			       sizeof(interface->driver));
+	}
+
+	if (!have_stats_strs) {
+		interface->n_stats = drv_info.n_stats;
+	} else {
+		interface->n_stats = interface->link.drv_stats.all_count;
+	}
+
+	if (!have_bus_addr) {
 		sfptpd_strncpy(interface->bus_addr, drv_info.bus_info,
 			       sizeof(interface->bus_addr));
 	} else  {
@@ -809,21 +814,36 @@ static void interface_check_efx_support(struct sfptpd_interface *interface)
 /* Must be called after interface_get_versions to populate driver info */
 static void interface_driver_stats_init(struct sfptpd_interface *interface)
 {
-	int rc;
-	struct ethtool_gstrings *gstrings;
-	int i, j;
+	struct ethtool_gstrings *gstrings = NULL;
+	int rc, i, j, found;
 	char path[PATH_MAX];
 
 	assert(interface != NULL);
 
-	TRACE_L4("interface %s: initialising driver stats-getting via ethtool\n",
+	TRACE_L4("interface %s: initialising driver stats-getting\n",
 		 interface->name);
 
+	/* Method 1. Get strings from ethtool netlink */
+	if (interface->link.drv_stats_ids_state == QRY_POPULATED) {
+		for (found = 0, i = 0; i < SFPTPD_DRVSTAT_MAX; i++) {
+			if (interface->link.drv_stats.requested_ids[i] != -1) {
+				interface->drv_stat_method[i] = DRV_STAT_ETHTOOL;
+				interface->drv_stat_ethtool_index[i] = interface->link.drv_stats.requested_ids[i];
+				interface->drv_stat_methods |= 1 << DRV_STAT_ETHTOOL;
+				found++;
+			}
+		}
+		TRACE_L5("interface %s: found %d/%d stats strings via ethtool netlink\n",
+			 interface->name, found, SFPTPD_DRVSTAT_MAX);
+		goto skip_ioctl;
+	}
+
+	/* Method 2. Get strings from ethtool ioctl */
 	gstrings = calloc(1, ETH_GSTRING_LEN * interface->n_stats + sizeof *gstrings);
 	if (gstrings == NULL) {
 		ERROR("interface %s: could not allocate ethtool stat strings buffer, %s\n",
 		      interface->name, strerror(errno));
-		goto no_ethtool;
+		goto skip_ioctl;
 	}
 
 	gstrings->cmd = ETHTOOL_GSTRINGS;
@@ -837,43 +857,50 @@ static void interface_driver_stats_init(struct sfptpd_interface *interface)
 		interface->n_stats = 0;
 	}
 
-	for (i = 0; i < interface->n_stats; i++) {
+	for (found = 0, i = 0; i < interface->n_stats; i++) {
 		const char *name = (char *) gstrings->data + i * ETH_GSTRING_LEN;
 
 		for (j = 0; j < SFPTPD_DRVSTAT_MAX; j++) {
-			if (drv_stats[j].ethtool_name &&
-			    !strncmp(name, drv_stats[j].ethtool_name,
+			if (sfptpd_stats_ethtool_names[j] &&
+			    !strncmp(name, sfptpd_stats_ethtool_names[j],
 				     ETH_GSTRING_LEN))
 				break;
 		}
 
 		if (j != SFPTPD_DRVSTAT_MAX) {
-			interface->drv_stat[j].method = DRV_STAT_ETHTOOL;
-			interface->drv_stat[j].detail.ethtool_stat_index = i;
+			interface->drv_stat_method[j] = DRV_STAT_ETHTOOL;
+			interface->drv_stat_ethtool_index[j] = i;
 			interface->drv_stat_methods |= 1 << DRV_STAT_ETHTOOL;
+			found++;
 		}
 	}
+	TRACE_L5("interface %s: found %d/%d stats strings via ethtool ioctl\n",
+		 interface->name, found, SFPTPD_DRVSTAT_MAX);
 
-no_ethtool:
-	for (j = 0; j < SFPTPD_DRVSTAT_MAX; j++) {
-		if (interface->drv_stat[j].method == DRV_STAT_NOT_AVAILABLE) {
+skip_ioctl:
+	/* Method 3. Use sysfs for stats */
+	for (found = 0, j = 0; j < SFPTPD_DRVSTAT_MAX; j++) {
+		if (interface->drv_stat_method[j] == DRV_STAT_NOT_AVAILABLE) {
 
 			rc = snprintf(path, sizeof path, "/sys/class/net/%s/device/%s",
 				      interface->name, drv_stats[j].sysfs_name);
 			assert(rc > 0 && rc < sizeof path);
 
 			if (!access(path, R_OK)) {
-				interface->drv_stat[j].method = DRV_STAT_SYSFS;
+				interface->drv_stat_method[j] = DRV_STAT_SYSFS;
 				interface->drv_stat_methods |= 1 << DRV_STAT_SYSFS;
+				found++;
 			}
 		}
 
 		TRACE_L5("interface %s: driver stat %s available by %s\n",
-			 interface->name, drv_stats[j].ethtool_name,
-			 interface->drv_stat[j].method == DRV_STAT_ETHTOOL ? "ethtool" :
-			 (interface->drv_stat[j].method == DRV_STAT_SYSFS ? "sysfs" :
+			 interface->name, sfptpd_stats_ethtool_names[j],
+			 interface->drv_stat_method[j] == DRV_STAT_ETHTOOL ? "ethtool" :
+			 (interface->drv_stat_method[j] == DRV_STAT_SYSFS ? "sysfs" :
 			 "no method"));
 	}
+	TRACE_L5("interface %s: found %d/%d stats strings via sysfs\n",
+		 interface->name, found, SFPTPD_DRVSTAT_MAX);
 
 	if (gstrings)
 		free(gstrings);
@@ -2097,10 +2124,10 @@ int sfptpd_interface_driver_stats_read(struct sfptpd_interface *interface,
 	}
 
 	for (i = 0; i < SFPTPD_DRVSTAT_MAX; i++) {
-		struct drv_stat_access *stat = interface->drv_stat + i;
-		switch (stat->method) {
+		enum drv_stat_method method = interface->drv_stat_method[i];
+		switch (method) {
 		case DRV_STAT_ETHTOOL:
-			stats[i] = estats->data[stat->detail.ethtool_stat_index] +
+			stats[i] = estats->data[interface->drv_stat_ethtool_index[i]] +
 				   interface->ethtool_stat_zero_adjustment[i];
 			break;
 		case DRV_STAT_SYSFS:
@@ -2124,7 +2151,7 @@ int sfptpd_interface_driver_stats_read(struct sfptpd_interface *interface,
 			break;
 		case DRV_STAT_NOT_AVAILABLE:
 			TRACE_L4("no method available to collect %s stat\n",
-				 drv_stats[i].ethtool_name);
+				 sfptpd_stats_ethtool_names[i]);
 		}
 	}
 

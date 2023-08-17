@@ -37,6 +37,7 @@
 #include "sfptpd_control.h"
 #include "sfptpd_link.h"
 #include "sfptpd_netlink.h"
+#include "sfptpd_statistics.h"
 
 #ifdef HAVE_CAPS
 #include <sys/capability.h>
@@ -391,6 +392,15 @@ static int netlink_start(void) {
 	if (netlink == NULL) {
 		CRITICAL("could not start netlink\n");
 		return EINVAL;
+	}
+
+	rc = sfptpd_netlink_set_driver_stats(netlink,
+					     sfptpd_stats_ethtool_names,
+					     SFPTPD_DRVSTAT_MAX);
+	if (rc != 0) {
+		CRITICAL("registering link stats types, %s\n",
+			 strerror(rc));
+		return rc;
 	}
 
 	rc = sfptpd_netlink_scan(netlink);

@@ -58,6 +58,7 @@
  ****************************************************************************/
 
 #define INITIAL_LINK_TABLE_SIZE 32
+#define NETLINK_PACKET_BUFFER_SIZE 16384
 
 /* Module-specific trace */
 #define DBG_L1(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NETLINK, 1, x, ##__VA_ARGS__)
@@ -146,6 +147,9 @@ struct sfptpd_nl_state {
 			      because we didn't have genetlink family id. */
 	bool need_service; /* true when fds are overdue servicing, e.g.
 			      because there were no free tables. */
+	const char **stats_keys;
+			   /* keys for driver stats required by client. */
+	size_t num_stats_keys;
 };
 
 struct nl_ge_group {
@@ -191,9 +195,13 @@ static struct nlmsghdr *netlink_create_team_query(struct nl_conn_state *conn,
 						  int team_ifindex);
 
 #ifdef HAVE_ETHTOOL_NETLINK
-static struct nlmsghdr *netlink_create_ethtool_tsinfo_query(struct nl_conn_state *conn,
-							    char *buf, size_t space,
-							    int ifindex);
+static struct nlmsghdr *create_ethtool_tsinfo_query(struct nl_conn_state *conn,
+						    char *buf, size_t space,
+					            int ifindex);
+
+static struct nlmsghdr *create_ethtool_string_query(struct nl_conn_state *conn,
+						    char *buf, size_t space,
+						    int ifindex);
 #endif
 
 /****************************************************************************
@@ -477,31 +485,39 @@ static bool netlink_send_team_query(struct sfptpd_nl_state *state, struct sfptpd
 #ifdef HAVE_ETHTOOL_NETLINK
 static bool netlink_send_ethtool_query(struct sfptpd_nl_state *state, struct sfptpd_link *link)
 {
-	struct nlmsghdr *new_hdr;
-	bool query_requested = false;
+	struct nlmsghdr *hdr;
+	struct nl_conn_state *conn = &state->conn[NL_CONN_GE];
 
 	assert(state != NULL);
 	assert(link != NULL);
 
-	if (nl_ge_groups[GRP_ETHTOOL].family > 0 &&
-	    (new_hdr = netlink_create_ethtool_tsinfo_query(state->conn + NL_CONN_GE,
-							   state->buf,
-							   state->buf_sz,
-							   link->if_index)) != NULL) {
-		if (mnl_socket_sendto(state->conn[NL_CONN_GE].mnl, new_hdr, new_hdr->nlmsg_len) < 0)
-			ERROR("netlink: sending ethtool query, %s\n", strerror(errno));
-		else
-			query_requested = true;
-	}
-
-	if (query_requested) {
-		DBG_L5("netlink: sent ethtool query for %d: %d\n", link->if_index, state->conn[NL_CONN_GE].seq);
-		link->ts_info_state = QRY_REQUESTED;
-	} else {
+	if (nl_ge_groups[GRP_ETHTOOL].family <= 0) {
 		DBG_L4("netlink: deferring ethtool query for %d\n", link->if_index);
+		return false;
 	}
 
-	return query_requested;
+
+	hdr = create_ethtool_tsinfo_query(conn, state->buf, state->buf_sz, link->if_index);
+	if (hdr) {
+		if (mnl_socket_sendto(conn->mnl, hdr, hdr->nlmsg_len) >= 0)
+			link->ts_info_state = QRY_REQUESTED;
+		else
+			ERROR("netlink: sending ethtool query, %s\n", strerror(errno));
+	}
+
+	if (state->stats_keys) {
+		hdr = create_ethtool_string_query(conn, state->buf, state->buf_sz, link->if_index);
+		if (hdr) {
+			if (mnl_socket_sendto(conn->mnl, hdr, hdr->nlmsg_len) >= 0)
+				link->drv_stats_ids_state = QRY_REQUESTED;
+			else
+				ERROR("netlink: sending ethtool query, %s\n", strerror(errno));
+		}
+	}
+
+	DBG_L5("netlink: sent ethtool queries for %d: %d\n", link->if_index, conn->seq);
+
+	return true;
 }
 #endif
 
@@ -671,18 +687,26 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 	/* Remove deleted interfaces from the table. */
 	for (row = 0; row < db->table.count; row++) {
 		if (db->table.rows[row].if_index == link->if_index) {
+			struct sfptpd_link *old = db->table.rows + row;
 			if (link->event == SFPTPD_LINK_DOWN) {
-				memmove(&db->table.rows[row],
-				        &db->table.rows[row + 1],
+				memmove(old, old + 1,
 					sizeof data * (db->table.count - row - 1));
 				db->table.count--;
-			} else {
+			} else  {
 				/* If the updated link is a team then inherit
 				 * the previous settings so that we don't lose
 				 * team characteristics while refetching them */
 				if (link->type == SFPTPD_LINK_TEAM)
-					link->bond = db->table.rows[row].bond;
-				db->table.rows[row] = *link;
+				*old = *link;
+
+				/* Also keep fixed ethtool info */
+				link->ts_info_state = old->ts_info_state;
+				link->ts_info = old->ts_info;
+
+				link->drv_stats_ids_state = old->drv_stats_ids_state;
+				memcpy(&link->drv_stats, &old->drv_stats, sizeof link->drv_stats);
+
+				link->bond = old->bond;
 			}
 			return 0;
 		}
@@ -1185,6 +1209,83 @@ static int ethtool_tsinfo_cb(const struct nlattr *attr, void *data)
 	return rc;
 }
 
+static int ethtool_strsets_cb(const struct nlattr *attr, void *data)
+{
+	const struct nlattr **table = data;
+	int type = mnl_attr_get_type(attr);
+	int rc = MNL_CB_OK;
+
+	if (mnl_attr_type_valid(attr, ETHTOOL_A_STRSET_MAX) < 0)
+		return rc;
+
+	switch(type) {
+	case ETHTOOL_A_STRSET_STRINGSETS:
+		if (mnl_attr_validate(attr, MNL_TYPE_NESTED) < 0)
+			rc = MNL_CB_ERROR;
+		break;
+	}
+	if (rc == MNL_CB_OK)
+		table[type] = attr;
+	else
+		ERROR("ethtool: mnl_attr_validate(<ethtool-strset>, %d), %s\n",
+		      type, strerror(errno));
+
+	return rc;
+}
+
+static int ethtool_strset_cb(const struct nlattr *attr, void *data)
+{
+	const struct nlattr **table = data;
+	int type = mnl_attr_get_type(attr);
+	int rc = MNL_CB_OK;
+
+	if (mnl_attr_type_valid(attr, ETHTOOL_A_STRINGSET_MAX) < 0)
+		return rc;
+
+	switch(type) {
+	case ETHTOOL_A_STRINGSET_ID:
+	case ETHTOOL_A_STRINGSET_COUNT:
+		if (mnl_attr_validate(attr, MNL_TYPE_U32) < 0)
+			rc = MNL_CB_ERROR;
+		break;
+	}
+	if (rc == MNL_CB_OK)
+		table[type] = attr;
+	else
+		ERROR("ethtool: mnl_attr_validate(<ethtool-strset>, %d), %s\n",
+		      type, strerror(errno));
+
+	return rc;
+}
+
+static int ethtool_string_cb(const struct nlattr *attr, void *data)
+{
+	const struct nlattr **table = data;
+	int type = mnl_attr_get_type(attr);
+	int rc = MNL_CB_OK;
+
+	if (mnl_attr_type_valid(attr, ETHTOOL_A_STRING_MAX) < 0)
+		return rc;
+
+	switch(type) {
+	case ETHTOOL_A_STRING_INDEX:
+		if (mnl_attr_validate(attr, MNL_TYPE_U32) < 0)
+			rc = MNL_CB_ERROR;
+		break;
+	case ETHTOOL_A_STRING_VALUE:
+		if (mnl_attr_validate(attr, MNL_TYPE_STRING) < 0)
+			rc = MNL_CB_ERROR;
+		break;
+	}
+	if (rc == MNL_CB_OK)
+		table[type] = attr;
+	else
+		ERROR("ethtool: mnl_attr_validate(<ethtool-string>, %d), %s\n",
+		      type, strerror(errno));
+
+	return rc;
+}
+
 static int ethtool_hdr_cb(const struct nlattr *attr, void *data)
 {
 	const struct nlattr **table = data;
@@ -1274,14 +1375,21 @@ static int netlink_handle_genl_ethtool(struct nl_conn_state *conn,
 	struct link_db *db = conn->state->db_hist + conn->state->db_hist_next;
 	struct sfptpd_link *link;
 	int rc;
+	const char **stats_keys = conn->state->stats_keys;
+	int num_stats_keys = conn->state->num_stats_keys;
 
 	assert(conn);
 	assert(nh);
+	assert(sizeof attr > (ETHTOOL_A_HEADER_MAX + 1) * sizeof *attr);
+	assert(sizeof attr > (ETHTOOL_A_STRSET_MAX + 1) * sizeof *attr);
 
 	genl = mnl_nlmsg_get_payload(nh);
 
 	/* Parse responses */
 	switch (genl->cmd) {
+	case ETHTOOL_MSG_STRSET_GET_REPLY:
+		mnl_attr_parse(nh, sizeof *genl, ethtool_strsets_cb, attr);
+		break;
 	case ETHTOOL_MSG_TSINFO_GET_REPLY:
 		mnl_attr_parse(nh, sizeof *genl, ethtool_tsinfo_cb, attr);
 		break;
@@ -1333,6 +1441,43 @@ static int netlink_handle_genl_ethtool(struct nl_conn_state *conn,
 		}
 		link->ts_info_state = QRY_POPULATED;
 		break;
+	case ETHTOOL_MSG_STRSET_GET_REPLY:
+		if (stats_keys && attr[ETHTOOL_A_STRSET_STRINGSETS]) {
+			struct nlattr *set;
+			mnl_attr_for_each_nested(set, attr[ETHTOOL_A_STRSET_STRINGSETS]) {
+				struct nlattr *nested[ETHTOOL_A_STRINGSET_MAX + 1] = {};
+				mnl_attr_parse_nested(set, ethtool_strset_cb, nested);
+				if (nested[ETHTOOL_A_STRINGSET_ID] &&
+				    nested[ETHTOOL_A_STRINGSET_COUNT] &&
+				    mnl_attr_get_u32(nested[ETHTOOL_A_STRINGSET_ID]) == ETH_SS_STATS &&
+				    nested[ETHTOOL_A_STRINGSET_STRINGS]) {
+					struct nlattr *string;
+					int count = mnl_attr_get_u32(nested[ETHTOOL_A_STRINGSET_COUNT]);
+					link->drv_stats.all_count = count;
+					memset(link->drv_stats.requested_ids, -1,
+					       sizeof link->drv_stats.requested_ids);
+					mnl_attr_for_each_nested(string,
+								 nested[ETHTOOL_A_STRINGSET_STRINGS]) {
+						struct nlattr *tuple[ETHTOOL_A_STRING_MAX];
+						mnl_attr_parse_nested(string, ethtool_string_cb, tuple);
+						if (tuple[ETHTOOL_A_STRING_INDEX] &&
+						    tuple[ETHTOOL_A_STRING_VALUE]) {
+							const char *key;
+							int i, value;
+							key = mnl_attr_get_str(tuple[ETHTOOL_A_STRING_VALUE]);
+							for (i = 0; i < num_stats_keys &&
+								    strcmp(key, stats_keys[i])
+								  ; i++);
+							if (i != num_stats_keys) {
+								value = mnl_attr_get_u32(tuple[ETHTOOL_A_STRING_INDEX]);
+								link->drv_stats.requested_ids[i] = value;
+							}
+						}
+					}
+					link->drv_stats_ids_state = QRY_POPULATED;
+				}
+			}
+		}
 	}
 
 	return 0;
@@ -1473,9 +1618,11 @@ static struct nlmsghdr *netlink_create_team_query(struct nl_conn_state *conn,
 }
 
 #ifdef HAVE_ETHTOOL_NETLINK
-static struct nlmsghdr *netlink_create_ethtool_tsinfo_query(struct nl_conn_state *conn,
-							    char *buf, size_t space,
-							    int ifindex)
+static struct nlmsghdr *netlink_create_ethtool_simple_get_query(struct nl_conn_state *conn,
+								char *buf, size_t space,
+								int ifindex,
+								uint32_t cmd,
+								uint32_t hdr_id)
 {
 	struct nlmsghdr *nh;
 	struct genlmsghdr *genlmsghdr;
@@ -1489,12 +1636,40 @@ static struct nlmsghdr *netlink_create_ethtool_tsinfo_query(struct nl_conn_state
 	nh->nlmsg_flags = NLM_F_REQUEST;
 
 	genlmsghdr = mnl_nlmsg_put_extra_header(nh, sizeof *genlmsghdr);
-	genlmsghdr->cmd = ETHTOOL_MSG_TSINFO_GET;
+	genlmsghdr->cmd = cmd;
 
-	ethtool_hdr = mnl_attr_nest_start_check(nh, space, ETHTOOL_A_TSINFO_HEADER);
+	ethtool_hdr = mnl_attr_nest_start_check(nh, space, hdr_id);
 	mnl_attr_put_u32_check(nh, space, ETHTOOL_A_HEADER_DEV_INDEX, ifindex);
 	mnl_attr_put_u32_check(nh, space, ETHTOOL_A_HEADER_FLAGS, ETHTOOL_FLAG_COMPACT_BITSETS);
 	mnl_attr_nest_end(nh, ethtool_hdr);
+
+	return nh;
+}
+static struct nlmsghdr *create_ethtool_tsinfo_query(struct nl_conn_state *conn,
+						    char *buf, size_t space,
+						    int ifindex)
+{
+	return netlink_create_ethtool_simple_get_query(conn, buf, space, ifindex,
+						       ETHTOOL_MSG_TSINFO_GET,
+						       ETHTOOL_A_TSINFO_HEADER);
+}
+
+static struct nlmsghdr *create_ethtool_string_query(struct nl_conn_state *conn,
+						    char *buf, size_t space,
+						    int ifindex)
+{
+	struct nlmsghdr *nh = netlink_create_ethtool_simple_get_query(conn, buf, space, ifindex,
+								      ETHTOOL_MSG_STRSET_GET,
+								      ETHTOOL_A_STRSET_HEADER);
+	struct nlattr *params, *set;
+
+	assert(nh);
+
+	params = mnl_attr_nest_start_check(nh, space, ETHTOOL_A_STRSET_STRINGSETS);
+	set = mnl_attr_nest_start_check(nh, space, ETHTOOL_A_STRINGSETS_STRINGSET);
+	mnl_attr_put_u32_check(nh, space, ETHTOOL_A_STRINGSET_ID, ETH_SS_STATS);
+	mnl_attr_nest_end(nh, set);
+	mnl_attr_nest_end(nh, params);
 
 	return nh;
 }
@@ -1622,6 +1797,8 @@ struct sfptpd_nl_state *sfptpd_netlink_init(void)
 	state->db_hist[0].table.version = state->db_ver_next++;
 
 	state->buf_sz = MNL_SOCKET_BUFFER_SIZE;
+	if (state->buf_sz < NETLINK_PACKET_BUFFER_SIZE)
+		state->buf_sz = NETLINK_PACKET_BUFFER_SIZE;
 	state->buf = malloc(state->buf_sz);
 	if (state->buf == NULL) {
 		ERROR("netlink: could not allocate buffer, %s\n",
@@ -2028,8 +2205,9 @@ void sfptpd_netlink_finish(struct sfptpd_nl_state *state)
 
 	for (i = 0; i < MAX_LINK_DB_VERSIONS; i++) {
 		struct sfptpd_link_table *table = &state->db_hist[i].table;
-		if (table->rows != NULL)
+		if (table->rows != NULL) {
 			free(table->rows);
+		}
 	}
 
 	for (i = 0; i < NL_CONN_MAX; i++) {
@@ -2119,4 +2297,19 @@ finish:
 	close(epollfd);
 	return link_table;
 }
+
+int sfptpd_netlink_set_driver_stats(struct sfptpd_nl_state *state,
+				     const char **keys, size_t num_keys)
+{
+	assert(state);
+	assert(num_keys == 0 || keys != NULL);
+
+	if (num_keys > SFPTPD_LINK_STATS_MAX)
+		return ENOSPC;
+
+	state->stats_keys = keys;
+	state->num_stats_keys = num_keys;
+	return 0;
+}
+
 /* fin */

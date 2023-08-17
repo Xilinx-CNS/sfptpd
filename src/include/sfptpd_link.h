@@ -16,6 +16,8 @@
 #define SFPTPD_L2ADDR_MAX 10
 #define SFPTPD_L2ADDR_STR_MAX SFPTPD_L2ADDR_MAX * 3
 
+#define SFPTPD_LINK_STATS_MAX 16
+
 enum sfptpd_link_type {
 	SFPTPD_LINK_PHYSICAL,
 	SFPTPD_LINK_VLAN,
@@ -82,6 +84,12 @@ struct sfptpd_link {
 
 	enum sfptpd_link_fulfillment_state ts_info_state;
 	struct ethtool_ts_info ts_info;
+
+	enum sfptpd_link_fulfillment_state drv_stats_ids_state;
+	struct {
+		int all_count;
+		int requested_ids[SFPTPD_LINK_STATS_MAX];
+	} drv_stats;
 
 	/* Not for client use */
 	void *priv;

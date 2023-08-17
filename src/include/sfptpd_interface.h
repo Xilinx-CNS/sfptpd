@@ -11,6 +11,7 @@
 #include <linux/if_ether.h>
 
 #include "sfptpd_constants.h"
+#include "sfptpd_statistics.h"
 #include "sfptpd_link.h"
 #include "sfptpd_db.h"
 
@@ -44,21 +45,6 @@ typedef uint32_t sfptpd_interface_ts_caps_t;
 #define SFPTPD_INTERFACE_TS_CAPS_SW (1<<0)
 #define SFPTPD_INTERFACE_TS_CAPS_HW (1<<1)
 #define SFPTPD_INTERFACE_TS_CAPS_ALL (3)
-
-/* Preserve order */
-enum sfptpd_interface_drv_stat {
-	SFPTPD_DRVSTAT_PPS_OFLOW,
-	SFPTPD_DRVSTAT_PPS_BAD,
-	SFPTPD_DRVSTAT_PPS_OFF_LAST,
-	SFPTPD_DRVSTAT_PPS_OFF_MEAN,
-	SFPTPD_DRVSTAT_PPS_OFF_MIN,
-	SFPTPD_DRVSTAT_PPS_OFF_MAX,
-	SFPTPD_DRVSTAT_PPS_PER_LAST,
-	SFPTPD_DRVSTAT_PPS_PER_MEAN,
-	SFPTPD_DRVSTAT_PPS_PER_MIN,
-	SFPTPD_DRVSTAT_PPS_PER_MAX,
-	SFPTPD_DRVSTAT_MAX,
-};
 
 
 /****************************************************************************

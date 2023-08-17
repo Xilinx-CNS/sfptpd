@@ -113,6 +113,21 @@ typedef struct sfptpd_stats_pps
 	} period;
 } sfptpd_stats_pps_t;
 
+enum sfptpd_stats_driver {
+	SFPTPD_DRVSTAT_PPS_OFLOW,
+	SFPTPD_DRVSTAT_PPS_BAD,
+	SFPTPD_DRVSTAT_PPS_OFF_LAST,
+	SFPTPD_DRVSTAT_PPS_OFF_MEAN,
+	SFPTPD_DRVSTAT_PPS_OFF_MIN,
+	SFPTPD_DRVSTAT_PPS_OFF_MAX,
+	SFPTPD_DRVSTAT_PPS_PER_LAST,
+	SFPTPD_DRVSTAT_PPS_PER_MEAN,
+	SFPTPD_DRVSTAT_PPS_PER_MIN,
+	SFPTPD_DRVSTAT_PPS_PER_MAX,
+	SFPTPD_DRVSTAT_MAX,
+};
+
+extern const char *sfptpd_stats_ethtool_names[SFPTPD_DRVSTAT_MAX];
 
 /** struct sfptpd_stats_range
  * Statistical measure of the range of a value over a period of time
