@@ -21,7 +21,8 @@ if_defn_then = echo -e "\#include <$1>\nint a=$2;"| $(CC) -c -S -x c -o - - > /d
 CONDITIONAL_DEFS := \
  $(shell $(call if_header_then,sys/capability.h,-DHAVE_CAPS)) \
  $(shell $(call if_header_then,linux/ethtool_netlink.h,-DHAVE_ETHTOOL_NETLINK)) \
- $(shell $(call if_defn_then,linux/if_link.h,IFLA_PERM_ADDRESS))
+ $(shell $(call if_defn_then,linux/if_link.h,IFLA_PERM_ADDRESS)) \
+ $(shell $(call if_defn_then,linux/if_link.h,IFLA_PARENT_DEV_NAME))
 CONDITIONAL_LIBS := \
  $(shell $(call if_header_then,sys/capability.h,-lcap))
 

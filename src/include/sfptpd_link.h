@@ -71,6 +71,7 @@ struct sfptpd_link {
 	char if_kind[16];
 	int if_link;
 	struct sfptpd_l2addr perm_addr;
+	char bus_addr[ETHTOOL_BUSINFO_LEN];
 	struct {
 		int if_master;
 		enum sfptpd_bond_mode bond_mode;

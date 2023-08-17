@@ -728,11 +728,17 @@ static int interface_get_versions(struct sfptpd_interface *interface)
 		       sizeof(interface->driver_version));
 	sfptpd_strncpy(interface->fw_version, drv_info.fw_version,
 		       sizeof(interface->fw_version));
-	sfptpd_strncpy(interface->bus_addr, drv_info.bus_info,
-		       sizeof(interface->bus_addr));
 	sfptpd_strncpy(interface->driver, drv_info.driver,
 		       sizeof(interface->driver));
 	interface->n_stats = drv_info.n_stats;
+
+	if (interface->link.bus_addr[0] == '\0') {
+		sfptpd_strncpy(interface->bus_addr, drv_info.bus_info,
+			       sizeof(interface->bus_addr));
+	} else  {
+		sfptpd_strncpy(interface->bus_addr, interface->link.bus_addr,
+			       sizeof(interface->bus_addr));
+	}
 
 	if (rc != 0)
 		TRACE_L4("interface %s: failed to get driver info via ethtool, %s\n",

@@ -237,13 +237,13 @@ static int snprint_flags_delta(char *buf, size_t space, int flags1, int flags2)
 
 static void print_link(struct sfptpd_link *link)
 {
-	DBG_L4("if %d name %s event %s link %d kind %s type %d flags %x family %d master %d type %d bond_mode %d active_slave %d is_slave %d vlan %d phc %d permaddr %s\n",
+	DBG_L4("if %d name %s event %s link %d kind %s type %d flags %x family %d master %d type %d bond_mode %d active_slave %d is_slave %d vlan %d phc %d perm_addr %s bus_addr %s\n",
 	       link->if_index, link->if_name, sfptpd_link_event_str(link->event),
                link->if_link, link->if_kind, link->if_type, link->if_flags,
                link->if_family, link->bond.if_master, link->type,
                link->bond.bond_mode, link->bond.active_slave, link->is_slave,
                link->vlan_id, link->ts_info.phc_index,
-	       link->perm_addr.string);
+	       link->perm_addr.string, link->bus_addr);
 }
 
 static const char *link_bond_mode(enum sfptpd_bond_mode mode) {
@@ -335,6 +335,9 @@ static int link_attr_cb(const struct nlattr *attr, void *data)
 
 	switch(type) {
 	case IFLA_IFNAME:
+#ifdef HAVE_IFLA_PARENT_DEV_NAME
+	case IFLA_PARENT_DEV_NAME:
+#endif
 		if (mnl_attr_validate(attr, MNL_TYPE_STRING) < 0)
 			rc = MNL_CB_ERROR;
 		break;
@@ -627,6 +630,13 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 					 ptr == len - 1 ? "%02hhx" : "%02hhx:",
 					 link->perm_addr.addr[ptr]);
 		}
+	}
+#endif
+
+#ifdef HAVE_IFLA_PARENT_DEV_NAME
+	if (table[IFLA_PARENT_DEV_NAME]) {
+		const char *bus_addr = mnl_attr_get_str(table[IFLA_PARENT_DEV_NAME]);
+		sfptpd_strncpy(link->bus_addr, bus_addr, sizeof link->bus_addr);
 	}
 #endif
 
