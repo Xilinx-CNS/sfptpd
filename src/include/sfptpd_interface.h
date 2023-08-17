@@ -34,8 +34,9 @@ typedef enum {
 
 /** Structure to hold interface hardware address */
 typedef struct {
-	uint8_t addr[ETH_ALEN];
-} sfptpd_mac_addr_t;
+	size_t len;
+	uint8_t addr[SFPTPD_L2ADDR_MAX];
+} __attribute__ ((packed)) sfptpd_mac_addr_t;
 
 
 /** Bitmask of interface timestamping capabilities */

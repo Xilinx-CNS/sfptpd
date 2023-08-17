@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2022 Xilinx, Inc. */
+/* (c) Copyright 2012-2023 Xilinx, Inc. */
 
 /**
  * @file   sfptpd_interface.c
@@ -140,7 +140,7 @@ struct sfptpd_interface {
 
 	/* Adapter permanent MAC address */
 	sfptpd_mac_addr_t mac_addr;
-	char mac_string[SFPTPD_CONFIG_MAC_STRING_MAX];
+	char mac_string[SFPTPD_L2ADDR_STR_MAX];
 
 	/* PCI device ID */
 	uint16_t pci_device_id;
@@ -638,30 +638,44 @@ static bool interface_is_ptp_capable(const char *name,
 
 static int interface_get_hw_address(struct sfptpd_interface *interface)
 {
-	uint8_t buf[sizeof(struct ethtool_perm_addr) + ETH_ALEN];
-	struct ethtool_perm_addr *req = (struct ethtool_perm_addr *)buf;
 	int rc;
 
 	assert(interface != NULL);
 
-	memset(buf, 0, sizeof(buf));
-	req->cmd = ETHTOOL_GPERMADDR;
-	req->size = ETH_ALEN;
+	if (interface->link.permaddr_len > 0) {
+		/* Method 1. Already have acquired via netlink. */
+		TRACE_L4("interface %s: got permanent hardware address via netlink\n",
+			 interface->name);
 
-	rc = sfptpd_interface_ioctl(interface, SIOCETHTOOL, req);
-	if (rc != 0) {
-		sfptpd_strncpy(interface->mac_string, "00:00:00:00:00:00",
-			       sizeof interface->mac_string);
-		TRACE_L3("interface %s: failed to get permanent hardware address, %s\n",
-			 interface->name, strerror(rc));
-		return rc;
+		assert(interface->link.permaddr_len <= sizeof interface->mac_addr.addr);
+		interface->mac_addr.len = interface->link.permaddr_len;
+		memcpy(interface->mac_addr.addr, interface->link.permaddr, interface->link.permaddr_len);
+		strncpy(interface->mac_string, interface->link.permaddr_repr, sizeof interface->mac_string);
+	} else {
+		uint8_t buf[sizeof(struct ethtool_perm_addr) + ETH_ALEN];
+		struct ethtool_perm_addr *req = (struct ethtool_perm_addr *)buf;
+
+		/* Method 2. Use the ethtool interface to get the timestamping
+		 * capabilities of the NIC. */
+		TRACE_L4("interface %s: getting permanent hardware address\n",
+			 interface->name);
+
+		memset(buf, 0, sizeof(buf));
+		req->cmd = ETHTOOL_GPERMADDR;
+		req->size = ETH_ALEN;
+		rc = sfptpd_interface_ioctl(interface, SIOCETHTOOL, req);
+		if (rc != 0) {
+			TRACE_L3("interface %s: failed to get permanent hardware address, %s\n",
+				 interface->name, strerror(rc));
+			return rc;
+		}
+
+		snprintf(interface->mac_string, sizeof(interface->mac_string),
+			 "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx",
+			 req->data[0], req->data[1], req->data[2],
+			 req->data[3], req->data[4], req->data[5]);
+		memcpy(interface->mac_addr.addr, req->data, sizeof(interface->mac_addr.addr));
 	}
-
-	snprintf(interface->mac_string, sizeof(interface->mac_string),
-		 "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx",
-		 req->data[0], req->data[1], req->data[2],
-		 req->data[3], req->data[4], req->data[5]);
-	memcpy(interface->mac_addr.addr, req->data, sizeof(interface->mac_addr.addr));
 
 	return 0;
 }
