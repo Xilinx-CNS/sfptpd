@@ -797,17 +797,26 @@ static int renew_clock(struct sfptpd_clock *clock)
 		}
 		snprintf(clock->long_name + name_len, sizeof(clock->long_name) - name_len, ")");
 
-		/* Create a hardware address using the MAC address of the
-		 * primary interface and an equivalent string form. */
-		sfptpd_interface_get_mac_addr(clock->u.nic.primary_if, &mac);
-		clock->hw_id.id[0] = mac.addr[0];
-		clock->hw_id.id[1] = mac.addr[1];
-		clock->hw_id.id[2] = mac.addr[2];
-		clock->hw_id.id[3] = 0xFF;
-		clock->hw_id.id[4] = 0xFE;
-		clock->hw_id.id[5] = mac.addr[3];
-		clock->hw_id.id[6] = mac.addr[4];
-		clock->hw_id.id[7] = mac.addr[5];
+		if (mac.len == 6) {
+			/* Create a hardware address using the legacy IEEE1588-2008
+			 * method for NUI-48 addresses, i.e. the MAC address of the
+			 * primary interface and an equivalent string form. */
+			sfptpd_interface_get_mac_addr(clock->u.nic.primary_if, &mac);
+			clock->hw_id.id[0] = mac.addr[0];
+			clock->hw_id.id[1] = mac.addr[1];
+			clock->hw_id.id[2] = mac.addr[2];
+			clock->hw_id.id[3] = 0xFF;
+			clock->hw_id.id[4] = 0xFE;
+			clock->hw_id.id[5] = mac.addr[3];
+			clock->hw_id.id[6] = mac.addr[4];
+			clock->hw_id.id[7] = mac.addr[5];
+		} else {
+			/* Else pump MSBs into the field, padded with zeros. This
+			 * will meet IEEE1588-2019 for NUI-64 addresses. */
+			memset(clock->hw_id.id, '\0', sizeof clock->hw_id.id);
+			memcpy(clock->hw_id.id, mac.addr, mac.len < sizeof clock->hw_id.id ?
+							  mac.len : sizeof clock->hw_id.id);
+		}
 		sfptpd_clock_init_hw_id_string(clock->hw_id_string, clock->hw_id,
 					       sizeof(clock->hw_id_string));
 
