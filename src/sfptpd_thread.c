@@ -1572,6 +1572,7 @@ static int thread_create(const char *name, const struct sfptpd_thread_ops *ops,
 		struct sfptpd_thread *self = sfptpd_thread_self();
 		sfptpd_msg_thread_startup_status_t *msg = &new->startup_status;
 		sfptpd_msg_hdr_t *hdr;
+		char thread_name[16];
 
 		/* Initialise the startup complete message ready to wait on.
 		 * Set the reply queue to be the priority queue. */
@@ -1588,7 +1589,8 @@ static int thread_create(const char *name, const struct sfptpd_thread_ops *ops,
 		}
 
 		/* Set the thread name for debugging purposes: ignore failure */
-		pthread_setname_np(new->pthread, name);
+		snprintf(thread_name, sizeof thread_name, "sfptpd:%s", name);
+		pthread_setname_np(new->pthread, thread_name);
 
 		/* Wait for the response from the thread to indicate that
 		 * startup is complete. */
