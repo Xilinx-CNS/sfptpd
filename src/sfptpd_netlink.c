@@ -237,12 +237,13 @@ static int snprint_flags_delta(char *buf, size_t space, int flags1, int flags2)
 
 static void print_link(struct sfptpd_link *link)
 {
-	DBG_L4("if %d name %s event %s link %d kind %s type %d flags %x family %d master %d type %d bond_mode %d active_slave %d is_slave %d vlan %d phc %d\n",
+	DBG_L4("if %d name %s event %s link %d kind %s type %d flags %x family %d master %d type %d bond_mode %d active_slave %d is_slave %d vlan %d phc %d permaddr %s\n",
 	       link->if_index, link->if_name, sfptpd_link_event_str(link->event),
                link->if_link, link->if_kind, link->if_type, link->if_flags,
                link->if_family, link->bond.if_master, link->type,
                link->bond.bond_mode, link->bond.active_slave, link->is_slave,
-               link->vlan_id, link->ts_info.phc_index);
+               link->vlan_id, link->ts_info.phc_index,
+	       link->perm_addr.string);
 }
 
 static const char *link_bond_mode(enum sfptpd_bond_mode mode) {
@@ -294,7 +295,7 @@ void sfptpd_link_log(const struct sfptpd_link *link, const struct sfptpd_link *p
 		       , prev->ts_info.phc_index
 #endif
 #ifdef HAVE_IFLA_PERM_ADDRESS
-		       , prev->permaddr_repr
+		       , prev->perm_addr.string
 #endif
 		       );
 		prev_flags = prev->if_flags;
@@ -310,7 +311,7 @@ void sfptpd_link_log(const struct sfptpd_link *link, const struct sfptpd_link *p
 		       , link->ts_info.phc_index
 #endif
 #ifdef HAVE_IFLA_PERM_ADDRESS
-		       , link->permaddr_repr
+		       , link->perm_addr.string
 #endif
 		       );
 		if (prev != NULL && prev_flags ^ link->if_flags) {
@@ -613,18 +614,18 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 	if (table[IFLA_PERM_ADDRESS]) {
 		uint32_t len = mnl_attr_get_payload_len(table[IFLA_PERM_ADDRESS]);
 		void *data = mnl_attr_get_payload(table[IFLA_PERM_ADDRESS]);
-		if (len > sizeof link->permaddr) {
+		if (len > sizeof link->perm_addr.addr) {
 			/* Silently ignore - irrelevant scenario for esoteric link types */
-			TRACE_L3("netlink: permaddr too big (%d > %d)\n", len, sizeof link->permaddr);
+			TRACE_L3("netlink: permaddr too big (%d > %d)\n", len, sizeof link->perm_addr.addr);
 		} else {
 			int ptr;
-			link->permaddr_len = len;
-			memcpy(link->permaddr, data, len);
+			link->perm_addr.len = len;
+			memcpy(link->perm_addr.addr, data, len);
 			for (ptr = 0; ptr < len; ptr++)
-				snprintf(link->permaddr_repr + ptr * 3,
-					 (sizeof link->permaddr_repr) - ptr * 3,
+				snprintf(link->perm_addr.string + ptr * 3,
+					 (sizeof link->perm_addr.string) - ptr * 3,
 					 ptr == len - 1 ? "%02hhx" : "%02hhx:",
-					 link->permaddr[ptr]);
+					 link->perm_addr.addr[ptr]);
 		}
 	}
 #endif

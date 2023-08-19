@@ -642,15 +642,15 @@ static int interface_get_hw_address(struct sfptpd_interface *interface)
 
 	assert(interface != NULL);
 
-	if (interface->link.permaddr_len > 0) {
+	if (interface->link.perm_addr.len > 0) {
 		/* Method 1. Already have acquired via netlink. */
 		TRACE_L4("interface %s: got permanent hardware address via netlink\n",
 			 interface->name);
 
-		assert(interface->link.permaddr_len <= sizeof interface->mac_addr.addr);
-		interface->mac_addr.len = interface->link.permaddr_len;
-		memcpy(interface->mac_addr.addr, interface->link.permaddr, interface->link.permaddr_len);
-		strncpy(interface->mac_string, interface->link.permaddr_repr, sizeof interface->mac_string);
+		assert(interface->link.perm_addr.len <= sizeof interface->mac_addr.addr);
+		interface->mac_addr.len = interface->link.perm_addr.len;
+		memcpy(interface->mac_addr.addr, interface->link.perm_addr.addr, interface->link.perm_addr.len);
+		strncpy(interface->mac_string, interface->link.perm_addr.string, sizeof interface->mac_string);
 	} else {
 		uint8_t buf[sizeof(struct ethtool_perm_addr) + ETH_ALEN];
 		struct ethtool_perm_addr *req = (struct ethtool_perm_addr *)buf;

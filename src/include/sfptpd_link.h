@@ -53,6 +53,12 @@ enum sfptpd_link_fulfillment_state {
 	QRY_POPULATED,
 };
 
+struct sfptpd_l2addr {
+	size_t len;
+	uint8_t addr[SFPTPD_L2ADDR_MAX];
+	char string [SFPTPD_L2ADDR_STR_MAX];
+};
+
 struct sfptpd_link {
 	enum sfptpd_link_type type;
 	enum sfptpd_link_event event;
@@ -64,11 +70,7 @@ struct sfptpd_link {
 	char if_name[IF_NAMESIZE];
 	char if_kind[16];
 	int if_link;
-
-	size_t permaddr_len;
-	uint8_t permaddr[SFPTPD_L2ADDR_MAX];
-	char permaddr_repr[SFPTPD_L2ADDR_STR_MAX];
-
+	struct sfptpd_l2addr perm_addr;
 	struct {
 		int if_master;
 		enum sfptpd_bond_mode bond_mode;
