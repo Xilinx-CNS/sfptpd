@@ -19,6 +19,10 @@ dir := $(d)/crny
 include $(dir)/module.mk
 dir := $(d)/sfptpdctl
 include $(dir)/module.mk
+ifndef NO_GPS
+dir := $(d)/gps
+include $(dir)/module.mk
+endif
 
 # Local variables
 

@@ -31,6 +31,9 @@ struct sfptpd_hash_table;
 /** Maximum offset used for NTP sync module */
 #define SFPTPD_STATS_CONVERGENCE_MAX_OFFSET_NTP 10000000.0
 
+/** Maximum offset used for NTP sync module */
+#define SFPTPD_STATS_CONVERGENCE_MAX_OFFSET_GPS 10000000.0
+
 /** Maximum size of a stats collection */
 #define SFPTPD_STATS_COLLECTION_MAX_SIZE (256)
 

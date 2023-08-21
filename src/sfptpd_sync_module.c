@@ -22,6 +22,9 @@
 #include "sfptpd_pps_module.h"
 #include "sfptpd_ntp_module.h"
 #include "sfptpd_crny_module.h"
+#ifdef HAVE_GPS
+#include "sfptpd_gps_module.h"
+#endif
 
 
 /****************************************************************************
@@ -62,6 +65,10 @@ static const struct sync_module_defn sync_module_defns[] = {
 		= {SFPTPD_NTP_MODULE_NAME, sfptpd_ntp_module_create},
 	[SFPTPD_CONFIG_CATEGORY_CRNY]
 		= {SFPTPD_CRNY_MODULE_NAME, sfptpd_crny_module_create},
+#ifdef HAVE_GPS
+	[SFPTPD_CONFIG_CATEGORY_GPS]
+		= {SFPTPD_GPS_MODULE_NAME, sfptpd_gps_module_create},
+#endif
 };
 
 
@@ -182,6 +189,11 @@ int sfptpd_sync_module_config_init(struct sfptpd_config *config)
 	if (rc != 0)
 		return rc;
 	rc = sfptpd_crny_module_config_init(config);
+#ifdef HAVE_GPS
+	if (rc != 0)
+		return rc;
+	rc = sfptpd_gps_module_config_init(config);
+#endif
 	return rc;
 }
 
@@ -196,6 +208,9 @@ void sfptpd_sync_module_set_default_interface(struct sfptpd_config *config,
 	sfptpd_ptp_module_set_default_interface(config, interface_name);
 	sfptpd_pps_module_set_default_interface(config, interface_name);
 	sfptpd_ntp_module_set_default_interface(config, interface_name);
+#ifdef HAVE_GPS
+	sfptpd_gps_module_set_default_interface(config, interface_name);
+#endif
 
 	TRACE_L3("default interface set to %s\n", optarg);
 }

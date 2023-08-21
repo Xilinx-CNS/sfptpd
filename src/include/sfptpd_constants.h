@@ -89,6 +89,7 @@
 #define SFPTPD_ACCURACY_PPS		(50.0)		/* 50ns */
 #define SFPTPD_ACCURACY_PTP_HW		(50.0)		/* 50ns */
 #define SFPTPD_ACCURACY_PTP_SW		(50.0e3)	/* 50us */
+#define SFPTPD_ACCURACY_GPS		(500.0e6)	/* 500ms */
 
 /** Extra servos for interfaces that could be added at runtime */
 #define SFPTPD_EXTRA_SERVOS_FOR_HOTPLUGGING (16)

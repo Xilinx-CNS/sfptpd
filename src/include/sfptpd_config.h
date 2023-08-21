@@ -458,6 +458,9 @@ enum sfptpd_config_category {
 	SFPTPD_CONFIG_CATEGORY_PPS,
 	SFPTPD_CONFIG_CATEGORY_NTP,
 	SFPTPD_CONFIG_CATEGORY_CRNY,
+#ifdef HAVE_GPS
+	SFPTPD_CONFIG_CATEGORY_GPS,
+#endif
 
 	/* Insert new categories here */
 

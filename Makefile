@@ -10,6 +10,10 @@ SFPTPD_VERSION = $(shell scripts/sfptpd_versioning read)
 PACKAGE_NAME = sfptpd
 PACKAGE_VERSION = $(SFPTPD_VERSION)
 
+### Exclude unsupported features by default
+# The GPS module is not supported; use 'make NO_GPS=' to enable build
+NO_GPS = 1
+
 ### Definitions conditional on build environment
 if_header_then = echo "\#include <$1>" | $(CC) -E -x c - > /dev/null 2>&1 && echo $2
 
@@ -18,6 +22,11 @@ CONDITIONAL_DEFS := \
  $(shell $(call if_header_then,linux/if_team.h,-DHAVE_TEAMING))
 CONDITIONAL_LIBS := \
  $(shell $(call if_header_then,sys/capability.h,-lcap))
+
+ifndef NO_GPS
+CONDITIONAL_DEFS += $(shell $(call if_header_then,gps.h,-DHAVE_GPS))
+CONDITIONAL_LIBS += $(shell $(call if_header_then,gps.h,-lgps))
+endif
 
 ### Unit testing
 FAST_TESTS = bic filters hash stats config
