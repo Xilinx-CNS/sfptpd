@@ -82,6 +82,9 @@ struct sfptpd_servo {
 	/* Calculated offset from master in ns */
 	long double offset_from_master_ns;
 
+	/* Step threshold for the clock in ns */
+	long double step_threshold;
+
 	/* Boolean indicating that servo synchronize operation has been
 	 * executed at least once. Used to limit clock stepping to first
 	 * update if required. */
@@ -152,6 +155,7 @@ struct sfptpd_servo *sfptpd_servo_create(struct sfptpd_config *config, int idx)
 
 	servo->clock_ctrl = general_config->clocks.control;
 	servo->epoch_guard = general_config->epoch_guard;
+	servo->step_threshold = general_config->step_threshold;
 
 	/* Work out the FIR stiffness to use based on how often we will
 	 * synchronize the clocks. For large sync intervals we effectively
@@ -475,8 +479,8 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 	    ((servo->clock_ctrl == SFPTPD_CLOCK_CTRL_STEP_ON_FIRST_LOCK) && 
                 !servo->stepped_after_lrc_locked && sfptpd_clock_get_been_locked(servo->master)) || 
             ((servo->clock_ctrl == SFPTPD_CLOCK_CTRL_STEP_FORWARD) && (diff_ns < 0))) {
-		if ((diff_ns <= -SFPTPD_SERVO_CLOCK_STEP_THRESHOLD) ||
-		    (diff_ns >= SFPTPD_SERVO_CLOCK_STEP_THRESHOLD)) {
+		if ((diff_ns <= -servo->step_threshold) ||
+		    (diff_ns >= servo->step_threshold)) {
 			/* Step the clock and return */
 			rc = sfptpd_servo_step_clock(servo, &diff);
 

@@ -26,6 +26,7 @@
 #define SFPTPD_DEFAULT_TRACE_LEVEL                 (0)
 #define SFPTPD_DEFAULT_SYNC_INTERVAL               -4
 #define SFPTPD_DEFAULT_CLOCK_CTRL                  (SFPTPD_CLOCK_CTRL_SLEW_AND_STEP)
+#define SFPTPD_DEFAULT_STEP_THRESHOLD_NS           (SFPTPD_SERVO_CLOCK_STEP_THRESHOLD_S * ONE_BILLION)
 #define SFPTPD_DEFAULT_EPOCH_GUARD                 (SFPTPD_EPOCH_GUARD_CORRECT_CLOCK)
 #define SFPTPD_DEFAULT_CLUSTERING_MODE             (SFPTPD_CLUSTERING_DISABLED)
 #define SFPTPD_DEFAULT_CLUSTERING_SCORE_ABSENT_DISCRIM 1
@@ -166,6 +167,7 @@ typedef struct sfptpd_config_timestamping {
  * @lock: Use a lock file to lock access to the clocks
  * @timestamping: Timestamping configuration
  * @convergence_threshold: Convergence threshold in ns
+ * @step_threshold: Step threshold in ns
  * @selection_policy: Sync instance selection rules & strategy
  * @pps_methods: PHC PPS methods
  * @initial_sync_instance: When selecting instances manually, the name of the initial sync instance
@@ -205,6 +207,7 @@ typedef struct sfptpd_config_general {
 	char control_path[PATH_MAX];
 	sfptpd_config_timestamping_t timestamping;
 	long double convergence_threshold;
+	long double step_threshold;
 	char initial_sync_instance[SFPTPD_CONFIG_SECTION_NAME_MAX];
 	unsigned int selection_holdoff_interval;
 	unsigned int netlink_rescan_interval;

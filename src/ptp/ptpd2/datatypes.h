@@ -327,6 +327,9 @@ typedef struct ptp_servo {
 	sfptpd_time_t offset_from_master;
 	sfptpd_time_t mean_path_delay;
 
+	/* Step threshold */
+	LongDouble step_threshold;
+
 	/* PID filter */
 	sfptpd_pid_filter_t pid_filter;
 
@@ -496,6 +499,7 @@ typedef struct ptpd_port_config {
 	unsigned int outlier_filter_size;
 	long double outlier_filter_adaption;
 	unsigned int fir_filter_size;
+	long double step_threshold;
 
 	Integer32 maxReset; /* Maximum number of nanoseconds to reset */
 	enum sfptpd_clock_ctrl clock_ctrl;

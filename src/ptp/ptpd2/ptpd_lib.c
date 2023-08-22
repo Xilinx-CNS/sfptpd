@@ -65,6 +65,8 @@ void ptpd_config_port_initialise(struct ptpd_port_config *config,
 
 	config->clock_ctrl = SFPTPD_CLOCK_CTRL_SLEW_AND_STEP;
 
+	config->step_threshold = SFPTPD_DEFAULT_STEP_THRESHOLD_NS;
+
 	config->maxReset = 0;
 
 	config->servoKP = PTPD_DEFAULT_KP;

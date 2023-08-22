@@ -95,6 +95,7 @@ servo_init(const RunTimeOpts *rtOpts, ptp_servo_t *servo, struct sfptpd_clock *c
 	/* Take copy of configuration required */
 	servo->ctrl_flags = SYNC_MODULE_CTRL_FLAGS_DEFAULT;
 	servo->clock_ctrl = rtOpts->clock_ctrl;
+	servo->step_threshold = rtOpts->step_threshold;
 	servo->clock_first_updated = FALSE;
 	servo->critical_stats_logger = (struct ptpd_critical_stats_logger *) &rtOpts->criticalStatsLogger;
         servo->clustering_evaluator = (struct sfptpd_clustering_evaluator *)  &rtOpts->clusteringEvaluator;
@@ -635,7 +636,7 @@ void servo_update_clock(ptp_servo_t *servo)
 		SYNC_MODULE_ALARM_CLEAR(servo->alarms, CLUSTERING_THRESHOLD_EXCEEDED);
 	}
 
-	if (sfptpd_time_abs(servo->offset_from_master) >= ONE_BILLION) {
+	if (sfptpd_time_abs(servo->offset_from_master) >= servo->step_threshold) {
 		/* If clock control is disabled, go no further! */
 		if ((servo->ctrl_flags & SYNC_MODULE_CLOCK_CTRL) == 0)
 			goto finish;

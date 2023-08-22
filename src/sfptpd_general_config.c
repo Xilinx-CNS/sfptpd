@@ -64,6 +64,8 @@ static int parse_sync_threshold(struct sfptpd_config_section *section, const cha
 				 unsigned int num_params, const char * const params[]);
 static int parse_clock_control(struct sfptpd_config_section *section, const char *option,
 			       unsigned int num_params, const char * const params[]);
+static int parse_step_threshold(struct sfptpd_config_section *section, const char *option,
+			       unsigned int num_params, const char * const params[]);
 static int parse_epoch_guard(struct sfptpd_config_section *section, const char *option,
 			       unsigned int num_params, const char * const params[]);
 static int parse_clock_list(struct sfptpd_config_section *section, const char *option,
@@ -196,6 +198,11 @@ static const sfptpd_config_option_t config_general_options[] =
 		"Specifies how the clocks are controlled. By default clocks are stepped and slewed as necessary",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
 		parse_clock_control},
+	{"step_threshold", "NUMBER",
+		"Threshold in seconds of the offset between the clock and its reference clock for sfptpd to step. The default is "
+		STRINGIFY(SFPTPD_SERVO_CLOCK_STEP_THRESHOLD_S) ".",
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		parse_step_threshold},
 	{"epoch_guard", "<alarm-only | prevent-sync | correct-clock>",
 		"Guards against propagation of times near the epoch. The default is correct-clock",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
@@ -883,6 +890,29 @@ static int parse_clock_control(struct sfptpd_config_section *section, const char
 	return rc;
 }
 
+static int parse_step_threshold(struct sfptpd_config_section *section, const char *option,
+				unsigned int num_params, const char * const params[])
+{
+	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+	int tokens;
+	long double threshold;
+	assert(num_params == 1);
+	tokens = sscanf(params[0], "%Lf", &threshold);
+	if (tokens != 1)
+		return EINVAL;
+
+	if ((threshold < SFPTPD_SERVO_CLOCK_STEP_THRESHOLD_S_MIN) || (threshold > SFPTPD_SERVO_CLOCK_STEP_THRESHOLD_S_MAX)) {
+			  CFG_ERROR(section, "step_threshold %s outside valid range ["
+			  STRINGIFY(SFPTPD_SERVO_CLOCK_STEP_THRESHOLD_S_MIN) ","
+			  STRINGIFY(SFPTPD_SERVO_CLOCK_STEP_THRESHOLD_S_MAX) "]\n",
+			  params[0]);
+		return ERANGE;
+	}
+
+	general->step_threshold = threshold * ONE_BILLION;
+	return 0;
+}
+
 static int parse_epoch_guard(struct sfptpd_config_section *section, const char *option,
 			       unsigned int num_params, const char * const params[])
 {
@@ -1537,6 +1567,7 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		new->timestamping.num_interfaces = 0;
 
 		new->convergence_threshold = 0.0;
+		new->step_threshold = SFPTPD_DEFAULT_STEP_THRESHOLD_NS;
 		new->initial_sync_instance[0] = '\0';
 		new->selection_holdoff_interval = SFPTPD_DEFAULT_SELECTION_HOLDOFF_INTERVAL;
 		new->netlink_rescan_interval = SFPTPD_DEFAULT_NETLINK_RESCAN_INTERVAL;

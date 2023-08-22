@@ -537,6 +537,8 @@ static void ptp_configure_ptpd(struct sfptpd_ptp_module_config *config)
 	/* Set up the clock control options based on the top level config */
 	config->ptpd_port.clock_ctrl
 		= sfptpd_general_config_get(SFPTPD_CONFIG_TOP_LEVEL(config))->clocks.control;
+	config->ptpd_port.step_threshold
+		= sfptpd_general_config_get(SFPTPD_CONFIG_TOP_LEVEL(config))->step_threshold;
 }
 
 
