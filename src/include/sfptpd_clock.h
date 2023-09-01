@@ -502,4 +502,10 @@ const char *sfptpd_clock_get_diff_method(struct sfptpd_clock *clock);
  */
 const char *sfptpd_clock_get_pps_method(struct sfptpd_clock *clock);
 
+/** Is the given clock the system clock
+ * @param clock the clock to check
+ * @return true if the clock is the system clock
+ */
+bool sfptpd_clock_is_system(const struct sfptpd_clock *clock);
+
 #endif /* _SFPTPD_CLOCK_H */

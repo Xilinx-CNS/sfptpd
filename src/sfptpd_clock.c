@@ -434,8 +434,11 @@ static int clock_init_common(struct sfptpd_clock *clock,
 	return rc;
 }
 
-static bool is_system_clock(struct sfptpd_clock *clock)
+static bool is_system_clock(const struct sfptpd_clock *clock)
 {
+	assert(clock);
+	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
+
 	return (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM ||
 		clock == sfptpd_clock_get_system_clock());
 }
@@ -2391,5 +2394,9 @@ const char *sfptpd_clock_get_pps_method(struct sfptpd_clock *clock)
 	}
 }
 
+bool sfptpd_clock_is_system(const struct sfptpd_clock *clock)
+{
+	return is_system_clock(clock);
+}
 
 /* fin */

@@ -23,6 +23,7 @@
 #include "sfptpd_general_config.h"
 #include "sfptpd_servo.h"
 #include "sfptpd_clock.h"
+#include "sfptpd_clockfeed.h"
 #include "sfptpd_constants.h"
 #include "sfptpd_time.h"
 #include "sfptpd_statistics.h"
@@ -55,6 +56,10 @@ struct sfptpd_servo {
 	/* Handles of master and slave clocks */
 	struct sfptpd_clock *master;
 	struct sfptpd_clock *slave;
+
+	/* Clock feeds for master and slave clocks */
+	const struct sfptpd_clockfeed_shm *clock1_shm;
+	const struct sfptpd_clockfeed_shm *clock2_shm;
 
 	/* Clock control configuration */
 	enum sfptpd_clock_ctrl clock_ctrl;
@@ -213,6 +218,11 @@ void sfptpd_servo_destroy(struct sfptpd_servo *servo)
 {
 	assert(servo != NULL);
 
+	if (servo->master != NULL)
+		sfptpd_clockfeed_unsubscribe(servo->master);
+	if (servo->slave != NULL)
+		sfptpd_clockfeed_unsubscribe(servo->slave);
+
 	/* Free the servo */
 	free(servo);
 }
@@ -254,7 +264,20 @@ void sfptpd_servo_set_clocks(struct sfptpd_servo *servo, struct sfptpd_clock *ma
 	assert(master != NULL);
 	assert(slave != NULL);
 
+	if (master != servo->master) {
+		sfptpd_clockfeed_subscribe(master, &servo->clock1_shm);
+		if (servo->master != NULL)
+			sfptpd_clockfeed_unsubscribe(servo->master);
+	}
+
+	if (slave != servo->slave) {
+		sfptpd_clockfeed_subscribe(slave, &servo->clock2_shm);
+		if (servo->slave != NULL)
+			sfptpd_clockfeed_unsubscribe(servo->slave);
+	}
+
 	if ((servo->master != master) || (servo->slave != slave)) {
+
 		servo->master = master;
 		servo->slave = slave;
 
@@ -336,8 +359,12 @@ int sfptpd_servo_step_clock(struct sfptpd_servo *servo, struct sfptpd_timespec *
 
 static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_servo *servo, struct sfptpd_timespec *time)
 {
-	struct sfptpd_timespec diff;
 	long double mean, diff_ns;
+        struct sfptpd_timespec slavetime;
+	struct sfptpd_timespec curtime;
+	struct sfptpd_timespec diff;
+	long double slavetime_ns;
+	long double curtime_ns;
 	int rc;
 
 	assert(servo != NULL);
@@ -346,7 +373,8 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 	assert(time != NULL);
 
 	/* Get the time difference between the two clocks */
-	rc = sfptpd_clock_compare(servo->slave, servo->master, &diff);
+	rc = sfptpd_clockfeed_compare(servo->clock2_shm, servo->clock1_shm,
+				      &diff, &slavetime, &curtime);
 	if (rc != 0) {
 		DBG_L4("%s: failed to compare clocks %s and %s, error %s\n",
 		       servo->servo_name,
@@ -363,17 +391,9 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 
 	/* Check to see if the NIC time is less than 115 days since the epoch.
 	 * If so then the NIC has reset. In this case we need to raise an alarm. */
-	struct sfptpd_timespec curtime;
-	rc = sfptpd_clock_get_time(servo->master, &curtime);
-	if (rc != 0) {
-		DBG_L4("%s: failed to get time from clock %s, error %s\n",
-		      servo->servo_name,
-		      sfptpd_clock_get_short_name(servo->master), strerror(rc));
-		return rc;
-	}
-	long double curtime_ns = sfptpd_time_timespec_to_float_ns(&curtime);
+	curtime_ns = sfptpd_time_timespec_to_float_ns(&curtime);
 	DBG_L6("%s: reference clock timestamp in ns: " SFPTPD_FORMAT_FLOAT "\n",
-	      servo->servo_name, curtime_ns);
+	       servo->servo_name, curtime_ns);
 	if (curtime_ns < 1e16 || curtime_ns > (0xFFFC0000 * 1e9)) {
 		if (!SYNC_MODULE_ALARM_TEST(servo->alarms, CLOCK_NEAR_EPOCH)) {
 			SYNC_MODULE_ALARM_SET(servo->alarms, CLOCK_NEAR_EPOCH);
@@ -413,9 +433,7 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 
 	/* Check to see if the slave NIC's time is near epoch.
 	 * If so then the NIC has reset. In this case we just print a warning. */
-        struct sfptpd_timespec slavetime;
-	rc = sfptpd_clock_get_time(servo->slave, &slavetime);
-	long double slavetime_ns = sfptpd_time_timespec_to_float_ns(&slavetime);
+	slavetime_ns = sfptpd_time_timespec_to_float_ns(&slavetime);
 	if (slavetime_ns < 1e16 || slavetime_ns > (0xFFFC0000 * 1e9)) {
 		if (!SYNC_MODULE_ALARM_TEST(servo->alarms, CLOCK_NEAR_EPOCH)) {
 			SYNC_MODULE_ALARM_SET(servo->alarms, CLOCK_NEAR_EPOCH);

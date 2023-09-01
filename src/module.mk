@@ -35,6 +35,7 @@ LIB_SRCS_$(d) := sfptpd_logging.c sfptpd_config.c sfptpd_engine.c \
 	sfptpd_bic.c sfptpd_control.c \
 	sfptpd_netlink.c sfptpd_phc.c sfptpd_db.c \
 	sfptpd_app.c sfptpd_link.c \
+	sfptpd_clockfeed.c \
 	sfptpd_multicast.c
 
 LIB_$(d) := common
