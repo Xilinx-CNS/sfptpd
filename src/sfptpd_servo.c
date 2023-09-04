@@ -58,8 +58,8 @@ struct sfptpd_servo {
 	struct sfptpd_clock *slave;
 
 	/* Clock feeds for master and slave clocks */
-	const struct sfptpd_clockfeed_shm *clock1_shm;
-	const struct sfptpd_clockfeed_shm *clock2_shm;
+	struct sfptpd_clockfeed_sub *clock1_feed;
+	struct sfptpd_clockfeed_sub *clock2_feed;
 
 	/* Clock control configuration */
 	enum sfptpd_clock_ctrl clock_ctrl;
@@ -219,9 +219,9 @@ void sfptpd_servo_destroy(struct sfptpd_servo *servo)
 	assert(servo != NULL);
 
 	if (servo->master != NULL)
-		sfptpd_clockfeed_unsubscribe(servo->master);
+		sfptpd_clockfeed_unsubscribe(servo->clock1_feed);
 	if (servo->slave != NULL)
-		sfptpd_clockfeed_unsubscribe(servo->slave);
+		sfptpd_clockfeed_unsubscribe(servo->clock2_feed);
 
 	/* Free the servo */
 	free(servo);
@@ -257,23 +257,35 @@ void sfptpd_servo_pid_adjust(struct sfptpd_servo *servo,
 }
 
 
+void sfptpd_servo_prepare(struct sfptpd_servo *servo)
+{
+	assert(servo != NULL);
+	assert(servo->master != NULL);
+	assert(servo->slave != NULL);
+
+	sfptpd_clockfeed_require_fresh(servo->clock1_feed);
+	sfptpd_clockfeed_require_fresh(servo->clock2_feed);
+}
+
+
 void sfptpd_servo_set_clocks(struct sfptpd_servo *servo, struct sfptpd_clock *master, struct sfptpd_clock *slave)
 {
 	int rc;
+
 	assert(servo != NULL);
 	assert(master != NULL);
 	assert(slave != NULL);
 
 	if (master != servo->master) {
-		sfptpd_clockfeed_subscribe(master, &servo->clock1_shm);
 		if (servo->master != NULL)
-			sfptpd_clockfeed_unsubscribe(servo->master);
+			sfptpd_clockfeed_unsubscribe(servo->clock1_feed);
+		sfptpd_clockfeed_subscribe(master, &servo->clock1_feed);
 	}
 
 	if (slave != servo->slave) {
-		sfptpd_clockfeed_subscribe(slave, &servo->clock2_shm);
 		if (servo->slave != NULL)
-			sfptpd_clockfeed_unsubscribe(servo->slave);
+			sfptpd_clockfeed_unsubscribe(servo->clock2_feed);
+		sfptpd_clockfeed_subscribe(slave, &servo->clock2_feed);
 	}
 
 	if ((servo->master != master) || (servo->slave != slave)) {
@@ -357,12 +369,13 @@ int sfptpd_servo_step_clock(struct sfptpd_servo *servo, struct sfptpd_timespec *
 }
 
 
-static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_servo *servo, struct sfptpd_timespec *time)
+static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_servo *servo, struct sfptpd_timespec *mono_time)
 {
 	long double mean, diff_ns;
         struct sfptpd_timespec slavetime;
 	struct sfptpd_timespec curtime;
 	struct sfptpd_timespec diff;
+	struct sfptpd_timespec mono;
 	long double slavetime_ns;
 	long double curtime_ns;
 	int rc;
@@ -370,11 +383,11 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 	assert(servo != NULL);
 	assert(servo->master != NULL);
 	assert(servo->slave != NULL);
-	assert(time != NULL);
+	assert(mono_time != NULL);
 
 	/* Get the time difference between the two clocks */
-	rc = sfptpd_clockfeed_compare(servo->clock2_shm, servo->clock1_shm,
-				      &diff, &slavetime, &curtime);
+	rc = sfptpd_clockfeed_compare(servo->clock2_feed, servo->clock1_feed,
+				      &diff, &slavetime, &curtime, &mono);
 	if (rc != 0) {
 		DBG_L4("%s: failed to compare clocks %s and %s, error %s\n",
 		       servo->servo_name,
@@ -521,7 +534,7 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 
 	/* Update the PID filter and get back the frequency adjustment */
 	servo->freq_adjust_ppb = servo->freq_correction_ppb
-		+ sfptpd_pid_filter_update(&servo->pid_filter, mean, time);
+		+ sfptpd_pid_filter_update(&servo->pid_filter, mean, mono_time);
 
 	/* Saturate the frequency adjustment */
 	if (servo->freq_adjust_ppb > servo->freq_adjust_max)
@@ -541,7 +554,7 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 
 	/* Update the convergence measure */
 	servo->synchronized = sfptpd_stats_convergence_update(&servo->convergence,
-							      time->sec, mean);
+							      mono_time->sec, mean);
 
 	/* Log offset and synchronized stats with clock object */
 	sfptpd_clock_stats_record_offset(servo->slave, mean, servo->synchronized);

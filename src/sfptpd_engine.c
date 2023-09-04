@@ -169,7 +169,6 @@ STATIC_ASSERT(STATS_KEY_END < 8 * sizeof(((struct sfptpd_sync_instance_rt_stats_
 
 /* Timer identities */
 enum engine_timer_ids {
-	ENGINE_TIMER_SYNCHRONIZE,
 	ENGINE_TIMER_LOG_STATS,
 	ENGINE_TIMER_STATS_PERIOD_END,
 	ENGINE_TIMER_SAVE_STATE,
@@ -281,7 +280,7 @@ STATIC_ASSERT(sizeof(RT_STATS_KEY_NAMES)/sizeof(*RT_STATS_KEY_NAMES) == STATS_KE
  * Function prototypes
  ****************************************************************************/
 
-static void on_synchronize(void *user_context, unsigned int timer_id);
+static void on_synchronize(void *user_context);
 static void on_log_stats(void *user_context, unsigned int timer_id);
 static void on_save_state(void *user_context, unsigned int timer_id);
 static void on_stats_period_end(void *user_context, unsigned int timer_id);
@@ -298,7 +297,6 @@ struct engine_timer_defn {
 
 static const struct engine_timer_defn engine_timer_defns[] =
 {
-	{ENGINE_TIMER_SYNCHRONIZE,       CLOCK_MONOTONIC, on_synchronize},
 	{ENGINE_TIMER_LOG_STATS,	 CLOCK_MONOTONIC, on_log_stats},
 	{ENGINE_TIMER_SAVE_STATE,	 CLOCK_MONOTONIC, on_save_state},
 	{ENGINE_TIMER_STATS_PERIOD_END,  CLOCK_MONOTONIC, on_stats_period_end},
@@ -523,7 +521,6 @@ static int create_servos(struct sfptpd_engine *engine, struct sfptpd_config *con
 static int create_timers(struct sfptpd_engine *engine)
 {
 	struct sfptpd_timespec interval;
-	sfptpd_time_t sync_interval;
 	unsigned int i;
 	int rc;
 
@@ -541,16 +538,6 @@ static int create_timers(struct sfptpd_engine *engine)
 				 engine_timer_defns[i].timer_id, strerror(rc));
 			return rc;
 		}
-	}
-
-	/* Calculate the sync timer interval in seconds and nanoseconds */
-	sync_interval = powl(2, (sfptpd_time_t)engine->general_config->clocks.sync_interval);
-	sfptpd_time_float_s_to_timespec(sync_interval, &interval);
-	rc = sfptpd_thread_timer_start(ENGINE_TIMER_SYNCHRONIZE,
-				       true, false, &interval);
-	if (rc != 0) {
-		CRITICAL("failed to start sync timer, %s\n", strerror(rc));
-		return rc;
 	}
 
 	/* Start the stats logging timer */
@@ -1610,7 +1597,7 @@ static void on_netlink_coalesce_timer(void *user_context, unsigned int timer_id)
 }
 
 
-static void on_synchronize(void *user_context, unsigned int timer_id)
+static void on_synchronize(void *user_context)
 {
 	struct sfptpd_engine *engine = (struct sfptpd_engine *)user_context;
 	struct sfptpd_timespec time;
@@ -1632,6 +1619,10 @@ static void on_synchronize(void *user_context, unsigned int timer_id)
 	if (sfclock_gettime(CLOCK_MONOTONIC, &time) < 0) {
 		ERROR("failed to get monotonic time, %s\n", strerror(errno));
 	} else {
+		/* Prepare the servos */
+		for (i = 0; i < engine->active_servos; i++)
+			sfptpd_servo_prepare(engine->servos[i]);
+
 		/* Run the slave servos */
 		for (i = 0; i < engine->active_servos; i++) {
 			sfptpd_sync_module_alarms_t prev_alarms;
@@ -2171,6 +2162,9 @@ static void engine_on_shutdown(void *context)
 
 	sfptpd_multicast_unsubscribe(SFPTPD_SERVO_MSG_PID_ADJUST);
 
+	/* Deregister for clock feed events */
+	sfptpd_clockfeed_unsubscribe_events();
+
 	/* Now free up the resources */
 	for (module = 0; module < SFPTPD_CONFIG_CATEGORY_MAX; module++) {
 		if (engine->sync_modules[module] != NULL) {
@@ -2281,7 +2275,8 @@ static int engine_on_startup(void *context)
 
 	config = engine->config;
 
-	engine->clockfeed = sfptpd_clockfeed_create(&engine->clockfeed_thread);
+	engine->clockfeed = sfptpd_clockfeed_create(&engine->clockfeed_thread,
+						    engine->general_config->clocks.sync_interval);
 	if (engine->clockfeed == NULL) {
 		rc = errno;
 		CRITICAL("could not start clock feed, %s\n", strerror(rc));
@@ -2296,7 +2291,8 @@ static int engine_on_startup(void *context)
 		     clock;
 		     clock = sfptpd_clock_next_active(clock)) {
 			if (clock != sfptpd_clock_get_system_clock())
-				sfptpd_clockfeed_add_clock(engine->clockfeed, clock, -4);
+				sfptpd_clockfeed_add_clock(engine->clockfeed, clock,
+							   engine->general_config->clocks.sync_interval);
 		}
 	}
 
@@ -2466,6 +2462,9 @@ static void on_run(struct sfptpd_engine *engine)
 
 	assert(engine != NULL);
 
+	/* Register for clock feed events */
+	sfptpd_clockfeed_subscribe_events();
+
 	/* Create the timers */
 	rc = create_timers(engine);
 	if (rc != 0) {
@@ -2572,6 +2571,11 @@ static void engine_on_message(void *context, struct sfptpd_msg_hdr *hdr)
 
 	case SFPTPD_SERVO_MSG_PID_ADJUST:
 		on_servo_pid_adjust(engine, (sfptpd_servo_msg_t *) msg);
+		SFPTPD_MSG_FREE(msg);
+		break;
+
+	case SFPTPD_CLOCKFEED_MSG_SYNC_EVENT:
+		on_synchronize(engine);
 		SFPTPD_MSG_FREE(msg);
 		break;
 

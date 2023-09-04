@@ -27,6 +27,7 @@
 #include "sfptpd_constants.h"
 #include "sfptpd_thread.h"
 #include "sfptpd_clock.h"
+#include "sfptpd_clockfeed.h"
 #include "sfptpd_interface.h"
 #include "sfptpd_statistics.h"
 #include "sfptpd_engine.h"
@@ -93,6 +94,9 @@ struct sfptpd_pps_instance {
 
 	/* Handle of the local reference clock */
 	struct sfptpd_clock *clock;
+
+	/* Clock feed for LRC */
+	struct sfptpd_clockfeed_sub *feed;
 
 	/* Which elements of the PPS instance are enabled */
 	sfptpd_sync_module_ctrl_flags_t ctrl_flags;
@@ -918,6 +922,11 @@ static void pps_destroy_instance(pps_module_t *pps,
 		instance->poll_fd = -1;
 	}
 
+	if (instance->feed != NULL) {
+		sfptpd_clockfeed_unsubscribe(instance->feed);
+		instance->feed = NULL;
+	}
+
 	/* Disable PPS events in the driver */
 	if (instance->clock != NULL) {
 		(void)sfptpd_clock_pps_disable(instance->clock);
@@ -1149,6 +1158,9 @@ static int pps_configure_clock(pps_module_t *pps,
 		      config->interface_name, strerror(rc));
 		return EIO;
 	}
+
+	/* Get a clock feed */
+	sfptpd_clockfeed_subscribe(clock, &instance->feed);
 
 	/* Store the clock */
 	instance->clock = clock;
@@ -1637,9 +1649,11 @@ static void pps_time_of_day_poll(pps_module_t *pps,
 						   pps->time_of_day.source.handle,
 						   &pps->time_of_day.status);
 		if (rc == 0 && !sfptpd_time_is_zero(&pps->time_of_day.status.offset_from_master)) {
-			rc = sfptpd_clock_compare(instance->clock,
-						  sfptpd_clock_get_system_clock(),
-						  &system_to_nic);
+			sfptpd_clockfeed_require_fresh(instance->feed);
+			rc = sfptpd_clockfeed_compare(instance->feed,
+						      NULL,
+						      &system_to_nic,
+						      NULL, NULL, NULL);
 			if (rc == 0) {
 				TRACE_L5("pps %s: ntp->sys " SFPTPD_FORMAT_FLOAT
 					 ", sys->nic " SFPTPD_FORMAT_FLOAT "\n",

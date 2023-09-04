@@ -147,6 +147,12 @@ int sfptpd_servo_step_clock(struct sfptpd_servo *servo, struct sfptpd_timespec *
  */
 int sfptpd_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_servo *servo, struct sfptpd_timespec *time);
 
+/** Prepare a clock servo. This ensures the next set of samples from the
+ * clock feed will be fresh.
+ * @param servo  Servo instance
+ */
+void sfptpd_servo_prepare(struct sfptpd_servo *servo);
+
 /** Get the latest difference between the master and slave clocks
  * @param servo  Servo instance
  * @param offset Difference between master and slave clocks (master - slave)

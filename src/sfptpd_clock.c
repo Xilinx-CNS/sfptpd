@@ -2399,4 +2399,11 @@ bool sfptpd_clock_is_system(const struct sfptpd_clock *clock)
 	return is_system_clock(clock);
 }
 
+bool sfptpd_clock_is_active(const struct sfptpd_clock *clock)
+{
+	assert(!clock || clock->magic == SFPTPD_CLOCK_MAGIC);
+
+	return clock && !clock->deleted;
+}
+
 /* fin */
