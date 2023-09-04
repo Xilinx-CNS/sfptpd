@@ -24,7 +24,7 @@
 #define SFPTPD_DEFAULT_STATE_PATH                  SFPTPD_STATE_PATH
 #define SFPTPD_DEFAULT_CONTROL_PATH                SFPTPD_CONTROL_SOCKET_PATH
 #define SFPTPD_DEFAULT_TRACE_LEVEL                 (0)
-#define SFPTPD_DEFAULT_SYNC_INTERVAL               (-4)
+#define SFPTPD_DEFAULT_SYNC_INTERVAL               -4
 #define SFPTPD_DEFAULT_CLOCK_CTRL                  (SFPTPD_CLOCK_CTRL_SLEW_AND_STEP)
 #define SFPTPD_DEFAULT_EPOCH_GUARD                 (SFPTPD_EPOCH_GUARD_CORRECT_CLOCK)
 #define SFPTPD_DEFAULT_CLUSTERING_MODE             (SFPTPD_CLUSTERING_DISABLED)
@@ -49,8 +49,8 @@
 #define SFPTPD_CONFIG_MAC_STRING_MAX   (24)
 
 /** Sync interval minimum and maximum values */
-#define SFPTPD_MAX_SYNC_INTERVAL       (2)
-#define SFPTPD_MIN_SYNC_INTERVAL       (-4)
+#define SFPTPD_MAX_SYNC_INTERVAL       2
+#define SFPTPD_MIN_SYNC_INTERVAL       -4
 
 /** Message logging options */
 enum sfptpd_msg_log_config {

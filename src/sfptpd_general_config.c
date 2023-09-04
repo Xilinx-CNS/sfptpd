@@ -174,7 +174,12 @@ static const sfptpd_config_option_t config_general_options[] =
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
 		parse_control_path},
 	{"sync_interval", "NUMBER",
-		"Specifies the interval in 2^number seconds at which the clocks are synchronized to the local reference clock",
+		"Specifies the interval in 2^NUMBER seconds at which the clocks "
+		"are synchronized to the local reference clock, where NUMBER is "
+		"in the range ["
+		STRINGIFY(SFPTPD_MIN_SYNC_INTERVAL) ","
+		STRINGIFY(SFPTPD_MAX_SYNC_INTERVAL) "]. The default is "
+		STRINGIFY(SFPTPD_DEFAULT_SYNC_INTERVAL) ".",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
 		parse_sync_interval},
 	{"local_sync_threshold", "NUMBER",

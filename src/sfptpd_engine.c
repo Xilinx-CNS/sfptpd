@@ -2769,10 +2769,10 @@ int sfptpd_engine_calculate_clustering_score(struct sfptpd_clustering_evaluator 
 
 	sfptpd_time_t diff_i = sfptpd_time_timespec_to_float_ns(&discrim_to_instance);
 
-    TRACE_L6("clustering: %s remote clock is " SFPTPD_FORMAT_FLOAT
-             "ns from discriminator remote clock\n",
-             evaluator->instance_name,
-             diff_i);
+	TRACE_L6("clustering: %s remote clock is " SFPTPD_FORMAT_FLOAT
+		 "ns from discriminator remote clock\n",
+		 evaluator->instance_name,
+		 diff_i);
 	diff_i = sfptpd_time_abs(diff_i);
 	return (diff_i < engine->general_config->clustering_discriminator_threshold ? 1 : 0);
 }
