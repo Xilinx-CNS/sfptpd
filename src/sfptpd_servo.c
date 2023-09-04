@@ -61,6 +61,10 @@ struct sfptpd_servo {
 	struct sfptpd_clockfeed_sub *clock1_feed;
 	struct sfptpd_clockfeed_sub *clock2_feed;
 
+	/* Snapshot of last times */
+	struct sfptpd_timespec clock1_snapshot;
+	struct sfptpd_timespec clock2_snapshot;
+
 	/* Clock control configuration */
 	enum sfptpd_clock_ctrl clock_ctrl;
 
@@ -372,8 +376,6 @@ int sfptpd_servo_step_clock(struct sfptpd_servo *servo, struct sfptpd_timespec *
 static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_servo *servo, struct sfptpd_timespec *mono_time)
 {
 	long double mean, diff_ns;
-        struct sfptpd_timespec slavetime;
-	struct sfptpd_timespec curtime;
 	struct sfptpd_timespec diff;
 	struct sfptpd_timespec mono;
 	long double slavetime_ns;
@@ -386,8 +388,8 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 	assert(mono_time != NULL);
 
 	/* Get the time difference between the two clocks */
-	rc = sfptpd_clockfeed_compare(servo->clock2_feed, servo->clock1_feed,
-				      &diff, &slavetime, &curtime, &mono);
+	rc = sfptpd_clockfeed_compare(servo->clock2_feed, servo->clock1_feed, &diff,
+				      &servo->clock2_snapshot, &servo->clock1_snapshot, &mono);
 	if (rc != 0) {
 		DBG_L4("%s: failed to compare clocks %s and %s, error %s\n",
 		       servo->servo_name,
@@ -404,7 +406,7 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 
 	/* Check to see if the NIC time is less than 115 days since the epoch.
 	 * If so then the NIC has reset. In this case we need to raise an alarm. */
-	curtime_ns = sfptpd_time_timespec_to_float_ns(&curtime);
+	curtime_ns = sfptpd_time_timespec_to_float_ns(&servo->clock1_snapshot);
 	DBG_L6("%s: reference clock timestamp in ns: " SFPTPD_FORMAT_FLOAT "\n",
 	       servo->servo_name, curtime_ns);
 	if (curtime_ns < 1e16 || curtime_ns > (0xFFFC0000 * 1e9)) {
@@ -446,7 +448,7 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 
 	/* Check to see if the slave NIC's time is near epoch.
 	 * If so then the NIC has reset. In this case we just print a warning. */
-	slavetime_ns = sfptpd_time_timespec_to_float_ns(&slavetime);
+	slavetime_ns = sfptpd_time_timespec_to_float_ns(&servo->clock2_snapshot);
 	if (slavetime_ns < 1e16 || slavetime_ns > (0xFFFC0000 * 1e9)) {
 		if (!SYNC_MODULE_ALARM_TEST(servo->alarms, CLOCK_NEAR_EPOCH)) {
 			SYNC_MODULE_ALARM_SET(servo->alarms, CLOCK_NEAR_EPOCH);
@@ -641,6 +643,8 @@ struct sfptpd_servo_stats sfptpd_servo_get_stats(struct sfptpd_servo *servo)
 	stats.servo_name = servo->servo_name;
 	stats.clock_master = servo->master;
 	stats.clock_slave = servo->slave;
+	stats.time_master = servo->clock1_snapshot;
+	stats.time_slave = servo->clock2_snapshot;
 	stats.disciplining = sfptpd_clock_is_writable(servo->slave);
 	stats.blocked = sfptpd_clock_is_blocked(servo->slave);
 	stats.offset = servo->offset_from_master_ns;

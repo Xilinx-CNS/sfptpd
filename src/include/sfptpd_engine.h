@@ -201,6 +201,8 @@ enum sfptpd_rt_stats_key {     /* Type of following argument */
 	STATS_KEY_BOND_NAME,   /*  char*                     */
 	STATS_KEY_P_TERM,      /*  long double               */
 	STATS_KEY_I_TERM,      /*  long double               */
+	STATS_KEY_M_TIME,      /*  struct timespec           */
+	STATS_KEY_S_TIME,      /*  struct timespec           */
 	STATS_KEY_END
 };
 

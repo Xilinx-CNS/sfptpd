@@ -2215,6 +2215,7 @@ static void ptp_send_instance_rt_stats_update(struct sfptpd_engine *engine,
 
 	if (instance->ptpd_port_snapshot.port.state == PTPD_SLAVE ||
 	    instance->ptpd_port_snapshot.port.state == PTPD_UNCALIBRATED) {
+		struct sfptpd_timespec *offset_time = &instance->ptpd_port_snapshot.current.last_offset_time;
 		ofm_ns = instance->ptpd_port_snapshot.current.offset_from_master;
 		owd_ns = instance->ptpd_port_snapshot.current.one_way_delay;
 
@@ -2242,6 +2243,7 @@ static void ptp_send_instance_rt_stats_update(struct sfptpd_engine *engine,
 				STATS_KEY_OVERFLOWS, pps_stats.overflow_count,
 				STATS_KEY_P_TERM, instance->ptpd_port_snapshot.current.servo_p_term,
 				STATS_KEY_I_TERM, instance->ptpd_port_snapshot.current.servo_i_term,
+				offset_time->sec != 0 ? STATS_KEY_S_TIME : STATS_KEY_END, *offset_time,
 				STATS_KEY_END);
 		} else {
 			sfptpd_engine_post_rt_stats(engine, &time,
@@ -2260,6 +2262,7 @@ static void ptp_send_instance_rt_stats_update(struct sfptpd_engine *engine,
 				STATS_KEY_BOND_NAME, bond_info->bond_mode == SFPTPD_BOND_MODE_NONE ? NULL : bond_info->bond_if,
 				STATS_KEY_P_TERM, instance->ptpd_port_snapshot.current.servo_p_term,
 				STATS_KEY_I_TERM, instance->ptpd_port_snapshot.current.servo_i_term,
+				offset_time->sec != 0 ? STATS_KEY_S_TIME : STATS_KEY_END, *offset_time,
 				STATS_KEY_END);
 		}
 	}

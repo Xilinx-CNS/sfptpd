@@ -22,6 +22,8 @@
  * @source Instance source
  * @clock_master Instance's master clock
  * @clock_slave Instance's slave clock
+ * @time_master Time of instance's master clock at offset computation
+ * @time_slave Time of instance's slave clock at offset computation
  * @is_disciplining Is the master disciplining the slave?
  * @is_blocked Is the Master being blocked from disciplining the slave?
  * @is_in_sync Is the clock in sync?
@@ -44,12 +46,16 @@ struct sfptpd_sync_instance_rt_stats_entry {
 	const char *source;
 	const struct sfptpd_clock *clock_master;
 	const struct sfptpd_clock *clock_slave;
-	bool is_disciplining;
-	bool is_blocked;
-	bool is_in_sync;
+	bool is_disciplining:1;
+	bool is_blocked:1;
+	bool is_in_sync:1;
+	bool has_m_time:1;
+	bool has_s_time:1;
 	sfptpd_sync_module_alarms_t alarms;
 	uint32_t stat_present;
 	/* Following fields are optional */
+	struct sfptpd_timespec time_master;
+	struct sfptpd_timespec time_slave;
 	sfptpd_time_t offset;
 	sfptpd_time_t freq_adj;
 	sfptpd_time_t one_way_delay;

@@ -272,6 +272,8 @@ const char *RT_STATS_KEY_NAMES[] = {
 	[STATS_KEY_BOND_NAME] = "bond-interface",
 	[STATS_KEY_P_TERM] = "p-term",
 	[STATS_KEY_I_TERM] = "i-term",
+	[STATS_KEY_M_TIME] = "m-time",
+	[STATS_KEY_S_TIME] = "s-time",
 };
 
 STATIC_ASSERT(sizeof(RT_STATS_KEY_NAMES)/sizeof(*RT_STATS_KEY_NAMES) == STATS_KEY_END);
@@ -993,7 +995,6 @@ static void write_rt_stats_json(FILE* json_stats_fp,
 {
 	char* comma = "";
 	char ftime[24];
-	struct sfptpd_timespec time;
 	size_t len = 0;
 
 	assert(json_stats_fp != NULL);
@@ -1017,10 +1018,12 @@ static void write_rt_stats_json(FILE* json_stats_fp,
 
 	/* Add clock time */
 	if (entry->clock_master != NULL) {
-		sfptpd_clock_get_time(entry->clock_master, &time);
-		time_t secs = time.sec;
-		sfptpd_local_strftime(ftime, (sizeof ftime) - 1, "%Y-%m-%d %H:%M:%S", &secs);
-		LPRINTF(json_stats_fp, ",\"time\":\"%s.%09" PRIu32 "\"", ftime, time.nsec);
+		if (entry->has_m_time) {
+			time_t secs = entry->time_master.sec;
+			sfptpd_local_strftime(ftime, (sizeof ftime) - 1, "%Y-%m-%d %H:%M:%S", &secs);
+			LPRINTF(json_stats_fp, ",\"time\":\"%s.%09" PRIu32 "\"",
+				ftime, entry->time_master.nsec);
+		}
 
 		/* Extra info about clock interface, mostly useful when using bonds */
 		if (entry->clock_master != sfptpd_clock_get_system_clock())
@@ -1030,11 +1033,14 @@ static void write_rt_stats_json(FILE* json_stats_fp,
 	}
 
 	/* Slave clock info */
-	sfptpd_clock_get_time(entry->clock_slave, &time);
-	time_t secs = time.sec;
-	sfptpd_local_strftime(ftime, (sizeof ftime) - 1, "%Y-%m-%d %H:%M:%S", &secs);
-	LPRINTF(json_stats_fp, "},\"clock-slave\":{\"name\":\"%s\",\"time\":\"%s.%09" PRIu32 "\"",
-			sfptpd_clock_get_long_name(entry->clock_slave), ftime, time.nsec);
+	LPRINTF(json_stats_fp, "},\"clock-slave\":{\"name\":\"%s\"",
+		sfptpd_clock_get_long_name(entry->clock_slave));
+	if (entry->has_s_time) {
+		time_t secs = entry->time_slave.sec;
+		sfptpd_local_strftime(ftime, (sizeof ftime) - 1, "%Y-%m-%d %H:%M:%S", &secs);
+		LPRINTF(json_stats_fp, ",\"time\":\"%s.%09" PRIu32 "\"",
+			ftime, entry->time_slave.nsec);
+	}
 
 	/* Extra info about clock interface, mostly useful when using bonds */
 	if (entry->clock_slave != sfptpd_clock_get_system_clock())
@@ -1667,6 +1673,8 @@ void sfptpd_engine_post_rt_stats_simple(struct sfptpd_engine *engine, struct sfp
 					STATS_KEY_P_TERM, stats.p_term,
 					STATS_KEY_I_TERM, stats.i_term,
 					STATS_KEY_OFFSET, stats.offset,
+					STATS_KEY_M_TIME, stats.time_master,
+					STATS_KEY_S_TIME, stats.time_slave,
 					STATS_KEY_END);
 }
 
@@ -3009,6 +3017,14 @@ void sfptpd_engine_post_rt_stats(struct sfptpd_engine *engine,
 			break;
 		case STATS_KEY_I_TERM:
 			msg->stats.i_term = va_arg(ap, long double);
+			break;
+		case STATS_KEY_M_TIME:
+			msg->stats.time_master = va_arg(ap, struct sfptpd_timespec);
+			msg->stats.has_m_time = true;
+			break;
+		case STATS_KEY_S_TIME:
+			msg->stats.time_slave = va_arg(ap, struct sfptpd_timespec);
+			msg->stats.has_s_time = true;
 			break;
 		default:
 			CRITICAL("sfptpd_engine_post_rt_stats: unknown key given (%d)\n", key);
