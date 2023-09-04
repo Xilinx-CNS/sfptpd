@@ -58,8 +58,8 @@
 #define SFPTPD_CONFIG_FMT_STR_MAX      (16)
 
 /** Sync interval minimum and maximum values */
-#define SFPTPD_MAX_SYNC_INTERVAL       2
-#define SFPTPD_MIN_SYNC_INTERVAL       -4
+#define SFPTPD_MAX_SYNC_INTERVAL       3
+#define SFPTPD_MIN_SYNC_INTERVAL       -5
 
 /** Message logging options */
 enum sfptpd_msg_log_config {
