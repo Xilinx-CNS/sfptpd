@@ -628,7 +628,6 @@ static void gps_on_control(struct gps_module *module, sfptpd_sync_module_msg_t *
 	sfptpd_sync_module_ctrl_flags_t flags;
 	struct gps_instance *gps;
 
-	assert(gps != NULL);
 	assert(msg != NULL);
 	assert(msg->u.control_req.instance_handle != NULL);
 
@@ -1151,8 +1150,8 @@ static bool gps_state_machine(struct gps_instance *gps, int read_rc)
 			 gps_data->pps.clock.tv_sec, gps_data->pps.clock.tv_nsec);
 
 		sfptpd_time_subtract(&diff,
-				     &gps_data->pps.real,
-				     &gps_data->pps.clock);
+				     &gps_data->pps.clock,
+				     &gps_data->pps.real);
 		next_state->offset_gps_timestamp = gps_data->pps.real;
 		next_state->offset_timestamp = gps_data->pps.clock;
 		next_state->offset_from_master = sfptpd_time_timespec_to_float_ns(&diff);
@@ -1197,7 +1196,7 @@ static void gps_on_user_fds(void *context, unsigned int num_fds, int fds[])
 	struct gps_instance *gps;
 	int i;
 
-	assert(gps != NULL);
+	assert(module != NULL);
 
 	for (i = 0; i < num_fds; i++) {
 		for (gps = module->instances; gps; gps = gps->next) {
