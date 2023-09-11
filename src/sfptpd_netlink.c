@@ -332,126 +332,38 @@ void sfptpd_link_log(const struct sfptpd_link *link, const struct sfptpd_link *p
 	}
 }
 
-static int link_attr_cb(const struct nlattr *attr, void *data)
-{
-	const struct nlattr **table = data;
-	int type = mnl_attr_get_type(attr);
-	int rc = MNL_CB_OK;
-
-	if (mnl_attr_type_valid(attr, IFLA_MAX) < 0)
-		return rc;
-
-	switch(type) {
-	case IFLA_IFNAME:
-#ifdef HAVE_IFLA_PARENT_DEV_NAME
-	case IFLA_PARENT_DEV_NAME:
-#endif
-		if (mnl_attr_validate(attr, MNL_TYPE_STRING) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	case IFLA_LINK:
-	case IFLA_MASTER:
-		if (mnl_attr_validate(attr, MNL_TYPE_U32) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	case IFLA_LINKINFO:
-		if (mnl_attr_validate(attr, MNL_TYPE_NESTED) < 0)
-			rc = MNL_CB_ERROR;
-	case IFLA_ADDRESS:
-#ifdef HAVE_IFLA_PERM_ADDRESS
-	case IFLA_PERM_ADDRESS:
-#endif
-		if (mnl_attr_validate(attr, MNL_TYPE_BINARY) < 0)
-			rc = MNL_CB_ERROR;
-	}
-
-	if (rc == MNL_CB_OK)
-		table[type] = attr;
-	else
-		ERROR("link: mnl_attr_validate(<link>), %s\n", strerror(errno));
-
-	return rc;
+/* Macro to generate an attribute callback function that:
+ *   1. validates expected attribute types
+ *   2. populates a table of attributes indexed by attribute key
+ */
+#define MNL_VALIDATE(purpose) validate_ ## purpose
+#define MNL_VALIDATE_CB(purpose, max_attr, attrs) \
+static int MNL_VALIDATE(purpose)(const struct nlattr *attr, void *data) \
+{ \
+	const uint8_t types[max_attr + 1] = attrs; \
+	enum mnl_attr_data_type expected; \
+	const struct nlattr **table = data; \
+	int type = mnl_attr_get_type(attr); \
+	int rc = MNL_CB_OK; \
+\
+	assert(MNL_TYPE_MAX <= UINT8_MAX); \
+	if (mnl_attr_type_valid(attr, max_attr) < 0) \
+		return rc; \
+	\
+	expected = (enum mnl_attr_data_type) types[type]; \
+	if (expected != MNL_TYPE_UNSPEC && \
+	    (mnl_attr_validate(attr, expected) < 0)) \
+		rc = MNL_CB_ERROR; \
+\
+	if (rc == MNL_CB_OK) \
+		table[type] = attr; \
+	else \
+		ERROR("netlink: %s: unexpected attribute type (!=%d) for %d\n", \
+		      STRINGIFY(purpose), expected, type); \
+	return rc; \
 }
-
-static int link_attr_info_cb(const struct nlattr *attr, void *data)
-{
-	const struct nlattr **table = data;
-	int type = mnl_attr_get_type(attr);
-	int rc = MNL_CB_OK;
-
-	if (mnl_attr_type_valid(attr, IFLA_INFO_MAX) < 0)
-		return rc;
-
-	switch(type) {
-	case IFLA_INFO_KIND:
-		if (mnl_attr_validate(attr, MNL_TYPE_STRING) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	case IFLA_INFO_DATA:
-		if (mnl_attr_validate(attr, MNL_TYPE_NESTED) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	}
-
-	if (rc == MNL_CB_OK)
-		table[type] = attr;
-	else
-		ERROR("link: mnl_attr_validate(<link info>), %s\n", strerror(errno));
-
-	return rc;
-}
-
-static int link_attr_info_bond_cb(const struct nlattr *attr, void *data)
-{
-	const struct nlattr **table = data;
-	int type = mnl_attr_get_type(attr);
-	int rc = MNL_CB_OK;
-
-	if (mnl_attr_type_valid(attr, IFLA_BOND_MAX) < 0)
-		return rc;
-
-	switch(type) {
-	case IFLA_BOND_MODE:
-		if (mnl_attr_validate(attr, MNL_TYPE_U8) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	case IFLA_BOND_ACTIVE_SLAVE:
-		if (mnl_attr_validate(attr, MNL_TYPE_U32) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	}
-
-	if (rc == MNL_CB_OK)
-		table[type] = attr;
-	else
-		ERROR("link: mnl_attr_validate(<bond data>), %s\n", strerror(errno));
-
-	return rc;
-}
-
-static int link_attr_info_vlan_cb(const struct nlattr *attr, void *data)
-{
-	const struct nlattr **table = data;
-	int type = mnl_attr_get_type(attr);
-	int rc = MNL_CB_OK;
-
-	if (mnl_attr_type_valid(attr, IFLA_VLAN_MAX) < 0)
-		return rc;
-
-	switch(type) {
-	case IFLA_VLAN_ID:
-		if (mnl_attr_validate(attr, MNL_TYPE_U16) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	}
-
-	if (rc == MNL_CB_OK)
-		table[type] = attr;
-	else
-		ERROR("link: mnl_attr_validate(<vlan data>), %s\n", strerror(errno));
-
-	return rc;
-}
+#define A(key, type) [ key ] = type
+#define EXPECTED(...) { MNL_TYPE_UNSPEC, __VA_ARGS__}
 
 static bool netlink_send_team_query(struct sfptpd_nl_state *state, struct sfptpd_link *link)
 {
@@ -521,6 +433,30 @@ static bool netlink_send_ethtool_query(struct sfptpd_nl_state *state, struct sfp
 }
 #endif
 
+MNL_VALIDATE_CB(link_attr, IFLA_MAX, EXPECTED(
+#ifdef HAVE_IFLA_PARENT_DEV_NAME
+		A(IFLA_PARENT_DEV_NAME,		MNL_TYPE_STRING),
+#endif
+#ifdef HAVE_IFLA_PERM_ADDRESS
+		A(IFLA_PERM_ADDRESS,		MNL_TYPE_BINARY),
+#endif
+		A(IFLA_IFNAME,			MNL_TYPE_STRING),
+		A(IFLA_LINK,			MNL_TYPE_U32),
+		A(IFLA_MASTER,			MNL_TYPE_U32),
+		A(IFLA_LINKINFO,		MNL_TYPE_NESTED),
+		A(IFLA_ADDRESS,			MNL_TYPE_BINARY)))
+
+MNL_VALIDATE_CB(link_attr_info, IFLA_INFO_MAX, EXPECTED(
+		A(IFLA_INFO_KIND,		MNL_TYPE_STRING),
+		A(IFLA_INFO_DATA,		MNL_TYPE_NESTED)))
+
+MNL_VALIDATE_CB(link_attr_info_bond, IFLA_BOND_MAX, EXPECTED(
+		A(IFLA_BOND_MODE,		MNL_TYPE_U8),
+		A(IFLA_BOND_ACTIVE_SLAVE,	MNL_TYPE_U32)))
+
+MNL_VALIDATE_CB(link_attr_info_vlan, IFLA_VLAN_MAX, EXPECTED(
+		A(IFLA_VLAN_ID,			MNL_TYPE_U16)))
+
 static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr *nh)
 {
 	struct ifinfomsg *ifm;
@@ -547,7 +483,7 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 	link->if_family = ifm->ifi_family;
 	link->is_slave = false;
 
-	mnl_attr_parse(nh, sizeof(*ifm), link_attr_cb, table);
+	mnl_attr_parse(nh, sizeof(*ifm), MNL_VALIDATE(link_attr), table);
 
 	if (table[IFLA_IFNAME])
 		strncpy(link->if_name, mnl_attr_get_str(table[IFLA_IFNAME]), sizeof link->if_name - 1);
@@ -559,7 +495,7 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 		link->bond.if_master = mnl_attr_get_u32(table[IFLA_MASTER]);
 
 	if (table[IFLA_LINKINFO]) {
-		mnl_attr_parse_nested(table[IFLA_LINKINFO], link_attr_info_cb, nested);
+		mnl_attr_parse_nested(table[IFLA_LINKINFO], MNL_VALIDATE(link_attr_info), nested);
 		if (nested[IFLA_INFO_KIND]) {
 			const char *kind = mnl_attr_get_str(nested[IFLA_INFO_KIND]);
 			if (!strcmp(kind, "vlan"))
@@ -595,7 +531,10 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 		if (nested[IFLA_INFO_DATA]) {
 			switch (link->type) {
 			case SFPTPD_LINK_BOND:
-				mnl_attr_parse_nested(nested[IFLA_INFO_DATA], link_attr_info_bond_cb, nested2);
+				mnl_attr_parse_nested(nested[IFLA_INFO_DATA],
+						      MNL_VALIDATE(link_attr_info_bond),
+						      nested2);
+
 				if (nested2[IFLA_BOND_MODE]) {
 					uint8_t mode = mnl_attr_get_u8(nested2[IFLA_BOND_MODE]);
 					switch (mode) {
@@ -615,7 +554,8 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 				break;
 
 			case SFPTPD_LINK_VLAN:
-				mnl_attr_parse_nested(nested[IFLA_INFO_DATA], link_attr_info_vlan_cb, nested2);
+				mnl_attr_parse_nested(nested[IFLA_INFO_DATA],
+						      MNL_VALIDATE(link_attr_info_vlan), nested2);
 				if (nested2[IFLA_VLAN_ID])
 					link->vlan_id = mnl_attr_get_u16(nested2[IFLA_VLAN_ID]);
 				break;
@@ -771,84 +711,16 @@ static void netlink_rescan_ethtool(struct sfptpd_nl_state *state)
 }
 #endif
 
-static int ctrl_attr_cb(const struct nlattr *attr, void *data)
-{
-	const struct nlattr **table = data;
-	int type = mnl_attr_get_type(attr);
-	int rc = MNL_CB_OK;
+MNL_VALIDATE_CB(ctrl_attr, CTRL_ATTR_MAX, EXPECTED(
+		A(CTRL_ATTR_FAMILY_NAME,	MNL_TYPE_STRING),
+		A(CTRL_ATTR_FAMILY_ID,		MNL_TYPE_U16),
+		A(CTRL_ATTR_MCAST_GROUPS,	MNL_TYPE_NESTED)))
 
-	if (mnl_attr_type_valid(attr, CTRL_ATTR_MAX) < 0)
-		return rc;
+MNL_VALIDATE_CB(ctrl_mcast_grp1, 2, EXPECTED(
+		A(1,				MNL_TYPE_NESTED)))
 
-	switch(type) {
-	case CTRL_ATTR_FAMILY_NAME:
-		if (mnl_attr_validate(attr, MNL_TYPE_STRING) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	case CTRL_ATTR_FAMILY_ID:
-		if (mnl_attr_validate(attr, MNL_TYPE_U16) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	case CTRL_ATTR_MCAST_GROUPS:
-		if (mnl_attr_validate(attr, MNL_TYPE_NESTED) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	}
-
-	if (rc == MNL_CB_OK)
-		table[type] = attr;
-	else
-		ERROR("ctrl: mnl_attr_validate(<link>, %d), %s\n",
-		      type, strerror(errno));
-
-	return rc;
-}
-
-static int ctrl_mcast_grp1_cb(const struct nlattr *attr, void *data)
-{
-	const struct nlattr **item = data;
-	int type = mnl_attr_get_type(attr);
-	int rc = MNL_CB_OK;
-
-	if (type == 1) {
-		if (mnl_attr_validate(attr, MNL_TYPE_NESTED) < 0) {
-			rc = MNL_CB_ERROR;
-		} else {
-			*item = attr;
-		}
-	}
-
-	if (rc != MNL_CB_OK)
-		ERROR("ctrl: mnl_attr_validate(<mcast-grp1>, %d), %s\n",
-		      type, strerror(errno));
-
-	return rc;
-}
-
-static int ctrl_mcast_grp2_cb(const struct nlattr *attr, void *data)
-{
-	const struct nlattr **table = data;
-	int type = mnl_attr_get_type(attr);
-	int rc = MNL_CB_OK;
-
-	if (mnl_attr_type_valid(attr, CTRL_ATTR_MAX) < 0)
-		return rc;
-
-	switch(type) {
-	case CTRL_ATTR_MCAST_GRP_ID:
-		if (mnl_attr_validate(attr, MNL_TYPE_U32) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	}
-
-	if (rc == MNL_CB_OK)
-		table[type] = attr;
-	else
-		ERROR("ctrl: mnl_attr_validate(<mcast-grp2>, %d), %s\n",
-		      type, strerror(errno));
-
-	return rc;
-}
+MNL_VALIDATE_CB(ctrl_mcast_grp2, CTRL_ATTR_MAX, EXPECTED(
+		A(CTRL_ATTR_MCAST_GRP_ID,	MNL_TYPE_U32)))
 
 static int netlink_handle_genl_ctrl(struct nl_conn_state *conn,
 				    struct nl_conn_state *team_conn,
@@ -878,7 +750,7 @@ static int netlink_handle_genl_ctrl(struct nl_conn_state *conn,
 		return 0;
 	}
 
-	mnl_attr_parse(nh, sizeof(*genl), ctrl_attr_cb, attr);
+	mnl_attr_parse(nh, sizeof(*genl), MNL_VALIDATE(ctrl_attr), attr);
 
 	if (attr[CTRL_ATTR_FAMILY_NAME]) {
 		for (i = 0; i < GRP_MAX; i++) {
@@ -899,9 +771,9 @@ static int netlink_handle_genl_ctrl(struct nl_conn_state *conn,
 	}
 
 	if (attr[CTRL_ATTR_MCAST_GROUPS]) {
-		mnl_attr_parse_nested(attr[CTRL_ATTR_MCAST_GROUPS], ctrl_mcast_grp1_cb, &mcastgrp);
+		mnl_attr_parse_nested(attr[CTRL_ATTR_MCAST_GROUPS], MNL_VALIDATE(ctrl_mcast_grp1), &mcastgrp);
 		if (mcastgrp) {
-			mnl_attr_parse_nested(mcastgrp, ctrl_mcast_grp2_cb, nested);
+			mnl_attr_parse_nested(mcastgrp, MNL_VALIDATE(ctrl_mcast_grp2), nested);
 			if (nested[CTRL_ATTR_MCAST_GRP_ID]) {
 				group_id = mnl_attr_get_u32(nested[CTRL_ATTR_MCAST_GRP_ID]);
 			}
@@ -929,103 +801,25 @@ static int netlink_handle_genl_ctrl(struct nl_conn_state *conn,
 	return 0;
 }
 
-static int team_attr_cb(const struct nlattr *attr, void *data)
-{
-	const struct nlattr **table = data;
-	int type = mnl_attr_get_type(attr);
-	int rc = MNL_CB_OK;
+MNL_VALIDATE_CB(team_attr, TEAM_ATTR_MAX, EXPECTED(
+		A(TEAM_ATTR_TEAM_IFINDEX,	MNL_TYPE_U32),
+		A(TEAM_ATTR_LIST_PORT,		MNL_TYPE_NESTED)))
 
-	if (mnl_attr_type_valid(attr, TEAM_ATTR_MAX) < 0)
-		return rc;
+MNL_VALIDATE_CB(team_attr_port, TEAM_ATTR_PORT_MAX, EXPECTED(
+		A(TEAM_ATTR_PORT_IFINDEX,	MNL_TYPE_U32),
+		A(TEAM_ATTR_PORT_CHANGED,	MNL_TYPE_FLAG),
+		A(TEAM_ATTR_PORT_LINKUP,	MNL_TYPE_FLAG),
+		A(TEAM_ATTR_PORT_REMOVED,	MNL_TYPE_FLAG)))
 
-	switch(type) {
-	case TEAM_ATTR_TEAM_IFINDEX:
-		if (mnl_attr_validate(attr, MNL_TYPE_U32) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	case TEAM_ATTR_LIST_PORT:
-		if (mnl_attr_validate(attr, MNL_TYPE_NESTED) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	}
-	if (rc == MNL_CB_OK)
-		table[type] = attr;
-	else
-		ERROR("ctrl: mnl_attr_validate(<team-attr>, %d), %s\n",
-		      type, strerror(errno));
-
-	return rc;
-}
-
-static int team_port_cb(const struct nlattr *attr, void *data)
-{
-	const struct nlattr **table = data;
-	int type = mnl_attr_get_type(attr);
-	int rc = MNL_CB_OK;
-
-	if (mnl_attr_type_valid(attr, TEAM_ATTR_PORT_MAX) < 0)
-		return rc;
-
-	switch(type) {
-	case TEAM_ATTR_PORT_IFINDEX:
-		if (mnl_attr_validate(attr, MNL_TYPE_U32) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	case TEAM_ATTR_PORT_CHANGED:
-	case TEAM_ATTR_PORT_LINKUP:
-	case TEAM_ATTR_PORT_REMOVED:
-		if (mnl_attr_validate(attr, MNL_TYPE_FLAG) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	}
-	if (rc == MNL_CB_OK)
-		table[type] = attr;
-	else
-		ERROR("team: mnl_attr_validate(<team-attr-port>, %d), %s\n",
-		      type, strerror(errno));
-
-	return rc;
-}
-
-static int team_opt_cb(const struct nlattr *attr, void *data)
-{
-	const struct nlattr **table = data;
-	int type = mnl_attr_get_type(attr);
-	int rc = MNL_CB_OK;
-
-	if (mnl_attr_type_valid(attr, TEAM_ATTR_PORT_MAX) < 0)
-		return rc;
-
-	switch(type) {
-	case TEAM_ATTR_OPTION_NAME:
-		if (mnl_attr_validate(attr, MNL_TYPE_STRING) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	case TEAM_ATTR_OPTION_PORT_IFINDEX:
-		if (mnl_attr_validate(attr, MNL_TYPE_U32) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	case TEAM_ATTR_OPTION_TYPE:
-		if (mnl_attr_validate(attr, MNL_TYPE_U8) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	case TEAM_ATTR_OPTION_DATA:
-		/* Option handler will decide the type. */
-	case TEAM_ATTR_OPTION_CHANGED:
-	case TEAM_ATTR_OPTION_REMOVED:
-		/* These options are not validating as FLAG type but
-		   we only care about presence so never mind. */
-		rc = MNL_CB_OK;
-		break;
-	}
-	if (rc == MNL_CB_OK)
-		table[type] = attr;
-	else
-		ERROR("team: mnl_attr_validate(<team-option>, %d), %s\n",
-		      type, strerror(errno));
-
-	return rc;
-}
+MNL_VALIDATE_CB(team_attr_option, TEAM_ATTR_OPTION_MAX, EXPECTED(
+		A(TEAM_ATTR_OPTION_NAME,	MNL_TYPE_STRING),
+		A(TEAM_ATTR_OPTION_PORT_IFINDEX,MNL_TYPE_U32),
+		A(TEAM_ATTR_OPTION_TYPE,	MNL_TYPE_U8),
+		/* Allow the following options to be of any type:
+		  TEAM_ATTR_OPTION_DATA
+		  TEAM_ATTR_OPTION_CHANGED
+		  TEAM_ATTR_OPTION_REMOVED
+		*/))
 
 static void team_opt_apply_mode(struct link_db *db, void *value,
 				int team_ifindex, int port_ifindex,
@@ -1101,7 +895,7 @@ static int netlink_handle_genl_team(struct nl_conn_state *conn,
 
 	switch (genl->cmd) {
 	case TEAM_CMD_PORT_LIST_GET:
-		mnl_attr_parse(nh, sizeof *genl, team_attr_cb, attr);
+		mnl_attr_parse(nh, sizeof *genl, MNL_VALIDATE(team_attr), attr);
 
 		if (attr[TEAM_ATTR_TEAM_IFINDEX]) {
 			team_ifindex = mnl_attr_get_u32(attr[TEAM_ATTR_TEAM_IFINDEX]);
@@ -1109,7 +903,7 @@ static int netlink_handle_genl_team(struct nl_conn_state *conn,
 
 		if (attr[TEAM_ATTR_LIST_PORT]) {
 			mnl_attr_for_each_nested(port, attr[TEAM_ATTR_LIST_PORT]) {
-				mnl_attr_parse_nested(port, team_port_cb, nested);
+				mnl_attr_parse_nested(port, MNL_VALIDATE(team_attr_port), nested);
 
 				if (nested[TEAM_ATTR_PORT_IFINDEX])
 					port_ifindex = mnl_attr_get_u32(nested[TEAM_ATTR_PORT_IFINDEX]);
@@ -1127,7 +921,7 @@ static int netlink_handle_genl_team(struct nl_conn_state *conn,
 
 		break;
 	case TEAM_CMD_OPTIONS_GET:
-		mnl_attr_parse(nh, sizeof *genl, team_opt_cb, attr);
+		mnl_attr_parse(nh, sizeof *genl, MNL_VALIDATE(team_attr), attr);
 
 		if (attr[TEAM_ATTR_TEAM_IFINDEX]) {
 			team_ifindex = mnl_attr_get_u32(attr[TEAM_ATTR_TEAM_IFINDEX]);
@@ -1137,7 +931,7 @@ static int netlink_handle_genl_team(struct nl_conn_state *conn,
 			assert(team_ifindex > 0);
 			mnl_attr_for_each_nested(option, attr[TEAM_ATTR_LIST_OPTION]) {
 				void *data = NULL;
-				mnl_attr_parse_nested(option, team_opt_cb, nested);
+				mnl_attr_parse_nested(option, MNL_VALIDATE(team_attr_option), nested);
 
 				if (nested[TEAM_ATTR_OPTION_NAME]) {
 					for (opt = 0; opt < CP_TEAM_OPTION_MAX &&
@@ -1179,164 +973,29 @@ static int netlink_handle_genl_team(struct nl_conn_state *conn,
 }
 
 #ifdef HAVE_ETHTOOL_NETLINK
-static int ethtool_tsinfo_cb(const struct nlattr *attr, void *data)
-{
-	const struct nlattr **table = data;
-	int type = mnl_attr_get_type(attr);
-	int rc = MNL_CB_OK;
+MNL_VALIDATE_CB(ethtool_tsinfo, ETHTOOL_A_TSINFO_MAX, EXPECTED(
+		A(ETHTOOL_A_TSINFO_PHC_INDEX,	MNL_TYPE_U32),
+		A(ETHTOOL_A_TSINFO_TIMESTAMPING,MNL_TYPE_NESTED),
+		A(ETHTOOL_A_TSINFO_TX_TYPES,	MNL_TYPE_NESTED),
+		A(ETHTOOL_A_TSINFO_RX_FILTERS,	MNL_TYPE_NESTED)))
 
-	if (mnl_attr_type_valid(attr, ETHTOOL_A_TSINFO_MAX) < 0)
-		return rc;
+MNL_VALIDATE_CB(ethtool_strset, ETHTOOL_A_STRSET_MAX, EXPECTED(
+		A(ETHTOOL_A_STRSET_STRINGSETS,	MNL_TYPE_NESTED)))
 
-	switch(type) {
-	case ETHTOOL_A_TSINFO_PHC_INDEX:
-		if (mnl_attr_validate(attr, MNL_TYPE_U32) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	case ETHTOOL_A_TSINFO_TIMESTAMPING:
-	case ETHTOOL_A_TSINFO_TX_TYPES:
-	case ETHTOOL_A_TSINFO_RX_FILTERS:
-		if (mnl_attr_validate(attr, MNL_TYPE_NESTED) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	}
-	if (rc == MNL_CB_OK)
-		table[type] = attr;
-	else
-		ERROR("ethtool: mnl_attr_validate(<ethtool-attr>, %d), %s\n",
-		      type, strerror(errno));
+MNL_VALIDATE_CB(ethtool_stringset, ETHTOOL_A_STRINGSET_MAX, EXPECTED(
+		A(ETHTOOL_A_STRINGSET_ID,	MNL_TYPE_U32),
+		A(ETHTOOL_A_STRINGSET_COUNT,	MNL_TYPE_U32)))
 
-	return rc;
-}
+MNL_VALIDATE_CB(ethtool_string, ETHTOOL_A_STRING_MAX, EXPECTED(
+		A(ETHTOOL_A_STRING_INDEX,	MNL_TYPE_U32),
+		A(ETHTOOL_A_STRING_VALUE,	MNL_TYPE_STRING)))
 
-static int ethtool_strsets_cb(const struct nlattr *attr, void *data)
-{
-	const struct nlattr **table = data;
-	int type = mnl_attr_get_type(attr);
-	int rc = MNL_CB_OK;
+MNL_VALIDATE_CB(ethtool_header, ETHTOOL_A_HEADER_MAX, EXPECTED(
+		A(ETHTOOL_A_HEADER_DEV_INDEX,	MNL_TYPE_U32)))
 
-	if (mnl_attr_type_valid(attr, ETHTOOL_A_STRSET_MAX) < 0)
-		return rc;
-
-	switch(type) {
-	case ETHTOOL_A_STRSET_STRINGSETS:
-		if (mnl_attr_validate(attr, MNL_TYPE_NESTED) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	}
-	if (rc == MNL_CB_OK)
-		table[type] = attr;
-	else
-		ERROR("ethtool: mnl_attr_validate(<ethtool-strset>, %d), %s\n",
-		      type, strerror(errno));
-
-	return rc;
-}
-
-static int ethtool_strset_cb(const struct nlattr *attr, void *data)
-{
-	const struct nlattr **table = data;
-	int type = mnl_attr_get_type(attr);
-	int rc = MNL_CB_OK;
-
-	if (mnl_attr_type_valid(attr, ETHTOOL_A_STRINGSET_MAX) < 0)
-		return rc;
-
-	switch(type) {
-	case ETHTOOL_A_STRINGSET_ID:
-	case ETHTOOL_A_STRINGSET_COUNT:
-		if (mnl_attr_validate(attr, MNL_TYPE_U32) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	}
-	if (rc == MNL_CB_OK)
-		table[type] = attr;
-	else
-		ERROR("ethtool: mnl_attr_validate(<ethtool-strset>, %d), %s\n",
-		      type, strerror(errno));
-
-	return rc;
-}
-
-static int ethtool_string_cb(const struct nlattr *attr, void *data)
-{
-	const struct nlattr **table = data;
-	int type = mnl_attr_get_type(attr);
-	int rc = MNL_CB_OK;
-
-	if (mnl_attr_type_valid(attr, ETHTOOL_A_STRING_MAX) < 0)
-		return rc;
-
-	switch(type) {
-	case ETHTOOL_A_STRING_INDEX:
-		if (mnl_attr_validate(attr, MNL_TYPE_U32) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	case ETHTOOL_A_STRING_VALUE:
-		if (mnl_attr_validate(attr, MNL_TYPE_STRING) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	}
-	if (rc == MNL_CB_OK)
-		table[type] = attr;
-	else
-		ERROR("ethtool: mnl_attr_validate(<ethtool-string>, %d), %s\n",
-		      type, strerror(errno));
-
-	return rc;
-}
-
-static int ethtool_hdr_cb(const struct nlattr *attr, void *data)
-{
-	const struct nlattr **table = data;
-	int type = mnl_attr_get_type(attr);
-	int rc = MNL_CB_OK;
-
-	if (mnl_attr_type_valid(attr, ETHTOOL_A_HEADER_MAX) < 0)
-		return rc;
-
-	switch(type) {
-	case ETHTOOL_A_HEADER_DEV_INDEX:
-		if (mnl_attr_validate(attr, MNL_TYPE_U32) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	}
-	if (rc == MNL_CB_OK)
-		table[type] = attr;
-	else
-		ERROR("ethtool: mnl_attr_validate(<ethtool-hdr>, %d), %s\n",
-		      type, strerror(errno));
-
-	return rc;
-}
-
-static int ethtool_bitset_cb(const struct nlattr *attr, void *data)
-{
-	const struct nlattr **table = data;
-	int type = mnl_attr_get_type(attr);
-	int rc = MNL_CB_OK;
-
-	if (mnl_attr_type_valid(attr, ETHTOOL_A_BITSET_MAX) < 0)
-		return rc;
-
-	switch(type) {
-	case ETHTOOL_A_BITSET_SIZE:
-		if (mnl_attr_validate(attr, MNL_TYPE_U32) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	case ETHTOOL_A_BITSET_VALUE:
-		if (mnl_attr_validate(attr, MNL_TYPE_BINARY) < 0)
-			rc = MNL_CB_ERROR;
-		break;
-	}
-	if (rc == MNL_CB_OK)
-		table[type] = attr;
-	else
-		ERROR("ethtool: mnl_attr_validate(<bitset>, %d), %s\n",
-		      type, strerror(errno));
-
-	return rc;
-}
+MNL_VALIDATE_CB(ethtool_bitset, ETHTOOL_A_BITSET_MAX, EXPECTED(
+		A(ETHTOOL_A_BITSET_SIZE,	MNL_TYPE_U32),
+		A(ETHTOOL_A_BITSET_VALUE,	MNL_TYPE_BINARY)))
 
 static int attr_get_bitset32(struct nlattr *bitset, uint32_t *output)
 {
@@ -1346,7 +1005,7 @@ static int attr_get_bitset32(struct nlattr *bitset, uint32_t *output)
 	assert(bitset);
 	assert(output);
 
-	mnl_attr_parse_nested(bitset, ethtool_bitset_cb, nest);
+	mnl_attr_parse_nested(bitset, MNL_VALIDATE(ethtool_bitset), nest);
 	if (nest[ETHTOOL_A_BITSET_SIZE]) {
 		size = mnl_attr_get_u32(nest[ETHTOOL_A_BITSET_SIZE]);
 	}
@@ -1388,10 +1047,10 @@ static int netlink_handle_genl_ethtool(struct nl_conn_state *conn,
 	/* Parse responses */
 	switch (genl->cmd) {
 	case ETHTOOL_MSG_STRSET_GET_REPLY:
-		mnl_attr_parse(nh, sizeof *genl, ethtool_strsets_cb, attr);
+		mnl_attr_parse(nh, sizeof *genl, MNL_VALIDATE(ethtool_strset), attr);
 		break;
 	case ETHTOOL_MSG_TSINFO_GET_REPLY:
-		mnl_attr_parse(nh, sizeof *genl, ethtool_tsinfo_cb, attr);
+		mnl_attr_parse(nh, sizeof *genl, MNL_VALIDATE(ethtool_tsinfo), attr);
 		break;
 	default:
 		WARNING("unexpected ethtool command %d\n", genl->cmd);
@@ -1399,7 +1058,8 @@ static int netlink_handle_genl_ethtool(struct nl_conn_state *conn,
 
 	/* Parse standard header for all command responses */
 	if (attr[ETHTOOL_A_TSINFO_HEADER]) {
-		mnl_attr_parse_nested(attr[ETHTOOL_A_TSINFO_HEADER], ethtool_hdr_cb, hdr);
+		mnl_attr_parse_nested(attr[ETHTOOL_A_TSINFO_HEADER],
+				      MNL_VALIDATE(ethtool_header), hdr);
 		if (hdr[ETHTOOL_A_HEADER_DEV_INDEX]) {
 			if_index = mnl_attr_get_u32(hdr[ETHTOOL_A_HEADER_DEV_INDEX]);
 		}
@@ -1446,7 +1106,7 @@ static int netlink_handle_genl_ethtool(struct nl_conn_state *conn,
 			struct nlattr *set;
 			mnl_attr_for_each_nested(set, attr[ETHTOOL_A_STRSET_STRINGSETS]) {
 				struct nlattr *nested[ETHTOOL_A_STRINGSET_MAX + 1] = {};
-				mnl_attr_parse_nested(set, ethtool_strset_cb, nested);
+				mnl_attr_parse_nested(set, MNL_VALIDATE(ethtool_stringset), nested);
 				if (nested[ETHTOOL_A_STRINGSET_ID] &&
 				    nested[ETHTOOL_A_STRINGSET_COUNT] &&
 				    mnl_attr_get_u32(nested[ETHTOOL_A_STRINGSET_ID]) == ETH_SS_STATS &&
@@ -1459,7 +1119,9 @@ static int netlink_handle_genl_ethtool(struct nl_conn_state *conn,
 					mnl_attr_for_each_nested(string,
 								 nested[ETHTOOL_A_STRINGSET_STRINGS]) {
 						struct nlattr *tuple[ETHTOOL_A_STRING_MAX];
-						mnl_attr_parse_nested(string, ethtool_string_cb, tuple);
+						mnl_attr_parse_nested(string,
+								      MNL_VALIDATE(ethtool_string),
+								      tuple);
 						if (tuple[ETHTOOL_A_STRING_INDEX] &&
 						    tuple[ETHTOOL_A_STRING_VALUE]) {
 							const char *key;
