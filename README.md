@@ -38,7 +38,7 @@ Some example installation recipes follow.
 ### For most recent distributions
 ``` sudo make prefix=/usr install ```
 
-### Example for an old distribution like RHEL6
+### Example for an installation with sysv init and no Python 3
 ``` sudo make prefix=/usr INST_INITS=sysv INST_OMIT=sfptpmon install ```
 
 ### Default operation
@@ -55,5 +55,6 @@ mkdir -p ~/rpmbuild/SOURCES
 ver="$(scripts/sfptpd_versioning derive)"
 git archive --prefix="sfptpd-$ver/" --format=tgz -o ~/rpmbuild/SOURCES/sfptpd-$ver.tgz HEAD
 curl https://raw.githubusercontent.com/Xilinx-CNS/sfptpd-rpm/generic/sfptpd.spec | sed "s/^\(Version: \).*/\1 $ver/g" > sfptpd.spec
+curl https://raw.githubusercontent.com/Xilinx-CNS/sfptpd-rpm/generic/sfptpd.sysusers -o ~/rpmbuild/SOURCES/sfptpd.sysusers
 rpmbuild -bs sfptpd.spec
 ```
