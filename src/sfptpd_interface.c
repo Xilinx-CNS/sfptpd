@@ -641,7 +641,7 @@ static int interface_get_hw_address(struct sfptpd_interface *interface)
 		assert(interface->link.perm_addr.len <= sizeof interface->mac_addr.addr);
 		interface->mac_addr.len = interface->link.perm_addr.len;
 		memcpy(interface->mac_addr.addr, interface->link.perm_addr.addr, interface->link.perm_addr.len);
-		strncpy(interface->mac_string, interface->link.perm_addr.string, sizeof interface->mac_string);
+		sfptpd_strncpy(interface->mac_string, interface->link.perm_addr.string, sizeof interface->mac_string);
 	} else {
 		uint8_t buf[sizeof(struct ethtool_perm_addr) + ETH_ALEN];
 		struct ethtool_perm_addr *req = (struct ethtool_perm_addr *)buf;

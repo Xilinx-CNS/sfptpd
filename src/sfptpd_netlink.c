@@ -410,21 +410,17 @@ static bool netlink_send_ethtool_query(struct sfptpd_nl_state *state, struct sfp
 
 
 	hdr = create_ethtool_tsinfo_query(conn, state->buf, state->buf_sz, link->if_index);
-	if (hdr) {
-		if (mnl_socket_sendto(conn->mnl, hdr, hdr->nlmsg_len) >= 0)
-			link->ts_info_state = QRY_REQUESTED;
-		else
-			ERROR("netlink: sending ethtool query, %s\n", strerror(errno));
-	}
+	if (mnl_socket_sendto(conn->mnl, hdr, hdr->nlmsg_len) >= 0)
+		link->ts_info_state = QRY_REQUESTED;
+	else
+		ERROR("netlink: sending ethtool query, %s\n", strerror(errno));
 
 	if (state->stats_keys) {
 		hdr = create_ethtool_string_query(conn, state->buf, state->buf_sz, link->if_index);
-		if (hdr) {
-			if (mnl_socket_sendto(conn->mnl, hdr, hdr->nlmsg_len) >= 0)
-				link->drv_stats_ids_state = QRY_REQUESTED;
-			else
-				ERROR("netlink: sending ethtool query, %s\n", strerror(errno));
-		}
+		if (mnl_socket_sendto(conn->mnl, hdr, hdr->nlmsg_len) >= 0)
+			link->drv_stats_ids_state = QRY_REQUESTED;
+		else
+			ERROR("netlink: sending ethtool query, %s\n", strerror(errno));
 	}
 
 	DBG_L5("netlink: sent ethtool queries for %d: %d\n", link->if_index, conn->seq);
@@ -432,6 +428,20 @@ static bool netlink_send_ethtool_query(struct sfptpd_nl_state *state, struct sfp
 	return true;
 }
 #endif
+
+static void render_l2_addr(struct sfptpd_l2addr *addr)
+{
+	int ptr;
+
+	assert(addr);
+	assert(addr->len <= sizeof addr->addr);
+
+	for (ptr = 0; ptr < addr->len; ptr++)
+		snprintf(addr->string + ptr * 3,
+			 (sizeof addr->string) - ptr * 3,
+			 ptr == addr->len - 1 ? "%02hhx" : "%02hhx:",
+			 addr->addr[ptr]);
+}
 
 MNL_VALIDATE_CB(link_attr, IFLA_MAX, EXPECTED(
 #ifdef HAVE_IFLA_PARENT_DEV_NAME
@@ -577,14 +587,9 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 			/* Silently ignore - irrelevant scenario for esoteric link types */
 			TRACE_L3("netlink: permaddr too big (%d > %d)\n", len, sizeof link->perm_addr.addr);
 		} else {
-			int ptr;
 			link->perm_addr.len = len;
 			memcpy(link->perm_addr.addr, data, len);
-			for (ptr = 0; ptr < len; ptr++)
-				snprintf(link->perm_addr.string + ptr * 3,
-					 (sizeof link->perm_addr.string) - ptr * 3,
-					 ptr == len - 1 ? "%02hhx" : "%02hhx:",
-					 link->perm_addr.addr[ptr]);
+			render_l2_addr(&link->perm_addr);
 		}
 	}
 #endif
@@ -632,7 +637,7 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 				memmove(old, old + 1,
 					sizeof data * (db->table.count - row - 1));
 				db->table.count--;
-			} else  {
+			} else {
 				/* If the updated link is a team then inherit
 				 * the previous settings so that we don't lose
 				 * team characteristics while refetching them */
