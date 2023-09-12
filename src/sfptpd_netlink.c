@@ -429,6 +429,7 @@ static bool netlink_send_ethtool_query(struct sfptpd_nl_state *state, struct sfp
 }
 #endif
 
+#ifdef HAVE_IFLA_PERM_ADDRESS
 static void render_l2_addr(struct sfptpd_l2addr *addr)
 {
 	int ptr;
@@ -442,6 +443,7 @@ static void render_l2_addr(struct sfptpd_l2addr *addr)
 			 ptr == addr->len - 1 ? "%02hhx" : "%02hhx:",
 			 addr->addr[ptr]);
 }
+#endif
 
 MNL_VALIDATE_CB(link_attr, IFLA_MAX, EXPECTED(
 #ifdef HAVE_IFLA_PARENT_DEV_NAME
@@ -1123,7 +1125,7 @@ static int netlink_handle_genl_ethtool(struct nl_conn_state *conn,
 					       sizeof link->drv_stats.requested_ids);
 					mnl_attr_for_each_nested(string,
 								 nested[ETHTOOL_A_STRINGSET_STRINGS]) {
-						struct nlattr *tuple[ETHTOOL_A_STRING_MAX];
+						struct nlattr *tuple[ETHTOOL_A_STRING_MAX + 1];
 						mnl_attr_parse_nested(string,
 								      MNL_VALIDATE(ethtool_string),
 								      tuple);

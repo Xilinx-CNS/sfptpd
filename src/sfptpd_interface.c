@@ -665,7 +665,10 @@ static int interface_get_hw_address(struct sfptpd_interface *interface)
 			 "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx",
 			 req->data[0], req->data[1], req->data[2],
 			 req->data[3], req->data[4], req->data[5]);
-		memcpy(interface->mac_addr.addr, req->data, sizeof(interface->mac_addr.addr));
+		interface->mac_addr.len = req->size;
+		if (interface->mac_addr.len > sizeof interface->mac_addr.addr)
+			interface->mac_addr.len = sizeof interface->mac_addr.addr;
+		memcpy(interface->mac_addr.addr, req->data, interface->mac_addr.len);
 	}
 
 	return 0;
