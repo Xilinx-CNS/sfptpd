@@ -31,6 +31,7 @@
 #define OPT_VERSION   0x10000
 #define OPT_NO_DAEMON 0x10001
 #define OPT_DAEMON    0x10002
+#define OPT_CONSOLE   0x10003
 
 static const char *command_line_options_short = "hf:i:tvu:";
 static const struct option command_line_options_long[] = 
@@ -44,6 +45,7 @@ static const struct option command_line_options_long[] =
 	{"version", 0, NULL, OPT_VERSION},
 	{"no-daemon", 0, NULL, OPT_NO_DAEMON},
 	{"daemon", 0, NULL, OPT_DAEMON},
+	{"console", 0, NULL, OPT_CONSOLE},
 	{NULL, 0, NULL, 0}
 };
 
@@ -88,12 +90,13 @@ static void config_display_help(void)
 		"Command Line Options:\n"
 		"-h, --help                   Display help information\n"
 		"-i, --interface=INTERFACE    Default interface that Synchronization Modules will use\n"
-		"-f, --config-file=FILE       Configure from a file\n"
+		"-f, --config-file=FILE       Configure from FILE, or stdin if '-'\n"
 		"-t, --test-config            Test configuration\n"
 		"-u, --user=USER[:GROUP]      Run as user USER (and group GROUP)\n"
 		"    --no-daemon              Do not run as a daemon, overriding config file\n"
 		"    --daemon                 Run as a daemon, overriding config file\n"
 		"-v, --verbose                Verbose: enable stats, trace and send output to stdout/stderr\n"
+		"    --console                Send output to stdout/stderr\n"
 		"    --version                Show version number and exit\n"
 		"\n"
 		"Runtime Signals:\n"
@@ -636,6 +639,10 @@ int sfptpd_config_parse_command_line_pass1(struct sfptpd_config *config,
 			sfptpd_config_general_set_verbose(config);
 			break;
 
+		case OPT_CONSOLE:
+			sfptpd_config_general_set_console_logging(config);
+			break;
+
 		case 'i':
 			/* Update the interface name for the global section of
 			 * each sync module. */
@@ -705,6 +712,10 @@ int sfptpd_config_parse_command_line_pass2(struct sfptpd_config *config,
 			sfptpd_config_general_set_verbose(config);
 			break;
 
+		case OPT_CONSOLE:
+			sfptpd_config_general_set_console_logging(config);
+			break;
+
 		case 't':
 			/* Terminate early: not an error */
 			return ESHUTDOWN;
@@ -747,22 +758,36 @@ int sfptpd_config_parse_file(struct sfptpd_config *config)
 		return 0;
 	}
 
-	rc = stat(general_config->config_filename, &file_stat);
-	if (rc < 0) {
-		ERROR("failed to retrieve info on config file, %s\n", strerror(errno));
-		return rc;
+	if (!strcmp(general_config->config_filename, "-")) {
+		int fd = dup(STDIN_FILENO);
+
+		if (fd == -1) {
+			rc = errno;
+			ERROR("dup() on stdin, %s\n", strerror(rc));
+			return rc;
+		}
+
+		cfg_file = fdopen(fd, "r");
+	} else {
+		rc = stat(general_config->config_filename, &file_stat);
+		if (rc < 0) {
+			ERROR("failed to retrieve info on config file, %s\n", strerror(errno));
+			return rc;
+		}
+
+		if (S_ISDIR(file_stat.st_mode)) {
+			ERROR("config file is a directory\n");
+			return ENOENT;
+		}
+
+		cfg_file = fopen(general_config->config_filename, "r");
 	}
 
-	if (S_ISDIR(file_stat.st_mode)) {
-		ERROR("config file is a directory\n");
-		return ENOENT;
-	}
-
-	cfg_file = fopen(general_config->config_filename, "r");
 	if (cfg_file == NULL) {
+		rc = errno;
 		ERROR("failed to open config file %s, error %d\n",
-		      general_config->config_filename, errno);
-		return errno;
+		      general_config->config_filename, rc);
+		return rc;
 	}
 
 	sfptpd_log_lexed_config("# Reconstructed from: %s\n",

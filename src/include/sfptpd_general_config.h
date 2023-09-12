@@ -247,6 +247,12 @@ struct sfptpd_config_general *sfptpd_general_config_get(struct sfptpd_config *co
 void sfptpd_config_set_config_file(struct sfptpd_config *config,
 				   char *filename);
 
+
+/** Direct all output to the console.
+ * @param config  Pointer to configuration
+ */
+void sfptpd_config_general_set_console_logging(struct sfptpd_config *config);
+
 /** Enable verbose logging and direct all output to the console.
  * @param config  Pointer to configuration
  */

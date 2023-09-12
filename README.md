@@ -58,3 +58,18 @@ curl https://raw.githubusercontent.com/Xilinx-CNS/sfptpd-rpm/generic/sfptpd.spec
 curl https://raw.githubusercontent.com/Xilinx-CNS/sfptpd-rpm/generic/sfptpd.sysusers -o ~/rpmbuild/SOURCES/sfptpd.sysusers
 rpmbuild -bs sfptpd.spec
 ```
+
+### Building a container image
+```
+docker build .
+```
+
+### Running a container image
+```
+sudo docker run \
+  --network=host \
+  --cap-add NET_BIND_SERVICE,NET_ADMIN,NET_RAW,SYS_TIME \
+  $(for d in $(ls /dev/{ptp*,pps*}); do echo "--device $d"; done) \
+  -i sfptpd:latest \
+  -v -f - < config/default.cfg
+```
