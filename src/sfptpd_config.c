@@ -31,6 +31,7 @@
 #define OPT_VERSION   0x10000
 #define OPT_NO_DAEMON 0x10001
 #define OPT_DAEMON    0x10002
+#define OPT_CONSOLE   0x10003
 
 static const char *command_line_options_short = "hf:i:tvu:";
 static const struct option command_line_options_long[] = 
@@ -44,6 +45,7 @@ static const struct option command_line_options_long[] =
 	{"version", 0, NULL, OPT_VERSION},
 	{"no-daemon", 0, NULL, OPT_NO_DAEMON},
 	{"daemon", 0, NULL, OPT_DAEMON},
+	{"console", 0, NULL, OPT_CONSOLE},
 	{NULL, 0, NULL, 0}
 };
 
@@ -94,6 +96,7 @@ static void config_display_help(void)
 		"    --no-daemon              Do not run as a daemon, overriding config file\n"
 		"    --daemon                 Run as a daemon, overriding config file\n"
 		"-v, --verbose                Verbose: enable stats, trace and send output to stdout/stderr\n"
+		"    --console                Send output to stdout/stderr\n"
 		"    --version                Show version number and exit\n"
 		"\n"
 		"Runtime Signals:\n"
@@ -636,6 +639,10 @@ int sfptpd_config_parse_command_line_pass1(struct sfptpd_config *config,
 			sfptpd_config_general_set_verbose(config);
 			break;
 
+		case OPT_CONSOLE:
+			sfptpd_config_general_set_console_logging(config);
+			break;
+
 		case 'i':
 			/* Update the interface name for the global section of
 			 * each sync module. */
@@ -703,6 +710,10 @@ int sfptpd_config_parse_command_line_pass2(struct sfptpd_config *config,
 
 		case 'v':
 			sfptpd_config_general_set_verbose(config);
+			break;
+
+		case OPT_CONSOLE:
+			sfptpd_config_general_set_console_logging(config);
 			break;
 
 		case 't':

@@ -1577,12 +1577,21 @@ void sfptpd_config_set_config_file(struct sfptpd_config *config,
 }
 
 
-void sfptpd_config_general_set_verbose(struct sfptpd_config *config)
+void sfptpd_config_general_set_console_logging(struct sfptpd_config *config)
 {
 	struct sfptpd_config_general *general = sfptpd_general_config_get(config);
 
 	general->message_log = SFPTPD_MSG_LOG_TO_STDERR;
 	general->stats_log = SFPTPD_STATS_LOG_TO_STDOUT;
+}
+
+
+void sfptpd_config_general_set_verbose(struct sfptpd_config *config)
+{
+	struct sfptpd_config_general *general = sfptpd_general_config_get(config);
+
+	sfptpd_config_general_set_console_logging(config);
+
 	if (general->trace_level < 3)
 		general->trace_level = 3;
 	if (general->netlink_trace_level < 1)
