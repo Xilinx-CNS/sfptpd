@@ -57,3 +57,18 @@ git archive --prefix="sfptpd-$ver/" --format=tgz -o ~/rpmbuild/SOURCES/sfptpd-$v
 curl https://raw.githubusercontent.com/Xilinx-CNS/sfptpd-rpm/v3_7/generic/sfptpd.spec | sed "s/^\(Version: \).*/\1 $ver/g" > sfptpd.spec
 rpmbuild -bs sfptpd.spec
 ```
+
+### Building a container image
+```
+docker build .
+```
+
+### Running a container image
+```
+sudo docker run \
+  --network=host \
+  --cap-add NET_BIND_SERVICE,NET_ADMIN,NET_RAW,SYS_TIME \
+  $(for d in $(ls /dev/{ptp*,pps*}); do echo "--device $d"; done) \
+  -i sfptpd:latest \
+  -v -f - < config/default.cfg
+```
