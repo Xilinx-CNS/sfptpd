@@ -90,7 +90,7 @@ static void config_display_help(void)
 		"Command Line Options:\n"
 		"-h, --help                   Display help information\n"
 		"-i, --interface=INTERFACE    Default interface that Synchronization Modules will use\n"
-		"-f, --config-file=FILE       Configure from a file\n"
+		"-f, --config-file=FILE       Configure from FILE, or stdin if '-'\n"
 		"-t, --test-config            Test configuration\n"
 		"-u, --user=USER[:GROUP]      Run as user USER (and group GROUP)\n"
 		"    --no-daemon              Do not run as a daemon, overriding config file\n"
@@ -758,22 +758,36 @@ int sfptpd_config_parse_file(struct sfptpd_config *config)
 		return 0;
 	}
 
-	rc = stat(general_config->config_filename, &file_stat);
-	if (rc < 0) {
-		ERROR("failed to retrieve info on config file, %s\n", strerror(errno));
-		return rc;
+	if (!strcmp(general_config->config_filename, "-")) {
+		int fd = dup(STDIN_FILENO);
+
+		if (fd == -1) {
+			rc = errno;
+			ERROR("dup() on stdin, %s\n", strerror(rc));
+			return rc;
+		}
+
+		cfg_file = fdopen(fd, "r");
+	} else {
+		rc = stat(general_config->config_filename, &file_stat);
+		if (rc < 0) {
+			ERROR("failed to retrieve info on config file, %s\n", strerror(errno));
+			return rc;
+		}
+
+		if (S_ISDIR(file_stat.st_mode)) {
+			ERROR("config file is a directory\n");
+			return ENOENT;
+		}
+
+		cfg_file = fopen(general_config->config_filename, "r");
 	}
 
-	if (S_ISDIR(file_stat.st_mode)) {
-		ERROR("config file is a directory\n");
-		return ENOENT;
-	}
-
-	cfg_file = fopen(general_config->config_filename, "r");
 	if (cfg_file == NULL) {
+		rc = errno;
 		ERROR("failed to open config file %s, error %d\n",
-		      general_config->config_filename, errno);
-		return errno;
+		      general_config->config_filename, rc);
+		return rc;
 	}
 
 	sfptpd_log_lexed_config("# Reconstructed from: %s\n",
