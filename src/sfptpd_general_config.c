@@ -118,7 +118,8 @@ static int parse_rtc_adjust(struct sfptpd_config_section *section, const char *o
 			    unsigned int num_params, const char * const params[]);
 static int parse_clock_display_fmts(struct sfptpd_config_section *section, const char *option,
 				    unsigned int num_params, const char * const params[]);
-
+static int parse_unique_clockid_bits(struct sfptpd_config_section *section, const char *option,
+				     unsigned int num_params, const char * const params[]);
 
 static int validate_config(struct sfptpd_config_section *section);
 
@@ -337,6 +338,12 @@ static const sfptpd_config_option_t config_general_options[] =
 		SFPTPD_DEFAULT_CLOCK_HWID_FMT " "
 		SFPTPD_DEFAULT_CLOCK_FNAM_FMT ".",
 		4, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_clock_display_fmts},
+	{"unique_clockid_bits", "OCTETS",
+		"Colon-delimited octets providing the unique bits that pad the "
+		"LSBs of an EUI-64 clock identity constructed from an EUI-48 "
+		"MAC address. Default is "
+		SFPTPD_DEFAULT_UNIQUE_CLOCKID_BITS ".",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_unique_clockid_bits},
 };
 
 static const sfptpd_config_option_set_t config_general_option_set =
@@ -1474,6 +1481,26 @@ static int parse_clock_display_fmts(struct sfptpd_config_section *section, const
 		       sizeof general->clocks.format_hwid);
 	sfptpd_strncpy(general->clocks.format_fnam, params[3],
 		       sizeof general->clocks.format_fnam);
+
+	return 0;
+}
+
+
+static int parse_unique_clockid_bits(struct sfptpd_config_section *section, const char *option,
+				     unsigned int num_params, const char * const params[])
+{
+	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+	assert(num_params == 1);
+	int tokens;
+	uint8_t o[8];
+
+	tokens = sscanf(params[0], "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+			&o[0], &o[1], &o[2], &o[3], &o[4], &o[5], &o[6], &o[7]);
+
+	if (tokens < 1 || tokens > 8)
+		return EINVAL;
+
+	memcpy(general->unique_clockid_bits + 8 - tokens, o, tokens);
 
 	return 0;
 }

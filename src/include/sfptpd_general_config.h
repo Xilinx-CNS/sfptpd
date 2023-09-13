@@ -48,6 +48,7 @@
 #define SFPTPD_DEFAULT_CLOCK_LONG_FMT		   "phc%P(%I)"
 #define SFPTPD_DEFAULT_CLOCK_HWID_FMT		   "%C:"
 #define SFPTPD_DEFAULT_CLOCK_FNAM_FMT		   "%C:"
+#define SFPTPD_DEFAULT_UNIQUE_CLOCKID_BITS         "00:00"
 
 
 /** Maximum size of MAC address string */
@@ -232,6 +233,7 @@ typedef struct sfptpd_config_general {
 	long double limit_freq_adj;
 	bool ignore_critical[SFPTPD_CRITICAL_MAX];
 	unsigned long declared_sync_modules;
+	uint8_t unique_clockid_bits[8];
 } sfptpd_config_general_t;
 
 STATIC_ASSERT(sizeof ((sfptpd_config_general_t *) 0)->declared_sync_modules * 8 >= SFPTPD_CONFIG_CATEGORY_MAX);

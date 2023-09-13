@@ -728,8 +728,8 @@ static int clock_compare_using_efx(void *context, struct sfptpd_timespec *diff)
 
 static int renew_clock(struct sfptpd_clock *clock)
 {
-	struct sfptpd_config_general *general_config = sfptpd_general_config_get(sfptpd_clock_config);
 	struct sfptpd_db_query_result interface_index_snapshot;
+	struct sfptpd_config_general *general_config;
 	struct sfptpd_interface *interface, *primary;
 	int i, nic_id;
 	int phc_idx;
@@ -747,6 +747,8 @@ static int renew_clock(struct sfptpd_clock *clock)
 		 clock->u.nic.nic_id,
 		 clock->u.nic.device_idx,
 		 sfptpd_interface_get_name(clock->u.nic.primary_if));
+
+	general_config = sfptpd_general_config_get(sfptpd_clock_config);
 
 	/* Get an index of the active PTP capable interfaces. Note that the
 	 * index is ordered by NIC ID and then by increasing MAC address.
@@ -847,26 +849,19 @@ static int renew_clock(struct sfptpd_clock *clock)
 		sfptpd_format(clock_format_specifiers, clock, clock->long_name,
 			      sizeof clock->long_name, general_config->clocks.format_long);
 
+		/* IEEEE Std 1588-2019 7.5.2.2.2.2 requires clock IDs (EUI-64)
+		 * constructed from EUI-48 MAC addresses to left align the
+		 * MAC address and add unique bits to the RHS (LSBs). This
+		 * differs from the 1588-2008 __:__:__:ff:fe:__:__:__ style.
+		 *
+		 * The unique bits are configurable, which supports use cases
+		 * such as multiple PTP daemons which might be operating in
+		 * different time domains simultaneously or would otherwise
+		 * need to avoid clashing port IDs. */
 		sfptpd_interface_get_mac_addr(clock->u.nic.primary_if, &mac);
-		if (mac.len == 6) {
-			/* Create a hardware address using the legacy IEEE1588-2008
-			 * method for NUI-48 addresses, i.e. the MAC address of the
-			 * primary interface and an equivalent string form. */
-			clock->hw_id.id[0] = mac.addr[0];
-			clock->hw_id.id[1] = mac.addr[1];
-			clock->hw_id.id[2] = mac.addr[2];
-			clock->hw_id.id[3] = 0xFF;
-			clock->hw_id.id[4] = 0xFE;
-			clock->hw_id.id[5] = mac.addr[3];
-			clock->hw_id.id[6] = mac.addr[4];
-			clock->hw_id.id[7] = mac.addr[5];
-		} else {
-			/* Else pump MSBs into the field, padded with zeros. This
-			 * will meet IEEE1588-2019 for NUI-64 addresses. */
-			memset(clock->hw_id.id, '\0', sizeof clock->hw_id.id);
-			memcpy(clock->hw_id.id, mac.addr, mac.len < sizeof clock->hw_id.id ?
-							  mac.len : sizeof clock->hw_id.id);
-		}
+		memcpy(clock->hw_id.id, general_config->unique_clockid_bits, 8);
+		memcpy(clock->hw_id.id, mac.addr, mac.len < sizeof clock->hw_id.id ?
+						  mac.len : sizeof clock->hw_id.id);
 		sfptpd_format(clock_format_specifiers, clock, clock->hw_id_string,
 			      sizeof clock->hw_id_string, general_config->clocks.format_hwid);
 		sfptpd_format(clock_format_specifiers, clock, clock->fname_string,
