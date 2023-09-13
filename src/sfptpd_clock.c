@@ -797,11 +797,11 @@ static int renew_clock(struct sfptpd_clock *clock)
 		}
 		snprintf(clock->long_name + name_len, sizeof(clock->long_name) - name_len, ")");
 
+		sfptpd_interface_get_mac_addr(clock->u.nic.primary_if, &mac);
 		if (mac.len == 6) {
 			/* Create a hardware address using the legacy IEEE1588-2008
 			 * method for NUI-48 addresses, i.e. the MAC address of the
 			 * primary interface and an equivalent string form. */
-			sfptpd_interface_get_mac_addr(clock->u.nic.primary_if, &mac);
 			clock->hw_id.id[0] = mac.addr[0];
 			clock->hw_id.id[1] = mac.addr[1];
 			clock->hw_id.id[2] = mac.addr[2];
