@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <assert.h>
 #include <string.h>
+#include <endian.h>
 #include <stdbool.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -338,7 +339,7 @@ static const sfptpd_config_option_t config_general_options[] =
 		SFPTPD_DEFAULT_CLOCK_HWID_FMT " "
 		SFPTPD_DEFAULT_CLOCK_FNAM_FMT ".",
 		4, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_clock_display_fmts},
-	{"unique_clockid_bits", "OCTETS",
+	{"unique_clockid_bits", "<OCTETS | pid | hostid | rand>",
 		"Colon-delimited octets providing the unique bits that pad the "
 		"LSBs of an EUI-64 clock identity constructed from an EUI-48 "
 		"MAC address. Default is "
@@ -1491,16 +1492,33 @@ static int parse_unique_clockid_bits(struct sfptpd_config_section *section, cons
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
-	int tokens;
-	uint8_t o[8];
+	union {
+		uint8_t o[8];
+		uint32_t pid;
+		long hostid;
+		uint32_t rand;
+	} d;
+	size_t sz;
 
-	tokens = sscanf(params[0], "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
-			&o[0], &o[1], &o[2], &o[3], &o[4], &o[5], &o[6], &o[7]);
+	if (!strcmp(params[0], "pid")) {
+		d.pid = htobe32(getpid());
+		sz = sizeof d.pid;
+	} else if (!strcmp(params[0], "hostid")) {
+		d.hostid = htobe64(gethostid());
+		sz = sizeof d.hostid;
+	} else if (!strcmp(params[0], "rand")) {
+		srand48(getpid());
+		d.rand = lrand48();
+		sz = sizeof d.rand;
+	} else {
+		sz = sscanf(params[0], "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+			    &d.o[0], &d.o[1], &d.o[2], &d.o[3], &d.o[4], &d.o[5], &d.o[6], &d.o[7]);
+		if (sz < 1)
+			return EINVAL;
+	}
+	assert(sz <= 8);
 
-	if (tokens < 1 || tokens > 8)
-		return EINVAL;
-
-	memcpy(general->unique_clockid_bits + 8 - tokens, o, tokens);
+	memcpy(general->unique_clockid_bits + 8 - sz, &d, sz);
 
 	return 0;
 }

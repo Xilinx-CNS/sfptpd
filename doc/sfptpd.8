@@ -134,6 +134,44 @@ The NTP sync module monitors and potentially controls an external NTP daemon
 either as a time-of-day source for PPS or, typically, a fallback time source
 should preferred PTP or PPS sources fail.
 
+.Sh CONSIDERATIONS
+
+.Ss Running multiple instances
+.Nm
+is designed to use a single process to control multiple sources and sinks
+across different PTP domains and synchronisation technologies. However, in
+some circumstances, such as for debugging, diagnostics, monitoring or to
+partition the time domains within a host, it may be required to run multiple
+instances.
+
+The lock file
+.Ql kernel_clock
+is used by default to ensure only one instance of
+.Nm
+or ptpd is running simultaneously.
+The
+.Ql lock off
+option can be used to disable this lock.
+
+If multiple instances are in operation in the same host then the following
+additional options should be considered:
+
+.Bl -bullet -compact
+.It
+.Ql state_path
+.It
+.Ql control_path
+.It
+.Ql unique_clockid_bits
+.El
+
+The list of clocks that are controlled by the different instances should also
+be partitioned using
+.Ql clock_list
+or
+.Ql clock_readonly
+.
+
 .Sh FILES
 .Bl -tag -width /etc/sfptpd.conF
 .It Pa /etc/sfptpd.conf
@@ -141,6 +179,10 @@ typical configuration file
 .It Pa /var/lib/sfptpd
 location of files giving instantaneous sfptpd status, long term
 statistics and diagnostics
+.It Pa /var/run/kernel_clock
+lock file preventing multiple instances of
+.Nm
+and ptpd running unintentionally.
 .El
 .Sh CONFORMING TO
 The PTP sync module implements IEEE Std 1588-2008 and IEEE Std 1588-2019.
