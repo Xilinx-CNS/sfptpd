@@ -235,7 +235,7 @@ def recv(s, spec):
             (ptr, end) = (end, end + struct_tlv.size)
             tlv = tlv_header._make(struct_tlv.unpack(rawmsg[ptr:end]))
             (ptr, end) = (end, end + tlv.lengthField)
-            if tlv.tlvType:
+            if tlv.tlvType and tlv.tlvType in tlvs:
                 evt_records = tlvs[tlv.tlvType](TLV(tlv.tlvType, tlv.lengthField, rawmsg[ptr:end]))
                 if evt_records:
                     node_record = {
