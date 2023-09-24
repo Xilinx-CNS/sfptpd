@@ -1219,6 +1219,19 @@ int sfptpd_clock_get_total(void)
 	return count;
 }
 
+static int ptr_compar(const void *a, const void *b)
+{
+	const void **pa = (const void **) a;
+	const void **pb = (const void **) b;
+
+	if (*pa < *pb)
+		return -1;
+	else if (*pa  > *pb)
+		return 1;
+	else
+		return 0;
+}
+
 struct sfptpd_clock **sfptpd_clock_get_active_snapshot(size_t *num_clocks)
 {
 	struct sfptpd_clock **snapshot;
@@ -1248,6 +1261,9 @@ struct sfptpd_clock **sfptpd_clock_get_active_snapshot(size_t *num_clocks)
 			snapshot[index++] = node;
 		}
 	}
+	assert(index == count);
+
+	qsort(snapshot, count, sizeof *snapshot, ptr_compar);
 
 finish:
 	clock_unlock();

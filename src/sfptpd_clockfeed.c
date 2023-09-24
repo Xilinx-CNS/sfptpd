@@ -476,7 +476,7 @@ static void clockfeed_on_remove_clock(struct sfptpd_clockfeed *module,
 		assert((*source)->magic == CLOCKFEED_SOURCE_MAGIC);
 
 	if (*source == NULL) {
-		ERROR("clockfeed: cannot remove inactive clock %s\n",
+		TRACE_L6("clockfeed: ignoring request to remove inactive clock %s\n",
 		      sfptpd_clock_get_short_name(msg->u.remove_clock.clock));
 	} else {
 		struct clockfeed_source *s = *source;

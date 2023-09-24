@@ -157,7 +157,7 @@ void sfptpd_clock_shutdown(void);
  */
 int sfptpd_clock_get_total(void);
 
-/** Get a snapshot of the active clocks.
+/** Get a snapshot of the active clocks ordered by clock pointer.
  * @param num_clocks Set to the number of active clocks in snapshot.
  * @return A pointer to an array of clock pointers.
  */

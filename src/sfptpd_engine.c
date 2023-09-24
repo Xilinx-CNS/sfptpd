@@ -420,6 +420,7 @@ static void reconfigure_servos(struct sfptpd_engine *engine,
 	struct sfptpd_clock **active;
 	struct sfptpd_clock *clock;
 	size_t num_active = 0;
+	unsigned int clock_idx;
 	unsigned int idx;
 
 	assert(engine != NULL);
@@ -431,8 +432,9 @@ static void reconfigure_servos(struct sfptpd_engine *engine,
 	/* For each clock that is not the LRC, configure a servo to slave the
 	 * clock to the LRC */
 	active = sfptpd_clock_get_active_snapshot(&num_active);
-	for (idx = 0; idx < num_active; idx++) {
-		clock = active[idx];
+	idx = 0;
+	for (clock_idx = 0; clock_idx < num_active; clock_idx++) {
+		clock = active[clock_idx];
 		if (sfptpd_clock_get_discipline(clock) && (clock != engine->lrc)) {
 			/* We should always have enough servos */
 			assert(idx < engine->total_servos);
@@ -1459,14 +1461,20 @@ static int engine_set_netlink_polling(struct sfptpd_engine *engine, bool poll)
 	return rc;
 }
 
-
 static void engine_handle_new_link_table(struct sfptpd_engine *engine, int version)
 {
+	struct sfptpd_clock **clocks_before;
+	struct sfptpd_clock **clocks_after;
+	size_t num_clocks_before;
+	size_t num_clocks_after;
+
 	int rc, rows, i, j;
 	bool new_link_table = false;
 	bool reconfigure = false;
 
 	assert(engine != NULL);
+
+	clocks_before = sfptpd_clock_get_active_snapshot(&num_clocks_before);
 
 	while (version > 0) {
 		TRACE_L3("engine: link changes - new table version %d\n", version);
@@ -1476,8 +1484,10 @@ static void engine_handle_new_link_table(struct sfptpd_engine *engine, int versi
 		rows = sfptpd_netlink_get_table(engine->netlink_state, version, &engine->link_table);
 		assert(rows == engine->link_table->count);
 
-		if (engine->link_table_prev == NULL)
+		if (engine->link_table_prev == NULL) {
+			sfptpd_clock_free_active_snapshot(clocks_before);
 			return;
+		}
 
 		for (i = 0; i < engine->link_table->count; i++) {
 			const struct sfptpd_link *link = engine->link_table->rows + i;
@@ -1524,6 +1534,32 @@ static void engine_handle_new_link_table(struct sfptpd_engine *engine, int versi
 
 	if (version < 0)
 		ERROR("engine: servicing netlink responses, %s\n", strerror(-version));
+
+
+	/* Reflect hot-plugged clocks in clock feeds */
+	clocks_after = sfptpd_clock_get_active_snapshot(&num_clocks_after);
+	for (i = 0, j = 0; i < num_clocks_before || j < num_clocks_after;) {
+		struct sfptpd_clock *clock_a = i < num_clocks_before ? clocks_before[i] : NULL;
+		struct sfptpd_clock *clock_b = j < num_clocks_after ? clocks_after[j] : NULL;
+
+		if (clock_a && (!clock_b || clock_b > clock_a)) {
+			TRACE_L3("engine: clock %s hot unplugged\n",
+				 sfptpd_clock_get_short_name(clock_a));
+			sfptpd_clockfeed_remove_clock(engine->clockfeed, clock_a);
+			i++;
+		} else if (clock_b && (!clock_a || clock_a > clock_b)) {
+			TRACE_L3("engine: clock %s hot plugged\n",
+				 sfptpd_clock_get_short_name(clock_b));
+			sfptpd_clockfeed_add_clock(engine->clockfeed, clock_b,
+						   engine->general_config->clocks.sync_interval);
+			j++;
+		} else {
+			/* Clock present before and after change */
+			i++, j++;
+		}
+	}
+	sfptpd_clock_free_active_snapshot(clocks_after);
+	sfptpd_clock_free_active_snapshot(clocks_before);
 
 	if (reconfigure) {
 		TRACE_L3("engine: reconfiguring slave servos after interface hotplugging\n");
@@ -2168,6 +2204,8 @@ static void on_servo_pid_adjust(struct sfptpd_engine *engine,
 static void engine_on_shutdown(void *context)
 {
 	struct sfptpd_engine *engine = (struct sfptpd_engine *)context;
+	struct sfptpd_clock **clocks;
+	size_t num_clocks;
 	int module;
 
 	assert(engine != NULL);
@@ -2176,6 +2214,12 @@ static void engine_on_shutdown(void *context)
 
 	/* Deregister for clock feed events */
 	sfptpd_clockfeed_unsubscribe_events();
+
+	/* Remove clock feeds */
+	clocks = sfptpd_clock_get_active_snapshot(&num_clocks);
+	while (num_clocks--)
+		sfptpd_clockfeed_remove_clock(engine->clockfeed, clocks[num_clocks]);
+	sfptpd_clock_free_active_snapshot(clocks);
 
 	/* Now free up the resources */
 	for (module = 0; module < SFPTPD_CONFIG_CATEGORY_MAX; module++) {
