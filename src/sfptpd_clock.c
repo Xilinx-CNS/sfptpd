@@ -1158,31 +1158,6 @@ int sfptpd_clock_get_total(void)
 	return count;
 }
 
-
-/* Not locked because:
-     (a) the locking would need to take place spanning the caller's
-         iteration as it would be ineffective locking this simple operation.
-     (b) the above is not necessary in the only current call site.
-*/
-struct sfptpd_clock *sfptpd_clock_first(void)
-{
-	return sfptpd_clock_list_head;
-}
-
-
-/* Not locked because:
-     (a) the locking would need to take place spanning the caller's
-         iteration as it would be ineffective locking this simple operation.
-     (b) the above is not necessary in the only current call site.
-*/
-struct sfptpd_clock *sfptpd_clock_next(struct sfptpd_clock *clock)
-{
-	assert(clock != NULL);
-	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
-	return clock->next;
-}
-
-
 struct sfptpd_clock *sfptpd_clock_first_active(void)
 {
 	struct sfptpd_clock *clock;

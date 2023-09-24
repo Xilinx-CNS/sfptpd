@@ -126,17 +126,6 @@ int sfptpd_clock_get_total(void);
 /** Iterate through list of clocks. Get first clock.
  * @return A pointer to the first clock in the list or NULL if list empty.
  */
-struct sfptpd_clock *sfptpd_clock_first(void);
-
-/** Iterate through list of clocks. Get next clock.
- * @param clock Pointer to current list member
- * @return A pointer to the next clock in the list or NULL if end reached.
- */
-struct sfptpd_clock *sfptpd_clock_next(struct sfptpd_clock *clock);
-
-/** Iterate through list of clocks. Get first clock.
- * @return A pointer to the first clock in the list or NULL if list empty.
- */
 struct sfptpd_clock *sfptpd_clock_first_active(void);
 
 /** Iterate through list of clocks. Get next clock.
