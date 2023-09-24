@@ -1219,6 +1219,48 @@ int sfptpd_clock_get_total(void)
 	return count;
 }
 
+struct sfptpd_clock **sfptpd_clock_get_active_snapshot(size_t *num_clocks)
+{
+	struct sfptpd_clock **snapshot;
+	struct sfptpd_clock *node;
+	size_t count;
+	int index;
+
+	clock_lock();
+	count = 0;
+	for (node = sfptpd_clock_list_head; node != NULL; node = node->next) {
+		assert(node->magic == SFPTPD_CLOCK_MAGIC);
+		if (!node->deleted) count++;
+	}
+
+	snapshot = calloc(count, sizeof *snapshot);
+	if (!snapshot) {
+		ERROR("clock: error allocating space for active clock snapshot, %s\n",
+		      strerror(errno));
+		goto finish;
+	}
+
+	index = 0;
+	for (node = sfptpd_clock_list_head; node != NULL; node = node->next) {
+		assert(node->magic == SFPTPD_CLOCK_MAGIC);
+		if (!node->deleted) {
+			assert(index < count);
+			snapshot[index++] = node;
+		}
+	}
+
+finish:
+	clock_unlock();
+	if (num_clocks)
+		*num_clocks = count;
+	return snapshot;
+}
+
+void sfptpd_clock_free_active_snapshot(struct sfptpd_clock **snapshot)
+{
+	free(snapshot);
+}
+
 struct sfptpd_clock *sfptpd_clock_first_active(void)
 {
 	struct sfptpd_clock *clock;

@@ -157,16 +157,16 @@ void sfptpd_clock_shutdown(void);
  */
 int sfptpd_clock_get_total(void);
 
-/** Iterate through list of clocks. Get first clock.
- * @return A pointer to the first clock in the list or NULL if list empty.
+/** Get a snapshot of the active clocks.
+ * @param num_clocks Set to the number of active clocks in snapshot.
+ * @return A pointer to an array of clock pointers.
  */
-struct sfptpd_clock *sfptpd_clock_first_active(void);
+struct sfptpd_clock **sfptpd_clock_get_active_snapshot(size_t *num_clocks);
 
-/** Iterate through list of clocks. Get next clock.
- * @param clock Pointer to current list member
- * @return A pointer to the next clock in the list or NULL if end reached.
+/** Free a snapshot of clock pointers.
+ * @param snapshot The snapshot to be freed.
  */
-struct sfptpd_clock *sfptpd_clock_next_active(struct sfptpd_clock *clock);
+void sfptpd_clock_free_active_snapshot(struct sfptpd_clock **snapshot);
 
 /** Find a clock by name 
  * @param name  Textual name of clock

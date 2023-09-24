@@ -417,7 +417,9 @@ static void update_leap_second_status(struct sfptpd_engine *engine,
 static void reconfigure_servos(struct sfptpd_engine *engine,
 			       sfptpd_sync_instance_status_t *sync_module_status)
 {
+	struct sfptpd_clock **active;
 	struct sfptpd_clock *clock;
+	size_t num_active = 0;
 	unsigned int idx;
 
 	assert(engine != NULL);
@@ -428,8 +430,9 @@ static void reconfigure_servos(struct sfptpd_engine *engine,
 
 	/* For each clock that is not the LRC, configure a servo to slave the
 	 * clock to the LRC */
-	idx = 0;
-	for (clock = sfptpd_clock_first_active(); clock != NULL; clock = sfptpd_clock_next_active(clock)) {
+	active = sfptpd_clock_get_active_snapshot(&num_active);
+	for (idx = 0; idx < num_active; idx++) {
+		clock = active[idx];
 		if (sfptpd_clock_get_discipline(clock) && (clock != engine->lrc)) {
 			/* We should always have enough servos */
 			assert(idx < engine->total_servos);
@@ -439,6 +442,7 @@ static void reconfigure_servos(struct sfptpd_engine *engine,
 			idx++;
 		}
 	}
+	sfptpd_clock_free_active_snapshot(active);
 
 	/* Record the number of active servos */
 	engine->active_servos = idx;
@@ -2293,15 +2297,19 @@ static int engine_on_startup(void *context)
 
 	/* Register clocks with clock feed */
 	{
+		struct sfptpd_clock **active;
 		struct sfptpd_clock *clock;
+		size_t num_active;
+		int idx;
 
-		for (clock = sfptpd_clock_first_active();
-		     clock;
-		     clock = sfptpd_clock_next_active(clock)) {
+		active = sfptpd_clock_get_active_snapshot(&num_active);
+		for (idx = 0; idx < num_active; idx++) {
+		     clock = active[idx];
 			if (clock != sfptpd_clock_get_system_clock())
 				sfptpd_clockfeed_add_clock(engine->clockfeed, clock,
 							   engine->general_config->clocks.sync_interval);
 		}
+		sfptpd_clock_free_active_snapshot(active);
 	}
 
 	/* Count potential sync instances, create storage for them and
