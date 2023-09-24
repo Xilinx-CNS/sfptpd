@@ -98,9 +98,6 @@ static const struct sfptpd_clock_spec sfptpd_clock_specifications[] =
 #define SFPTPD_CLOCK_SHORT_NAME_SIZE (16)
 #define SFPTPD_CLOCK_FULL_NAME_SIZE (64)
 
-/* Paths */
-#define SFPTPD_SYSFS_MODULE_PARAMETERS_PATH "/sys/module/sfc/parameters"
-
 /* Earlier drivers only supported a frequency range of +-1000000. Newer drivers
  * support a wider range and indicate the capibility using the sysfs file
  * "/sys/module/sfc/parameters/max_freq_adj" */
