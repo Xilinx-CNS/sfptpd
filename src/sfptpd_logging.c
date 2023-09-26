@@ -401,6 +401,7 @@ int sfptpd_log_open(struct sfptpd_config *config)
 	trace_levels[SFPTPD_COMPONENT_ID_NETLINK] = general_config->netlink_trace_level;
 	trace_levels[SFPTPD_COMPONENT_ID_NTP] = general_config->ntp_trace_level;
 	trace_levels[SFPTPD_COMPONENT_ID_SERVO] = general_config->servo_trace_level;
+	trace_levels[SFPTPD_COMPONENT_ID_CLOCKS] = general_config->clocks_trace_level;
 
 	/* Ratchet up some component trace levels based on the general level
 	 * where appropriate. */

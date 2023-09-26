@@ -193,6 +193,7 @@ typedef struct sfptpd_config_general {
 	unsigned int netlink_trace_level;
 	unsigned int ntp_trace_level;
 	unsigned int servo_trace_level;
+	unsigned int clocks_trace_level;
 	sfptpd_config_clocks_t clocks;
 	bool non_sfc_nics;
 	bool assume_one_phc_per_nic;

@@ -2212,6 +2212,8 @@ static void engine_on_shutdown(void *context)
 
 	sfptpd_multicast_unsubscribe(SFPTPD_SERVO_MSG_PID_ADJUST);
 
+	sfptpd_clockfeed_dump_state(engine->clockfeed);
+
 	/* Deregister for clock feed events */
 	sfptpd_clockfeed_unsubscribe_events();
 

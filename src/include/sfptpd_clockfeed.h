@@ -41,6 +41,8 @@ struct sfptpd_clockfeed_sample {
 struct sfptpd_clockfeed *sfptpd_clockfeed_create(struct sfptpd_thread **threadret,
 						 int min_poll_period_log2);
 
+void sfptpd_clockfeed_dump_state(struct sfptpd_clockfeed *clockfeed);
+
 void sfptpd_clockfeed_add_clock(struct sfptpd_clockfeed *clockfeed,
 				struct sfptpd_clock *clock,
 				int poll_period_log2);

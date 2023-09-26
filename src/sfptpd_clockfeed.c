@@ -39,8 +39,16 @@
 
 
 /****************************************************************************
- * Constants
+ * Constants and macros
  ****************************************************************************/
+
+/* Clock feed component specific trace */
+#define DBG_L1(x, ...)  TRACE(SFPTPD_COMPONENT_ID_CLOCKS, 1, x, ##__VA_ARGS__)
+#define DBG_L2(x, ...)  TRACE(SFPTPD_COMPONENT_ID_CLOCKS, 2, x, ##__VA_ARGS__)
+#define DBG_L3(x, ...)  TRACE(SFPTPD_COMPONENT_ID_CLOCKS, 3, x, ##__VA_ARGS__)
+#define DBG_L4(x, ...)  TRACE(SFPTPD_COMPONENT_ID_CLOCKS, 4, x, ##__VA_ARGS__)
+#define DBG_L5(x, ...)  TRACE(SFPTPD_COMPONENT_ID_CLOCKS, 5, x, ##__VA_ARGS__)
+#define DBG_L6(x, ...)  TRACE(SFPTPD_COMPONENT_ID_CLOCKS, 6, x, ##__VA_ARGS__)
 
 #define CLOCKFEED_MODULE_MAGIC     0xC10CFEED0030D01EULL
 #define CLOCKFEED_SOURCE_MAGIC     0xC10CFEED00005005ULL
@@ -246,34 +254,6 @@ const static struct sfptpd_clockfeed *sfptpd_clockfeed = NULL;
  * Internal Functions
  ****************************************************************************/
 
-void clockfeed_dump_state(struct sfptpd_clockfeed *clockfeed)
-{
-	struct sfptpd_clockfeed_sub *subscriber;
-	struct clockfeed_source *source;
-	int i;
-
-	TRACE_L5("clockfeed: dumping state:\n");
-	TRACE_L5("clockfeed:  event subscribers:\n");
-	for (i = 0; i < MAX_EVENT_SUBSCRIBERS; i++)
-		if (clockfeed->event_subscribers[i])
-			TRACE_L5("clockfeed:   - thread %p\n", clockfeed->event_subscribers[i]);
-
-	for (i = 0; i < 2; i ++) {
-		const char *which[] = { "active", "inactive" };
-		TRACE_L5("clockfeed:  %s sources:\n", which[i]);
-		for (source = (i == 0 ? clockfeed->active : clockfeed->inactive); source; source = source->next) {
-			TRACE_L5("clockfeed:   - clock %s\n", sfptpd_clock_get_short_name(source->clock));
-			TRACE_L5("clockfeed:      write_counter %d\n", source->shm.write_counter);
-			TRACE_L5("clockfeed:      subscribers:\n");
-			for (subscriber = source->subscribers; subscriber; subscriber = subscriber->next) {
-				TRACE_L5("clockfeed:     - subscriber %p\n", subscriber);
-				TRACE_L5("clockfeed:        read_counter %d\n", subscriber->read_counter);
-				TRACE_L5("clockfeed:        min_counter %d\n", subscriber->min_counter);
-			}
-		}
-	}
-}
-
 static void clockfeed_send_sync_event(struct sfptpd_clockfeed *clockfeed)
 {
 	struct clockfeed_msg *msg;
@@ -308,7 +288,7 @@ static void clockfeed_reap_zombies(struct sfptpd_clockfeed *module,
 	if (source->inactive && source->subscribers == NULL) {
 		struct clockfeed_source **nextp;
 
-		TRACE_L6("clockfeed: removing source %s\n",
+		DBG_L3("clockfeed: removing source %s\n",
 			 sfptpd_clock_get_short_name(source->clock));
 
 		for (nextp = &module->inactive;
@@ -357,12 +337,12 @@ static void clockfeed_on_timer(void *user_context, unsigned int id)
 			else
 				sfptpd_time_zero(&record->snapshot);
 
-			TRACE_L6("clockfeed %s: %llu: %llu: %d: "
-				 SFPTPD_FMT_SFTIMESPEC " " SFPTPD_FMT_SFTIMESPEC "\n",
-				 sfptpd_clock_get_short_name(source->clock),
-				 source->cycles, source->shm.write_counter, record->rc,
-				 SFPTPD_ARGS_SFTIMESPEC(record->system),
-				 SFPTPD_ARGS_SFTIMESPEC(record->snapshot));
+			DBG_L6("clockfeed %s: %llu: %llu: %d: "
+			       SFPTPD_FMT_SFTIMESPEC " " SFPTPD_FMT_SFTIMESPEC "\n",
+			       sfptpd_clock_get_short_name(source->clock),
+			       source->cycles, source->shm.write_counter, record->rc,
+			       SFPTPD_ARGS_SFTIMESPEC(record->system),
+			       SFPTPD_ARGS_SFTIMESPEC(record->snapshot));
 
 			source->shm.write_counter++;
 		}
@@ -398,8 +378,8 @@ static int clockfeed_on_startup(void *context)
 	sfptpd_time_init(&interval, secs_fp32 >> 32,
 			 ((secs_fp32 & 0xFFFFFFFFUL) * 1000000000UL) >> 32, 0);
 
-	TRACE_L3("clockfeed: set poll interval to " SFPTPD_FMT_SFTIMESPEC "s\n",
-		 SFPTPD_ARGS_SFTIMESPEC(interval));
+	DBG_L1("clockfeed: set poll interval to " SFPTPD_FMT_SFTIMESPEC "s\n",
+	       SFPTPD_ARGS_SFTIMESPEC(interval));
 
 	rc = sfptpd_thread_timer_start(CLOCK_POLL_TIMER_ID,
 				       true, false, &interval);
@@ -427,7 +407,7 @@ static void clockfeed_on_add_clock(struct sfptpd_clockfeed *module,
 	assert(module->magic == CLOCKFEED_MODULE_MAGIC);
 	assert(msg != NULL);
 
-	TRACE_L6("clockfeed: received add_clock message\n");
+	DBG_L3("clockfeed: received add_clock message\n");
 
 	source = calloc(1, sizeof *source);
 	assert(source);
@@ -451,9 +431,9 @@ static void clockfeed_on_add_clock(struct sfptpd_clockfeed *module,
 	source->next = module->active;
 	module->active = source;
 
-	TRACE_L3("clockfeed: added source %s with log2 sync interval %d\n",
-		 sfptpd_clock_get_short_name(source->clock),
-		 source->poll_period_log2);
+	DBG_L1("clockfeed: added source %s with log2 sync interval %d\n",
+		sfptpd_clock_get_short_name(source->clock),
+		source->poll_period_log2);
 
 	SFPTPD_MSG_REPLY(msg);
 }
@@ -468,7 +448,7 @@ static void clockfeed_on_remove_clock(struct sfptpd_clockfeed *module,
 	assert(msg != NULL);
 	assert(msg->u.remove_clock.clock != NULL);
 
-	TRACE_L6("clockfeed: received remove_clock message\n");
+	DBG_L3("clockfeed: received remove_clock message\n");
 
 	for (source = &module->active;
 	     *source && (*source)->clock != msg->u.remove_clock.clock;
@@ -476,7 +456,7 @@ static void clockfeed_on_remove_clock(struct sfptpd_clockfeed *module,
 		assert((*source)->magic == CLOCKFEED_SOURCE_MAGIC);
 
 	if (*source == NULL) {
-		TRACE_L6("clockfeed: ignoring request to remove inactive clock %s\n",
+		DBG_L4("clockfeed: ignoring request to remove inactive clock %s\n",
 		      sfptpd_clock_get_short_name(msg->u.remove_clock.clock));
 	} else {
 		struct clockfeed_source *s = *source;
@@ -486,7 +466,7 @@ static void clockfeed_on_remove_clock(struct sfptpd_clockfeed *module,
 		s->inactive = true;
 		module->inactive = s;
 
-		TRACE_L6("clockfeed: marked source inactive: %s\n",
+		DBG_L4("clockfeed: marked source inactive: %s\n",
 			 sfptpd_clock_get_short_name(s->clock));
 
 		clockfeed_reap_zombies(module, s);
@@ -505,7 +485,7 @@ static void clockfeed_on_subscribe(struct sfptpd_clockfeed *module,
 	assert(msg != NULL);
 	assert(msg->u.subscribe_req.clock != NULL);
 
-	TRACE_L6("clockfeed: received subscribe message\n");
+	DBG_L3("clockfeed: received subscribe message\n");
 
 	for (source = module->active;
 	     source && source->clock != msg->u.subscribe_req.clock;
@@ -551,7 +531,7 @@ static void clockfeed_on_unsubscribe(struct sfptpd_clockfeed *module,
 	assert(msg != NULL);
 	assert(msg->u.unsubscribe.sub != NULL);
 
-	TRACE_L6("clockfeed: received unsubscribe message\n");
+	DBG_L3("clockfeed: received unsubscribe message\n");
 
 	sub = msg->u.unsubscribe.sub;
 
@@ -583,7 +563,7 @@ static void clockfeed_on_subscribe_events(struct sfptpd_clockfeed *module,
 	assert(msg != NULL);
 	assert(msg->u.subscribe_events.thread != NULL);
 
-	TRACE_L6("clockfeed: received subscribe_events message\n");
+	DBG_L3("clockfeed: received subscribe_events message\n");
 
 	for (i = 0; i < MAX_EVENT_SUBSCRIBERS; i++) {
 		if (module->event_subscribers[i] == NULL) {
@@ -605,7 +585,7 @@ static void clockfeed_on_unsubscribe_events(struct sfptpd_clockfeed *module,
 	assert(msg != NULL);
 	assert(msg->u.unsubscribe_events.thread != NULL);
 
-	TRACE_L6("clockfeed: received unsubscribe_events message\n");
+	DBG_L3("clockfeed: received unsubscribe_events message\n");
 
 	for (i = 0; i < MAX_EVENT_SUBSCRIBERS; i++) {
 		if (module->event_subscribers[i] == msg->u.unsubscribe_events.thread)
@@ -613,7 +593,7 @@ static void clockfeed_on_unsubscribe_events(struct sfptpd_clockfeed *module,
 	}
 
 	if (i == MAX_EVENT_SUBSCRIBERS)
-		TRACE_L6("clockfeed: non-subscriber event unsubscription request ignored\n");
+		DBG_L6("clockfeed: non-subscriber event unsubscription request ignored\n");
 
 	SFPTPD_MSG_REPLY(msg);
 }
@@ -629,9 +609,9 @@ static void clockfeed_on_shutdown(void *context)
 	assert(sfptpd_clockfeed == module);
 	assert(module->magic == CLOCKFEED_MODULE_MAGIC);
 
-	INFO("clockfeed: shutting down\n");
+	DBG_L2("clockfeed: shutting down\n");
 
-	clockfeed_dump_state(module);
+	sfptpd_clockfeed_dump_state(module);
 
 	/* Mark all sources inactive */
 	count = 0;
@@ -647,13 +627,13 @@ static void clockfeed_on_shutdown(void *context)
 	*source = module->inactive;
 	module->inactive = module->active;
 	module->active = NULL;
-	TRACE_L5("clockfeed: inactivated all %d active sources\n", count);
+	DBG_L4("clockfeed: inactivated all %d active sources\n", count);
 
 	/* Reap zombies */
 	for (s = module->inactive; s; s = s->next)
 		clockfeed_reap_zombies(module, s);
 
-	clockfeed_dump_state(module);
+	sfptpd_clockfeed_dump_state(module);
 
 	if (module->inactive)
 		WARNING("clockfeed: clock source subscribers remaining on shutdown\n");
@@ -742,7 +722,7 @@ struct sfptpd_clockfeed *sfptpd_clockfeed_create(struct sfptpd_thread **threadre
 	assert(threadret);
 	assert(!sfptpd_clockfeed);
 
-	TRACE_L3("clockfeed: creating service\n");
+	DBG_L3("clockfeed: creating service\n");
 
 	*threadret = NULL;
 	clockfeed = (struct sfptpd_clockfeed *) calloc(1, sizeof(*clockfeed));
@@ -766,6 +746,34 @@ struct sfptpd_clockfeed *sfptpd_clockfeed_create(struct sfptpd_thread **threadre
 	clockfeed->thread = *threadret;
 	sfptpd_clockfeed = clockfeed;
 	return clockfeed;
+}
+
+void sfptpd_clockfeed_dump_state(struct sfptpd_clockfeed *clockfeed)
+{
+	struct sfptpd_clockfeed_sub *subscriber;
+	struct clockfeed_source *source;
+	int i;
+
+	DBG_L2("clockfeed: dumping state:\n");
+	DBG_L2("clockfeed:  event subscribers:\n");
+	for (i = 0; i < MAX_EVENT_SUBSCRIBERS; i++)
+		if (clockfeed->event_subscribers[i])
+			DBG_L2("clockfeed:   - thread %p\n", clockfeed->event_subscribers[i]);
+
+	for (i = 0; i < 2; i ++) {
+		const char *which[] = { "active", "inactive" };
+		DBG_L3("clockfeed:  %s sources:\n", which[i]);
+		for (source = (i == 0 ? clockfeed->active : clockfeed->inactive); source; source = source->next) {
+			DBG_L2("clockfeed:   - clock %s\n", sfptpd_clock_get_short_name(source->clock));
+			DBG_L2("clockfeed:      write_counter %d\n", source->shm.write_counter);
+			DBG_L2("clockfeed:      subscribers:\n");
+			for (subscriber = source->subscribers; subscriber; subscriber = subscriber->next) {
+				DBG_L2("clockfeed:     - subscriber %p\n", subscriber);
+				DBG_L2("clockfeed:        read_counter %d\n", subscriber->read_counter);
+				DBG_L2("clockfeed:        min_counter %d\n", subscriber->min_counter);
+			}
+		}
+	}
 }
 
 void sfptpd_clockfeed_add_clock(struct sfptpd_clockfeed *clockfeed,
@@ -897,8 +905,8 @@ static int clockfeed_compare_to_sys(struct sfptpd_clockfeed_sub *sub,
 
 	sfptpd_time_zero(diff);
 
-	TRACE_L5("clockfeed: comparing %s (%p shm) to sys\n",
-		 sfptpd_clock_get_short_name(sub->source->clock), shm);
+	DBG_L5("clockfeed: consumer: comparing %s (%p shm) to sys\n",
+		sfptpd_clock_get_short_name(sub->source->clock), shm);
 
 	clock = sub->source->clock;
 	writer1 = shm->write_counter;
@@ -988,9 +996,9 @@ int sfptpd_clockfeed_compare(struct sfptpd_clockfeed_sub *sub1,
 			mono = &mono1;
 	}
 
-	TRACE_L5("clockfeed: comparing %s (%p shm) %s (%p shm)\n",
-		 shm1 ? sfptpd_clock_get_short_name(feed1->clock) : "<sys>", shm1,
-		 shm2 ? sfptpd_clock_get_short_name(feed2->clock) : "<sys>", shm2);
+	DBG_L6("clockfeed: consumer: comparing %s (%p shm) to %s (%p shm)\n",
+		shm1 ? sfptpd_clock_get_short_name(feed1->clock) : "<sys>", shm1,
+		shm2 ? sfptpd_clock_get_short_name(feed2->clock) : "<sys>", shm2);
 
 	if (sub1) {
 		rc = clockfeed_compare_to_sys(sub1, diff, t1, sub2 ? NULL : t2, mono);
@@ -1030,9 +1038,9 @@ void sfptpd_clockfeed_require_fresh(struct sfptpd_clockfeed_sub *sub)
 
 	assert(sub->magic == CLOCKFEED_SUBSCRIBER_MAGIC);
 
-	TRACE_L6("clockfeed %s: updating minimum read counter from %d to %d\n",
-		 sfptpd_clock_get_short_name(sub->source->clock),
-		 sub->min_counter, sub->read_counter + 1);
+	DBG_L6("clockfeed %s: updating minimum read counter from %d to %d\n",
+		sfptpd_clock_get_short_name(sub->source->clock),
+		sub->min_counter, sub->read_counter + 1);
 
 	sub->min_counter = sub->read_counter + 1;
 }

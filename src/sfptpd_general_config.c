@@ -268,7 +268,7 @@ static const sfptpd_config_option_t config_general_options[] =
 		STRINGIFY(SFPTPD_DEFAULT_SERVO_K_INTEGRAL) ".",
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_pid_filter_ki},
-	{"trace_level", "[<general | threading | bic | netlink | ntp | servo>] NUMBER",
+	{"trace_level", "[<general | threading | bic | netlink | ntp | servo | clocks>] NUMBER",
 		"Specifies a module trace level, if built with trace enabled. If module name is omitted, will set the 'general' module trace level. Default is 0 - no trace",
 		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
 		parse_trace_level},
@@ -1226,6 +1226,8 @@ static int parse_trace_level(struct sfptpd_config_section *section, const char *
 			general->ntp_trace_level = trace_level;
 		else if (strcmp(module_name, "servo") == 0)
 			general->servo_trace_level = trace_level;
+		else if (strcmp(module_name, "clocks") == 0)
+			general->clocks_trace_level = trace_level;
 		else {
 			ERROR("Unknown <module> argument for `trace_level`: '%s'\n", module_name);
 			return EINVAL;
@@ -1752,6 +1754,8 @@ void sfptpd_config_general_set_verbose(struct sfptpd_config *config)
 		general->netlink_trace_level = 1;
 	if (general->ntp_trace_level < 1)
 		general->ntp_trace_level = 1;
+	if (general->clocks_trace_level < 3)
+		general->clocks_trace_level = 3;
 	sfptpd_log_set_trace_level(SFPTPD_COMPONENT_ID_SFPTPD,
 				   general->trace_level);
 }
