@@ -1706,11 +1706,21 @@ static void ntp_on_clock_control_change(crny_module_t *ntp, struct ntp_state *ne
 
 	clock_control = ((ntp->ctrl_flags & SYNC_MODULE_CLOCK_CTRL) != 0);
 
-	if (new_state->sys_info.clock_control_enabled && !clock_control)
+	if (new_state->sys_info.clock_control_enabled && !clock_control) {
 		CRITICAL("### chronyd is now disciplining the system clock! ###\n");
+		if (strlen(ntp->config->chronyd_script) == 0) {
+			SYNC_MODULE_CONSTRAINT_SET(ntp->constraints, MUST_BE_SELECTED);
+			SYNC_MODULE_CONSTRAINT_CLEAR(ntp->constraints, CANNOT_BE_SELECTED);
+		}
+	}
 
-	if (!new_state->sys_info.clock_control_enabled && clock_control)
+	if (!new_state->sys_info.clock_control_enabled && clock_control) {
 		WARNING("crny: chronyd is no longer disciplining the system clock!\n");
+		if (strlen(ntp->config->chronyd_script) == 0) {
+			SYNC_MODULE_CONSTRAINT_SET(ntp->constraints, CANNOT_BE_SELECTED);
+			SYNC_MODULE_CONSTRAINT_CLEAR(ntp->constraints, MUST_BE_SELECTED);
+		}
+	}
 
 	/* If we have control, try to stop NTP */
 	if (new_state->sys_info.clock_control_enabled != clock_control &&
