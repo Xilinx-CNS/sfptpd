@@ -302,13 +302,13 @@ struct sfptpd_log *sfptpd_log_open_statistics(struct sfptpd_clock *clock,
  * of the caller to close the file once the information has been written using
  * sfptpd_log_file_close().
  * @param clock Instance of clock to which stats apply
- * @param sync_instance_name Name of the sync module instance that produced the
+ * @param entity_name Name of the sync module instance that produced the
  * stats or NULL if the stats have been produced by a local clock
  * synchronization process.
  * @return A file handle on success or NULL on error
  */
 struct sfptpd_log *sfptpd_log_open_statistics_json(struct sfptpd_clock *clock,
-					      const char *sync_instance_name);
+					      const char *entity_name);
 
 /** Open remote monitoring file for writing. It is the responsibility of the
  * caller to close the file once the information has been written using

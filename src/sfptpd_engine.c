@@ -1806,6 +1806,12 @@ static void on_stats_period_end(void *user_context, unsigned int timer_id)
 		for (i = 0; i < engine->active_servos; i++) {
 			sfptpd_servo_stats_end_period(engine->servos[i], &time);
 		}
+
+		/* Write out clock feed stats */
+		if (engine->clockfeed != NULL) {
+			sfptpd_clockfeed_stats_end_period(engine->clockfeed,
+							  &time);
+		}
 	}
 }
 

@@ -1276,8 +1276,8 @@ int sfptpd_stats_collection_get_interval(struct sfptpd_stats_collection *stats,
 
 
 void sfptpd_stats_collection_dump(struct sfptpd_stats_collection *stats,
-								  struct sfptpd_clock *clock,
-								  const char *sync_instance_name)
+				  struct sfptpd_clock *clock,
+				  const char *sync_instance_name)
 {
 	unsigned int i;
 	struct sfptpd_log *log, *log_json;
@@ -1290,7 +1290,6 @@ void sfptpd_stats_collection_dump(struct sfptpd_stats_collection *stats,
 	bool first_entry = true;
 
 	assert(stats != NULL);
-	assert(clock != NULL);
 
 	/* Open the logs and get their stream handles */
 	log = sfptpd_log_open_statistics(clock, sync_instance_name);

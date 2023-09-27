@@ -1014,14 +1014,14 @@ void sfptpd_log_table_row(FILE *stream, bool draw_line, const char *format, ...)
 
 
 struct sfptpd_log *sfptpd_log_open_statistics(struct sfptpd_clock *clock,
-					      const char *sync_instance_name)
+					      const char *entity_name)
 {
 	const char *name;
 
-	assert(clock != NULL);
+	assert(clock || entity_name);
 
-	if (sync_instance_name != NULL)
-		name = sync_instance_name;
+	if (entity_name != NULL)
+		name = entity_name;
 	else
 		name = sfptpd_clock_get_fname_string(clock);
 
@@ -1036,14 +1036,14 @@ struct sfptpd_log *sfptpd_log_open_statistics(struct sfptpd_clock *clock,
 
 
 struct sfptpd_log *sfptpd_log_open_statistics_json(struct sfptpd_clock *clock,
-					      const char *sync_instance_name)
+						   const char *entity_name)
 {
 	const char *name;
 
-	assert(clock != NULL);
+	assert(clock || entity_name);
 
-	if (sync_instance_name != NULL)
-		name = sync_instance_name;
+	if (entity_name != NULL)
+		name = entity_name;
 	else
 		name = sfptpd_clock_get_fname_string(clock);
 

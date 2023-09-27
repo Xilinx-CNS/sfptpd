@@ -34,6 +34,7 @@
 #include "sfptpd_statistics.h"
 #include "sfptpd_time.h"
 #include "sfptpd_engine.h"
+#include "sfptpd_sync_module.h"
 
 #include "sfptpd_clockfeed.h"
 
@@ -62,6 +63,16 @@
 #define MAX_CLOCK_SAMPLES      (1 << MAX_CLOCK_SAMPLES_LOG2)
 
 #define MAX_EVENT_SUBSCRIBERS (4)
+
+/* Stats ids */
+enum clockfeed_stats_ids {
+	CLOCKFEED_STATS_ID_NUM_CLOCKS,
+};
+
+static const struct sfptpd_stats_collection_defn clockfeed_stats_defns[] =
+{
+	{CLOCKFEED_STATS_ID_NUM_CLOCKS, SFPTPD_STATS_TYPE_RANGE, "num-clocks", NULL, 0},
+};
 
 /****************************************************************************
  * Clock feed messages
@@ -234,6 +245,9 @@ struct sfptpd_clockfeed {
 
 	/* Event subscribers */
 	struct sfptpd_thread *event_subscribers[MAX_EVENT_SUBSCRIBERS];
+
+	/* Clock feed statistics */
+	struct sfptpd_stats_collection stats;
 };
 
 
@@ -307,12 +321,15 @@ static void clockfeed_reap_zombies(struct sfptpd_clockfeed *module,
 static void clockfeed_on_timer(void *user_context, unsigned int id)
 {
 	struct sfptpd_clockfeed *clockfeed = (struct sfptpd_clockfeed *)user_context;
-	struct clockfeed_source *source;
 	const uint32_t index_mask = (1 << MAX_CLOCK_SAMPLES_LOG2) - 1;
+	struct sfptpd_timespec realtime = { 0, 0 };
+	struct clockfeed_source *source;
+	int sources_count;
 
 	assert(clockfeed != NULL);
 	assert(clockfeed->magic == CLOCKFEED_MODULE_MAGIC);
 
+	sources_count = 0;
 	for (source = clockfeed->active; source; source = source->next) {
 		const int cadence = source->poll_period_log2 - clockfeed->poll_period_log2;
 		const uint64_t cadence_mask = (1 << cadence) - 1;
@@ -328,7 +345,8 @@ static void clockfeed_on_timer(void *user_context, unsigned int id)
 						  &diff);
 
 			sfclock_gettime(CLOCK_MONOTONIC, &record->mono);
-			sfclock_gettime(CLOCK_REALTIME, &record->system);
+			sfclock_gettime(CLOCK_REALTIME, &realtime);
+			record->system = realtime;
 
 			if (record->rc == 0)
 				sfptpd_time_add(&record->snapshot,
@@ -347,7 +365,15 @@ static void clockfeed_on_timer(void *user_context, unsigned int id)
 			source->shm.write_counter++;
 		}
 		source->cycles++;
+		sources_count++;
 	}
+
+	if (realtime.sec == 0)
+		sfclock_gettime(CLOCK_REALTIME, &realtime);
+
+	sfptpd_stats_collection_update_range(&clockfeed->stats,
+					     CLOCKFEED_STATS_ID_NUM_CLOCKS,
+					     sources_count, realtime, true);
 
 	clockfeed_send_sync_event(clockfeed);
 }
@@ -638,11 +664,26 @@ static void clockfeed_on_shutdown(void *context)
 	if (module->inactive)
 		WARNING("clockfeed: clock source subscribers remaining on shutdown\n");
 
+	sfptpd_stats_collection_free(&module->stats);
+
 	module->magic = CLOCKFEED_DELETED_MAGIC;
 	free(module);
 	sfptpd_clockfeed = NULL;
 }
 
+static void clockfeed_on_stats_end_period(struct sfptpd_clockfeed *module, sfptpd_sync_module_msg_t *msg)
+{
+	assert(module != NULL);
+	assert(msg != NULL);
+
+	sfptpd_stats_collection_end_period(&module->stats,
+					   &msg->u.stats_end_period_req.time);
+
+	/* Write the historical statistics to file */
+	sfptpd_stats_collection_dump(&module->stats, NULL, "clocks");
+
+	SFPTPD_MSG_FREE(msg);
+}
 
 static void clockfeed_on_message(void *context, struct sfptpd_msg_hdr *hdr)
 {
@@ -657,6 +698,10 @@ static void clockfeed_on_message(void *context, struct sfptpd_msg_hdr *hdr)
 	case SFPTPD_APP_MSG_RUN:
 		clockfeed_on_run(module);
 		SFPTPD_MSG_FREE(msg);
+		break;
+
+	case SFPTPD_SYNC_MODULE_MSG_STATS_END_PERIOD:
+		clockfeed_on_stats_end_period(module, (sfptpd_sync_module_msg_t *) msg);
 		break;
 
 	case CLOCKFEED_MSG_ADD_CLOCK:
@@ -733,19 +778,31 @@ struct sfptpd_clockfeed *sfptpd_clockfeed_create(struct sfptpd_thread **threadre
 
 	clockfeed->poll_period_log2 = min_poll_period_log2;
 
+	/* Create the statistics collection */
+	rc = sfptpd_stats_collection_create(&clockfeed->stats, "clockfeed",
+					    sizeof(clockfeed_stats_defns)/sizeof(clockfeed_stats_defns[0]),
+					    clockfeed_stats_defns);
+	if (rc != 0) {
+		errno = rc;
+		goto fail;
+	}
+
 	/* Create the service thread- the thread start up routine will
 	 * carry out the rest of the initialisation. */
 	rc = sfptpd_thread_create("clocks", &clockfeed_thread_ops, clockfeed, threadret);
 	if (rc != 0) {
-		free(clockfeed);
 		errno = rc;
-		return NULL;
+		goto fail;
 	}
 
 	clockfeed->magic = CLOCKFEED_MODULE_MAGIC;
 	clockfeed->thread = *threadret;
 	sfptpd_clockfeed = clockfeed;
 	return clockfeed;
+
+fail:
+	free(clockfeed);
+	return NULL;
 }
 
 void sfptpd_clockfeed_dump_state(struct sfptpd_clockfeed *clockfeed)
@@ -1109,4 +1166,10 @@ void sfptpd_clockfeed_unsubscribe_events(void)
 
 	SFPTPD_MSG_SEND_WAIT(msg, sfptpd_clockfeed->thread,
 			     CLOCKFEED_MSG_UNSUBSCRIBE_EVENTS);
+}
+
+void sfptpd_clockfeed_stats_end_period(struct sfptpd_clockfeed *module,
+				       struct sfptpd_timespec *time)
+{
+	sfptpd_sync_module_stats_end_period(module->thread, time);
 }

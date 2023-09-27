@@ -74,6 +74,9 @@ void sfptpd_clockfeed_subscribe_events(void);
 
 void sfptpd_clockfeed_unsubscribe_events(void);
 
+void sfptpd_clockfeed_stats_end_period(struct sfptpd_clockfeed *module,
+				       struct sfptpd_timespec *time);
+
 /****************************************************************************
  * Public clock feed messages
  ****************************************************************************/
