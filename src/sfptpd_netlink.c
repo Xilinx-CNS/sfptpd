@@ -497,8 +497,10 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 
 	mnl_attr_parse(nh, sizeof(*ifm), MNL_VALIDATE(link_attr), table);
 
+	DBG_L6("netlink: handling link %d\n", link->if_index);
+
 	if (table[IFLA_IFNAME])
-		strncpy(link->if_name, mnl_attr_get_str(table[IFLA_IFNAME]), sizeof link->if_name - 1);
+		sfptpd_strncpy(link->if_name, mnl_attr_get_str(table[IFLA_IFNAME]), sizeof link->if_name);
 
 	if (table[IFLA_LINK])
 		link->if_link = mnl_attr_get_u32(table[IFLA_LINK]);
@@ -631,7 +633,10 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 		}
 	}
 
-	/* Remove deleted interfaces from the table. */
+	/* Remove deleted interfaces from the table and write in the
+	 * new link data. While doing so, retain the old version of data
+	 * obtained via GEnetlink rather than RTnetlink, ie. teaming,
+	 * and ethtool info. */
 	for (row = 0; row < db->table.count; row++) {
 		if (db->table.rows[row].if_index == link->if_index) {
 			struct sfptpd_link *old = db->table.rows + row;
@@ -644,7 +649,7 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 				 * the previous settings so that we don't lose
 				 * team characteristics while refetching them */
 				if (link->type == SFPTPD_LINK_TEAM)
-				*old = *link;
+					link->bond = old->bond;
 
 				/* Also keep fixed ethtool info */
 				link->ts_info_state = old->ts_info_state;
@@ -653,7 +658,8 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 				link->drv_stats_ids_state = old->drv_stats_ids_state;
 				memcpy(&link->drv_stats, &old->drv_stats, sizeof link->drv_stats);
 
-				link->bond = old->bond;
+				/* Now write the new link data into the table. */
+				*old = *link;
 			}
 			return 0;
 		}
