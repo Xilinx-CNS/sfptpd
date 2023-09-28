@@ -120,7 +120,7 @@ install: sfptpd sfptpdctl
 	[ -z "$(filter systemd,$(INST_INITS))" ] || install -m 644 -p -D scripts/systemd/sfptpd.service $(INST_UNITDIR)/sfptpd.service
 	[ -z "$(filter sysv,   $(INST_INITS))" ] || install -m 755 -p -D scripts/init.d/sfptpd $(INST_CONFDIR)/init.d/sfptpd
 	[ -n "$(filter license,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGLICENSEDIR) LICENSE PTPD2_COPYRIGHT NTP_COPYRIGHT.html
-	install -m 644 -p -D config/default.cfg $(INST_CONFDIR)/sfptpd.conf
+	[ -e $(INST_CONFDIR)/sfptpd.conf ] || install -m 644 -p -D config/default.cfg $(INST_CONFDIR)/sfptpd.conf
 	install -m 644 -p -t $(INST_PKGDOCDIR)/config config/*.cfg
 	install -m 644 -p -t $(INST_PKGDOCDIR)/examples/init.d scripts/init.d/*
 	install -m 644 -p -t $(INST_PKGDOCDIR)/examples/systemd scripts/systemd/*
@@ -137,7 +137,7 @@ install: sfptpd sfptpdctl
 uninstall:
 	rm -f $(INST_SBINDIR)/{sfptpd,sfptpdctl,sfptpmon}
 	rm -f $(INST_UNITDIR)/sfptpd.service
-	rm -f $(INST_CONFDIR)/sfptpd.conf
+	! diff -q config/default.cfg $(INST_CONFDIR)/sfptpd.conf || rm -f $(INST_CONFDIR)/sfptpd.conf
 	rm -f $(INST_DEFAULTSDIR)/sfptpd
 	rm -f $(INST_MANDIR)/man8/{sfptpd,sfptpdctl,sfptpmon}.8
 	rm -f $(DESTDIR)/etc/init/sfptpd
