@@ -1874,7 +1874,7 @@ int sfptpd_interface_is_link_detected(struct sfptpd_interface *interface,
 
 	/* Set up the ifrequest structure with the interface name */
 	memset(&ifr, 0, sizeof(ifr));
-	sfptpd_strncpy(ifr.ifr_name, interface->name, sizeof(interface->name));
+	sfptpd_strncpy(ifr.ifr_name, interface->name, sizeof ifr.ifr_name);
 
 	if (ioctl(sfptpd_interface_socket, SIOCGIFFLAGS, &ifr) >= 0) {
 		*link_detected = !!(ifr.ifr_flags & IFF_UP);
@@ -1928,7 +1928,7 @@ static int interface_check_hotplug_rename(struct sfptpd_interface *interface)
 		return errno;
 	}
 
-	if (0 == strcmp(ifr.ifr_name, interface->name)) {
+	if (0 == strncmp(ifr.ifr_name, interface->name, sizeof ifr.ifr_name)) {
 		return 0;
 	}
 
@@ -1955,7 +1955,7 @@ int sfptpd_interface_ioctl(struct sfptpd_interface *interface,
 
 	/* Set up the ifrequest structure with the interface name */
 	memset(&ifr, 0, sizeof(ifr));
-	sfptpd_strncpy(ifr.ifr_name, interface->name, sizeof(interface->name));
+	sfptpd_strncpy(ifr.ifr_name, interface->name, sizeof ifr.ifr_name);
 	ifr.ifr_data = data;
 
 	/* bug74449: check for hotplug renames before & after ioctl
