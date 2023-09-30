@@ -340,4 +340,9 @@ void sfptpd_log_lexed_config(const char *format, ...);
 /** Abandon config logging in case of error */
 void sfptpd_log_config_abandon(void);
 
+/** Get specification for path interpolation
+ * @return format specifiers.
+ */
+const struct sfptpd_interpolation *sfptpd_log_get_format_specifiers(void);
+
 #endif /* _SFPTPD_LOGGING_H */

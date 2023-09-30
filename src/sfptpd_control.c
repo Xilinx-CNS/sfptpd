@@ -70,9 +70,15 @@ int sfptpd_control_socket_open(struct sfptpd_config *config)
 	struct sockaddr_un addr = {
 		.sun_family = AF_UNIX
 	};
+	char control_path[sizeof addr.sun_path];
 
 	general_config = sfptpd_general_config_get(config);
-	control_path = general_config->control_path;
+	rc = sfptpd_format(sfptpd_log_get_format_specifiers(), NULL,
+			   control_path, sizeof control_path,
+			   general_config->control_path);
+	if (rc < 0)
+		return errno;
+
 	sfptpd_strncpy(addr.sun_path, control_path, sizeof addr.sun_path);
 
 	/* Remove any existing socket, ignoring errors */

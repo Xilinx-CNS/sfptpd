@@ -66,9 +66,34 @@ const char *sfptpd_remote_monitor_file = "remote-monitor";
 const char *sfptpd_config_log_file = "config";
 const char *sfptpd_sync_instances_file = "sync-instances";
 
+enum path_format_id {
+	PATH_FMT_HOSTNAME,
+	PATH_FMT_HOSTID,
+	PATH_FMT_PID,
+	PATH_FMT_CTIME_LOCAL,
+};
+
+static size_t path_interpolate(char *buffer, size_t space, int id, void *context, char opt);
+static size_t path_interpolate_time(char *buffer, size_t space, int id, void *context, char opt);
+
+/* %H   hostname
+ * %I   hostid
+ * %P   pid
+ * %Cd  creation date, local time (ISO 8601)
+ * %Ct  creation date and local time (ISO 8601)
+ */
+const static struct sfptpd_interpolation path_format_specifiers[] = {
+	{ PATH_FMT_HOSTNAME,		'H', false, path_interpolate },
+	{ PATH_FMT_HOSTID,		'I', false, path_interpolate },
+	{ PATH_FMT_PID,			'P', false, path_interpolate },
+	{ PATH_FMT_CTIME_LOCAL,		'C', true,  path_interpolate_time },
+	{ SFPTPD_INTERPOLATORS_END }
+};
+
 
 /****************************************************************************
  * Local Variables
+
  ****************************************************************************/
 
 static enum sfptpd_msg_log_config message_log = SFPTPD_MSG_LOG_TO_STDERR;
@@ -98,6 +123,57 @@ static unsigned int trace_levels[SFPTPD_COMPONENT_ID_MAX] =
 /****************************************************************************
  * Local Functions
  ****************************************************************************/
+
+static size_t path_interpolate(char *buffer, size_t space, int id, void *context, char opt)
+{
+	assert(buffer != NULL || space == 0);
+
+	char hostname[HOST_NAME_MAX];
+	int ret;
+
+	switch (id) {
+	case PATH_FMT_HOSTNAME:
+		ret = gethostname(hostname, sizeof hostname);
+		if (ret != 0)
+			return -1;
+		hostname[sizeof hostname - 1] = '\0';
+		return snprintf(buffer, space, "%s", hostname);
+	case PATH_FMT_HOSTID:
+		return snprintf(buffer, space, "%lx", gethostid());
+	case PATH_FMT_PID:
+		return snprintf(buffer, space, "%lu", (unsigned long) getpid());
+	default:
+		return 0;
+	}
+}
+
+static size_t path_interpolate_time(char *buffer, size_t space, int id, void *context, char opt)
+{
+	assert(buffer != NULL || space == 0);
+
+	const char *fmt = "";
+	char tmp[128];
+	struct tm *t_local;
+	time_t t_sys;
+
+	assert(id == PATH_FMT_CTIME_LOCAL);
+
+	t_sys = time(NULL);
+	t_local = localtime(&t_sys);
+	if (t_local == NULL)
+		return -1;
+	if (opt == 'd')
+		fmt = "%F";
+	else if (opt == 't')
+		fmt = "%F %T";
+
+	if (space == 0) {
+		buffer = tmp;
+		space = sizeof tmp;
+	}
+	strftime(buffer, space, fmt, t_local);
+	return strnlen(buffer, space);
+}
 
 static int construct_log_paths(struct sfptpd_log *log,
 			       const char *filename_pattern,
@@ -250,6 +326,42 @@ static void log_copy_file(const char *src, const char *dest)
 		      strerror(errno));
 }
 
+static char *format_path(const char *pattern)
+{
+	char *path;
+	int len;
+	int len2;
+
+	len = sfptpd_format(path_format_specifiers, NULL, NULL, 0, pattern);
+	if (len < 0) {
+		ERROR("logging: error formatting path: %s\n",
+		      pattern, strerror(errno));
+		return NULL;
+	}
+
+	path = (char *) malloc(len + 1);
+	if (path == NULL) {
+		ERROR("logging: error allocating path of %d\n",
+		      len, strerror(errno));
+		return NULL;
+	}
+
+	len2 = sfptpd_format(path_format_specifiers, NULL, path, len + 1, pattern);
+	if (len2 > len) {
+		ERROR("logging: truncated formatted path that expanded after sizing (%d > %d)\n",
+		      len2, len);
+		errno = ENAMETOOLONG;
+		return NULL;
+	}
+
+	return path;
+}
+
+static void free_path(char *path)
+{
+	free(path);
+}
+
 
 /****************************************************************************
  * Public Functions
@@ -258,7 +370,7 @@ static void log_copy_file(const char *src, const char *dest)
 int sfptpd_log_open(struct sfptpd_config *config)
 {
 	struct sfptpd_config_general *general_config = sfptpd_general_config_get(config);
-	const char *state_path = general_config->state_path;
+	char *state_path = format_path(general_config->state_path);
 	glob_t glob_results;
 	char path[PATH_MAX];
 	FILE *file;
@@ -276,6 +388,9 @@ int sfptpd_log_open(struct sfptpd_config *config)
 				    "sync-instances",
 				    ".next.*"
 	};
+
+	if (state_path == NULL)
+		return errno;
 
 	/* Take copies of the message and stats logging targets and the trace level */
 	message_log = general_config->message_log;
@@ -307,8 +422,7 @@ int sfptpd_log_open(struct sfptpd_config *config)
 	/* Call log rotate to open log files if logging to file. */
 	rc = sfptpd_log_rotate(config);
 	if (rc != 0) {
-		sfptpd_log_close();
-		return rc;
+		goto fail;
 	}
 
 	/* Send the warning for failed directory creation to the log */
@@ -346,7 +460,8 @@ int sfptpd_log_open(struct sfptpd_config *config)
 	file = fopen(path, "w");
 	if (file == NULL) {
 		ERROR("couldn't open %s/version\n", state_path);
-		return errno;
+		rc = errno;
+		goto fail;
 	}
 	if (chown(path, general_config->uid, general_config->gid))
 		TRACE_L4("could not set version file ownership, %s\n",
@@ -370,16 +485,24 @@ int sfptpd_log_open(struct sfptpd_config *config)
 		      sizeof state_next_file_format,
 		      "%s/.next.", state_path);
 	if (rc >= sizeof path) return ENOMEM;
+	rc = 0;
 
 	pthread_mutex_init(&vmsg_mutex, NULL);
 
-	return 0;
-}
+fail:
+	if (rc != 0) {
+		sfptpd_log_close();
+	}
 
+	free_path(state_path);
+
+	return rc;
+}
 
 int sfptpd_log_rotate(struct sfptpd_config *config)
 {
 	struct sfptpd_config_general *general_config;
+	char *path;
 	int rc = 0;
 	bool shared_file;
 
@@ -397,57 +520,75 @@ int sfptpd_log_rotate(struct sfptpd_config *config)
 		if(message_log_fd != -1)
 			close(message_log_fd);
 
-		message_log_fd = open(general_config->message_log_filename,
-				      O_CREAT | O_APPEND | O_RDWR, 0644);
-		if (message_log_fd < 0) {
-			ERROR("Failed to open message log file %s, error %s\n", 
-			      general_config->message_log_filename, strerror(errno));
+		path = format_path(general_config->message_log_filename);
+		if (path == NULL) {
 			rc = errno;
 		} else {
-			if (chown(general_config->message_log_filename, general_config->uid, general_config->gid))
-				TRACE_L4("could not set message log ownership, %s\n", strerror(errno));
+			message_log_fd = open(path,
+					      O_CREAT | O_APPEND | O_RDWR, 0644);
+			if (message_log_fd < 0) {
+				ERROR("Failed to open message%s log file %s, error %s\n",
+				      shared_file ? "/stats" : "",
+				      path, strerror(errno));
+				rc = errno;
+			} else {
+				if (chown(path, general_config->uid, general_config->gid))
+					TRACE_L4("could not set message%s log ownership, %s\n",
+						 shared_file ? "/stats" : "",
+						 strerror(errno));
 
-			/* Redirect stderr to the log file */
-			dup2(message_log_fd, STDERR_FILENO);
+				/* Redirect stderr to the log file */
+				dup2(message_log_fd, STDERR_FILENO);
+			}
+			free_path(path);
 		}
 	}
 
 	if (stats_log == SFPTPD_STATS_LOG_TO_FILE) {
-		if (!shared_file) {
+		if (shared_file) {
+			stats_log_fd = message_log_fd;
+			dup2(stats_log_fd, STDOUT_FILENO);
+		} else {
 			/* Close and then reopen the log file */
 			if(stats_log_fd != -1)
 				close(stats_log_fd);
 
-			stats_log_fd = open(general_config->stats_log_filename,
-					    O_CREAT | O_APPEND | O_RDWR, 0644);
-		} else {
-			stats_log_fd = message_log_fd;
-		}
+			path = format_path(general_config->stats_log_filename);
+			if (path == NULL) {
+				rc = errno;
+			} else {
+				stats_log_fd = open(path,
+						    O_CREAT | O_APPEND | O_RDWR, 0644);
 
-		if (stats_log_fd < 0) {
-			ERROR("Failed to open stats log file %s, error %s\n", 
-			      general_config->stats_log_filename, strerror(errno));
-			rc = errno;
-		} else {
-			if (chown(general_config->stats_log_filename, general_config->uid, general_config->gid))
-				TRACE_L4("could not set stats log ownership, %s\n", strerror(errno));
+				if (stats_log_fd < 0) {
+					ERROR("Failed to open stats log file %s, error %s\n",
+					      path, strerror(errno));
+					rc = errno;
+				} else {
+					if (chown(path, general_config->uid, general_config->gid))
+						TRACE_L4("could not set stats log ownership, %s\n", strerror(errno));
 
-			/* Redirect stdout to the log file */
-			dup2(stats_log_fd, STDOUT_FILENO);
+					/* Redirect stdout to the log file */
+					dup2(stats_log_fd, STDOUT_FILENO);
+				}
+				free_path(path);
+			}
 		}
 	}
 
 	if (strlen(general_config->json_stats_filename) > 0) {
+		char *path = format_path(general_config->json_stats_filename);
+
 		/* Close and then reopen the log file */
 		if(json_stats_fp != NULL)
 			fclose(json_stats_fp);
 		else
 			json_stats_buf = malloc(json_stats_bufsz);
 
-		json_stats_fp = fopen(general_config->json_stats_filename, "a");
+		json_stats_fp = path ? fopen(path, "a") : NULL;
 		if (json_stats_fp == NULL) {
 			ERROR("Failed to open json stats file %s, error %s\n",
-				  general_config->json_stats_filename, strerror(errno));
+			      path ? path : general_config->json_stats_filename, strerror(errno));
 			if (json_stats_buf)
 				free(json_stats_buf);
 			/* We don't set rc = errno because this log is non-critical. */
@@ -455,6 +596,7 @@ int sfptpd_log_rotate(struct sfptpd_config *config)
 			setvbuf(json_stats_fp, json_stats_buf, _IOFBF, json_stats_bufsz);
 			json_stats_ptr = 0;
 		}
+		free_path(path);
 	}
 
 	if (strlen(general_config->json_remote_monitor_filename) > 0) {
@@ -965,6 +1107,11 @@ void sfptpd_log_config_abandon(void)
 		unlink(sfptpd_config_log_tmpfile);
 		config_log_tmp = NULL;
 	}
+}
+
+const struct sfptpd_interpolation *sfptpd_log_get_format_specifiers(void)
+{
+	return path_format_specifiers;
 }
 
 /* fin */
