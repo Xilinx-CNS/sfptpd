@@ -640,7 +640,7 @@ void sfptpd_log_write_state(struct sfptpd_clock *clock,
 	if (sync_instance_name != NULL)
 		name = sync_instance_name;
 	else
-		name = sfptpd_clock_get_hw_id_string(clock);
+		name = sfptpd_clock_get_fname_string(clock);
 
 	/* Create the path of the state file along the lines of either with
 	 * either the clock or the sync module instance name.
@@ -671,7 +671,7 @@ int sfptpd_log_write_freq_correction(struct sfptpd_clock *clock, long double fre
 	 *      /var/lib/sfptpd/freq-correction-1122:3344:5566:7788 or
 	 */
 	log = create_log("freq-correction", sfptpd_freq_correction_file_format,
-			 sfptpd_clock_get_hw_id_string(clock));
+			 sfptpd_clock_get_fname_string(clock));
 	if (log != NULL) {
 		fprintf(sfptpd_log_file_get_stream(log),
 			"%Lf\n", freq_adj_ppb);
@@ -693,7 +693,7 @@ int sfptpd_log_read_freq_correction(struct sfptpd_clock *clock, long double *fre
 	
 	/* Create the path name of the frequency adjustment file for this clock */
 	snprintf(path, sizeof(path), freq_correction_file_format,
-		 sfptpd_clock_get_hw_id_string(clock));
+		 sfptpd_clock_get_fname_string(clock));
 	
 	file = fopen(path, "r");
 	if (file == NULL) {
@@ -725,7 +725,7 @@ void sfptpd_log_delete_freq_correction(struct sfptpd_clock *clock)
 
 	/* Create the path name of the frequency adjustment file for this clock */
 	snprintf(path, sizeof(path), freq_correction_file_format,
-		 sfptpd_clock_get_hw_id_string(clock));
+		 sfptpd_clock_get_fname_string(clock));
 
 	unlink(path);
 }
@@ -880,7 +880,7 @@ struct sfptpd_log *sfptpd_log_open_statistics(struct sfptpd_clock *clock,
 	if (sync_instance_name != NULL)
 		name = sync_instance_name;
 	else
-		name = sfptpd_clock_get_hw_id_string(clock);
+		name = sfptpd_clock_get_fname_string(clock);
 
 	/* Create the path of the stats file along the lines of either with
 	 * either the clock or the sync module instance name.
@@ -902,7 +902,7 @@ struct sfptpd_log *sfptpd_log_open_statistics_json(struct sfptpd_clock *clock,
 	if (sync_instance_name != NULL)
 		name = sync_instance_name;
 	else
-		name = sfptpd_clock_get_hw_id_string(clock);
+		name = sfptpd_clock_get_fname_string(clock);
 
 	/* Create the path of the stats file along the lines of either with
 	 * either the clock or the sync module instance name.

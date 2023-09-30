@@ -13,6 +13,7 @@
 #define SFPTPD_HT_MAX_TABLE_SIZE 	(0x100)
 #define SFPTPD_HT_MAX_TABLE_ENTRIES 	(0x10000)
 
+#define SFPTPD_INTERPOLATORS_END -1
 
 /****************************************************************************
  * Static assert
@@ -29,6 +30,15 @@
 /****************************************************************************
  * Structures and Types
  ****************************************************************************/
+
+typedef size_t (*sfptpd_interpolator_t)(char *buffer, size_t space, int id, void *context, char opt);
+
+struct sfptpd_interpolation {
+	int id;
+	char specifier;
+	bool has_opt;
+	sfptpd_interpolator_t writer;
+};
 
 struct sfptpd_hash_table;
 
@@ -95,6 +105,18 @@ struct sfptpd_prog {
 /****************************************************************************
  * Function Prototypes
  ****************************************************************************/
+
+/** Format a string with application-specific interpolations.
+ * @param interpolators table of interpolation definitions
+ * @param context context for interpolators (the object whose properties
+ *		  are to be interpolated)
+ * @param buffer as per snprintf
+ * @param space as per snprintf
+ * @param format the application-specific %-format to be interpolated
+ * @return The number of bytes written or that would be written as per snprintf
+ */
+size_t sfptpd_format(const struct sfptpd_interpolation *interpolators, void *context,
+		     char *buffer, size_t space, const char *format);
 
 /** Safe version of strncpy. Places 0 termination at last character
  * @param dest Destination buffer

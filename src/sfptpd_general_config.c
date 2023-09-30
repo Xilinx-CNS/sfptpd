@@ -114,6 +114,9 @@ static int parse_ignore_critical(struct sfptpd_config_section *section, const ch
 				 unsigned int num_params, const char * const params[]);
 static int parse_rtc_adjust(struct sfptpd_config_section *section, const char *option,
 			    unsigned int num_params, const char * const params[]);
+static int parse_clock_display_fmts(struct sfptpd_config_section *section, const char *option,
+				    unsigned int num_params, const char * const params[]);
+
 
 static int validate_config(struct sfptpd_config_section *parent);
 
@@ -311,6 +314,19 @@ static const sfptpd_config_option_t config_general_options[] =
 		"Specify whether to let the kernel sync the RTC clock. "
 		"Enabled by default",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, false, parse_rtc_adjust},
+	{"clock_display_fmts", "SHORT-FMT LONG-FMT HWID-FMT FNAM-FMT",
+		"Define formats for displaying clock properties, "
+		"of max expansion "
+		STRINGIFY(SFPTPD_CLOCK_SHORT_NAME_SIZE) ", "
+		STRINGIFY(SFPTPD_CLOCK_FULL_NAME_SIZE) ", "
+		STRINGIFY(SFPTPD_CLOCK_HW_ID_STRING_SIZE) " and "
+		STRINGIFY(SFPTPD_CLOCK_HW_ID_STRING_SIZE) " respectively. "
+		"Default is "
+		SFPTPD_DEFAULT_CLOCK_SHORT_FMT " "
+		SFPTPD_DEFAULT_CLOCK_LONG_FMT " "
+		SFPTPD_DEFAULT_CLOCK_HWID_FMT " "
+		SFPTPD_DEFAULT_CLOCK_FNAM_FMT ".",
+		4, SFPTPD_CONFIG_SCOPE_GLOBAL, false, parse_clock_display_fmts},
 };
 
 static const sfptpd_config_option_set_t config_general_option_set =
@@ -1405,6 +1421,31 @@ static int parse_rtc_adjust(struct sfptpd_config_section *section, const char *o
 }
 
 
+static int parse_clock_display_fmts(struct sfptpd_config_section *section, const char *option,
+				    unsigned int num_params, const char * const params[])
+{
+	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+	assert(num_params == 4);
+
+	if (strlen(params[0]) >= sizeof general->clocks.format_short ||
+	    strlen(params[1]) >= sizeof general->clocks.format_long ||
+	    strlen(params[2]) >= sizeof general->clocks.format_hwid ||
+	    strlen(params[3]) >= sizeof general->clocks.format_fnam)
+		return ENOSPC;
+
+	sfptpd_strncpy(general->clocks.format_short, params[0],
+		       sizeof general->clocks.format_short);
+	sfptpd_strncpy(general->clocks.format_long, params[1],
+		       sizeof general->clocks.format_long);
+	sfptpd_strncpy(general->clocks.format_hwid, params[2],
+		       sizeof general->clocks.format_hwid);
+	sfptpd_strncpy(general->clocks.format_fnam, params[3],
+		       sizeof general->clocks.format_fnam);
+
+	return 0;
+}
+
+
 static int validate_config(struct sfptpd_config_section *parent)
 {
 	struct sfptpd_config *config = parent->config;
@@ -1520,6 +1561,11 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		new->clustering_score_without_discriminator = SFPTPD_DEFAULT_CLUSTERING_SCORE_ABSENT_DISCRIM;
 
 		new->limit_freq_adj = 1.0E9;
+
+		sfptpd_strncpy(new->clocks.format_short, SFPTPD_DEFAULT_CLOCK_SHORT_FMT, sizeof new->clocks.format_short);
+		sfptpd_strncpy(new->clocks.format_long, SFPTPD_DEFAULT_CLOCK_LONG_FMT, sizeof new->clocks.format_long);
+		sfptpd_strncpy(new->clocks.format_hwid, SFPTPD_DEFAULT_CLOCK_HWID_FMT, sizeof new->clocks.format_hwid);
+		sfptpd_strncpy(new->clocks.format_fnam, SFPTPD_DEFAULT_CLOCK_FNAM_FMT, sizeof new->clocks.format_fnam);
 
 		new->declared_sync_modules = 0;
 	}

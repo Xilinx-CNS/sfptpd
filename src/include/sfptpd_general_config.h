@@ -43,10 +43,17 @@
 #define SFPTPD_DEFAULT_SERVO_K_PROPORTIONAL        0.4
 #define SFPTPD_DEFAULT_SERVO_K_INTEGRAL            0.03
 #define SFPTPD_DEFAULT_SERVO_K_DIFFERENTIAL        0.0
+#define SFPTPD_DEFAULT_CLOCK_SHORT_FMT		   "phc%P"
+#define SFPTPD_DEFAULT_CLOCK_LONG_FMT		   "phc%P(%I)"
+#define SFPTPD_DEFAULT_CLOCK_HWID_FMT		   "%C:"
+#define SFPTPD_DEFAULT_CLOCK_FNAM_FMT		   "%C:"
 
 
 /** Maximum size of MAC address string */
 #define SFPTPD_CONFIG_MAC_STRING_MAX   (24)
+
+/** Maximum size of format string */
+#define SFPTPD_CONFIG_FMT_STR_MAX      (16)
 
 /** Sync interval minimum and maximum values */
 #define SFPTPD_MAX_SYNC_INTERVAL       2
@@ -117,6 +124,10 @@ typedef struct sfptpd_config_clocks {
 	char clocks[SFPTPD_CONFIG_TOKENS_MAX][SFPTPD_CONFIG_MAC_STRING_MAX];
 	unsigned int num_readonly_clocks;
 	char readonly_clocks[SFPTPD_CONFIG_TOKENS_MAX][SFPTPD_CONFIG_MAC_STRING_MAX];
+	char format_short[SFPTPD_CONFIG_FMT_STR_MAX];
+	char format_long[SFPTPD_CONFIG_FMT_STR_MAX];
+	char format_hwid[SFPTPD_CONFIG_FMT_STR_MAX];
+	char format_fnam[SFPTPD_CONFIG_FMT_STR_MAX];
 
 	/* Mutable state to keep track of whether the config options have been applied.
            CLOCK_OPTION_NOT_APPLIED (0) means not applied because the clock couldn't be found,

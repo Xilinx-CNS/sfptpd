@@ -54,6 +54,8 @@ typedef enum sfptpd_component_id {
 #define TEXT_DEFAULT                      "\033[0m"
 #define SFPTPD_FORMAT_EUI48               "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx"
 #define SFPTPD_FORMAT_EUI64               "%02hhx%02hhx:%02hhx%02hhx:%02hhx%02hhx:%02hhx%02hhx"
+#define SFPTPD_FORMAT_EUI64_SEP           "%02hhx%02hhx%c%02hhx%02hhx%c%02hhx%02hhx%c%02hhx%02hhx"
+#define SFPTPD_FORMAT_EUI64_NOSEP         "%02hhx%02hhx%02hhx%02hhx%02hhx%02hhx%02hhx%02hhx"
 #define SFPTPD_FORMAT_FLOAT               "%0.3Lf"
 #define SFPTPD_FORMAT_FLOAT_RED           TEXT_RED SFPTPD_FORMAT_FLOAT TEXT_DEFAULT
 #define SFPTPD_FORMAT_TOPOLOGY_FLOAT      SFPTPD_FORMAT_FLOAT " ns"

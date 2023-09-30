@@ -95,8 +95,6 @@ static const struct sfptpd_clock_spec sfptpd_clock_specifications[] =
  ****************************************************************************/
 
 #define SFPTPD_CLOCK_MAGIC (0xFACEB055)
-#define SFPTPD_CLOCK_SHORT_NAME_SIZE (16)
-#define SFPTPD_CLOCK_FULL_NAME_SIZE (64)
 
 /* Earlier drivers only supported a frequency range of +-1000000. Newer drivers
  * support a wider range and indicate the capibility using the sysfs file
@@ -194,7 +192,9 @@ struct sfptpd_clock {
 	/* Clock identifiers */
 	char short_name[SFPTPD_CLOCK_SHORT_NAME_SIZE];
 	char long_name[SFPTPD_CLOCK_FULL_NAME_SIZE];
+	char intfs_list[SFPTPD_CLOCK_FULL_NAME_SIZE];
 	char hw_id_string[SFPTPD_CLOCK_HW_ID_STRING_SIZE];
+	char fname_string[SFPTPD_CLOCK_HW_ID_STRING_SIZE];
 	sfptpd_clock_id_t hw_id;
 
 	/* Indicates whether clock should be disciplined */
@@ -270,11 +270,34 @@ const struct sfptpd_clock_id SFPTPD_CLOCK_ID_UNINITIALISED = {
 	{ 0, 0, 0, 0, 0, 0, 0, 0 }
 };
 
+enum clock_format_id {
+	CLOCK_FMT_PHC_INDEX,
+	CLOCK_FMT_INTFS,
+	CLOCK_FMT_HW_ID,
+	CLOCK_FMT_HW_ID_NO_SEP,
+};
+
+static size_t clock_interpolate(char *buffer, size_t space, int id, void *context, char opt);
+
+/* %P   phc device index
+ * %I   interface list, separated by '/'
+ * %Cx  clock id with separator 'x'
+ * %D   clock id with no separator
+ */
+static struct sfptpd_interpolation clock_format_specifiers[] = {
+	{ CLOCK_FMT_PHC_INDEX,       'P', false, clock_interpolate },
+	{ CLOCK_FMT_INTFS,           'I', false, clock_interpolate },
+	{ CLOCK_FMT_HW_ID,           'C', true,  clock_interpolate },
+	{ CLOCK_FMT_HW_ID_NO_SEP,    'D', false, clock_interpolate },
+	{ SFPTPD_INTERPOLATORS_END }
+};
+
 /****************************************************************************
  * Clock Internal Functions
  ****************************************************************************/
 
-static inline void clock_lock(void) {
+static inline void clock_lock(void)
+{
 	int rc = pthread_mutex_lock(sfptpd_clock_lock);
 	if (rc != 0) {
 		CRITICAL("clock: could not acquire hardware state lock\n");
@@ -283,7 +306,8 @@ static inline void clock_lock(void) {
 }
 
 
-static inline void clock_unlock(void) {
+static inline void clock_unlock(void)
+{
 	int rc = pthread_mutex_unlock(sfptpd_clock_lock);
 	if (rc != 0) {
 		CRITICAL("clock: could not release hardware state lock\n");
@@ -292,8 +316,35 @@ static inline void clock_unlock(void) {
 }
 
 
-/* Diagnostic function */
-static void clock_dump_header(const char *title, int trace_level) {
+static size_t clock_interpolate(char *buffer, size_t space, int id, void *context, char opt)
+{
+	const struct sfptpd_clock *clock = (const struct sfptpd_clock *) context;
+	const sfptpd_clock_id_t hw_id = clock->hw_id;
+
+	assert(clock != NULL);
+	assert(buffer != NULL || space == 0);
+
+	switch (id) {
+	case CLOCK_FMT_PHC_INDEX:
+		return snprintf(buffer, space, "%d", clock->u.nic.device_idx);
+	case CLOCK_FMT_INTFS:
+		return snprintf(buffer, space, "%s", clock->intfs_list);
+	case CLOCK_FMT_HW_ID:
+		return snprintf(buffer, space, SFPTPD_FORMAT_EUI64_SEP,
+				hw_id.id[0], hw_id.id[1], opt, hw_id.id[2], hw_id.id[3], opt,
+				hw_id.id[4], hw_id.id[5], opt, hw_id.id[6], hw_id.id[7]);
+	case CLOCK_FMT_HW_ID_NO_SEP:
+		return snprintf(buffer, space, SFPTPD_FORMAT_EUI64_NOSEP,
+				hw_id.id[0], hw_id.id[1], hw_id.id[2], hw_id.id[3],
+				hw_id.id[4], hw_id.id[5], hw_id.id[6], hw_id.id[7]);
+	default:
+		return 0;
+	}
+}
+
+
+static void clock_dump_header(const char *title, int trace_level)
+{
 	const char *heading    = "  | type    | nic_id | clk    | phc diff method    | short name | long name\n";
 	const char *separator  = "  +---------+--------+--------+--------------------+------------+----------\n";
 
@@ -302,7 +353,8 @@ static void clock_dump_header(const char *title, int trace_level) {
 	sfptpd_log_trace(SFPTPD_COMPONENT_ID_SFPTPD, trace_level, "%s", separator);
 }
 
-static void clock_dump_record(struct sfptpd_clock *clock, int trace_level) {
+static void clock_dump_record(struct sfptpd_clock *clock, int trace_level)
+{
 	const char *sys_pat = "  | %-7s | %-36s | %-10s | %s%s\n";
 	const char *nic_pat = "  | %-7s | %6d | %6d | %-18s | %-10s | %s%s%s\n";
 
@@ -559,6 +611,7 @@ static int new_system_clock(struct sfptpd_config_general *config,
 	sfptpd_strncpy(new->long_name, "system", sizeof(new->long_name));
 	memset(&new->hw_id, 0, sizeof(new->hw_id));
 	sfptpd_strncpy(new->hw_id_string, "system", sizeof(new->hw_id_string));
+	sfptpd_strncpy(new->fname_string, "system", sizeof(new->fname_string));
 
 	/* Work out some parameters for adjusting the clock using tick length
 	 * adjustment for cases where the frequency adjustment exceeds the
@@ -677,8 +730,9 @@ static int clock_compare_using_efx(void *context, struct timespec *diff)
 
 static int renew_clock(struct sfptpd_clock *clock)
 {
-	struct sfptpd_interface *interface, *primary;
+	struct sfptpd_config_general *general_config = sfptpd_general_config_get(sfptpd_clock_config);
 	struct sfptpd_db_query_result interface_index_snapshot;
+	struct sfptpd_interface *interface, *primary;
 	int i, nic_id;
 	int phc_idx;
 	bool supports_phc = false;
@@ -745,8 +799,8 @@ static int renew_clock(struct sfptpd_clock *clock)
 		clock->u.nic.device_idx = phc_idx;
 		clock->u.nic.supports_efx = supports_efx;
 
-		snprintf(clock->short_name, sizeof(clock->short_name),
-			 SFPTPD_NIC_NAME_FORMAT, phc_idx);
+		sfptpd_format(clock_format_specifiers, clock, clock->short_name,
+			      sizeof clock->short_name, general_config->clocks.format_short);
 
 		if (clock->u.nic.phc == NULL) {
 			rc = sfptpd_phc_open(clock->u.nic.device_idx,
@@ -773,26 +827,27 @@ static int renew_clock(struct sfptpd_clock *clock)
 			rc = sfptpd_phc_start(clock->u.nic.phc);
 		}
 
-		/* Create the long clock name including the name of the clock and
-		 * all the interfaces associated with it. */
-		name_len = snprintf(clock->long_name, sizeof(clock->long_name),
-				    SFPTPD_NIC_NAME_FORMAT "(%s",
-				    phc_idx, sfptpd_interface_get_name(clock->u.nic.primary_if));
-		if (name_len > sizeof(clock->long_name)) name_len = sizeof(clock->long_name);
+		/* Create the interfaces list typically used in the long clock name. */
+		name_len = snprintf(clock->intfs_list, sizeof(clock->intfs_list),
+				    "%s", sfptpd_interface_get_name(clock->u.nic.primary_if));
+		if (name_len > sizeof(clock->intfs_list)) name_len = sizeof(clock->intfs_list);
 		for ( ; i < interface_index_snapshot.num_records; i++) {
 			struct sfptpd_interface **intfp = interface_index_snapshot.record_ptrs[i];
 			interface = *intfp;
 			nic_id = sfptpd_interface_get_nic_id(interface);
 			if (nic_id == clock->u.nic.nic_id) {
-				name_len += snprintf(clock->long_name + name_len,
-						     sizeof(clock->long_name) - name_len,
+				name_len += snprintf(clock->intfs_list + name_len,
+						     sizeof(clock->intfs_list) - name_len,
 						     "/%s",
 						     sfptpd_interface_get_name(interface));
-				if (name_len > sizeof(clock->long_name))
-					name_len = sizeof(clock->long_name);
+				if (name_len > sizeof(clock->intfs_list))
+					name_len = sizeof(clock->intfs_list);
 			}
 		}
-		snprintf(clock->long_name + name_len, sizeof(clock->long_name) - name_len, ")");
+
+		/* Write out the long clock name. */
+		sfptpd_format(clock_format_specifiers, clock, clock->long_name,
+			      sizeof clock->long_name, general_config->clocks.format_long);
 
 		sfptpd_interface_get_mac_addr(clock->u.nic.primary_if, &mac);
 		if (mac.len == 6) {
@@ -814,8 +869,10 @@ static int renew_clock(struct sfptpd_clock *clock)
 			memcpy(clock->hw_id.id, mac.addr, mac.len < sizeof clock->hw_id.id ?
 							  mac.len : sizeof clock->hw_id.id);
 		}
-		sfptpd_clock_init_hw_id_string(clock->hw_id_string, clock->hw_id,
-					       sizeof(clock->hw_id_string));
+		sfptpd_format(clock_format_specifiers, clock, clock->hw_id_string,
+			      sizeof clock->hw_id_string, general_config->clocks.format_hwid);
+		sfptpd_format(clock_format_specifiers, clock, clock->fname_string,
+			      sizeof clock->fname_string, general_config->clocks.format_fnam);
 
 		/* Get the NIC clock specification if known. Otherwise assume
 		 * stratum 4 i.e. a normal crystal oscillator. */
@@ -1533,6 +1590,15 @@ const char *sfptpd_clock_get_hw_id_string(const struct sfptpd_clock *clock)
 	assert(clock != NULL);
 	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
 	return clock->hw_id_string;
+}
+
+
+/* Not locked because it is an atomic operation. */
+const char *sfptpd_clock_get_fname_string(const struct sfptpd_clock *clock)
+{
+	assert(clock != NULL);
+	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
+	return clock->fname_string;
 }
 
 

@@ -475,4 +475,79 @@ int sfptpd_ht_get_num_entries(struct sfptpd_hash_table *table)
 }
 
 
+/****************************************************************************
+ * String formatting functions
+ ****************************************************************************/
+
+size_t sfptpd_format(const struct sfptpd_interpolation *interpolators, void *context,
+		     char *buffer, size_t space, const char *format)
+{
+	const struct sfptpd_interpolation *spec;
+	enum { IDLE, FMT, UNDERFLOW, ERROR } state = IDLE;
+	ssize_t ret = 0;
+	size_t len = 0;
+	char c;
+
+	assert(format != NULL);
+	assert(buffer != NULL || space == 0);
+
+	while ((c = *format++))
+		switch (state) {
+		case IDLE:
+			if (c == '%') {
+				state = FMT;
+			} else {
+				if (buffer && len + 1 < space)
+					buffer[len] = c;
+				len++;
+			}
+			break;
+		case FMT:
+			if (c == '%') {
+				if (buffer && len + 1 < space)
+					buffer[len] = c;
+				len++;
+			}
+			else for (spec = interpolators; spec->id != SFPTPD_INTERPOLATORS_END; spec++)
+				if (c == spec->specifier) {
+					char opt = '\0';
+					assert(spec->writer);
+					if (spec->has_opt) {
+						if (*format == '\0')
+							state = UNDERFLOW;
+						opt = *format++;
+					}
+					ret = spec->writer(buffer ? buffer + len : NULL,
+							   space != 0 ? space - len : 0,
+							   spec->id, context, opt);
+					if (ret < 0) {
+						state = ERROR;
+						break;
+					}
+					len += ret;
+					assert(space == 0 || len < space);
+					break;
+				}
+			state = IDLE;
+			break;
+		case UNDERFLOW:
+		case ERROR:
+			goto error;
+		}
+
+error:
+	if (state != IDLE && ret != -1) {
+		errno = E2BIG;
+		ret = -1;
+	}
+
+	if (buffer) {
+		assert(len < space);
+		buffer[len] = '\0';
+	}
+
+	return ret < 0 ? -1 : len;
+}
+
+
 /* fin */

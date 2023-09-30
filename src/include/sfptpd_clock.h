@@ -82,8 +82,10 @@ enum sfptpd_time_source {
 	SFPTPD_TIME_SOURCE_INTERNAL_OSCILLATOR = 0xA0,
 };
 
-#define SFPTPD_CLOCK_HW_ID_SIZE (8)
-#define SFPTPD_CLOCK_HW_ID_STRING_SIZE (32)
+#define SFPTPD_CLOCK_SHORT_NAME_SIZE 16
+#define SFPTPD_CLOCK_FULL_NAME_SIZE 64
+#define SFPTPD_CLOCK_HW_ID_SIZE 8
+#define SFPTPD_CLOCK_HW_ID_STRING_SIZE 32
 
 /** Structure defining a clock ID
  * @clock_id Array containing EUI64 format ID
@@ -256,6 +258,12 @@ const char *sfptpd_clock_get_long_name(const struct sfptpd_clock *clock);
  * @return String of clock ID
  */
 const char *sfptpd_clock_get_hw_id_string(const struct sfptpd_clock *clock);
+
+/** Get the formatted filename form of the clock ID associated with this clock
+ * @param clock Pointer to clock instance
+ * @return String to use in filenames labelling clock
+ */
+const char *sfptpd_clock_get_fname_string(const struct sfptpd_clock *clock);
 
 /** Create formatted string from hw_id
  * @param buf Pointer to buffer to print string into

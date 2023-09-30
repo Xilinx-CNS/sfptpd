@@ -1473,8 +1473,8 @@ int sfptpd_stats_add_node(struct sfptpd_hash_table *table,
 
 	memcpy(&new_node.clock_id, clock_id, sizeof(new_node.clock_id));
 	sfptpd_clock_init_hw_id_string(new_node.clock_id_string,
-					 new_node.clock_id,
-					 SFPTPD_CLOCK_HW_ID_STRING_SIZE);
+				       new_node.clock_id,
+				       SFPTPD_CLOCK_HW_ID_STRING_SIZE);
 	new_node.state = (state) ? "Master" : "Slave";
 	new_node.port_number = port_number;
 	new_node.domain_number = domain_number;
