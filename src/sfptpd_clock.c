@@ -2008,6 +2008,37 @@ int sfptpd_clock_compare(struct sfptpd_clock *clock1, struct sfptpd_clock *clock
 }
 
 
+int sfptpd_clock_set_time(struct sfptpd_clock *clock_to,
+			  struct sfptpd_clock *clock_from,
+			  const struct timespec *threshold)
+{
+	struct timespec diff;
+	int rc;
+
+	if (clock_to == clock_from)
+		return 0;
+
+	clock_lock();
+
+	assert(clock_to != NULL);
+	assert(clock_from != NULL);
+
+	/* Rather than set the NIC time, get an
+	 * accurate difference between the two clocks
+	 * and apply this offset */
+
+	rc = sfptpd_clock_compare(clock_from, clock_to, &diff);
+
+	if (rc == 0 &&
+	    (threshold == NULL ||
+	     sfptpd_time_cmp(&diff, threshold) >= 0))
+		rc = sfptpd_clock_adjust_time(clock_to, &diff);
+
+	clock_unlock();
+	return rc;
+}
+
+
 int sfptpd_clock_set_sync_status(struct sfptpd_clock *clock, bool in_sync,
 				 unsigned int timeout)
 {
@@ -2178,13 +2209,7 @@ void sfptpd_clock_correct_new(struct sfptpd_clock *clock)
 			ERROR("failed to read clock %s time, %s\n",
 			      clock->long_name, strerror(rc));
 		} else if (time.tv_sec < SFPTPD_NIC_TIME_VALID_THRESHOLD) {
-			/* Rather than set the NIC time, get an
-			 * accurate difference between the system and
-			 * NIC time and apply this offset */
-			rc = sfptpd_clock_compare(sfptpd_clock_system,
-						  clock, &time);
-			if (rc == 0)
-				sfptpd_clock_adjust_time(clock, &time);
+			sfptpd_clock_set_time(clock, sfptpd_clock_system, NULL);
 		}
 	}
 }

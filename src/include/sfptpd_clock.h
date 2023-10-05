@@ -352,6 +352,19 @@ int sfptpd_clock_leap_second_now(enum sfptpd_leap_second_type type);
 int sfptpd_clock_compare(struct sfptpd_clock *clock1, struct sfptpd_clock *clock2,
 			 struct timespec *diff);
 
+/** Set one clock to another using differences. This should be used in
+ *  preference to the caller performing compare and adjustment operations to
+ *  avoid a race window that could result in double adjustment.
+ * @param clock_to    Pointer to the clock to set
+ * @param clock_from  Pointer to the clock to use as a reference
+ * @param threshold   A threshold which below which the clock difference
+ *		      should not trigger an adjustment or NULL.
+ * @return 0 for success otherwise an errno status code.
+ */
+int sfptpd_clock_set_time(struct sfptpd_clock *clock_to,
+			  struct sfptpd_clock *clock_from,
+			  const struct timespec *threshold);
+
 /** Report the sync status to the NIC associated with the clock. This is used
  * by the NIC firmware to report the sync status to other interested parties
  * using the NIC resources.
