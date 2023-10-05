@@ -1589,7 +1589,8 @@ static int thread_create(const char *name, const struct sfptpd_thread_ops *ops,
 		}
 
 		/* Set the thread name for debugging purposes: ignore failure */
-		snprintf(thread_name, sizeof thread_name, "sfptpd:%s", name);
+		snprintf(thread_name, sizeof thread_name, "%.7s:%s",
+			 program_invocation_short_name, name);
 		pthread_setname_np(new->pthread, thread_name);
 
 		/* Wait for the response from the thread to indicate that
