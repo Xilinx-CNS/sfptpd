@@ -1679,7 +1679,7 @@ static int ptp_configure_clock(struct sfptpd_ptp_intf *interface)
 			TRACE_L4("ptp: failed to compare clock %s and system clock, %s\n",
 				 sfptpd_clock_get_short_name(interface->clock),
 				 strerror(rc));
-			if (rc != EAGAIN)
+			if (rc != EAGAIN && rc != EBUSY)
 				return rc;
 		} else {
 			sfptpd_clock_adjust_time(interface->clock, &time);
