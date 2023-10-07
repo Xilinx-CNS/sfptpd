@@ -32,6 +32,7 @@
 #include "sfptpd_engine.h"
 #include "sfptpd_time.h"
 #include "sfptpd_filter.h"
+#include "sfptpd_multicast.h"
 
 
 /****************************************************************************
@@ -2250,6 +2251,29 @@ static void pps_on_run(pps_module_t *pps)
 }
 
 
+static void on_servo_pid_adjust(pps_module_t *pps,
+				sfptpd_servo_msg_t *msg)
+{
+	struct sfptpd_pps_instance *instance;
+
+	assert(pps != NULL);
+	assert(msg != NULL);
+
+	for (instance = pps->instances; instance; instance = instance->next) {
+		sfptpd_pid_filter_adjust(&instance->pid_filter,
+					 msg->u.pid_adjust.kp,
+					 msg->u.pid_adjust.ki,
+					 msg->u.pid_adjust.kd,
+					 msg->u.pid_adjust.reset);
+
+		TRACE_L4("%s: adjust pid filter\n",
+			SFPTPD_CONFIG_GET_NAME(instance->config));
+	}
+
+	SFPTPD_MSG_FREE(msg);
+}
+
+
 static int pps_on_startup(void *context)
 {
 	pps_module_t *pps = (pps_module_t *)context;
@@ -2257,6 +2281,13 @@ static int pps_on_startup(void *context)
 	int rc;
 
 	assert(pps != NULL);
+
+	rc = sfptpd_multicast_subscribe(SFPTPD_SERVO_MSG_PID_ADJUST);
+	if (rc != 0) {
+		CRITICAL("failed to subscribe to servo message multicasts, %s\n",
+			 strerror(rc));
+		return rc;
+	}
 
 	for (instance = pps->instances; instance; instance = instance->next) {
 		rc = pps_start_instance(pps, instance);
@@ -2288,6 +2319,8 @@ static void pps_on_shutdown(void *context)
 {
 	pps_module_t *pps = (pps_module_t *)context;
 	assert(pps != NULL);
+
+	sfptpd_multicast_unsubscribe(SFPTPD_SERVO_MSG_PID_ADJUST);
 
 	pps_destroy_instances(pps);
 
@@ -2350,6 +2383,10 @@ static void pps_on_message(void *context, struct sfptpd_msg_hdr *hdr)
 
 	case SFPTPD_SYNC_MODULE_MSG_TEST_MODE:
 		pps_on_test_mode(pps, msg);
+		break;
+
+	case SFPTPD_SERVO_MSG_PID_ADJUST:
+		on_servo_pid_adjust(pps, (sfptpd_servo_msg_t *) msg);
 		break;
 
 	default:
