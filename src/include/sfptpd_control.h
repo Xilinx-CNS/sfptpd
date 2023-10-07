@@ -26,6 +26,7 @@ enum sfptpd_control_action {
 	CONTROL_SELECTINSTANCE,
 	CONTROL_TESTMODE,
 	CONTROL_DUMPTABLES,
+	CONTROL_PID_ADJUST,
 };
 
 union sfptpd_control_action_parameters {
@@ -34,6 +35,12 @@ union sfptpd_control_action_parameters {
 		enum sfptpd_test_id id;
 		int params[3];
 	} test_mode;
+	struct {
+		double kp;
+		double ki;
+		double kd;
+		bool reset;
+	} pid_adjust;
 };
 
 

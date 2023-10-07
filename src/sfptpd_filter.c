@@ -175,6 +175,26 @@ void sfptpd_pid_filter_reset(sfptpd_pid_filter_t *pid)
 }
 
 
+void sfptpd_pid_filter_adjust(sfptpd_pid_filter_t *pid, long double k_p,
+			      long double k_i, long double k_d,
+			      bool reset)
+{
+	assert(pid != NULL);
+
+	if (!isnan(k_p))
+		pid->k_p = k_p;
+
+	if (!isnan(k_i))
+		pid->k_i = k_i;
+
+	if (!isnan(k_d))
+		pid->k_d = k_d;
+
+	if (reset)
+		sfptpd_pid_filter_reset(pid);
+}
+
+
 long double sfptpd_pid_filter_update(sfptpd_pid_filter_t *pid, long double delta,
 				     struct timespec *time)
 {

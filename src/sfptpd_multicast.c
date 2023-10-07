@@ -47,7 +47,7 @@ struct multicast_group {
 	/* Message id */
 	uint32_t msg_id;
 
-	/* List of subcribers to multicast group */
+	/* List of subscribers to multicast group */
 	struct users_list subscribers;
 
 	/* List of publishers to multicast group */

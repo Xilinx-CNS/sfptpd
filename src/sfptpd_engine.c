@@ -42,6 +42,7 @@
 #include "sfptpd_freerun_module.h"
 #include "sfptpd_crny_module.h"
 #include "sfptpd_netlink.h"
+#include "sfptpd_multicast.h"
 
 
 /****************************************************************************
@@ -1794,8 +1795,9 @@ static void on_selection_holdoff_timer(void *user_context, unsigned int timer_id
 static void on_thread_exit(struct sfptpd_engine *engine,
 			   sfptpd_msg_thread_exit_notify_t *msg)
 {
-	CRITICAL("fatal error from sync module %p, %s\n",
-		 msg->thread, strerror(msg->exit_code));
+	CRITICAL("fatal error from sync module %p (%s), %s\n",
+		 msg->thread, sfptpd_thread_get_name(msg->thread),
+		 strerror(msg->exit_code));
 	sfptpd_thread_exit(msg->exit_code);
 }
 
@@ -2142,12 +2144,32 @@ static void on_link_table_release(struct sfptpd_engine *engine,
 }
 
 
+static void on_servo_pid_adjust(struct sfptpd_engine *engine,
+				sfptpd_servo_msg_t *msg)
+{
+	int i;
+
+	assert(engine != NULL);
+	assert(msg != NULL);
+
+	for (i = 0; i < engine->active_servos; i++) {
+		sfptpd_servo_pid_adjust(engine->servos[i],
+					msg->u.pid_adjust.kp,
+					msg->u.pid_adjust.ki,
+					msg->u.pid_adjust.kd,
+					msg->u.pid_adjust.reset);
+	}
+}
+
+
 static void engine_on_shutdown(void *context)
 {
 	struct sfptpd_engine *engine = (struct sfptpd_engine *)context;
 	int module;
 
 	assert(engine != NULL);
+
+	sfptpd_multicast_unsubscribe(SFPTPD_SERVO_MSG_PID_ADJUST);
 
 	/* Now free up the resources */
 	for (module = 0; module < SFPTPD_CONFIG_CATEGORY_MAX; module++) {
@@ -2305,6 +2327,13 @@ static int engine_on_startup(void *context)
 					  rt_stats_msg_pool_size, sizeof(struct rt_stats_msg));
 	if (rc != 0) {
 		CRITICAL("failed to create realtime stats message pool, %s\n",
+			 strerror(rc));
+		goto fail;
+	}
+
+	rc = sfptpd_multicast_subscribe(SFPTPD_SERVO_MSG_PID_ADJUST);
+	if (rc != 0) {
+		CRITICAL("failed to subscribe to servo message multicasts, %s\n",
 			 strerror(rc));
 		goto fail;
 	}
@@ -2512,6 +2541,11 @@ static void engine_on_message(void *context, struct sfptpd_msg_hdr *hdr)
 
 	case ENGINE_MSG_LINK_TABLE_RELEASE:
 		on_link_table_release(engine, msg);
+		SFPTPD_MSG_FREE(msg);
+		break;
+
+	case SFPTPD_SERVO_MSG_PID_ADJUST:
+		on_servo_pid_adjust(engine, (sfptpd_servo_msg_t *) msg);
 		SFPTPD_MSG_FREE(msg);
 		break;
 

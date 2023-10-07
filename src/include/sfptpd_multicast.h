@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2023 Xilinx, Inc. */
+/* (c) Copyright 2023 Advanced Micro Devices, Inc. */
 
 #ifndef _SFPTPD_MULTICAST_H
 #define _SFPTPD_MULTICAST_H
@@ -58,4 +58,4 @@ int sfptpd_multicast_send(sfptpd_msg_hdr_t *hdr,
 #define SFPTPD_MULTICAST_SEND(msg, msg_id, pool) \
 		sfptpd_multicast_send(&((msg)->hdr), (msg_id), (pool))
 
-#endif /* _SFPTPD_APP_H */
+#endif /* _SFPTPD_MULTICAST_H */

@@ -38,6 +38,7 @@
 #include "sfptpd_link.h"
 #include "sfptpd_netlink.h"
 #include "sfptpd_statistics.h"
+#include "sfptpd_multicast.h"
 
 #ifdef HAVE_CAPS
 #include <sys/capability.h>
@@ -516,6 +517,12 @@ static int main_on_startup(void *not_used)
 	int ret;
 	int control_fd;
 
+	rc = sfptpd_multicast_init();
+	if (rc != 0) {
+		CRITICAL("failed to initialise multicast messaging\n");
+		return rc;
+	}
+
 	/* Try to open the sysfs PTP directory */
 	if (access("/sys/class/ptp/", F_OK) == -1) {
 		CRITICAL("failed to open sysfs ptp devices directory (Is your kernel built with PHC support?), "
@@ -528,10 +535,11 @@ static int main_on_startup(void *not_used)
 		}
 	}
 
+	sfptpd_multicast_publish(SFPTPD_SERVO_MSG_PID_ADJUST);
+
 	/* Configure control socket handling */
 	control_fd = sfptpd_control_socket_get_fd();
 	if (control_fd == -1) {
-
 		CRITICAL("control: no file descriptor set for the control socket\n");
 		return EINVAL;
 	}
@@ -562,6 +570,9 @@ static void main_on_shutdown(void *not_used)
 	if (engine != NULL)
 		sfptpd_engine_destroy(engine);
 	engine = NULL;
+
+	sfptpd_multicast_unpublish(SFPTPD_SERVO_MSG_PID_ADJUST);
+	sfptpd_multicast_destroy();
 }
 
 
@@ -624,6 +635,7 @@ static void main_on_user_fds(void *not_used, unsigned int num_fds, int fds[])
 {
 	enum sfptpd_control_action action;
 	union sfptpd_control_action_parameters param;
+	sfptpd_servo_msg_t servo_msg;
 
 	/* We only register a single user file descriptor in this thread. */
 	assert(num_fds == 1);
@@ -635,7 +647,7 @@ static void main_on_user_fds(void *not_used, unsigned int num_fds, int fds[])
 		NOTICE("unrecognised control command\n");
 		break;
 	case CONTROL_ERROR:
-		NOTICE("error receiving control command\n");
+		ERROR("error receiving control command\n");
 		break;
 	case CONTROL_EXIT:
 		NOTICE("received 'exit' control command: exiting application\n");
@@ -669,6 +681,22 @@ static void main_on_user_fds(void *not_used, unsigned int num_fds, int fds[])
 		NOTICE("received 'dumptables' control command: outputing diagnostics\n");
 		sfptpd_interface_diagnostics(0);
 		sfptpd_clock_diagnostics(0);
+		break;
+	case CONTROL_PID_ADJUST:
+		/* Adjust PID controller coefficients */
+		NOTICE("received 'pid_adjust' control command: (%g, %g, %g)%s\n",
+			param.pid_adjust.kp,
+			param.pid_adjust.ki,
+			param.pid_adjust.kd,
+			param.pid_adjust.reset ? " reset": "");
+		SFPTPD_MSG_INIT(servo_msg);
+		servo_msg.u.pid_adjust.kp = param.pid_adjust.kp;
+		servo_msg.u.pid_adjust.ki = param.pid_adjust.ki;
+		servo_msg.u.pid_adjust.kd = param.pid_adjust.kd;
+		servo_msg.u.pid_adjust.reset = param.pid_adjust.reset;
+		SFPTPD_MULTICAST_SEND(&servo_msg,
+				      SFPTPD_SERVO_MSG_PID_ADJUST,
+				      SFPTPD_MSG_POOL_GLOBAL);
 		break;
 	}
 }

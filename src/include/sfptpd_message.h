@@ -35,6 +35,7 @@ enum sfptpd_msg_pool_id
 #define SFPTPD_MSG_BASE_ENGINE      (0x00010000)
 #define SFPTPD_MSG_BASE_SYNC_MODULE (0x00020000)
 #define SFPTPD_MSG_BASE_APP         (0x00030000)
+#define SFPTPD_MSG_BASE_SERVO       (0x00040000)
 
 
 /** struct sfptpd_msg_hdr

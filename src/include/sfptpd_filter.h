@@ -189,6 +189,17 @@ void sfptpd_pid_filter_set_interval(sfptpd_pid_filter_t *pid,
  */
 void sfptpd_pid_filter_reset(sfptpd_pid_filter_t *pid);
 
+/** Reconfigure a PID filter.
+ * @param pid PID filter instance
+ * @param k_p The new proportional term coefficient or NAN
+ * @param k_i The new integral term coefficient or NAN
+ * @param k_d The new differential term coefficient or NAN
+ * @param reset True if the filter should be reset
+ */
+void sfptpd_pid_filter_adjust(sfptpd_pid_filter_t *pid, long double k_p,
+			      long double k_i, long double k_d,
+			      bool reset);
+
 /** Update the PID filter with new sample data.
  * @param pid PID filter instance
  * @param delta Current difference between signal and control

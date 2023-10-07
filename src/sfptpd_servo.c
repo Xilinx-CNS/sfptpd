@@ -228,6 +228,21 @@ void sfptpd_servo_reset(struct sfptpd_servo *servo)
 }
 
 
+void sfptpd_servo_pid_adjust(struct sfptpd_servo *servo,
+			     long double k_p,
+			     long double k_i,
+			     long double k_d,
+			     bool reset)
+{
+	assert(servo != NULL);
+
+	sfptpd_pid_filter_adjust(&servo->pid_filter,
+				 k_p, k_i, k_d, reset);
+
+	DBG_L4("%s: adjust pid filter\n", servo->servo_name);
+}
+
+
 void sfptpd_servo_set_clocks(struct sfptpd_servo *servo, struct sfptpd_clock *master, struct sfptpd_clock *slave)
 {
 	int rc;
@@ -639,6 +654,7 @@ void sfptpd_servo_save_state(struct sfptpd_servo *servo)
 			       "in-sync: %d\n"
 			       "p-term: " SFPTPD_FORMAT_FLOAT "\n"
 			       "i-term: " SFPTPD_FORMAT_FLOAT "\n"
+			       "pid-coefficients: " SFPTPD_FORMAT_FLOAT " " SFPTPD_FORMAT_FLOAT " " SFPTPD_FORMAT_FLOAT "\n"
 			       "diff-method: %s/%s\n",
 			       sfptpd_clock_get_long_name(servo->slave),
 			       sfptpd_clock_get_hw_id_string(servo->slave),
@@ -650,6 +666,9 @@ void sfptpd_servo_save_state(struct sfptpd_servo *servo)
 			       servo->synchronized,
 			       sfptpd_pid_filter_get_p_term(&servo->pid_filter),
 			       sfptpd_pid_filter_get_i_term(&servo->pid_filter),
+			       servo->pid_filter.k_p,
+			       servo->pid_filter.k_i,
+			       servo->pid_filter.k_d,
 			       sfptpd_clock_get_diff_method(servo->slave),
 			       sfptpd_clock_get_diff_method(servo->master));
 	

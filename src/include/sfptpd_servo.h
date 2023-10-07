@@ -34,6 +34,46 @@ struct sfptpd_servo_stats {
 };
 
 /****************************************************************************
+ * Servo Messages
+ *
+ * These are messages that components providing servos may wish to use.
+ ****************************************************************************/
+
+/** Macro used to define message ID values for servo messages */
+#define SFPTPD_SERVO_MSG(x) (SFPTPD_MSG_BASE_SERVO + (x))
+
+/** Message carrying a command to adjust PID controller coefficients.
+ * Not all servos may make use of all of the options.
+ * This is an asynchronous message with no reply.
+ * @kp PID filter proportional term coefficient
+ * @ki PID filter integral term coefficient
+ * @kd PID filter differential term coefficient
+ * @reset Whether to reset PID filter
+ */
+#define SFPTPD_SERVO_MSG_PID_ADJUST SFPTPD_SERVO_MSG(1)
+struct sfptpd_servo_pid_adjust {
+	double kp;
+	double ki;
+	double kd;
+	bool reset;
+};
+
+/** Union of servo messages
+ * @hdr Standard message header
+ * @u Union of message payloads
+ */
+typedef struct sfptpd_servo_msg {
+	sfptpd_msg_hdr_t hdr;
+	union {
+		struct sfptpd_servo_pid_adjust pid_adjust;
+	} u;
+} sfptpd_servo_msg_t;
+
+/* Make sure that the messages are smaller than global pool size */
+STATIC_ASSERT(sizeof(sfptpd_servo_msg_t) < SFPTPD_SIZE_GLOBAL_MSGS);
+
+
+/****************************************************************************
  * Function Prototypes
  ****************************************************************************/
 
@@ -56,6 +96,19 @@ void sfptpd_servo_destroy(struct sfptpd_servo *servo);
  * @param servo  Servo instance
  */
 void sfptpd_servo_reset(struct sfptpd_servo *servo);
+
+/** Reconfigure a servo's PID filter.
+ * @param servo Servo instance
+ * @param k_p The new proportional term coefficient or NAN
+ * @param k_i The new integral term coefficient or NAN
+ * @param k_d The new differential term coefficient or NAN
+ * @param reset True if the filter should be reset
+ */
+void sfptpd_servo_pid_adjust(struct sfptpd_servo *servo,
+			     long double k_p,
+			     long double k_i,
+			     long double k_d,
+			     bool reset);
 
 /** Set the master and slave clocks for servo. The servo provides the means to
  * synchronize the slave clock to the master
