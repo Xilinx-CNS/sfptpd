@@ -1778,6 +1778,7 @@ void sfptpd_thread_exit(int exit_errno)
 	self->exit_errno = exit_errno;
 
 	/* Send an exit event to the thread to cause it to exit. */
+
 	wrote = write(self->exit_event_fd, (const void *)&value, sizeof(value));
 	if (wrote != sizeof(value)) {
 		WARNING("thread %s: failed to send exit event to self, %zd\n",
@@ -1824,6 +1825,15 @@ struct sfptpd_thread *sfptpd_thread_find(const char *name)
 	}
 
 	return NULL;
+}
+
+
+const char *sfptpd_thread_get_name(struct sfptpd_thread *thread)
+{
+	assert(thread != NULL);
+	assert(thread->magic == SFPTPD_THREAD_MAGIC);
+
+	return thread->name;
 }
 
 

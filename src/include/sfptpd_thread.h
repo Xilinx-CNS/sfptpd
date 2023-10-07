@@ -165,6 +165,12 @@ struct sfptpd_thread *sfptpd_thread_parent(void);
  */
 struct sfptpd_thread *sfptpd_thread_find(const char *name);
 
+/** Get a thread's name.
+ * @param The thread
+ * @return Name of the thread
+ */
+const char *sfptpd_thread_get_name(struct sfptpd_thread *thread);
+
 /** Allocate a message pool.
  * @param pool_type Type of pool. Local pools are freed upon thread termination.
  * @param num_msgs Number of messages to allocate
