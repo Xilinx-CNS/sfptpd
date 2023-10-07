@@ -148,6 +148,9 @@ void ptpd_update_leap_second(struct ptpd_port_context *ptpd,
 /* Step the clock by the specified amount */
 void ptpd_step_clock(struct ptpd_port_context *ptpd, struct timespec *offset);
 
+/* Update the PID controller coefficients at runtime */
+void ptpd_pid_adjust(struct ptpd_port_context *ptpd, double kp, double ki, double kd, bool reset);
+
 /* Get the current timestamping mode */
 ptpd_timestamp_type_e ptpd_get_timestamping(struct ptpd_intf_context *ptpd_if);
 

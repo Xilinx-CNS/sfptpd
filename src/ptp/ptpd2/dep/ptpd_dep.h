@@ -265,6 +265,7 @@ bool servo_init(const RunTimeOpts *, ptp_servo_t *, struct sfptpd_clock *);
 void servo_shutdown(ptp_servo_t *);
 sfptpd_sync_module_alarms_t servo_get_alarms(ptp_servo_t *);
 void servo_reset(ptp_servo_t *);
+void servo_pid_adjust(const RunTimeOpts *rtOpts, ptp_servo_t *servo, bool reset);
 void servo_reset_operator_messages(ptp_servo_t *);
 void servo_set_slave_clock(ptp_servo_t *, struct sfptpd_clock *);
 void servo_set_interval(ptp_servo_t *, long double interval);

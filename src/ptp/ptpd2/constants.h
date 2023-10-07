@@ -19,6 +19,7 @@
 /* default values */
 #define PTPD_DEFAULT_KP			0.2
 #define PTPD_DEFAULT_KI			0.003
+#define PTPD_DEFAULT_KD			0.0
 #define PTPD_DEFAULT_TTL		64
 
 #define DEFAULT_ANNOUNCE_INTERVAL    	1       /* 0 in 802.1AS */

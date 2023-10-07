@@ -69,6 +69,7 @@ void ptpd_config_port_initialise(struct ptpd_port_config *config,
 
 	config->servoKP = PTPD_DEFAULT_KP;
 	config->servoKI = PTPD_DEFAULT_KI;
+	config->servoKD = PTPD_DEFAULT_KD;
 	config->inboundLatency.seconds = 0;
 	config->inboundLatency.nanoseconds = 0;
 	config->outboundLatency.seconds = 0;
@@ -535,6 +536,15 @@ void ptpd_step_clock(struct ptpd_port_context *ptpd, struct timespec *offset)
 	}
 
 	servo_step_clock(&ptpd->servo, offset);
+}
+
+
+void ptpd_pid_adjust(struct ptpd_port_context *ptpd, double kp, double ki, double kd, bool reset)
+{
+	ptpd->rtOpts.servoKP = kp;
+	ptpd->rtOpts.servoKI = ki;
+	ptpd->rtOpts.servoKD = kd;
+	servo_pid_adjust(&ptpd->rtOpts, &ptpd->servo, reset);
 }
 
 

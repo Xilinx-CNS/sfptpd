@@ -519,6 +519,7 @@ typedef struct ptpd_port_config {
 
 	long double servoKP;
 	long double servoKI;
+	long double servoKD;
 
 	Boolean managementEnabled;
 	Boolean managementSetEnable;

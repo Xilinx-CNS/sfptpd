@@ -129,7 +129,7 @@ servo_init(const RunTimeOpts *rtOpts, ptp_servo_t *servo, struct sfptpd_clock *c
 
 	/* Initialise PID filter */
 	sfptpd_pid_filter_init(&servo->pid_filter,
-			       rtOpts->servoKP, rtOpts->servoKI, 0.0,
+			       rtOpts->servoKP, rtOpts->servoKI, rtOpts->servoKD,
 			       powl(2, (long double)rtOpts->syncInterval));
 
 	/* Set the slave clock. This will reset the frequency adjustment
@@ -211,6 +211,25 @@ servo_reset_filters(ptp_servo_t *servo)
 	servo->mean_path_delay = 0.0;
 
 	sfptpd_smallest_filter_reset(servo->smallest_filt);
+}
+
+
+void
+servo_pid_adjust(const RunTimeOpts *rtOpts, ptp_servo_t *servo, bool reset)
+{
+	assert(rtOpts != NULL);
+	assert(servo != NULL);
+
+	DBG("servo_pid_adjust()\n");
+
+	assert(servo->magic == SERVO_MAGIC);
+
+	sfptpd_pid_filter_adjust(&servo->pid_filter,
+				 rtOpts->servoKP, rtOpts->servoKI, rtOpts->servoKD,
+				 reset);
+
+	if (reset)
+		sfptpd_pid_filter_reset(&servo->pid_filter);
 }
 
 
