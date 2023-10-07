@@ -104,18 +104,18 @@ void multicast_dump_group(struct sfptpd_multicast *module, struct multicast_grou
 
 	pthread_mutex_lock(&module->lock);
 
-	TRACE_L3(PREFIX "- group\n");
-	TRACE_L3(PREFIX "   id: %x\n", group->msg_id);
-	TRACE_L3(PREFIX "   publishers:\n");
+	TRACE_L4(PREFIX "- group\n");
+	TRACE_L4(PREFIX "   id: %x\n", group->msg_id);
+	TRACE_L4(PREFIX "   publishers:\n");
 	SLIST_FOREACH(user, &group->publishers, users) {
 		assert(user->magic == MULTICAST_USER_MAGIC);
-		TRACE_L3(PREFIX "    - %p %s\n", user->thread,
+		TRACE_L4(PREFIX "    - %p %s\n", user->thread,
 			 sfptpd_thread_get_name(user->thread));
 	}
-	TRACE_L3(PREFIX "   subscribers:\n");
+	TRACE_L4(PREFIX "   subscribers:\n");
 	SLIST_FOREACH(user, &group->subscribers, users) {
 		assert(user->magic == MULTICAST_USER_MAGIC);
-		TRACE_L3(PREFIX "    - %p %s\n", user->thread,
+		TRACE_L4(PREFIX "    - %p %s\n", user->thread,
 			 sfptpd_thread_get_name(user->thread));
 	}
 
@@ -149,7 +149,7 @@ int multicast_add_user(struct sfptpd_multicast *module,
 	assert(module);
 	assert(module->magic == MULTICAST_MAGIC);
 
-	TRACE_L3(PREFIX "%s(%s, %x)\n", action, sfptpd_thread_get_name(thread), msg_id);
+	TRACE_L4(PREFIX "%s(%s, %x)\n", action, sfptpd_thread_get_name(thread), msg_id);
 
 	user = calloc(1, sizeof *user);
 	if (user == NULL)
@@ -201,7 +201,7 @@ int multicast_remove_user(struct sfptpd_multicast *module,
 	assert(module);
 	assert(module->magic == MULTICAST_MAGIC);
 
-	TRACE_L3(PREFIX "%s(%x, %p)\n", action, msg_id, thread);
+	TRACE_L4(PREFIX "%s(%x, %p)\n", action, msg_id, thread);
 
 	pthread_mutex_lock(&sfptpd_multicast->lock);
 
@@ -237,7 +237,7 @@ fail:
 	if (group &&
 	    SLIST_EMPTY(&group->publishers) &&
 	    SLIST_EMPTY(&group->subscribers)) {
-		TRACE_L3(PREFIX "removing unused group %x\n", group->msg_id);
+		TRACE_L4(PREFIX "removing unused group %x\n", group->msg_id);
 		SLIST_REMOVE(&module->groups, group, multicast_group, groups);
 		group->magic = MULTICAST_DELETED_MAGIC;
 		free(group);
