@@ -48,6 +48,7 @@ typedef enum sfptpd_component_id {
 #define TRACE_L4(x, ...)  TRACE(SFPTPD_COMPONENT_ID_SFPTPD, 4, x, ##__VA_ARGS__)
 #define TRACE_L5(x, ...)  TRACE(SFPTPD_COMPONENT_ID_SFPTPD, 5, x, ##__VA_ARGS__)
 #define TRACE_L6(x, ...)  TRACE(SFPTPD_COMPONENT_ID_SFPTPD, 6, x, ##__VA_ARGS__)
+#define TRACE_LX(level, x, ...)  TRACE(SFPTPD_COMPONENT_ID_SFPTPD, level, x, ##__VA_ARGS__)
 
 /** Macros defining string formats for common data types */
 #define TEXT_RED                          "\033[31m"

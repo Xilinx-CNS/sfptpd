@@ -348,9 +348,9 @@ static void clock_dump_header(const char *title, int trace_level)
 	const char *heading    = "  | type    | nic_id | clk    | phc diff method    | short name | long name\n";
 	const char *separator  = "  +---------+--------+--------+--------------------+------------+----------\n";
 
-	sfptpd_log_trace(SFPTPD_COMPONENT_ID_SFPTPD, trace_level, "%s clocks list:-\n", title);
-	sfptpd_log_trace(SFPTPD_COMPONENT_ID_SFPTPD, trace_level, "%s", heading);
-	sfptpd_log_trace(SFPTPD_COMPONENT_ID_SFPTPD, trace_level, "%s", separator);
+	TRACE_LX(trace_level, "%s clocks list:-\n", title);
+	TRACE_LX(trace_level, "%s", heading);
+	TRACE_LX(trace_level, "%s", separator);
 }
 
 static void clock_dump_record(struct sfptpd_clock *clock, int trace_level)
@@ -359,20 +359,20 @@ static void clock_dump_record(struct sfptpd_clock *clock, int trace_level)
 	const char *nic_pat = "  | %-7s | %6d | %6d | %-18s | %-10s | %s%s%s\n";
 
 	if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM) {
-	  sfptpd_log_trace(SFPTPD_COMPONENT_ID_SFPTPD, trace_level,
-			   sys_pat, "sys", "",
-			   clock->short_name, clock->long_name,
-			   clock->read_only ? " [read-only]" : "");
+	  TRACE_LX(trace_level,
+		   sys_pat, "sys", "",
+		   clock->short_name, clock->long_name,
+		   clock->read_only ? " [read-only]" : "");
 	} else {
-	  sfptpd_log_trace(SFPTPD_COMPONENT_ID_SFPTPD, trace_level,
-			   nic_pat,
-			   clock->type == SFPTPD_CLOCK_TYPE_SFC ? "sfc" :
-				(clock->type == SFPTPD_CLOCK_TYPE_XNET ? "xnet" : "non-sfc"),
-			   clock->u.nic.nic_id, clock->u.nic.device_idx,
-			   sfptpd_phc_get_diff_method_name(clock->u.nic.phc),
-			   clock->short_name, clock->long_name,
-			   clock->deleted ? " [deleted]" : "",
-			   clock->read_only ? " [read-only]" : "");
+	  TRACE_LX(trace_level,
+		   nic_pat,
+		   clock->type == SFPTPD_CLOCK_TYPE_SFC ? "sfc" :
+			(clock->type == SFPTPD_CLOCK_TYPE_XNET ? "xnet" : "non-sfc"),
+		   clock->u.nic.nic_id, clock->u.nic.device_idx,
+		   sfptpd_phc_get_diff_method_name(clock->u.nic.phc),
+		   clock->short_name, clock->long_name,
+		   clock->deleted ? " [deleted]" : "",
+		   clock->read_only ? " [read-only]" : "");
 	}
 }
 

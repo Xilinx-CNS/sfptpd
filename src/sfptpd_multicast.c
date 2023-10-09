@@ -95,7 +95,7 @@ static struct sfptpd_multicast *sfptpd_multicast = NULL;
  * Private functions
  ****************************************************************************/
 
-void multicast_dump_group(struct sfptpd_multicast *module, struct multicast_group *group)
+void multicast_dump_group(struct sfptpd_multicast *module, struct multicast_group *group, int sev)
 {
 	struct multicast_user *user;
 
@@ -104,25 +104,25 @@ void multicast_dump_group(struct sfptpd_multicast *module, struct multicast_grou
 
 	pthread_mutex_lock(&module->lock);
 
-	TRACE_L4(PREFIX "- group\n");
-	TRACE_L4(PREFIX "   id: %x\n", group->msg_id);
-	TRACE_L4(PREFIX "   publishers:\n");
+	TRACE_LX(sev, PREFIX "- group\n");
+	TRACE_LX(sev, PREFIX "   id: %x\n", group->msg_id);
+	TRACE_LX(sev, PREFIX "   publishers:\n");
 	SLIST_FOREACH(user, &group->publishers, users) {
 		assert(user->magic == MULTICAST_USER_MAGIC);
-		TRACE_L4(PREFIX "    - %p %s\n", user->thread,
+		TRACE_LX(sev, PREFIX "    - %p %s\n", user->thread,
 			 sfptpd_thread_get_name(user->thread));
 	}
-	TRACE_L4(PREFIX "   subscribers:\n");
+	TRACE_LX(sev, PREFIX "   subscribers:\n");
 	SLIST_FOREACH(user, &group->subscribers, users) {
 		assert(user->magic == MULTICAST_USER_MAGIC);
-		TRACE_L4(PREFIX "    - %p %s\n", user->thread,
+		TRACE_LX(sev, PREFIX "    - %p %s\n", user->thread,
 			 sfptpd_thread_get_name(user->thread));
 	}
 
 	pthread_mutex_unlock(&module->lock);
 }
 
-void multicast_dump_groups(struct sfptpd_multicast *module)
+void multicast_dump_groups(struct sfptpd_multicast *module, int sev)
 {
 	struct multicast_group *group;
 
@@ -131,8 +131,10 @@ void multicast_dump_groups(struct sfptpd_multicast *module)
 
 	pthread_mutex_lock(&module->lock);
 
+	TRACE_LX(sev, PREFIX "groups:\n");
+
 	SLIST_FOREACH(group, &module->groups, groups)
-		multicast_dump_group(module, group);
+		multicast_dump_group(module, group, sev);
 
 	pthread_mutex_unlock(&module->lock);
 }
@@ -179,7 +181,7 @@ int multicast_add_user(struct sfptpd_multicast *module,
 			  user, users);
 
 fail:
-	multicast_dump_groups(sfptpd_multicast);
+	multicast_dump_groups(sfptpd_multicast, 4);
 	pthread_mutex_unlock(&sfptpd_multicast->lock);
 	if (rc != 0) {
 		user->magic = MULTICAST_DELETED_MAGIC;
@@ -232,7 +234,7 @@ int multicast_remove_user(struct sfptpd_multicast *module,
 	free(user);
 
 fail:
-	multicast_dump_groups(sfptpd_multicast);
+	multicast_dump_groups(sfptpd_multicast, 4);
 
 	if (group &&
 	    SLIST_EMPTY(&group->publishers) &&
@@ -279,7 +281,7 @@ void sfptpd_multicast_destroy(void)
 
 	if (!SLIST_EMPTY(&sfptpd_multicast->groups)) {
 		WARNING("multicast: not all multicast groups freed on exit\n");
-		multicast_dump_groups(sfptpd_multicast);
+		multicast_dump_groups(sfptpd_multicast, 4);
 	} else {
 		pthread_mutex_destroy(&sfptpd_multicast->lock);
 		sfptpd_multicast->magic = MULTICAST_DELETED_MAGIC;
@@ -295,7 +297,7 @@ void sfptpd_multicast_dump_state(void)
 
 	assert(sfptpd_multicast->magic == MULTICAST_MAGIC);
 
-	multicast_dump_groups(sfptpd_multicast);
+	multicast_dump_groups(sfptpd_multicast, 0);
 }
 
 int sfptpd_multicast_subscribe(uint32_t msg_id)
