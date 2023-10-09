@@ -55,7 +55,7 @@ static const struct sfptpd_test_mode_descriptor test_modes[] = SFPTPD_TESTS_ARRA
  ****************************************************************************/
 
 static int control_fd = -1;
-static const char *control_path;
+static char *control_path;
 
 
 /****************************************************************************
@@ -71,18 +71,33 @@ static const char *control_path;
 int sfptpd_control_socket_open(struct sfptpd_config *config)
 {
 	struct sfptpd_config_general *general_config;
-	int rc;
 	struct sockaddr_un addr = {
 		.sun_family = AF_UNIX
 	};
-	char control_path[sizeof addr.sun_path];
+	size_t sz;
+	int rc;
 
 	general_config = sfptpd_general_config_get(config);
+	sz = sfptpd_format(sfptpd_log_get_format_specifiers(), NULL,
+			   NULL, 0,
+			   general_config->control_path);
+	if (sz < 0)
+		return errno;
+
+	control_path = malloc(++sz);
+	if (control_path == NULL)
+		return errno;
+
 	rc = sfptpd_format(sfptpd_log_get_format_specifiers(), NULL,
-			   control_path, sizeof control_path,
+			   control_path, sz,
 			   general_config->control_path);
 	if (rc < 0)
-		return errno;
+		goto fail;
+
+	if (strlen(control_path) >= sizeof addr.sun_path) {
+		errno = ENAMETOOLONG;
+		goto fail;
+	}
 
 	sfptpd_strncpy(addr.sun_path, control_path, sizeof addr.sun_path);
 
@@ -93,7 +108,7 @@ int sfptpd_control_socket_open(struct sfptpd_config *config)
 	control_fd = socket(AF_UNIX, SOCK_DGRAM, 0);
 	if (control_fd == -1) {
 		ERROR(PREFIX "couldn't create socket\n");
-	        return errno;
+	        goto fail;
 	}
 
 	/* Bind to the path in the filesystem. */
@@ -101,7 +116,7 @@ int sfptpd_control_socket_open(struct sfptpd_config *config)
 	if (rc == -1) {
 		ERROR(PREFIX "couldn't bind socket to %s\n",
 		      control_path);
-	        return errno;
+	        goto fail;
 	}
 
 	/* Set ownership of socket. Defer error to any consequent failure. */
@@ -110,6 +125,9 @@ int sfptpd_control_socket_open(struct sfptpd_config *config)
 			 strerror(errno));
 
 	return 0;
+fail:
+	free(control_path);
+	return errno;
 }
 
 
@@ -236,7 +254,10 @@ void sfptpd_control_socket_close(void)
 		close(control_fd);
 		control_fd = -1;
 	}
-	unlink(control_path);
+	if (control_path != NULL) {
+		unlink(control_path);
+		free(control_path);
+	}
 }
 
 
