@@ -1754,8 +1754,8 @@ void sfptpd_config_general_set_verbose(struct sfptpd_config *config)
 		general->netlink_trace_level = 1;
 	if (general->ntp_trace_level < 1)
 		general->ntp_trace_level = 1;
-	if (general->clocks_trace_level < 3)
-		general->clocks_trace_level = 3;
+	if (general->clocks_trace_level < 2)
+		general->clocks_trace_level = 2;
 	sfptpd_log_set_trace_level(SFPTPD_COMPONENT_ID_SFPTPD,
 				   general->trace_level);
 }

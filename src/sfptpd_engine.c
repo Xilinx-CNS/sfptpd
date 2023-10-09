@@ -1831,8 +1831,8 @@ static void on_selection_holdoff_timer(void *user_context, unsigned int timer_id
 static void on_thread_exit(struct sfptpd_engine *engine,
 			   sfptpd_msg_thread_exit_notify_t *msg)
 {
-	CRITICAL("fatal error from sync module %p (%s), %s\n",
-		 msg->thread, sfptpd_thread_get_name(msg->thread),
+	CRITICAL("fatal error from sync module %p, %s\n",
+		 msg->thread,
 		 strerror(msg->exit_code));
 	sfptpd_thread_exit(msg->exit_code);
 }
@@ -2218,8 +2218,6 @@ static void engine_on_shutdown(void *context)
 
 	sfptpd_multicast_unsubscribe(SFPTPD_SERVO_MSG_PID_ADJUST);
 	sfptpd_multicast_unsubscribe(SFPTPD_CLOCKFEED_MSG_SYNC_EVENT);
-
-	sfptpd_clockfeed_dump_state(engine->clockfeed);
 
 	/* Remove clock feeds */
 	clocks = sfptpd_clock_get_active_snapshot(&num_clocks);
