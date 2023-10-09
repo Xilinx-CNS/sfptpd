@@ -1609,7 +1609,6 @@ int ptp_determine_timestamp_type(ptpd_timestamp_type_e *timestamp_type,
 static int ptp_configure_clock(struct sfptpd_ptp_intf *interface)
 {
 	struct sfptpd_clock *system_clock;
-	struct timespec time;
 	int rc;
 	struct sfptpd_ptp_instance *instance;
 	struct sfptpd_config_general *general_cfg;
@@ -1672,17 +1671,13 @@ static int ptp_configure_clock(struct sfptpd_ptp_intf *interface)
 	/* If using a NIC clock and we are in a PTP master mode then step the
 	 * NIC clock to the current system time. */
 	if ((interface->clock != system_clock) && !config->ptpd_port.slaveOnly) {
-		/* Rather than set the NIC time, get an accurate difference
-		 * between the system and NIC time and apply this offset */
-		rc = sfptpd_clock_compare(system_clock, interface->clock, &time);
+		rc = sfptpd_clock_set_time(interface->clock, system_clock, NULL);
 		if (rc != 0) {
-			TRACE_L4("ptp: failed to compare clock %s and system clock, %s\n",
+			TRACE_L4("ptp: failed to compare and set clock %s to system clock, %s\n",
 				 sfptpd_clock_get_short_name(interface->clock),
 				 strerror(rc));
-			if (rc != EAGAIN)
+			if (rc != EAGAIN && rc != EBUSY)
 				return rc;
-		} else {
-			sfptpd_clock_adjust_time(interface->clock, &time);
 		}
 	}
 

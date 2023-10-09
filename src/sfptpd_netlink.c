@@ -896,6 +896,7 @@ static int netlink_handle_genl_team(struct nl_conn_state *conn,
 	struct nlattr *attr[TEAM_ATTR_MAX + 1] = { 0 };
 	struct nlattr *port, *option;
 	struct nlattr *nested[TEAM_ATTR_PORT_MAX + 1] = { 0 };
+	struct nlattr *options[TEAM_ATTR_OPTION_MAX + 1] = { 0 };
 	int team_ifindex = -1;
 	int port_ifindex = -1;
 	int opt = CP_TEAM_OPTION_MAX;
@@ -944,24 +945,24 @@ static int netlink_handle_genl_team(struct nl_conn_state *conn,
 			assert(team_ifindex > 0);
 			mnl_attr_for_each_nested(option, attr[TEAM_ATTR_LIST_OPTION]) {
 				void *data = NULL;
-				mnl_attr_parse_nested(option, MNL_VALIDATE(team_attr_option), nested);
+				mnl_attr_parse_nested(option, MNL_VALIDATE(team_attr_option), options);
 
-				if (nested[TEAM_ATTR_OPTION_NAME]) {
+				if (options[TEAM_ATTR_OPTION_NAME]) {
 					for (opt = 0; opt < CP_TEAM_OPTION_MAX &&
-					     strcmp(mnl_attr_get_str(nested[TEAM_ATTR_OPTION_NAME]),
+					     strcmp(mnl_attr_get_str(options[TEAM_ATTR_OPTION_NAME]),
 						    team_options[opt].name); opt++);
 				}
 
-				if (nested[TEAM_ATTR_OPTION_DATA])
-					data = mnl_attr_get_payload(nested[TEAM_ATTR_OPTION_DATA]);
+				if (options[TEAM_ATTR_OPTION_DATA])
+					data = mnl_attr_get_payload(options[TEAM_ATTR_OPTION_DATA]);
 
-				if (nested[TEAM_ATTR_OPTION_PORT_IFINDEX]) {
-					port_ifindex = mnl_attr_get_u32(nested[TEAM_ATTR_OPTION_PORT_IFINDEX]);
+				if (options[TEAM_ATTR_OPTION_PORT_IFINDEX]) {
+					port_ifindex = mnl_attr_get_u32(options[TEAM_ATTR_OPTION_PORT_IFINDEX]);
 				}
 
-				if (nested[TEAM_ATTR_OPTION_REMOVED])
+				if (options[TEAM_ATTR_OPTION_REMOVED])
 					event = SFPTPD_LINK_DOWN;
-				else if (nested[TEAM_ATTR_OPTION_CHANGED])
+				else if (options[TEAM_ATTR_OPTION_CHANGED])
 					event = SFPTPD_LINK_CHANGE;
 
 				if (opt != CP_TEAM_OPTION_MAX) {
