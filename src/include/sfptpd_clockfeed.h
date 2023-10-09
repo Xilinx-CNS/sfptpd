@@ -70,10 +70,6 @@ void sfptpd_clockfeed_set_max_age(struct sfptpd_clockfeed_sub *sub,
 void sfptpd_clockfeed_set_max_age_diff(struct sfptpd_clockfeed_sub *sub,
 				       const struct sfptpd_timespec *max_age_diff);
 
-void sfptpd_clockfeed_subscribe_events(void);
-
-void sfptpd_clockfeed_unsubscribe_events(void);
-
 void sfptpd_clockfeed_stats_end_period(struct sfptpd_clockfeed *module,
 				       struct sfptpd_timespec *time);
 
@@ -85,7 +81,7 @@ void sfptpd_clockfeed_stats_end_period(struct sfptpd_clockfeed *module,
 #define SFPTPD_CLOCKFEED_MSG(x) (SFPTPD_MSG_BASE_CLOCK_FEED + (x))
 
 /* Notification that a cycle of processing all ready clock feeds has
- * been completed.
+ * been completed. Sent by multicast.
  */
 #define SFPTPD_CLOCKFEED_MSG_SYNC_EVENT   SFPTPD_CLOCKFEED_MSG(5)
 

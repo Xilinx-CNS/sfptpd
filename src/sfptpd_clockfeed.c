@@ -35,6 +35,7 @@
 #include "sfptpd_time.h"
 #include "sfptpd_engine.h"
 #include "sfptpd_sync_module.h"
+#include "sfptpd_multicast.h"
 
 #include "sfptpd_clockfeed.h"
 
@@ -119,31 +120,15 @@ struct clockfeed_unsubscribe {
 
 /* Notification that a cycle of processing all ready clock feeds has
  * been completed. This value is defined in the public header file.
- * It is an asynchronous message with no reply.
+ * It is an asynchronous message with no reply. To be multicast.
  */
 #define CLOCKFEED_MSG_SYNC_EVENT   SFPTPD_CLOCKFEED_MSG_SYNC_EVENT
-
-/* Subscribe to clock feed events
- * It is a synchronous message.
- */
-#define CLOCKFEED_MSG_SUBSCRIBE_EVENTS  CLOCKFEED_MSG(6)
-struct clockfeed_subscribe_events {
-	struct sfptpd_thread *thread;
-};
-
-/* Unsubscribe to clock feed events
- * It is an synchronous message.
- */
-#define CLOCKFEED_MSG_UNSUBSCRIBE_EVENTS  CLOCKFEED_MSG(7)
-struct clockfeed_unsubscribe_events {
-	struct sfptpd_thread *thread;
-};
 
 /* Union of all clock feed messages
  * @hdr Standard message header
  * @u Union of message payloads
  */
-struct clockfeed_msg {
+typedef struct clockfeed_msg {
 	sfptpd_msg_hdr_t hdr;
 	union {
 		struct clockfeed_add_clock add_clock;
@@ -151,10 +136,8 @@ struct clockfeed_msg {
 		struct clockfeed_subscribe_req subscribe_req;
 		struct clockfeed_subscribe_resp subscribe_resp;
 		struct clockfeed_unsubscribe unsubscribe;
-		struct clockfeed_subscribe_events subscribe_events;
-		struct clockfeed_unsubscribe_events unsubscribe_events;
 	} u;
-};
+} sfptpd_clockfeed_msg_t;
 
 STATIC_ASSERT(sizeof(struct clockfeed_msg) < SFPTPD_SIZE_GLOBAL_MSGS);
 
@@ -243,9 +226,6 @@ struct sfptpd_clockfeed {
 	/* Linked list of removed (zombie) clock sources */
 	struct clockfeed_source *inactive;
 
-	/* Event subscribers */
-	struct sfptpd_thread *event_subscribers[MAX_EVENT_SUBSCRIBERS];
-
 	/* Clock feed statistics */
 	struct sfptpd_stats_collection stats;
 };
@@ -270,25 +250,15 @@ const static struct sfptpd_clockfeed *sfptpd_clockfeed = NULL;
 
 static void clockfeed_send_sync_event(struct sfptpd_clockfeed *clockfeed)
 {
-	struct clockfeed_msg *msg;
-	int i;
+	sfptpd_clockfeed_msg_t msg;
 
 	assert(clockfeed != NULL);
 	assert(clockfeed->magic == CLOCKFEED_MODULE_MAGIC);
 
-	for (i = 0; i < MAX_EVENT_SUBSCRIBERS; i++) {
-		if (clockfeed->event_subscribers[i]) {
-
-			msg = (struct clockfeed_msg *)sfptpd_msg_alloc(SFPTPD_MSG_POOL_LOCAL, false);
-			if (msg == NULL) {
-				SFPTPD_MSG_LOG_ALLOC_FAILED("local");
-				/* Sit out this event if there is back-pressure */
-			} else {
-				SFPTPD_MSG_SEND(msg, clockfeed->event_subscribers[i],
-						SFPTPD_CLOCKFEED_MSG_SYNC_EVENT, false);
-			}
-		}
-	}
+	SFPTPD_MSG_INIT(msg);
+	SFPTPD_MULTICAST_SEND(&msg,
+			      SFPTPD_CLOCKFEED_MSG_SYNC_EVENT,
+			      SFPTPD_MSG_POOL_LOCAL);
 }
 
 static void clockfeed_reap_zombies(struct sfptpd_clockfeed *module,
@@ -580,50 +550,6 @@ static void clockfeed_on_unsubscribe(struct sfptpd_clockfeed *module,
 	SFPTPD_MSG_REPLY(msg);
 }
 
-static void clockfeed_on_subscribe_events(struct sfptpd_clockfeed *module,
-					  struct clockfeed_msg *msg)
-{
-	int i;
-
-	assert(module != NULL);
-	assert(msg != NULL);
-	assert(msg->u.subscribe_events.thread != NULL);
-
-	DBG_L3("clockfeed: received subscribe_events message\n");
-
-	for (i = 0; i < MAX_EVENT_SUBSCRIBERS; i++) {
-		if (module->event_subscribers[i] == NULL) {
-			module->event_subscribers[i] = msg->u.subscribe_events.thread;
-			SFPTPD_MSG_REPLY(msg);
-			return;
-		}
-	}
-
-	sfptpd_thread_exit(ENOSPC);
-}
-
-static void clockfeed_on_unsubscribe_events(struct sfptpd_clockfeed *module,
-					    struct clockfeed_msg *msg)
-{
-	int i;
-
-	assert(module != NULL);
-	assert(msg != NULL);
-	assert(msg->u.unsubscribe_events.thread != NULL);
-
-	DBG_L3("clockfeed: received unsubscribe_events message\n");
-
-	for (i = 0; i < MAX_EVENT_SUBSCRIBERS; i++) {
-		if (module->event_subscribers[i] == msg->u.unsubscribe_events.thread)
-			module->event_subscribers[i] = NULL;
-	}
-
-	if (i == MAX_EVENT_SUBSCRIBERS)
-		DBG_L6("clockfeed: non-subscriber event unsubscription request ignored\n");
-
-	SFPTPD_MSG_REPLY(msg);
-}
-
 static void clockfeed_on_shutdown(void *context)
 {
 	struct sfptpd_clockfeed *module = (struct sfptpd_clockfeed *)context;
@@ -720,14 +646,6 @@ static void clockfeed_on_message(void *context, struct sfptpd_msg_hdr *hdr)
 		clockfeed_on_unsubscribe(module, msg);
 		break;
 
-	case CLOCKFEED_MSG_SUBSCRIBE_EVENTS:
-		clockfeed_on_subscribe_events(module, msg);
-		break;
-
-	case CLOCKFEED_MSG_UNSUBSCRIBE_EVENTS:
-		clockfeed_on_unsubscribe_events(module, msg);
-		break;
-
 	default:
 		WARNING("clockfeed: received unexpected message, id %d\n",
 			sfptpd_msg_get_id(hdr));
@@ -812,11 +730,6 @@ void sfptpd_clockfeed_dump_state(struct sfptpd_clockfeed *clockfeed)
 	int i;
 
 	DBG_L2("clockfeed: dumping state:\n");
-	DBG_L2("clockfeed:  event subscribers:\n");
-	for (i = 0; i < MAX_EVENT_SUBSCRIBERS; i++)
-		if (clockfeed->event_subscribers[i])
-			DBG_L2("clockfeed:   - thread %p\n", clockfeed->event_subscribers[i]);
-
 	for (i = 0; i < 2; i ++) {
 		const char *which[] = { "active", "inactive" };
 		DBG_L3("clockfeed:  %s sources:\n", which[i]);
@@ -1122,50 +1035,6 @@ void sfptpd_clockfeed_set_max_age_diff(struct sfptpd_clockfeed_sub *sub,
 
 	sub->have_max_age_diff = true;
 	sub->max_age_diff = *max_age_diff;
-}
-
-void sfptpd_clockfeed_subscribe_events(void)
-{
-	struct clockfeed_msg *msg;
-
-	assert(sfptpd_clockfeed);
-	assert(sfptpd_clockfeed->magic == CLOCKFEED_MODULE_MAGIC);
-
-	msg = (struct clockfeed_msg *)sfptpd_msg_alloc(SFPTPD_MSG_POOL_GLOBAL, false);
-	if (msg == NULL) {
-		SFPTPD_MSG_LOG_ALLOC_FAILED("global");
-		sfptpd_thread_exit(ENOMEM);
-		return;
-	}
-
-	memset(&msg->u.subscribe_events, 0, sizeof(msg->u.subscribe_events));
-
-	msg->u.subscribe_events.thread = sfptpd_thread_self();
-
-	SFPTPD_MSG_SEND_WAIT(msg, sfptpd_clockfeed->thread,
-			     CLOCKFEED_MSG_SUBSCRIBE_EVENTS);
-}
-
-void sfptpd_clockfeed_unsubscribe_events(void)
-{
-	struct clockfeed_msg *msg;
-
-	assert(sfptpd_clockfeed);
-	assert(sfptpd_clockfeed->magic == CLOCKFEED_MODULE_MAGIC);
-
-	msg = (struct clockfeed_msg *)sfptpd_msg_alloc(SFPTPD_MSG_POOL_GLOBAL, false);
-	if (msg == NULL) {
-		SFPTPD_MSG_LOG_ALLOC_FAILED("global");
-		sfptpd_thread_exit(ENOMEM);
-		return;
-	}
-
-	memset(&msg->u.unsubscribe_events, 0, sizeof(msg->u.unsubscribe_events));
-
-	msg->u.unsubscribe_events.thread = sfptpd_thread_self();
-
-	SFPTPD_MSG_SEND_WAIT(msg, sfptpd_clockfeed->thread,
-			     CLOCKFEED_MSG_UNSUBSCRIBE_EVENTS);
 }
 
 void sfptpd_clockfeed_stats_end_period(struct sfptpd_clockfeed *module,

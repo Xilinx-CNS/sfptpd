@@ -2217,11 +2217,9 @@ static void engine_on_shutdown(void *context)
 	assert(engine != NULL);
 
 	sfptpd_multicast_unsubscribe(SFPTPD_SERVO_MSG_PID_ADJUST);
+	sfptpd_multicast_unsubscribe(SFPTPD_CLOCKFEED_MSG_SYNC_EVENT);
 
 	sfptpd_clockfeed_dump_state(engine->clockfeed);
-
-	/* Deregister for clock feed events */
-	sfptpd_clockfeed_unsubscribe_events();
 
 	/* Remove clock feeds */
 	clocks = sfptpd_clock_get_active_snapshot(&num_clocks);
@@ -2531,7 +2529,12 @@ static void on_run(struct sfptpd_engine *engine)
 	assert(engine != NULL);
 
 	/* Register for clock feed events */
-	sfptpd_clockfeed_subscribe_events();
+	rc = sfptpd_multicast_subscribe(SFPTPD_CLOCKFEED_MSG_SYNC_EVENT);
+	if (rc != 0) {
+		CRITICAL("failed to subscribe to clock feed sync events, %s\n",
+			 strerror(rc));
+		goto fail;
+	}
 
 	/* Create the timers */
 	rc = create_timers(engine);
