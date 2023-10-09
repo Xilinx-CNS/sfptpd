@@ -539,7 +539,7 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 				 !strcmp(kind, "gtp") || !strcmp(kind, "ipoib") ||
 				 !strcmp(kind, "wireguard"))
 				link->type = SFPTPD_LINK_OTHER;
-			strncpy(link->if_kind, kind, (sizeof link->if_kind) - 1);
+			sfptpd_strncpy(link->if_kind, kind, sizeof link->if_kind);
 		}
 
 		if (nested[IFLA_INFO_DATA]) {
