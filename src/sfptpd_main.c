@@ -838,7 +838,8 @@ int main(int argc, char **argv)
 
 	/* Initialise the threading library */
 	rc = sfptpd_threading_initialise(SFPTPD_NUM_GLOBAL_MSGS,
-					 SFPTPD_SIZE_GLOBAL_MSGS);
+					 SFPTPD_SIZE_GLOBAL_MSGS,
+					 SFPTPD_THREAD_ZOMBIES_REAP_AT_EXIT);
 	if (rc != 0)
 		goto exit;
 

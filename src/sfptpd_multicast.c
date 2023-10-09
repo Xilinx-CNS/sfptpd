@@ -281,7 +281,7 @@ void sfptpd_multicast_destroy(void)
 
 	if (!SLIST_EMPTY(&sfptpd_multicast->groups)) {
 		WARNING("multicast: not all multicast groups freed on exit\n");
-		multicast_dump_groups(sfptpd_multicast, 4);
+		multicast_dump_groups(sfptpd_multicast, 3);
 	} else {
 		pthread_mutex_destroy(&sfptpd_multicast->lock);
 		sfptpd_multicast->magic = MULTICAST_DELETED_MAGIC;

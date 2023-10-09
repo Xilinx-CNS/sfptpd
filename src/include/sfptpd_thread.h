@@ -13,6 +13,20 @@
 
 
 /****************************************************************************
+ * Constants
+ ****************************************************************************/
+
+/* Policy for reaping zombie threads.
+ * Immediate reaping prevents mid-execution memory leaks.
+ * Delayed reaping allows sfptpd_thread_get_name to be called on threads
+ * that have exited. */
+enum sfptpd_thread_zombie_policy {
+	SFPTPD_THREAD_ZOMBIES_REAP_IMMEDIATELY,
+	SFPTPD_THREAD_ZOMBIES_REAP_AT_EXIT,
+};
+
+
+/****************************************************************************
  * Structures and Types
  ****************************************************************************/
 
@@ -92,10 +106,12 @@ typedef void (*sfptpd_thread_on_timer_fn)(void *user_context,
  * @param num_global_msgs Number of messages to create in the global message
  * pool.
  * @param msg_size Maximum message size for global messages
+ * @param zombie_policy When to reap the state of zombie threads
  * @return 0 on success or an errno otherwise
  */
 int sfptpd_threading_initialise(unsigned int num_global_msgs,
-			        unsigned int msg_size);
+			        unsigned int msg_size,
+				enum sfptpd_thread_zombie_policy zombie_policy);
 
 /** Shutdown the threading library and free resources. Note that this should
  * only be done after all threads have exited.

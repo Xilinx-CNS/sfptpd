@@ -832,7 +832,7 @@ static int test_threading(const char *name, bool timers, bool messaging,
 	
 	printf("threading test %s...\n", name);
 	
-	test_rc = sfptpd_threading_initialise(256, sizeof(test_msg_t));
+	test_rc = sfptpd_threading_initialise(256, sizeof(test_msg_t), 0);
 	if (test_rc != 0) {
 		printf("failed to initialise threading support, %d\n", test_rc);
 		return test_rc;

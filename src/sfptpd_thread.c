@@ -46,6 +46,8 @@
 
 #define SFPTPD_TIMER_MAGIC  (0x75315eed)
 #define SFPTPD_THREAD_MAGIC (0xf00dface)
+#define SFPTPD_ZOMBIE_MAGIC (0x203b111e)
+#define SFPTPD_DEAD_MAGIC   (0xdead7ead)
 
 /* Maximum time we will wait for a child thred to exit before giving up. */
 #define SFPTPD_JOIN_TIMEOUT       (1000000)
@@ -138,6 +140,7 @@ struct sfptpd_thread
 	/* Magic number and link to the next thread object */
 	uint32_t magic;
 	struct sfptpd_thread *next;
+	struct sfptpd_thread *next_zombie;
 
 	/* Textual name for thread */
 	const char *name;
@@ -193,6 +196,9 @@ struct sfptpd_thread_lib
 	/* Used to restore signal mask when signal library exits */
 	sigset_t original_signal_set;
 
+	/* Policy on when to reap zombie threads */
+	enum sfptpd_thread_zombie_policy zombie_policy;
+
 	/* Global message pool */
 	struct sfptpd_pool global_msg_pool;
 
@@ -204,6 +210,9 @@ struct sfptpd_thread_lib
 
 	/* Thread list */
 	struct sfptpd_thread *thread_list;
+
+	/* Zombie list */
+	struct sfptpd_thread *zombie_list;
 };
 
 
@@ -1453,9 +1462,16 @@ static int thread_destroy(struct sfptpd_thread *thread)
 
 	DBG_L2("thread %s: destroyed\n", thread->name);
 
-	/* Free the memory */
-	thread->magic = 0;
-	free(thread);
+	if (sfptpd_thread_lib.zombie_policy == SFPTPD_THREAD_ZOMBIES_REAP_IMMEDIATELY) {
+		/* Free the memory */
+		thread->magic = SFPTPD_DEAD_MAGIC;
+		free(thread);
+	} else {
+		/* Add the thread to the zombie list */
+		thread->magic = SFPTPD_ZOMBIE_MAGIC;
+		thread->next_zombie = sfptpd_thread_lib.zombie_list;
+		sfptpd_thread_lib.zombie_list = thread;
+	}
 
 	return 0;
 }
@@ -1650,7 +1666,8 @@ fail1:
  ****************************************************************************/
 
 int sfptpd_threading_initialise(unsigned int num_global_msgs,
-				unsigned int msg_size)
+				unsigned int msg_size,
+				enum sfptpd_thread_zombie_policy zombie_policy)
 {
 	int rc;
 	sigset_t signal_set;
@@ -1659,6 +1676,8 @@ int sfptpd_threading_initialise(unsigned int num_global_msgs,
 
 	sfptpd_thread_lib.root_thread = NULL;
 	sfptpd_thread_lib.thread_list = NULL;
+	sfptpd_thread_lib.zombie_list = NULL;
+	sfptpd_thread_lib.zombie_policy = zombie_policy;
 
 	/* Create a pthread key to allow each thread to store it's message
 	 * threading context */
@@ -1707,6 +1726,16 @@ void sfptpd_threading_shutdown(void)
 	for (thread = sfptpd_thread_lib.thread_list; thread != NULL; thread = thread->next)
 		WARNING("threading shutdown but thread %s still exists\n",
 			thread->name);
+
+	for (thread = sfptpd_thread_lib.zombie_list; thread != NULL;) {
+		struct sfptpd_thread *next_zombie = thread->next_zombie;
+
+		if (sfptpd_thread_lib.zombie_policy != SFPTPD_THREAD_ZOMBIES_REAP_AT_EXIT)
+			WARNING("zombie threads exist at exist contrary to reaping policy\n");
+		thread->magic = SFPTPD_DEAD_MAGIC;
+		free(thread);
+		thread = next_zombie;
+	}
 
 	/* Destroy key before pool so that thread_get_name doesn't
 	 * reference freed memory */
@@ -1827,7 +1856,13 @@ struct sfptpd_thread *sfptpd_thread_find(const char *name)
 const char *sfptpd_thread_get_name(struct sfptpd_thread *thread)
 {
 	assert(thread != NULL);
-	assert(thread->magic == SFPTPD_THREAD_MAGIC);
+	assert(thread->magic == SFPTPD_THREAD_MAGIC ||
+	       thread->magic == SFPTPD_ZOMBIE_MAGIC);
+
+	if (thread->magic == SFPTPD_ZOMBIE_MAGIC) {
+		WARNING("zombie thread %p (%s) referenced\n",
+			thread, thread->name);
+	}
 
 	return thread->name;
 }
