@@ -40,11 +40,9 @@
 
 void sfptpd_app_run(struct sfptpd_thread *component)
 {
-	struct message {
-		sfptpd_msg_hdr_t hdr;
-	} *msg;
+	sfptpd_app_msg_t *msg;
 
-	msg = (struct message *) sfptpd_msg_alloc(SFPTPD_MSG_POOL_GLOBAL, false);
+	msg = (sfptpd_app_msg_t *) sfptpd_msg_alloc(SFPTPD_MSG_POOL_GLOBAL, false);
 
 	if (msg == NULL) {
 		SFPTPD_MSG_LOG_ALLOC_FAILED("global");

@@ -288,6 +288,16 @@ void sfptpd_multicast_destroy(void)
 	}
 }
 
+void sfptpd_multicast_dump_state(void)
+{
+	if (!sfptpd_multicast)
+		return;
+
+	assert(sfptpd_multicast->magic == MULTICAST_MAGIC);
+
+	multicast_dump_groups(sfptpd_multicast);
+}
+
 int sfptpd_multicast_subscribe(uint32_t msg_id)
 {
 	return multicast_add_user(sfptpd_multicast, sfptpd_thread_self(), msg_id, false);

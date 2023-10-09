@@ -25,6 +25,7 @@
 #include <pthread.h>
 #include <unistd.h>
 
+#include "sfptpd_app.h"
 #include "sfptpd_config.h"
 #include "sfptpd_general_config.h"
 #include "sfptpd_logging.h"
@@ -536,6 +537,7 @@ static int main_on_startup(void *not_used)
 	}
 
 	sfptpd_multicast_publish(SFPTPD_SERVO_MSG_PID_ADJUST);
+	sfptpd_multicast_publish(SFPTPD_APP_MSG_DUMP_TABLES);
 
 	/* Configure control socket handling */
 	control_fd = sfptpd_control_socket_get_fd();
@@ -571,6 +573,7 @@ static void main_on_shutdown(void *not_used)
 		sfptpd_engine_destroy(engine);
 	engine = NULL;
 
+	sfptpd_multicast_unpublish(SFPTPD_APP_MSG_DUMP_TABLES);
 	sfptpd_multicast_unpublish(SFPTPD_SERVO_MSG_PID_ADJUST);
 	sfptpd_multicast_destroy();
 }
@@ -635,7 +638,10 @@ static void main_on_user_fds(void *not_used, unsigned int num_fds, int fds[])
 {
 	enum sfptpd_control_action action;
 	union sfptpd_control_action_parameters param;
-	sfptpd_servo_msg_t servo_msg;
+	union {
+		sfptpd_app_msg_t app;
+		sfptpd_servo_msg_t servo;
+	} msg;
 
 	/* We only register a single user file descriptor in this thread. */
 	assert(num_fds == 1);
@@ -681,6 +687,11 @@ static void main_on_user_fds(void *not_used, unsigned int num_fds, int fds[])
 		NOTICE("received 'dumptables' control command: outputing diagnostics\n");
 		sfptpd_interface_diagnostics(0);
 		sfptpd_clock_diagnostics(0);
+		sfptpd_multicast_dump_state();
+		SFPTPD_MSG_INIT(msg.app);
+		SFPTPD_MULTICAST_SEND(&msg.app,
+				      SFPTPD_APP_MSG_DUMP_TABLES,
+				      SFPTPD_MSG_POOL_GLOBAL);
 		break;
 	case CONTROL_PID_ADJUST:
 		/* Adjust PID controller coefficients */
@@ -689,12 +700,12 @@ static void main_on_user_fds(void *not_used, unsigned int num_fds, int fds[])
 			param.pid_adjust.ki,
 			param.pid_adjust.kd,
 			param.pid_adjust.reset ? " reset": "");
-		SFPTPD_MSG_INIT(servo_msg);
-		servo_msg.u.pid_adjust.kp = param.pid_adjust.kp;
-		servo_msg.u.pid_adjust.ki = param.pid_adjust.ki;
-		servo_msg.u.pid_adjust.kd = param.pid_adjust.kd;
-		servo_msg.u.pid_adjust.reset = param.pid_adjust.reset;
-		SFPTPD_MULTICAST_SEND(&servo_msg,
+		SFPTPD_MSG_INIT(msg.servo);
+		msg.servo.u.pid_adjust.kp = param.pid_adjust.kp;
+		msg.servo.u.pid_adjust.ki = param.pid_adjust.ki;
+		msg.servo.u.pid_adjust.kd = param.pid_adjust.kd;
+		msg.servo.u.pid_adjust.reset = param.pid_adjust.reset;
+		SFPTPD_MULTICAST_SEND(&msg.servo,
 				      SFPTPD_SERVO_MSG_PID_ADJUST,
 				      SFPTPD_MSG_POOL_GLOBAL);
 		break;

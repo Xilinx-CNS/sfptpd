@@ -42,5 +42,17 @@ void sfptpd_app_run(struct sfptpd_thread *component);
  */
 #define SFPTPD_APP_MSG_RUN SFPTPD_APP_MSG(0)
 
+/** Optional message to request dumping of internal tables.
+ * There is no payload and no reply. Intended to be multicast.
+ */
+#define SFPTPD_APP_MSG_DUMP_TABLES SFPTPD_APP_MSG(1)
+
+/** Union of app messages
+ * @hdr Standard message header
+ */
+typedef struct sfptpd_app_msg {
+	sfptpd_msg_hdr_t hdr;
+} sfptpd_app_msg_t;
+
 
 #endif /* _SFPTPD_APP_H */

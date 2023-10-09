@@ -22,6 +22,9 @@ int sfptpd_multicast_init(void);
 /** Destroy sfptpd message multicast service */
 void sfptpd_multicast_destroy(void);
 
+/** Dump multicast group state */
+void sfptpd_multicast_dump_state(void);
+
 /** Join a subscriber to an sfptpd message multicast group.
  * @param msg_id The message id of the multicast group to join
  * @return 0 on success or errno
