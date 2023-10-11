@@ -3830,6 +3830,9 @@ static void on_servo_pid_adjust(struct sfptpd_ptp_module *ptp,
 	assert(ptp != NULL);
 	assert(msg != NULL);
 
+	if (!(msg->u.pid_adjust.servo_type_mask & SFPTPD_SERVO_TYPE_PTP))
+		return;
+
 	for (instance = ptp_get_first_instance(ptp); instance != NULL; instance = ptp_get_next_instance(instance)) {
 		ptpd_pid_adjust(instance->ptpd_port_private,
 				msg->u.pid_adjust.kp, msg->u.pid_adjust.ki,

@@ -36,6 +36,7 @@ union sfptpd_control_action_parameters {
 		int params[3];
 	} test_mode;
 	struct {
+		int servo_type_mask;
 		double kp;
 		double ki;
 		double kd;

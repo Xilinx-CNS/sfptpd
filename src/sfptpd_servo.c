@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2019 Xilinx, Inc. */
+/* (c) Copyright 2012-2023 Xilinx, Inc. */
 
 /**
  * @file   sfptpd_servo.c
@@ -735,6 +735,17 @@ sfptpd_sync_module_alarms_t sfptpd_servo_get_alarms(struct sfptpd_servo *servo,
 		*servo_name = servo->servo_name;
 
 	return servo->alarms;
+}
+
+int sfptpd_servo_get_type_flag(const char *type_name) {
+	if (!strcmp(type_name, "local"))
+		return SFPTPD_SERVO_TYPE_LOCAL;
+	else if (!strcmp(type_name, "ptp"))
+		return SFPTPD_SERVO_TYPE_PTP;
+	else if (!strcmp(type_name, "pps"))
+		return SFPTPD_SERVO_TYPE_PPS;
+	else
+		return 0;
 }
 
 /* fin */

@@ -2259,6 +2259,9 @@ static void on_servo_pid_adjust(pps_module_t *pps,
 	assert(pps != NULL);
 	assert(msg != NULL);
 
+	if (!(msg->u.pid_adjust.servo_type_mask & SFPTPD_SERVO_TYPE_PPS))
+		return;
+
 	for (instance = pps->instances; instance; instance = instance->next) {
 		sfptpd_pid_filter_adjust(&instance->pid_filter,
 					 msg->u.pid_adjust.kp,

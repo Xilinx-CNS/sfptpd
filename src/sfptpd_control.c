@@ -27,6 +27,7 @@
 #include "sfptpd_logging.h"
 #include "sfptpd_control.h"
 #include "sfptpd_general_config.h"
+#include "sfptpd_servo.h"
 
 
 /****************************************************************************
@@ -216,12 +217,16 @@ enum sfptpd_control_action sfptpd_control_socket_get_action(union sfptpd_control
 		return CONTROL_TESTMODE;
 	} else if (!strcmp(command, COMMAND_PID_ADJUST)) {
 		char *token;
+		int type = 0;
 
 		token = strsep(&opts, PARAM_DELIM);
+		param->pid_adjust.servo_type_mask = 0;
 		param->pid_adjust.kp = NAN;
 		param->pid_adjust.ki = NAN;
 		param->pid_adjust.kd = NAN;
 		param->pid_adjust.reset = false;
+
+		/* Positional parameters */
 		if (token != NULL && *token)
 			param->pid_adjust.kp = strtod(token, NULL);
 		token = strsep(&opts, PARAM_DELIM);
@@ -230,19 +235,26 @@ enum sfptpd_control_action sfptpd_control_socket_get_action(union sfptpd_control
 		token = strsep(&opts, PARAM_DELIM);
 		if (token != NULL && *token)
 			param->pid_adjust.kd = strtod(token, NULL);
-		token = strsep(&opts, PARAM_DELIM);
-		if (token != NULL && *token) {
-			if (!strcmp(token, "reset")) {
+
+		/* Keyword parameters */
+		while ((token = strsep(&opts, PARAM_DELIM))) {
+			if ((type = sfptpd_servo_get_type_flag(token))) {
+				param->pid_adjust.servo_type_mask |= type;
+			} else if (!strcmp(token, "reset")) {
 				param->pid_adjust.reset = true;
 			} else {
 				ERROR(PREFIX "%s has unexpected token: %s\n", command, token);
 				return CONTROL_ERROR;
 			}
 		}
+
+		/* Default to modifying all servo types */
+		if (param->pid_adjust.servo_type_mask == 0)
+			param->pid_adjust.servo_type_mask = SFPTPD_SERVO_TYPE_ALL;
 		return CONTROL_PID_ADJUST;
 	} else {
 		NOTICE(PREFIX "unknown command %s received\n",
-		       buf);
+		       command);
 		return CONTROL_NOP;
 	}
 }

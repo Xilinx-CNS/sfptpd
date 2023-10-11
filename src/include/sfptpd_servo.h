@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2019 Xilinx, Inc. */
+/* (c) Copyright 2012-2023 Xilinx, Inc. */
 
 #ifndef _SFPTPD_SERVO_H
 #define _SFPTPD_SERVO_H
@@ -33,6 +33,13 @@ struct sfptpd_servo_stats {
 	long double i_term;
 };
 
+#define SFPTPD_SERVO_TYPE_LOCAL   (1 << 0)
+#define SFPTPD_SERVO_TYPE_PTP     (1 << 1)
+#define SFPTPD_SERVO_TYPE_PPS     (1 << 2)
+#define _SFPTPD_SERVO_TYPE_NEXT   (1 << 3)
+#define SFPTPD_SERVO_TYPE_ALL     ((_SFPTPD_SERVO_TYPE_NEXT) - 1)
+
+
 /****************************************************************************
  * Servo Messages
  *
@@ -45,6 +52,7 @@ struct sfptpd_servo_stats {
 /** Message carrying a command to adjust PID controller coefficients.
  * Not all servos may make use of all of the options.
  * This is an asynchronous message with no reply.
+ * @servo_type_mask bitfield of servo types to be modified
  * @kp PID filter proportional term coefficient
  * @ki PID filter integral term coefficient
  * @kd PID filter differential term coefficient
@@ -52,6 +60,7 @@ struct sfptpd_servo_stats {
  */
 #define SFPTPD_SERVO_MSG_PID_ADJUST SFPTPD_SERVO_MSG(1)
 struct sfptpd_servo_pid_adjust {
+	int servo_type_mask;
 	double kp;
 	double ki;
 	double kd;
@@ -195,5 +204,11 @@ void sfptpd_servo_write_topology_clock_hw_id(struct sfptpd_servo *servo,
  */
 sfptpd_sync_module_alarms_t sfptpd_servo_get_alarms(struct sfptpd_servo *servo,
 						    const char **servo_name);
+
+/** Get servo type flag for name
+ * @param type_name Name of servo type
+ * @return The equivalent flag
+ */
+int sfptpd_servo_get_type_flag(const char *type_name);
 
 #endif /* _SFPTPD_SERVO_H */

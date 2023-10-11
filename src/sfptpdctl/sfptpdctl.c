@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2016-2019 Xilinx, Inc. */
+/* (c) Copyright 2016-2023 Xilinx, Inc. */
 
 /**
  * @file   sfptpdctl.c
@@ -35,7 +35,10 @@ int main(int argc, char *argv[])
 			"    exit                 cause sfptpd to exit\n"
 			"    logrotate            cause the log files to be closed and reopened\n"
 			"    stepclocks           cause the clocks to be stepped\n"
-			"    selectinstance=name  select specific sync instance\n",
+			"    selectinstance=name  select specific sync instance\n"
+			"    dumptables           dump some internal state to message log\n"
+			"    pid_adjust=[KP[,[KI][,[KD][,local|ptp|pps|reset]*]]]\n"
+			"                         set PID coefficients with optional reset per servo type, or all by default\n",
 			argv[0]);
 		return 1;
 	}

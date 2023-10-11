@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2022 Xilinx, Inc. */
+/* (c) Copyright 2012-2023 Xilinx, Inc. */
 
 /**
  * @file   sfptpd_main.c
@@ -695,15 +695,17 @@ static void main_on_user_fds(void *not_used, unsigned int num_fds, int fds[])
 		break;
 	case CONTROL_PID_ADJUST:
 		/* Adjust PID controller coefficients */
-		NOTICE("received 'pid_adjust' control command: (%g, %g, %g)%s\n",
+		NOTICE("received 'pid_adjust' control command: (%g, %g, %g) @0%o%s\n",
 			param.pid_adjust.kp,
 			param.pid_adjust.ki,
 			param.pid_adjust.kd,
+			param.pid_adjust.servo_type_mask,
 			param.pid_adjust.reset ? " reset": "");
 		SFPTPD_MSG_INIT(msg.servo);
 		msg.servo.u.pid_adjust.kp = param.pid_adjust.kp;
 		msg.servo.u.pid_adjust.ki = param.pid_adjust.ki;
 		msg.servo.u.pid_adjust.kd = param.pid_adjust.kd;
+		msg.servo.u.pid_adjust.servo_type_mask = param.pid_adjust.servo_type_mask;
 		msg.servo.u.pid_adjust.reset = param.pid_adjust.reset;
 		SFPTPD_MULTICAST_SEND(&msg.servo,
 				      SFPTPD_SERVO_MSG_PID_ADJUST,

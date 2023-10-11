@@ -2152,6 +2152,9 @@ static void on_servo_pid_adjust(struct sfptpd_engine *engine,
 	assert(engine != NULL);
 	assert(msg != NULL);
 
+	if (!(msg->u.pid_adjust.servo_type_mask & SFPTPD_SERVO_TYPE_LOCAL))
+		return;
+
 	for (i = 0; i < engine->active_servos; i++) {
 		sfptpd_servo_pid_adjust(engine->servos[i],
 					msg->u.pid_adjust.kp,
