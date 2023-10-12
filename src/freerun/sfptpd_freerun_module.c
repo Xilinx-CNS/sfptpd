@@ -292,8 +292,6 @@ static int freerun_select_clock(freerun_module_t *fr,
 	struct sfptpd_interface *interface;
 	struct sfptpd_freerun_module_config *config;
 	struct freerun_instance *other_instance;
-	int rc;
-	struct timespec diff;
 
 	assert(fr != NULL);
 	config = instance->config;
@@ -348,20 +346,6 @@ static int freerun_select_clock(freerun_module_t *fr,
 
 	/* Sanity checks complete: save the clock. */
 	instance->clock = candidate_clock;
-
-	/* Set the NIC clock based on the system clock to ensure
-	   it has a sensible initial value */
-	rc = sfptpd_clock_compare(system_clock, instance->clock, &diff);
-	if (rc != 0) {
-		TRACE_L4("freerun %s: failed to compare clock %s and system clock, error %s\n",
-			 SFPTPD_CONFIG_GET_NAME(config),
-			 sfptpd_clock_get_short_name(instance->clock),
-			 strerror(rc));
-		return rc;
-	}
-
-	/* Step the slave clock to the master's time */
-	sfptpd_clock_adjust_time(instance->clock, &diff);
 
 	TRACE_L4("freerun %s: selected clock %s as reference\n",
 		 SFPTPD_CONFIG_GET_NAME(config),
