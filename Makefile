@@ -120,6 +120,12 @@ uninstall:
 	rm -fr $(INST_PKGDOCDIR)
 	rm -fr $(DESTDIR)/var/lib/sfptpd
 
+.PHONY: flat_install
+flat_install: SBINDIR=bin
+flat_install: prefix=/
+flat_install: install
+	cd $(DESTDIR) && ln -sf $(SBINDIR)/* .
+
 # Prevent make from removing any build targets, including intermediate ones
 
 .SECONDARY: $(CLEAN)
