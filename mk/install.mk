@@ -8,19 +8,19 @@
 #   PACKAGE_VERSION
 # These are overriden by anything supplied by the packaging system
 
-ifdef prefix
-ifndef INST_PREFIX
-INST_PREFIX = $(prefix)
+ifndef prefix
+prefix = /usr/local
+else
+ifeq ("$(prefix)","/usr")
+INST_CONFDIR = $(DESTDIR)/etc
+else
+ifeq ("$(prefix)","/")
+prefix =
+endif
 endif
 endif
 
-# Default to /usr/local if not driven by a packaging tool
-ifndef DESTDIR
-ifndef INST_PREFIX
-INST_PREFIX = /usr/local
-INST_CONFDIR = $(INST_PREFIX)/etc
-endif
-endif
+SBINDIR ?= sbin
 
 # Defaults from OS detection
 
@@ -28,13 +28,11 @@ endif
 DEFAULT_DEFAULTSDIR := sysconfig
 
 # Installation variables
-
-INST_PREFIX ?= $(DESTDIR)/usr
-INST_SBINDIR ?= $(INST_PREFIX)/sbin
-INST_UNITDIR ?= $(INST_PREFIX)/lib/systemd/system
-INST_CONFDIR ?= $(DESTDIR)/etc
-INST_DOCDIR ?= $(INST_PREFIX)/share/doc
-INST_MANDIR ?= $(INST_PREFIX)/share/man
+INST_SBINDIR ?= $(DESTDIR)$(prefix)/$(SBINDIR)
+INST_UNITDIR ?= $(DESTDIR)$(prefix)/lib/systemd/system
+INST_CONFDIR ?= $(DESTDIR)$(prefix)/etc
+INST_DOCDIR ?= $(DESTDIR)$(prefix)/share/doc
+INST_MANDIR ?= $(DESTDIR)$(prefix)/share/man
 INST_PKGDOCDIR ?= $(INST_DOCDIR)/$(PACKAGE_NAME)
 INST_PKGLICENSEDIR ?= $(INST_PKGDOCDIR)
 INST_DEFAULTSDIR ?= $(INST_CONFDIR)/$(DEFAULT_DEFAULTSDIR)
