@@ -68,8 +68,8 @@
 #define SFPTPD_LEAP_SECOND_GUARD_INTERVAL_MAX (10.0)
 
 /** If the NIC time is before this then we assume that it has never been set.
- * Current value is one year after the epoch i.e. 1971 */
-#define SFPTPD_NIC_TIME_VALID_THRESHOLD (31536000)
+ * Current value is five years after the epoch i.e. 1975 */
+#define SFPTPD_NIC_TIME_VALID_THRESHOLD (157680000)
 
 /** Topology file field width */
 #define SFPTPD_TOPOLOGY_FIELD_WIDTH (35)
