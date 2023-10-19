@@ -1935,7 +1935,9 @@ static void on_sync_instance_state_changed(struct sfptpd_engine *engine,
 	 * instance */
 	instance_record->status = *status;
 	new_candidate = sfptpd_bic_choose(&engine->general_config->selection_policy,
-					  engine->sync_instances, engine->num_sync_instances);
+					  engine->sync_instances,
+					  engine->num_sync_instances,
+					  engine->candidate == NULL ? engine->selected : engine->candidate);
 	assert (NULL != new_candidate);
 
 	/* If we have no current candidate and proposed candidate is the
@@ -2356,7 +2358,7 @@ static int engine_on_startup(void *context)
 	 * status.
 	 */
 	bic_instance = sfptpd_bic_choose(&engine->general_config->selection_policy,
-					 engine->sync_instances, engine->num_sync_instances);
+					 engine->sync_instances, engine->num_sync_instances, NULL);
 	assert (NULL != bic_instance);
 
 	if (engine->general_config->selection_policy.strategy == SFPTPD_SELECTION_STRATEGY_AUTOMATIC) {

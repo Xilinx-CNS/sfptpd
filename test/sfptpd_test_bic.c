@@ -565,7 +565,7 @@ int test_select (char *name, struct sync_instance_record *statuses, size_t num_t
 	struct sync_instance_record *result;
 	bool passed;
 
-	result = sfptpd_bic_choose (&sfptpd_default_selection_policy, statuses, num_tests);
+	result = sfptpd_bic_choose (&sfptpd_default_selection_policy, statuses, num_tests, NULL);
         passed = ((expected == -1) && (result == NULL)) ||
                  ((expected != -1) && (result == &statuses [expected]));
 	printf ("SELECT %s: E %2d - %s\n", passed ? "PASS" : "FAIL", expected, name);

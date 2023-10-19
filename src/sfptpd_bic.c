@@ -356,10 +356,12 @@ static int ordered_instance_compar(const void *a, const void *b, void *context) 
 
 struct sync_instance_record *sfptpd_bic_choose(const struct sfptpd_selection_policy *policy,
 					       struct sync_instance_record *instance_records,
-					       int num_instances)
+					       int num_instances,
+					       struct sync_instance_record *old_candidate)
 {
 	struct sync_instance_record *result;
 	struct ordered_instance *list;
+	bool is_new_candidate;
 	int i;
 
 	if (num_instances == 0) {
@@ -379,25 +381,30 @@ struct sync_instance_record *sfptpd_bic_choose(const struct sfptpd_selection_pol
 
 	qsort_r(list, num_instances, sizeof *list, ordered_instance_compar, (void *) policy);
 
+	is_new_candidate = !old_candidate || old_candidate != list[0].record;
+
 	/* Fill in decisive rules */
 	for (i = 0; i < num_instances - 1; i++) {
 		sfptpd_bic_select(policy, list[i].record, list[i+1].record,
 				  &list[i].decisive_rule_index,
 				  "(checking-decisive-rule)");
-		INFO("selection: rank %i: %s by rule %s (%d)%s\n",
-		     i + 1,
-		     list[i].record->info.name,
-		     get_selection_rule_name(policy->rules[list[i].decisive_rule_index]),
-		     list[i].decisive_rule_index,
-		     i == 0 ? " <- BEST" : "");
+
+		if (is_new_candidate)
+			INFO("selection: rank %i: %s by rule %s (%d)%s\n",
+			     i + 1,
+			     list[i].record->info.name,
+			     get_selection_rule_name(policy->rules[list[i].decisive_rule_index]),
+			     list[i].decisive_rule_index,
+			     i == 0 ? " <- BEST" : "");
 
 		/* Record rank in the record for diagnostic use only */
 		list[i].record->rank = i + 1;
 	}
 	assert(num_instances > 1);
-	INFO("selection: rank %i: %s <- WORST\n",
-	     num_instances,
-	     list[num_instances - 1].record->info.name);
+	if (is_new_candidate)
+		INFO("selection: rank %i: %s <- WORST\n",
+		     num_instances,
+		     list[num_instances - 1].record->info.name);
 
 	/* Record rank in the record for diagnostic use only */
 	list[num_instances - 1].record->rank = i + 1;

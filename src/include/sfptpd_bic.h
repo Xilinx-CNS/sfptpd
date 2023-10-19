@@ -70,13 +70,16 @@ extern const int sfptpd_state_priorities[SYNC_MODULE_STATE_MAX];
 
 /** Choose a Best Instance Clock from a number of instances.
  *
+ * @param policy The selection policy to apply
  * @param instance_statuses Array of instance records
  * @param num_instances The number of elements in @ref instance_statuses.
+ * @param old_candidate If set, suppress diagnostics when result is unchanged.
  * @return instance NULL no suitable instance, otherwise selected instance
  */
 struct sync_instance_record *sfptpd_bic_choose(const struct sfptpd_selection_policy *policy,
 					       struct sync_instance_record *instance_records,
-					       int num_instances);
+					       int num_instances,
+					       struct sync_instance_record *old_candidate);
 
 /** Manually select a Best Instance Clock
  *
