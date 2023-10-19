@@ -2451,6 +2451,8 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 	bool hw_ts;
 	struct sfptpd_log *nodes_log;
 	char host[NI_MAXHOST] = "";
+	const char *if_unicast;
+	const char *if_multicast;
 
 	assert(ptp != NULL);
 	assert(msg != NULL);
@@ -2478,6 +2480,8 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 			delay_mechanism = "end-to-end";
 
 		hw_ts = ptp_is_instance_hw_timestamping(instance);
+		if_unicast = snapshot->port.effective_comm_caps.delayRespCapabilities & PTPD_COMM_UNICAST_CAPABLE ? " unicast" :"";
+		if_multicast = snapshot->port.effective_comm_caps.delayRespCapabilities & PTPD_COMM_MULTICAST_CAPABLE ? " multicast" :"";
 
 		switch (snapshot->port.state) {
 		case PTPD_SLAVE:
@@ -2505,6 +2509,7 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 				"parent-port-num: %d\n"
 				"parent-address: %s\n"
 				"delay-mechanism: %s\n"
+				"delay-resp:%s%s\n"
 				"two-step: %s\n"
 				"slave-only: %s\n"
 				"grandmaster-id: " SFPTPD_FORMAT_EUI64 "\n"
@@ -2544,6 +2549,7 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 				snapshot->parent.port_num,
 				host,
 				delay_mechanism,
+				if_unicast, if_multicast,
 				snapshot->current.two_step? "yes": "no",
 				snapshot->port.slave_only? "yes": "no",
 				gm_id[0], gm_id[1], gm_id[2], gm_id[3],
@@ -2578,6 +2584,7 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 				"ptp-domain: %d\n"
 				"steps-removed: %d\n"
 				"delay-mechanism: %s\n"
+				"delay-resp:%s%s\n"
 				"two-step: %s\n"
 				"grandmaster-id: " SFPTPD_FORMAT_EUI64 "\n"
 				"clock-class: %d\n"
@@ -2608,6 +2615,7 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 				snapshot->port.domain_number,
 				snapshot->current.steps_removed,
 				delay_mechanism,
+				if_unicast, if_multicast,
 				snapshot->current.two_step? "yes": "no",
 				gm_id[0], gm_id[1], gm_id[2], gm_id[3],
 				gm_id[4], gm_id[5], gm_id[6], gm_id[7],
@@ -2635,7 +2643,8 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 				"interface: %s (%s)\n"
 				"transport: %s\n"
 				"timestamping: %s\n"
-				"delay-mechanism: %s\n",
+				"delay-mechanism: %s\n"
+				"delay-resp:%s%s\n",
 				SFPTPD_CONFIG_GET_NAME(instance->config),
 				sfptpd_clock_get_long_name(instance->intf->clock),
 				sfptpd_clock_get_hw_id_string(instance->intf->clock),
@@ -2645,7 +2654,8 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 				instance->intf->bond_info.logical_if,
 				instance->intf->transport_name,
 				hw_ts? "hw": "sw",
-				delay_mechanism);
+				delay_mechanism,
+				if_unicast, if_multicast);
 			break;
 		}
 

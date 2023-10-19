@@ -640,6 +640,7 @@ int ptpd_get_snapshot(struct ptpd_port_context *ptpd, struct ptpd_port_snapshot 
 	snapshot->port.domain_number = ptpd->domainNumber;
 	snapshot->port.slave_only = ptpd->slaveOnly;
 	snapshot->current.servo_outlier_threshold = servo_get_outlier_threshold(&ptpd->servo);
+	snapshot->port.effective_comm_caps = ptpd->effective_comm_caps;
 
 	if (ptpd->portState == PTPD_SLAVE) {
 		snapshot->current.offset_from_master = servo_get_offset_from_master(&ptpd->servo);
