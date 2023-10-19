@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2022 Xilinx, Inc. */
+/* (c) Copyright 2012-2023 Xilinx, Inc. */
 
 /**
  * @file   sfptpd_ptp_module.c
@@ -138,6 +138,15 @@ struct sfptpd_ptp_instance {
 
 	/* Snapshot of PTPD public state */
 	struct ptpd_port_snapshot ptpd_port_snapshot;
+
+	/* Cache information derived from post snapshot */
+	struct {
+		/* Cache updated */
+		bool valid;
+
+		/* Hostname of parent */
+		char parent_host[NI_MAXHOST];
+	} derived;
 
 	/* PTPD private data structure */
 	struct ptpd_port_context *ptpd_port_private;
@@ -1879,6 +1888,41 @@ static void ptp_set_convergence_threshold(struct sfptpd_ptp_instance *instance) 
 }
 
 
+static void ptp_port_invalidate_derived(struct sfptpd_ptp_instance *instance, struct ptpd_port_snapshot *new)
+{
+	struct ptpd_port_snapshot *old;
+
+	assert(instance);
+	old = &instance->ptpd_port_snapshot;
+
+	if (new->parent.protocol_address_len != old->parent.protocol_address_len ||
+	    memcmp(&new->parent.protocol_address, &old->parent.protocol_address, new->parent.protocol_address_len)) {
+
+		instance->derived.valid = false;
+		*instance->derived.parent_host = '\0';
+	}
+}
+
+static void ptp_port_update_derived(struct sfptpd_ptp_instance *ptp)
+{
+	struct ptpd_port_snapshot *snapshot;
+
+	assert(ptp);
+	if (ptp->derived.valid)
+		return;
+
+	snapshot = &ptp->ptpd_port_snapshot;
+
+	if (snapshot->parent.protocol_address_len != 0)
+		getnameinfo((struct sockaddr *) &snapshot->parent.protocol_address,
+			    snapshot->parent.protocol_address_len,
+			    ptp->derived.parent_host,
+			    sizeof ptp->derived.parent_host,
+			    NULL, 0, NI_NUMERICHOST);
+
+	ptp->derived.valid = true;
+}
+
 /* Returns whether the instance state changed */
 static bool ptp_update_instance_state(struct sfptpd_ptp_instance *instance,
 				      bool bond_changed)
@@ -1913,6 +1957,9 @@ static bool ptp_update_instance_state(struct sfptpd_ptp_instance *instance,
 		      SFPTPD_CONFIG_GET_NAME(instance->config), strerror(rc));
 		return state_changed;
 	}
+
+	/* Invalidate derived data cache if necessary */
+	ptp_port_invalidate_derived(instance, &snapshot);
 
 	/* If the state has changed, make sure we update the packet timestamp
 	 * filter and notify the sync engine. */
@@ -2437,7 +2484,6 @@ static void ptp_write_ptp_nodes(FILE *stream,
 	}
 }
 
-
 static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t *msg)
 {
 	struct sfptpd_ptp_instance *instance;
@@ -2450,7 +2496,6 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 	char alarms[256], flags[256];
 	bool hw_ts;
 	struct sfptpd_log *nodes_log;
-	char host[NI_MAXHOST] = "";
 	const char *if_unicast;
 	const char *if_multicast;
 
@@ -2485,10 +2530,7 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 
 		switch (snapshot->port.state) {
 		case PTPD_SLAVE:
-			if (snapshot->parent.protocol_address_len != 0)
-				getnameinfo((struct sockaddr *) &snapshot->parent.protocol_address,
-					    snapshot->parent.protocol_address_len,
-					    host, sizeof host, NULL, 0, NI_NUMERICHOST);
+			ptp_port_update_derived(instance);
 			format = "instance: %s\n"
 				"clock-name: %s\n"
 				"clock-id: %s\n"
@@ -2547,7 +2589,7 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 				p_id[0], p_id[1], p_id[2], p_id[3],
 				p_id[4], p_id[5], p_id[6], p_id[7],
 				snapshot->parent.port_num,
-				host,
+				instance->derived.parent_host,
 				delay_mechanism,
 				if_unicast, if_multicast,
 				snapshot->current.two_step? "yes": "no",
@@ -2716,12 +2758,11 @@ static void ptp_on_write_topology(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_m
 	assert(stream != NULL);
 
 	state = instance->ptpd_port_snapshot.port.state;
-
 	p = instance->ptpd_port_snapshot.parent.clock_id;
-
 	ofm_ns = instance->ptpd_port_snapshot.current.offset_from_master;
-
 	hw_ts = ptp_is_instance_hw_timestamping(instance);
+
+	ptp_port_update_derived(instance);
 
 	/* If the parent clock ID is not the same as the grandmaster clock ID
 	 * then there is an intermediary between the grandmaster and the slave
@@ -2784,6 +2825,8 @@ static void ptp_on_write_topology(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_m
 						p[0], p[1], p[2], p[3],
 						p[4], p[5], p[6], p[7],
 						instance->ptpd_port_snapshot.parent.port_num);
+		if (*instance->derived.parent_host)
+			sfptpd_log_topology_write_field(stream, true, "[%s]", instance->derived.parent_host);
 		if (instance->ptpd_port_snapshot.current.transparent_clock) {
 			sfptpd_log_topology_write_1to1_connector(stream, false, true, NULL);
 			sfptpd_log_topology_write_field(stream, true, "transparent");
