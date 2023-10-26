@@ -10,9 +10,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Minor command line enhancements to support container usage (SWPTP-1401)
+- Add configurable patterns for log, state, control and stats paths. (SWPTP-649)
+  - supports logging to a directory shared between hosts
+    ```
+    json_stats /nfs/log/sfptpd-stats-%H:%Cd.jsonl
+    ```
+  - or esoteric use cases requiring multiple sfptpd instances
+    ```
+    state_path /var/lib/sfptpd-%P
+    control_path /run/sfptpd-%P-control.sock
+    ```
+- Show unicast/multicast delay response flags in state file. (SWPTP-807)
+- Add configurable patterns for clock names and ids. (SWPTP-997)
+  - enables colons to be omitted from clock ids in filenames:
+    ```
+    clock_display_fmts phc%P phc%P(%I) %C: %D
+    ```
+- Ethtool queries are now conducted over netlink instead of ioctl on kernels
+  where this is supported. (SWPTP-1304)
+- Add `step_threshold` option to change the offset threshold for allowing
+  a step (when permitted by clock control setting). (SWPTP-1365)
+- Minor command line enhancements to support container usage. (SWPTP-1401)
   - Allow config to be read from stdin with `-f -`
   - Add `--console` option to redirect logs to console
+- Add `pidadjust` control command to tweak PID controller co-efficients
+  at runtime for experimental purposes only. Run `sfptpdctl` without
+  arguments to see syntax. (SWPTP-1411)
+- Add `gps` sync module to use `gpsd` for PPS time of day.
+  - This is an **unsupported feature** neither compiled into supported releases
+    nor compiled by default from source.
+  - To use this feature install the appropriate development package for
+    gpsd/libgps, build with `make NO_GPS=` and instantiate the `gps`
+    sync module with information on how to access the `gpsd` daemon, e.g.:
+    ```
+    [gps1]
+    gpsd ::1 2947
+    [pps]
+    time_of_day gps1
+    ```
+
+### Removed
+
+- The source can no longer be built for RHEL 6 without backported kernel
+  headers (SWPTP-1371)
 
 ### Fixed
 
@@ -26,8 +66,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Issue SWPTP-1405
   - Avoid theoretical risk of double clock correction on startup
   - Extend period NIC considered to have unset time to 5 years after epoch
+- Issue SWPTP-1406
+  - When `chronyd` is started or stopped, reflect this fact in the 'external
+    constraints' instance selection rules.
 - Issue SWPTP-1408
   - Fix possible risk of stack corruption in teaming netlink handler
+- Issue SWPTP-1412
+  - Only show instance selection rankings when candidate changes.
 
 ## [3.7.0.1006] - 2023-08-17 [Feature Release]
 
@@ -373,7 +418,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   as the selected NTP server.
   > [!NOTE]
   > The [sync instances clustering feature](#3401003---2021-10-29-feature-release)
-  > is preferred to the BMC disriminator wherever possible. The use case for
+  > is preferred to the BMC discriminator wherever possible. The use case for
   > the BMC discriminator is rogue time sources within a single PTP domain on
   > the same interface. (Added: 2023-10-26)
 - Hybrid Network Mode Without Fallback (SWPTP-684)  
