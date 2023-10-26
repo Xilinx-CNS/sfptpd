@@ -1,0 +1,708 @@
+Changelog
+---------
+
+### v3.7.1.1000 Release Candidate
+
+Features:
+ ~ Minor command line enhancements to support container usage (SWPTP-1401)
+     - Allow config to be read from stdin with '-f -'
+     - Add '--console' option to redirect logs to console
+
+Issue SWPTP-1395
+ ~ Fix missing sfptpmon script in .tar.gz release package
+ ~ Omit unnecessary new reference to system clock frequency correction state
+   file in .rpm packages to avoid confusing 'alien' repackager tool
+Issue SWPTP-1403
+ ~ Ignore irrelevant PTP packets in sfptpmon event monitoring script instead of
+   exiting
+Issue SWPTP-1405
+ ~ Avoid theoretical risk of double clock correction on startup
+ ~ Extend period NIC considered to have unset time to 5 years after epoch
+Issue SWPTP-1408
+ ~ Fix possible risk of stack corruption in teaming netlink handler
+
+
+### v3.7.0.1006 Feature Release
+
+Features:
+ ~ Allow running as non-root user with minimum required capabilities (SWPTP-442)
+     - enable with 'user' configuration or --user command line options
+     - root user required for chronyd clock control script to restart chronyd
+     - example udev rules support hotplug with non-root user
+ ~ Support multiple PPS sources (SWPTP-776)
+ ~ Support bridges including over bonds in similar way to LACP bonds (SWPTP-826)
+ ~ Support MACVLANs when timestamping enabled in host netns (SWPTP-992)
+ ~ Allow a bond, bridge or vlan to be specified for freerun clock (SWPTP-1169)
+ ~ Replace bond, team and interface probing with netlink scanning (SWPTP-1269)
+ ~ Mix 'efx' clock diff method with list of preferred phc methods (SWPTP-1285)
+ ~ Add sync-instances file showing factors influencing selection (SWPTP-1286)
+ ~ Add ntp and servo logging modules for targetted diagnostics (SWPTP-1291)
+ ~ Reflect external constraints (ntpd, chronyd) as selection rule (SWPTP-1295)
+ ~ Better quality logging and trace on hotplug events (SWPTP-1300)
+ ~ IP address of parent clock added to state and nodes files (SWPTP-1312)
+ ~ Better init system integration with new command line options (SWPTP-1321)
+     --daemon       supersedes now-deprecated 'daemon' config file option
+     --no-daemon    overrides now-deprecated 'daemon' config file option
+     --version      outputs version number
+     --test-config  tests configuration file
+     --user USER[:GROUP]
+     and synchronises with systemd on startup as 'notify'-type service
+ ~ Support up to 6 destinations for PTP event monitoring messages (SWPTP-1340)
+ ~ Add 'sfptpmon' script to receive PTP event monitoring messages (SWPTP-1342)
+ ~ Accept any port for unicast PTP event monitoring destinations (SWPTP-1346)
+ ~ The 'ntpsec' implementation of ntpd available in the EPEL repositories for
+     RHEL 9 is confirmed to be fully interoperable with sfptpd, allowing
+     system clock disciplining to be controlled at runtime.
+
+Removed support:
+ ~ Special provision for SFN5000 and SFN6000 series adapters removed (SWPTP-1306)
+ ~ Provision for hardware timestamping without Linux PHC removed (SWPTP-1306)
+ ~ Support, testing and packaging for RHEL6 is dropped (SWPTP-1371)
+
+Issue SWPTP-1278
+ ~ Fix retrieval of transmit timestamps to recover from nic reset quicker
+Issue SWPTP-1296
+ ~ Improve logging of timer fd activity to identify system configuration issues
+Issue SWPTP-1314
+ ~ Fix issues using PPS via /dev/ptp external timestamping pin
+Issue SWPTP-1326
+ ~ Alter buffering for RT JSON stats output to avoid excessive writes per sec
+Issue SWPTP-1347
+ ~ Remove bogus reserved field from rx timing event monitoring TLV
+   ** NOTE ** Faulty senders and receivers need updating together.
+              This only applies to users of the mon_rx_sync_timing_data option.
+Issue SWPTP-1358
+ ~ Fix chronyd client state handling avoiding crashes after system startup
+Issue SWPTP-1366
+ ~ Fix ntpd client handling to avoid quitting when peer stats not available
+
+
+### v3.6.0.1015 Feature Release
+
+Features:
+ ~ Support Xilinx Alveo X3522 Ethernet adapters (SWPTP-1162)
+
+ ~ Support for operating alongside the chronyd service is now provided in a
+    separate 'crny' sync module from the 'ntp' module used for ntpd, e.g.
+     [general]
+     sync_module crny crny1
+
+    To aid the transition from existing behaviour under the 'ntp' sync module
+    a suitable instance is created implicitly. To disable this for simplified
+    logging and diagnostics, specify a sync module with no instances:
+     [general]
+     sync_module crny
+
+ ~ Allow user-defined scripts to reconfigure and restart a chronyd service
+    as a workaround to lack of a 'clock control' facility in chronyd. This
+    brings parity in the supportable use cases of ntpd and chronyd. (SWPTP-1216)
+     [crny]
+     control_script /usr/share/doc/sfptpd/examples/chrony_clockcontrol.py
+
+   ** N.B. restarting chronyd is destabilising for NTP synchronisation so this
+    feature should be avoided when chrony's time sync performance influences
+    sync instance selection. In the absence of native runtime control for
+    chronyd it is best used in an always-on or always-off mode with sfptpd. If
+    chronyd control is required for fallback it is advisable to give it a
+    lower (numerically higher) 'priority' setting so it is only selected on
+    total failure of PTP and to increase 'selection_holdoff_period' to 60s.
+    Similarly, it would not be recommended to use this clock control method
+    while chrony was operating as a clustering determinant (i.e. discriminator).
+
+ ~ Allow operation but block system clock updates when an uncontrollable
+    chronyd service is running, except when this condition holds at startup.
+    This is improved behaviour when the conflict is transient. It is, however,
+    recommended in such situations to configure sfptpd explicitly to treat
+    the system clock as read only. To disable this check at startup,
+    configure as follows. (SWPTP-1266)
+     [general]
+     ignore_critical clock-control-conflict
+
+ ~ Allow operation in the absence of a kernel PTP subsystem or PTP and PPS
+    without a PTP hardware clock. This change supports esoteric and diagnostic
+    use cases but is not recommended or supported in production. (SWPTP-1207)
+     [general]
+     ignore_critical no-ptp-subsystem no-ptp-clock
+
+ ~ Write running configuration into state directory as a diagnostic. (SWPTP-198)
+
+ ~ Control system clock flags to let kernel set RTC when in sync. (SWPTP-216)
+
+ ~ Add 'manual-startup' selection policy to start with a configured sync
+    instance before moving onto automatic selection. (SWPTP-823)
+
+ ~ Make 'correct-clock' the default mode for the epoch guard. This option has
+    proven effective and reliable since its introduction. (SWPTP-1283)
+
+ ~ Add separate trace component to help understand the detailed reason for
+    changes in sync instance selection. Disable in normal use to avoid excessive
+    logging.
+     [general]
+     trace_level bic 3
+
+Issue SWPTP-1257
+ ~ It is not fatal for the system clock not to be using the superior TSC.
+Issue SWPTP-1264
+ ~ Drop check for ancient driver/fw versions, avoiding parse failures
+    for in-tree drivers in new kernels.
+Issue SWPTP-1280
+ ~ Only use Allan Variance in clock source comparisons when measured by
+    both sources, otherwise fall through to next selection criterion.
+Issue SWPTP-1281
+ ~ Allow for delayed first sample when using PPS clock diff method; helps
+    when using in-tree sfc driver.
+
+
+### v3.5.0.1004 Feature Release
+
+Features:
+ ~ Support in-tree driver (SWPTP-211)
+    Out-of-tree driver from support-nic.xilinx.com is recommended for best
+    performance.
+
+ ~ Allow configuration of preferred order of clock diff methods
+    for non-Xilinx NICs (SWPTP-1193), e.g.:
+     [general]
+     phc_diff_methods sys-offset-precise pps sys-offset-ext sys-offset read-time
+
+ ~ Support synchronisation to PPS inputs via /dev/pps or /dev/ptp.
+    The preferred order of methods can also be configured (SWPTP-1164), e.g.:
+     [general]
+     phc_pps_methods devpps devptp
+
+ ~ Assume multiple PTP Hardware Clock (PHC) devices presented by the same
+    PCI device represent the same underlying clock, which is often the case
+    for non-Xilinx NICs. Enabled by default. (SWPTP-1181)
+    To disable:
+     [general]
+     assume_one_phc_per_nic off
+
+ ~ Allow hardware or software timestamping to be required for a given PTP
+    sync instance and refuse to start if requirement cannot be met (SWPTP-212)
+     [ptp1]
+     timestamping hw
+
+ ~ Allow maximum NIC clock skew amount to be limited to less than its
+    advertised capabilities in ppb (SWPTP-815), e.g.:
+     [general]
+     limit_freq_adj 50000000
+
+ ~ Decode advertised PTP clock accuracy to ns in state files (SWPTP-1045)
+ ~ Support PTP_SYS_OFFSET_EXTENDED clock diff method (SWPTP-1187)
+ ~ Allow control socket location to be specified (SWPTP-624)
+ ~ Detect if systemd-timesyncd is running (SWPTP-986)
+ ~ Alarm secondary servo on 30s of sustained sync failure (SWPTP-1049)
+
+Issue SWPTP-1203
+ ~ Synchronise normal thread activity start to avoid premature inter-thread
+   messaging
+Issue SWPTP-1188
+ ~ Show offset as only a comparison in stats when ntpd not disciplining
+Issue SWPTP-1184
+ ~ Fix failure to configure hardware timestamping where one interface in a
+   bond only supports software timestamping
+Issue SWPTP-1183
+ ~ Fix use of PPS clock diff method for non-Xilinx NICs after a step
+
+
+### v3.4.1.1000
+
+Feature:
+  ~ Allow PTP as PPS time-of-day source (SWPTP-1163)
+      A single sync instance can be specified in a global PPS section, e.g.:
+        [pps]
+        time_of_day ptp1
+
+Issue SWPTP-1172
+  ~ Handle reference clocks and unreachable peers reported by chronyd suitably
+    rather than crashing with an assertion failure
+Issue SWPTP-424
+  ~ Propagate time and frequency traceability flags from PPS to PTP
+
+
+### v3.4.0.1003 Feature Release
+
+Major features:
+  ~ Add simple clustering algorithm between sync instances (SWPTP-421).
+      In this mode a passive sync instance (e.g. NTP) is designated as the
+      'discriminator' between multiple active sync instances (e.g. PTP) to
+      allow wildly divergent time sources to be excluded in sync instance
+      selection.
+
+      N.B. while similar to the sfptpd Best Master Clock (BMC) Discriminator
+      feature this operates between sync instances (on separate PTP domains
+      and/or interfaces) rather than within a PTP domain and is a preferable
+      solution because full clock reconstruction is continuously performed for
+      each candidate source.
+
+      Example configuration for preferring instances within 100ms of NTP ref:
+        [general]
+        clustering discriminator ntp1 100000000 1
+
+  ~ Extend interoperability with chronyd (SWPTP-978).
+      Support chronyd as NTP server when either sfptpd or chronyd is
+      statically configured not to discipline the system clock. For example,
+      to enable the chronyd + PPS use case launch chronyd with the '-x' option.
+
+  ~ Support the draft PTP Enterprise Profile (SWPTP-975).
+      Suitable defaults and configuration constraints can be selected by using
+      the following option, which should appear before other options.
+        [ptp]
+        ptp_profile enterprise
+      See https://datatracker.ietf.org/doc/html/draft-ietf-tictoc-ptp-enterprise-profile-21
+
+  ~ Support the IEEE1588-2019 revision of the PTP standard (SWPTP-591).
+      Implementations of the 2019 revision, known informally as PTP v2.1, should
+      be backwards compatible with implementations of the 2008 revision (v2.0)
+      but to assure continued interoperability with intolerant peer devices
+      the protocol version must be specified to use new features, such as the
+      COMMUNICATION_CAPABILITIES TLV:
+        [ptp]
+        ptp_version 2.1
+
+  ~ Support for the IPv6/UDP PTP transport (annex E) (SWPTP-601).
+      The link-local and global scopes are supported. Example configuration:
+        [ptp]
+        transport ipv6
+        scope link-local
+
+Minor features:
+  ~ Add probe-only interface detection mode to avoid Netlink (SWPTP-1145):
+      hotplug_detection_mode probe
+  ~ Raise alarm on secondary servos that fail to operate continuously for 30
+    seconds or more such as due to clock comparison failure. (SWPTP-1049).
+  ~ Use COMMUNICATIONS_CAPABILITIES TLV to agree multicast vs unicast delay
+    request capabilities with corresponding PTP node (SWPTP-687).
+  ~ Extend application of 'epoch guard' for hosts with multiple NICs.
+    (SWPTP-1109)
+  ~ Convert example scripts to python 3 (SWPTP-957).
+  ~ Report outlier statistics in long term stats. NB frequent outliers are
+    always expected as this is intrinsic to the adaptive algorithm. (SWPTP-540).
+
+Issue SWPTP-1098, SWPTP-1102
+  ~ Fix clock_readonly option.
+Issue SWPTP-1091
+  ~ Correct handling of timestamp when Follow_Up messages received or handled
+    ahead of Sync, occasionally resulting in large time jumps.
+Issue SWPTP-1078
+  ~ Fix invalid JSON in real time stats output.
+Issue SWPTP-895
+  ~ Serialise log rotation with log writing to avoid broken output.
+Issue SWPTP-844, SWPTP-1150
+  ~ Fix association of PTP sync instances to interfaces when there are multiple
+    instances on multiple interfaces so that correct operation is no longer
+    sensitive to ordering in configuration.
+
+
+### v3.3.1.1001
+
+Features:
+  ~ New step-on-first-lock clock control mode (SWPTP-1032)
+      Add mode to allow clock steps after first lock onto a PTP master.
+      This mode addresses the unintuitive behaviour of step-at-startup when
+      there are multiple local clocks that have already been slewing to NIC.
+  ~ Configurable bond/hotplug detection mode (SWPTP-1041)
+      Add option to detect bond changes only via netlink events to avoid
+      expensive polling of bond state when teamd in use.
+      Enable with 'hotplug_detection_mode netlink'.
+
+Issue SWPTP-1002
+  ~ Propagate TIME_TRACEABLE flag when acting both as master and slave
+Issue SWPTP-1005
+  ~ Consider UTC offset in advertisement when computing BMC discriminator offset
+Issue SWPTP-1037
+  ~ Correct handling of cached Follow_Up messages received ahead of Sync
+
+
+### v3.3.0.1007 Feature Release
+
+Features:
+  ~ BMC Discriminator (SWPTP-906)
+      Provide option to disqualify PTP masters which advertise a time that
+      differs by more than a given threshold from a specific time source such
+      as the selected NTP server.
+  ~ Hybrid Network Mode Without Fallback (SWPTP-684)
+      Provide a new mode for DelayReq/DelayResp messaging that does not fall
+      back to multicast when there is no response.
+  ~ Freerun with System Clock (SWPTP-884)
+      Allow the system clock to be used as the clock source with the freerunning
+      sync module. In combination with other options this enables sfptpd to
+      operate alongside chronyd for some use cases.
+  ~ Epoch Guard (SWPTP-908)
+      Detect when a local clock has been reset to 1970, e.g. on an unexpected
+      NIC reset and raise an alarm, prevent it being used to synchronise other
+      clocks (default behaviour) and/or step it immediately.
+  ~ Chronyd (SWPTP-565)
+      Support limited use cases where sfptpd operates alongside chronyd with
+      read-only access to the system clock. Due to chronyd not supporting
+      external control of whether it disciplines clocks it is still recommended
+      to disable chronyd and install ntpd where NTP functionality is desired.
+  ~ Systemd example (SWPTP-536)
+      Install a systemd unit file to start sfptpd instead of a sysv-style
+      initscript and an example configuration file suitable for passive
+      operation alongside chronyd.
+  ~ Configurable state path (SWPTP-909)
+      Provide 'state_path' option to change the location of sfptpd state files.
+  ~ Slave UTC override option (SWPTP-726)
+      A new option 'ptp_utc_offset_handling override <N>' uses a fixed UTC
+      offset of N seconds regardless of any offset announced by PTP masters.
+      This option aids interoperability with faulty GMs but requires manual
+      intervention to handle leap seconds.
+  ~ Log sync instance alarm changes (SWPTP-988)
+      Any change in alarms or lack of alarms is shown in the message log.
+
+Issue SWPTP-984
+  ~ Avoid stale offsets in text stats when sync instance leaves slave state
+Issue SWPTP-968
+  ~ Apply a minimum logging level with '-v' rather than overriding trace_level
+Issue SWPTP-916
+  ~ Permit DelayReq intervals of up to 32s to match the default profile range
+Issue SWPTP-902/88775
+  ~ Ensure pipes are always sized sufficiently for message queues
+Issue SWPTP-896/88291, SWPTP-892/87934
+  ~ Abort startup if kernel not built with PHC support
+Issue SWPTP-876/84990
+  ~ Fix late message handling by rate-limiting probing for bond/team updates
+Issue SWPTP-866/82382
+  ~ Fix VPD access failures by prefering to read VPD from PCIe config space
+Issue SWPTP-851/79031
+  ~ Fix an issue where the NTP module would hang if an application other than
+    chronyd opened UDP port 323. ("Failed to allocate message" symptom.)
+  ~ Add additional tracing options for threading module.
+Issue SWPTP-840/78802
+  ~ Use clearer log message for pending sync instance selection
+Issue SWPTP-837/78323
+  ~ Accept FollowUp messages received before their corresponding Sync message
+Issue SWPTP-708/72389, SWPTP-893/87987
+  ~ Fix consequences of NIC reset with new 'epoch guard' feature SWPTP-908 above
+Issue SWPTP-792/74449
+  ~ Fix hotplug handling of interface renaming
+Issue SWPTP-610/70128
+  ~ Create state path directory before opening message log, allowing the mesage
+    log to be created in the same directory (not recommended).
+
+
+### v3.2.6.1003 Feature Release
+
+Features:
+  ~ Statistics. Include time of minimum and maximum for each statistics time
+    range.
+  ~ Sync Instance Selection. Provide option to specify the initial sync
+    instance to be selected using the 'manual-startup' mode of the
+    'selection_policy' directive.
+
+Issues 77818/76890
+  ~ Bonding. Fix issue where use of ifdown/ifup scripts on a bond can cause
+    sfptpd to exit.
+Issues 76886/67823
+  ~ PTP. Only raise a DelayResp alarm if three consecutive DelayResps fail to
+    be received.
+Issue 76096
+  ~ Emit a warning if sfptpd detects that it's been descheduled for too long.
+Issue 76086
+  ~ Allow clock names (e.g. phc0) to be used in the 'clock_list' directive.
+Issue 75041
+  ~ Emit a warning at startup if the kernel's current clocksource is not TSC.
+Issue 74320
+  ~ Refuse to start sfptpd if multiple instances are using software
+    timestamping. Use of software timestamping is not compatible with multiple
+    instances.
+Issue 74104
+  ~ Fix logging issue when a sync instance is selected where the wrong decisive
+    rule can be reported in some circumstances.
+Issue 73605
+  ~ NTP. Allow startup if ntpd is disciplining the system clock, but the
+    'clock_list' configuration directive doesn't include 'system'.
+Issue 71479
+  ~ PTP. Refuse to start if interface has no IP address configured.
+Issue 70876
+  ~ Include instance name in state files.
+
+
+### v3.2.5.1000
+
+Issue 78221:
+  ~ Bonding. Fix issue where after a bonding failover the multicast TTL value
+    is not re-initialised correctly.
+Issue 76542:
+  ~ PPS. Fix issue where PPS statistics are missing from the PTP long-term
+    stats log when pps logging enabled.
+Issue 76029:
+  ~ Fix issue that causes the daemon to crash at startup when the clock_list
+    option is used to specify a list of clocks to be disciplined that does not
+    include the system clock.
+
+
+### v3.2.4.1000
+
+Issue 77369:
+  ~ Multiple PTP instances. Fix issue that can cause PTP traffic to be received
+    by the wrong PTP instance when an interface is taken down and the IP address
+    removed.
+
+
+### v3.2.3.1000
+
+Issue 75431:
+  ~ Bonding. Fix issue where sfptpd does not detect interfaces in a bond
+    being brought up or taken down using ifup/ifdown.
+
+
+### v3.2.2.1000
+
+Issue 73989:
+  ~ Fix issue that can cause PHC API to be used when not ready.
+Issue 73875:
+  ~ Fix issue that can cause incorrect times to be recorded in log messages.
+
+
+### v3.2.1.1004 Feature Release
+
+Feature release of sfptpd. Includes the following features:
+  * Slave event & status reporting via TLVs with remote monitor (EXPERIMENTAL).
+  * Support for non-Solarflare NICs (EXPERIMENTAL).
+  * Clock-ctrl-failure alarm added for primary and secondary servos.
+  * Machine-readable local logging:
+    JSON-format long term stats files automatically created;
+    To enable JSON Lines stats logging use the option: json_stats <filename>
+  * Support for Meinberg NetSync Monitor extension including MTIE reporting.
+    To enable NetSync use the option: mon_meinberg_netsync
+  * Recording of the times of maximum and minimum events in long term stats
+    along with qualification status.
+  * Configurable automatic sync instance selection policy and improved logging
+    of decisive factor for selection of a new sync instance.
+  * Support for NICs to be inserted and removed at runtime when running sfptpd
+    over a bond.
+
+Issue 71792
+  ~ Record Announce intervals received from Foreign Masters when in the
+    PTP_LISTENING state and use the longest to determine Foreign Master Record
+    expiry rather than using the default Announce interval.
+Issue 71508
+  ~ Fix error in estimated accuracy of NTP synchronization that could cause
+    NTP to be incorrectly selected in preference to PTP.
+Issue 71397
+  ~ New allow-deny, deny-allow ACL order options match behaviour of ptpd2 and
+    Apache webserver ACLs. Old permit-deny, deny-permit ACL orders have the
+    opposite behaviour and are deprecated but get translated.
+Issue 71264
+  ~ Write log files atomically so that they never appear empty when read.
+Issue 70616
+  ~ Support NTP mode 6 communications (ntpq) in addition to mode 7 (ntpdc).
+Issue 69725
+  ~ Fix issue that causes a crash if IPv6 NTP peers are found.
+Issue 68960
+  ~ Check whether chronyd is running when sfptpd is started.
+Issue 61820
+  ~ Fix issue that can occasionally cause a crash on receipt of a signal.
+
+
+### v3.0.1.1004
+
+Issue 71252
+  ~ Fix issue that causes the old adapter clock continue to be used as the
+    Local Reference Clock when an active-backup bond fails over to an
+    interface associated with a different clock.
+Issue 70127
+  ~ Fix issue that can cause sfptpd to become unresponsive when socket
+    communications between sfptpd and the NTP daemon timeout e.g. due to an IP
+    Table rule that causes traffic to the NTP daemon to be dropped.
+Issue 70328
+  ~ New configuration option "ptp_delay_resp_ignore_port_id" to allow sfptpd to
+    interoperate with switches that don't correctly implement boundary clock
+    support when used with LACP.
+Issue 69699
+  ~ Fix reversed display of NTP peer IP addresses.
+Issue 69424
+  ~ Fix interoperability issue with masters that don't go passive,
+    e.g. FsmLabs GM.
+Issue 69299
+  ~ Fix file attributes (user, group) in RPM packages.
+
+
+### v3.0.0.1033 Feature Release
+
+Feature release of sfptpd. Includes the following features:
+  * Support for PTP multiple masters
+  * Support for NTP fallback
+  * Improved timestamp filtering and rejection
+  * Configurable synchronization thresholds for the PTP, PPS and local
+    clock servos in order to better interoperate with less accurate time sources.
+  * New control utility for selecting sync instances in manual selection mode,
+    triggering log rotation and causing clocks to be stepped.
+
+Issue 66361
+  ~ Fix issue that causes sfptpd to refuse to start when operating in freerun
+    NTP mode and FsmLabs Timekeeper is used as the NTP Daemon.
+Issue 64057
+  ~ Fix issue that can cause a segmentation fault on account of the incorrect
+    handling of management messages containing GET requests.
+
+
+### v2.4.0.1000 Feature Release
+
+Solarflare Enhanced PTP Daemon (sfptpd) includes support for LACP bonds and
+also provides a configuration option to select which clocks are disciplined
+by the daemon.
+
+Issue 60672
+  ~ Fix issue that causes the default configuration in /etc/sfptpd.conf to
+    be overwritten when upgrading the sfptpd RPM package.
+Issue 60416
+  ~ Fix issue that can cause a memory leak when PTP Management messages are
+    received by the daemon but not rejected.
+Issue 57262
+  ~ Fix issue that can cause sfptpd to fail to start if NTPd has no peers.
+    This can occur during NTPd startup if the NTPd is unable to quickly resolve
+    the DNS names of the peers.
+Issue 53399
+  ~ Fix issue that causes sfptpd to disable timestamping on non-Solarflare
+    adapters when the daemon exits.
+Issue 46699
+  ~ Fixed handling of logMessageInterval field in unicast PTP messages
+Issue 45906
+  ~ Fix issue then can cause sfptpd to fail to start if a physical interface
+    exists that does not have a permanent MAC address.
+Issue 33716
+  ~ The ptp_delay_discard_threshold option does not function correctly and
+    support has been removed from this release.
+
+
+### v2.2.4.70
+
+Issue 48359
+  ~ Improve filtering and rejection of spurious PPS events by adding a
+    configurable outlier filter based on deviation from the mean. Add bad
+    PPS signal alarm and statistics to count outliers.
+Issue 46699
+  ~ Fixed handling of logMessageInterval field in unicast PTP messages
+
+
+### v2.2.2.60
+
+Issue 45921
+  ~ Fixed issue that prevented the daemon being used in software timestamping
+    mode with some non-Solarflare adapters.
+Issue 45913
+  ~ Fixed issue that did not allow the daemon to be used with locking disabled
+Issue 45906
+  ~ Improved interface parsing to ignore non-ethernet devices
+
+
+### v2.2.1.58 Feature Release
+
+Solarflare Enhanced PTP Daemon (sfptpd) GA feature release including support
+for Flareon network adapaters SFN7142Q (requires Precision Time license).
+
+New features:
+  ~ Support for synchronizing to a PPS source using NTP to provide Time-of-Day
+  ~ Support for PTP management messages
+  ~ Access control lists for timing and management messages
+  ~ Clock control option to allow clocks to be stepped forwards only
+  ~ Configurable UTC offset valid handling for improved interoperability
+  ~ Configuration option to ignore lock file.
+  ~ Integration of changes from sourceforge PTPD2 project v2.3
+
+Improved diagnostics including:
+  ~ Report of PTP and timestamping capabilities of each host interface
+  ~ Detection of Transparent Clocks
+  ~ Reporting the set of PTP clocks active in the network
+  ~ Reporting the active PTP domains
+
+Issue 45758
+  ~ Fixed data sharing violation that could potentially result in stack
+    corruption and cause the daemon to crash.
+Issue 44508
+  ~ Fixed issue that can cause the daemon to fail to correctly reconfigure
+    SFN6322F/SFN5322F adapters following an abnormal shutdown.
+Issue 42473
+  ~ Fixed issue that can cause the daemon to crash if run on a system
+    containing a Solarflare 4000 series adapter.
+Issue 42454
+  ~ Fixed issue that resulted in lock file having non-standard contents when
+    operating in daemon mode.
+Issue 41245
+  ~ Add configuration option to allow more than one instance of sfptpd to be
+    run simultaneously.
+Issue 41222
+  ~ Improved detection of whether sfptpd is already running: ignore scripts
+    with the same name
+Issue 41210
+  ~ Fixed race condition in daemonize operation that can cause lock file
+    relocking to fail on some systems
+
+
+### v2.1.0.34
+
+Issue 41057
+  ~ Fix issue that can cause frequency correction and state files to be written
+    at every sync interval.
+
+
+### v2.1.0.33
+
+Solarflare Enhanced PTP Daemon (sfptpd) GA release including support for Flareon
+network adapaters SFN7322F and SFN7122F (SFN7122F requires AppFlex license).
+
+Improved diagnostics and error reporting including:
+  ~ Reporting of current clock offsets and error conditions in the topology file
+  ~ Detection of missing Sync, FollowUp and DelayResponse messages
+  ~ Colour coding of statistics output to indicate error conditions
+  ~ Configuration option to run as a daemon
+
+New features:
+  ~ Enable receive packet timestamping on a set of interfaces
+  ~ Optionally leave timestamping enabled when daemon exits
+  ~ Specify reference clock in freerun mode
+
+Issue 40507
+  ~ Improve detection of other running time services (ntpd, ptpd, sfptpd). Previous
+    implementation matched any process command line containing one of the strings.
+Issue 36755
+  ~ Disabled PTP Management support. In the previous version some Management message
+    support was unintentionally enabled.
+Issue 35966
+  ~ Fixed PPS statistics logging. Propagation delay should be subtracted rather
+    than added to PPS offset.
+Issue 35558
+  ~ Update topology and state files immediately if any of the PTP parent parameters
+    change.
+Issue 35147
+  ~ Added fault restart timer to avoid high CPU usage on continuous fault e.g. if
+    driver unloaded.
+Issue 34587
+  ~ Modified timestamp retrieval to detect and differentiate between different
+    failure modes. Ensure correct handling of socket errors in all cases.
+  ~ Modified mechanism to retrieve transmit timestamps to reduce CPU usage in the
+    case where the timestamp is returned late or not returned at all.
+
+
+### v2.0.0.23
+
+Issue 35391
+  ~ Fixed interoperability issue with Boundary Clocks
+Issue 34693
+  ~ Added configuration file option "message-log" to allow messages to be logged
+    to file in addition to statistics.
+    Improved log rotation to make it behave more conventionally.
+Issue 34445
+  ~ Fixed issue where sfptpd did not correctly detect and warn if driver version
+    too old.
+Issue 34099
+  ~ Improve mean path delay when master to slave propagation delay is small. If
+    calculated mean path delay is negative value, use 0 rather than previous value.
+
+
+### v2.0.0.17
+
+Solarflare Enhanced PTPd (sfptpd) GA Release including:
+  ~ Support for PTP over VLANs
+  ~ Support for PTP over bonded interfaces
+  ~ Support for PTP Hybrid Mode (mixed multicast/unicast)
+  ~ Synchronization of multiple PTP capable NICs
+  ~ File based configuration
+  ~ Saved frequency correction information
+  ~ Short and long term statistics collection
+
+
+(c) Copyright 2012-2023 Xilinx, Inc.
