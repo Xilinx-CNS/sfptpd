@@ -1,7 +1,7 @@
 Solarflare Enhanced PTP Daemon (sfptpd)
 Advanced Micro Devices, Inc.
 =======================================
-Version: v3.7.0.1006
+Version: v3.7.1.1000 (draft release notes)
 
 
 Overview
@@ -43,8 +43,8 @@ Linux distribution support
 --------------------------
 This package is supported on:
 - Red Hat Enterprise Linux 7.5 - 7.9
-- Red Hat Enterprise Linux 8.1 - 8.8
-- Red Hat Enterprise Linux 9.0 - 9.2
+- Red Hat Enterprise Linux 8.1 - 8.9
+- Red Hat Enterprise Linux 9.0 - 9.3
 - SuSE Linux Enterprise Server 12 sp4 and sp5
 - SuSE Linux Enterprise Server 15 sp1 - sp5
 - Canonical Ubuntu Server LTS 18.04, 20.04, 22.04
@@ -119,6 +119,27 @@ Advanced notice of possible future changes
 
 Changelog
 ---------
+
+### v3.7.1.1000 Release Candidate
+
+Features:
+ ~ Minor command line enhancements to support container usage (SWPTP-1401)
+     - Allow config to be read from stdin with '-f -'
+     - Add '--console' option to redirect logs to console
+
+Issue SWPTP-1395
+ ~ Fix missing sfptpmon script in .tar.gz release package
+ ~ Omit unnecessary new reference to system clock frequency correction state
+   file in .rpm packages to avoid confusing 'alien' repackager tool
+Issue SWPTP-1403
+ ~ Ignore irrelevant PTP packets in sfptpmon event monitoring script instead of
+   exiting
+Issue SWPTP-1405
+ ~ Avoid theoretical risk of double clock correction on startup
+ ~ Extend period NIC considered to have unset time to 5 years after epoch
+Issue SWPTP-1408
+ ~ Fix possible risk of stack corruption in teaming netlink handler
+
 
 ### v3.7.0.1006 Feature Release
 
