@@ -553,9 +553,9 @@ typedef struct sfptpd_config_option {
 	const char *description;
 	int num_params;
 	enum sfptpd_config_scope scope;
-	bool hidden;
 	int (*parse)(struct sfptpd_config_section *, const char *option,
 		     unsigned int num_params, const char * const *params);
+	bool hidden;
 	bool confidential;
 } sfptpd_config_option_t;
 

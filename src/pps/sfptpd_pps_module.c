@@ -567,65 +567,65 @@ static const sfptpd_config_option_t pps_config_options[] =
 {
 	{"interface", "interface-name",
 		"Specifies the name of the interface that PPS should use",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_interface},
 	{"priority", "<NUMBER>",
 		"Relative priority of sync module instance. Smaller values have higher "
 		"priority. The default " STRINGIFY(SFPTPD_DEFAULT_PRIORITY) ".",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_priority},
 	{"sync_threshold", "<NUMBER>",
 		"Threshold in nanoseconds of the offset from the clock source over a "
 		STRINGIFY(SFPTPD_STATS_CONVERGENCE_MIN_PERIOD_DEFAULT)
 		"s period to be considered in sync (converged). The default is "
 		STRINGIFY(SFPTPD_STATS_CONVERGENCE_MAX_OFFSET_DEFAULT) ".",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_sync_threshold},
 	{"time_of_day", "<SYNC-INSTANCE>",
 		"Sync instance to use for the time-of-day source. The default"
 		"is the explicit or implicit ntp sync instance.",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL, false,
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
 		parse_time_of_day},
 	{"master_clock_class", "<locked | holdover | freerunning>",
 		"Master clock class. Default value for PPS is locked.",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_master_clock_class},
 	{"master_time_source", "<atomic | gps | ptp | ntp | oscillator>",
 		"Master time source. Default value for PPS is GPS.",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_master_time_source},
 	{"master_accuracy", "<NUMBER | unknown>",
 		"Master clock accuracy in ns or unknown. Default value for PPS is unknown.",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_master_accuracy},
 	{"master_traceability", "<time | freq>*",
 		"Traceability of master time and frequency. Default for PPS is both.",
-		~0, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		~0, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_master_traceability},
 	{"steps_removed", "<NUMBER>",
 		"Number of steps between grandmaster and local clock. Default "
 		"value for PPS is 1.",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_steps_removed},
 	{"pps_delay", "NUMBER",
 		"PPS propagation delay in nanoseconds.",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_pps_delay},
 	{"pid_filter_p", "NUMBER",
 		"PID filter proportional term coefficient. Default value is "
 		STRINGIFY(SFPTPD_PPS_DEFAULT_PID_FILTER_KP) ".",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_pid_filter_kp},
 	{"pid_filter_i", "NUMBER",
 		"PID filter integral term coefficient. Default value is "
 		STRINGIFY(SFPTPD_PPS_DEFAULT_PID_FILTER_KI) ".",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_pid_filter_ki},
 	{"outlier_filter_type", "<disabled | std-dev>",
 		"Specifies filter type to use to reject outliers. Default is "
 		"std-dev i.e. based on a sample's distance from the mean "
 		"expressed as a number of standard deviations.",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_outlier_filter_type},
 	{"outlier_filter_size", "NUMBER",
 		"Number of data samples stored in the filter. For std-dev type "
@@ -633,7 +633,7 @@ static const sfptpd_config_option_t pps_config_options[] =
 		STRINGIFY(SFPTPD_PEIRCE_FILTER_SAMPLES_MIN) ","
 		STRINGIFY(SFPTPD_PEIRCE_FILTER_SAMPLES_MAX) "] and the default is "
 		STRINGIFY(SFPTPD_PPS_DEFAULT_OUTLIER_FILTER_SIZE) ".",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_outlier_filter_size},
 	{"outlier_filter_adaption", "NUMBER",
 		"Controls how outliers are fed into the filter, specified in "
@@ -642,7 +642,7 @@ static const sfptpd_config_option_t pps_config_options[] =
 		"each outlier is fed into the filter unchanged. Values between "
 		"result in a portion of the value being fed in. Default is "
 		STRINGIFY(SFPTPD_PPS_DEFAULT_OUTLIER_FILTER_ADAPTION) ".",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_outlier_adaption},
 	{"fir_filter_size", "NUMBER",
 		"Number of data samples stored in the FIR filter. The "
@@ -651,7 +651,7 @@ static const sfptpd_config_option_t pps_config_options[] =
 		"1 means that the filter is off while higher values will "
 		"reduce the adaptability of PPS but increase its stability. "
 		"Default is " STRINGIFY(SFPTPD_PPS_DEFAULT_FIR_FILTER_SIZE) ".",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_fir_filter_size},
 
 };

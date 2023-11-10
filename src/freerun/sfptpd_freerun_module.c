@@ -166,26 +166,28 @@ static const sfptpd_config_option_t freerun_config_options[] =
 	{"interface", "<INTERFACE_NAME | system>",
 		"The value 'system' specifies the system clock. Any other value specifies "
 		"the name of the interface hosting the local reference clock.",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_interface},
 	{"priority", "<NUMBER>",
 		"Relative priority of sync module instance. Smaller values have higher "
 		"priority. The default 128.",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_priority},
 	{"clock_class", "<locked | holdover | freerunning>",
 		"Clock class. Default (correct) value for a freerun clock is freerunning.",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, true,
-		parse_clock_class},
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_clock_class,
+		.hidden = true},
 	{"clock_accuracy", "<NUMBER | unknown>",
 		"Clock accuracy in ns or unknown. Default value is unknown.",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, true,
-		parse_clock_accuracy},
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_clock_accuracy,
+		.hidden = true},
 	{"clock_traceability", "<time | freq>*",
 		"Traceability of clock time and frequency. Default for freerun is neither.",
-		~0, SFPTPD_CONFIG_SCOPE_INSTANCE, true,
-		parse_clock_traceability},
-
+		~0, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_clock_traceability,
+		.hidden = true},
 };
 
 static const sfptpd_config_option_set_t freerun_config_option_set =

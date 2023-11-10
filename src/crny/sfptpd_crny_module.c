@@ -345,23 +345,23 @@ static const sfptpd_config_option_t ntp_config_options[] =
 	{"priority", "<NUMBER>",
 		"Relative priority of sync module instance. Smaller values have higher "
 		"priority. The default 128.",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_priority},
 	{"sync_threshold", "<NUMBER>",
 		"Threshold in nanoseconds of the offset from the clock source over a "
 		STRINGIFY(SFPTPD_STATS_CONVERGENCE_MIN_PERIOD_DEFAULT)
 		"s period to be considered in sync (converged). The default is "
 		STRINGIFY(SFPTPD_STATS_CONVERGENCE_MAX_OFFSET_NTP) ".",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_sync_threshold},
 	{"ntp_poll_interval", "NUMBER",
 		"Specifies the NTP daemon poll interval in seconds. Default value 1",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_ntp_poll_interval},
 	{"control_script", "<filename>",
 		"Specifes the path to a script which can be used to enable or "
 		"disable chronyd clock control",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false, parse_control_script},
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE, parse_control_script},
 };
 
 static const sfptpd_config_option_set_t ntp_config_option_set =
