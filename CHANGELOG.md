@@ -56,6 +56,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Issue SWPTP-855
+  - Redact NTP key in diagnostic output
 - Issue SWPTP-1395
   - Fix missing `sfptpmon` script in `.tar.gz` release package
   - Omit unnecessary new reference to system clock frequency correction state
@@ -73,6 +75,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Fix possible risk of stack corruption in teaming netlink handler
 - Issue SWPTP-1412
   - Only show instance selection rankings when candidate changes.
+- Issue SWPTP-1425
+  - Populate PTPMON_RESP TLV with timestamp of last sync not PTPMON_REQ receipt
 
 ## [3.7.0.1006] - 2023-08-17 [Feature Release]
 
