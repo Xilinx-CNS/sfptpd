@@ -86,6 +86,6 @@ configuring other time sync software.
 
 Enable the use of non-Solarflare adapters with:
 
-```config
+```ini
 non_solarflare_nics on
 ```

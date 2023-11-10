@@ -25,19 +25,19 @@ Supported hardware platforms
 The daemon contained in this package supports the following AMD adapters:
 
 - AMD Solarflare Server Adapters:
-  - XtremeScale™ SFN8522 Dual Port SFP+ Server Adapter (with Plus license)
-  - XtremeScale™ SFN8542 Dual Port QSFP+ Server Adapter (with Plus license)
-  - XtremeScale™ SFN8042 Dual Port QSFP+ Server Adapter (with Plus license)
-  - XtremeScale™ SFN8722 Dual Port SFP+ OCP Server Adapter (with Plus license)
-  - XtremeScale™ X2522 10GbE Adapter
-  - XtremeScale™ X2522-25 10/25GbE Adapter
-  - XtremeScale™ X2541 Single Port 10/25/40/50/100GbE Adapter
-  - XtremeScale™ X2542 Dual Port 10/25/40/50/100GbE Adapter
-  - Alveo™ XtremeScale™ X3522 low latency network adapter
+   - XtremeScale(TM) SFN8522 Dual Port SFP+ Server Adapter (with Plus license)
+   - XtremeScale(TM) SFN8542 Dual Port QSFP+ Server Adapter (with Plus license)
+   - XtremeScale(TM) SFN8042 Dual Port QSFP+ Server Adapter (with Plus license)
+   - XtremeScale(TM) SFN8722 Dual Port SFP+ OCP Server Adapter (with Plus license)
+   - XtremeScale(TM) X2522 10GbE Adapter
+   - XtremeScale(TM) X2522-25 10/25GbE Adapter
+   - XtremeScale(TM) X2541 Single Port 10/25/40/50/100GbE Adapter
+   - XtremeScale(TM) X2542 Dual Port 10/25/40/50/100GbE Adapter
+   - Alveo(TM) XtremeScale(TM) X3522 low latency network adapter
 
-- OEM Server Adapters:
-  - HP 570FLB Dual-Port 10GbE FlexibleLOM Server Adapter (with Precision Time license upgrade)
-  - HP 570M Dual-Port 10GbE Mezzanine Server Adapter (with Precision Time license upgrade)
+- OEM Server Adapters (with Precision Time license upgrade):
+   - HP 570FLB Dual-Port 10GbE FlexibleLOM Server Adapter
+   - HP 570M Dual-Port 10GbE Mezzanine Server Adapter
 
 - Support for non-Solarflare adapters is best effort. Particular attention
   should be paid to the tendency to advertise an independent physical clock
@@ -52,6 +52,7 @@ Linux distribution support
 --------------------------
 
 This package is supported on:
+
 - Red Hat Enterprise Linux 7.5 - 7.9
 - Red Hat Enterprise Linux 8.1 - 8.9
 - Red Hat Enterprise Linux 9.0 - 9.3
@@ -87,14 +88,14 @@ Known Issues
 ------------
 
 - Issue SWNETLINUX-78
-  - If the firmware is upgraded using sfupdate while sfptpd is running, sfptpd
-    will stop working. AMD recommends that sfptpd is stopped prior to
-    performing a firmware upgrade on an adapter.
+   - If the firmware is upgraded using sfupdate while sfptpd is running, sfptpd
+     will stop working. AMD recommends that sfptpd is stopped prior to
+     performing a firmware upgrade on an adapter.
 
 - Issue SWNETLINUX-4466
-  - With affected driver versions PPS is not functional unless timestamping
-    is enabled on the relevant interface. For more details see:
-    https://support.xilinx.com/s/article/000033083
+   - With affected driver versions PPS is not functional unless timestamping
+     is enabled on the relevant interface. For more details see:
+     <https://support.xilinx.com/s/article/000033083>
 
 
 Advanced notice of possible future changes
@@ -137,7 +138,7 @@ Please see [LICENSE](LICENSE) included in this distribution for terms of use.
 sfptpd is provided under a BSD 3-clause license.
 
 This application includes a modified version of the `ptpd` PTPD2 sourceforge
-project available at http://ptpd.sourceforge.net/. The PTPD2 software is
+project available at <http://ptpd.sourceforge.net/>. The PTPD2 software is
 distributed under a BSD 2-clause [license](PTPD2_COPYRIGHT). The version
 sourced is ptpd v2.3.
 
@@ -145,8 +146,9 @@ The program includes part of ntpd to implement NTP query and control
 protocols; this is distributed under the [NTP license](NTP_COPYRIGHT.html).
 The version sourced is ntp-4.2.6p5 and the following files in the source code
 are affected:
-  - `src/ntp/sfptpd_ntpd_client_mode6.c`
-  - `src/ntp/sfptpd_ntpd_client_mode7.c`
-  - `src/ptp/ptpd2/dep/ntpengine/ntp_isc_md5.c`
-  - `src/ptp/ptpd2/dep/ntpengine/ntp_isc_md5.h`
+
+- `src/ntp/sfptpd_ntpd_client_mode6.c`
+- `src/ntp/sfptpd_ntpd_client_mode7.c`
+- `src/ptp/ptpd2/dep/ntpengine/ntp_isc_md5.c`
+- `src/ptp/ptpd2/dep/ntpengine/ntp_isc_md5.h`
 
