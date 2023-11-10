@@ -100,33 +100,33 @@ Known Issues
 Advanced notice of possible future changes
 ------------------------------------------
 
- * Future change to default for `non_xilinx_nics`
+- Future change to default for `non_xilinx_nics`
 
-   Future feature releases may change the default setting of `non_xilinx_nics`
-   from `off` to `on`, enabling support for all NICs with suitable capabilities
-   by default. Where this change is not desired, it is recommended to change
-   configurations now to be explicit about the desired behaviour.
+  Future feature releases may change the default setting of `non_xilinx_nics`
+  from `off` to `on`, enabling support for all NICs with suitable capabilities
+  by default. Where this change is not desired, it is recommended to change
+  configurations now to be explicit about the desired behaviour.
 
- * Explicit declaration of crny sync module
+- Explicit declaration of crny sync module
 
-   If chronyd is in use it is recommended to specify an instance of the new
-   crny sync module explicitly as a future release may not create the implicit
-   instance or may do so only if chronyd is detected at startup time.
+  If chronyd is in use it is recommended to specify an instance of the new
+  crny sync module explicitly as a future release may not create the implicit
+  instance or may do so only if chronyd is detected at startup time.
 
- * Supporting new IEEE1588 specifications
+- Supporting new IEEE1588 specifications
 
-   Future releases may default to supporting new PTP specs out of the box. If
-   it is required to avoid new features for interoperability reasons it is
-   recommended to specify `ptp_version 2.0` in the `ptp` configuration section.
+  Future releases may default to supporting new PTP specs out of the box. If
+  it is required to avoid new features for interoperability reasons it is
+  recommended to specify `ptp_version 2.0` in the `ptp` configuration section.
 
- * Deprecation of remote monitor
+- Deprecation of remote monitor
 
-   The built-in receiver for PTP event monitoring messages (controlled by the
-   `remote_monitor` and `json_remote_monitor` configuration options) is
-   deprecated in favour of the `sfptpmon` script, which is a more appropriate
-   solution for production use. The built-in receiver may be disabled in
-   future feature releases of sfptpd. The option for sending these event
-   messages remains supported.
+  The built-in receiver for PTP event monitoring messages (controlled by the
+  `remote_monitor` and `json_remote_monitor` configuration options) is
+  deprecated in favour of the `sfptpmon` script, which is a more appropriate
+  solution for production use. The built-in receiver may be disabled in
+  future feature releases of sfptpd. The option for sending these event
+  messages remains supported.
 
 
 Copyright
