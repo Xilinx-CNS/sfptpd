@@ -543,6 +543,8 @@ typedef struct sfptpd_config {
  * @scope Scope of the configuration option - global or instance
  * @hidden Specifies that the option should be hidden
  * @parse Pointer to function to parse, validate parameters and set the
+ * @confidential Specified that the option value is sensitive and should be
+ *               redacted in diagnostic output.
  * option
  */
 typedef struct sfptpd_config_option {
@@ -554,6 +556,7 @@ typedef struct sfptpd_config_option {
 	bool hidden;
 	int (*parse)(struct sfptpd_config_section *, const char *option,
 		     unsigned int num_params, const char * const *params);
+	bool confidential;
 } sfptpd_config_option_t;
 
 /** struct sfptpd_config_option_set - structure used to define a collection

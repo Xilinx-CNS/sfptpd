@@ -127,6 +127,8 @@ Features:
      - Allow config to be read from stdin with '-f -'
      - Add '--console' option to redirect logs to console
 
+Issue SWPTP-855
+ ~ Redact NTP key in diagnostic output
 Issue SWPTP-1395
  ~ Fix missing sfptpmon script in .tar.gz release package
  ~ Omit unnecessary new reference to system clock frequency correction state

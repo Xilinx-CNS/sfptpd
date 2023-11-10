@@ -291,7 +291,8 @@ static const sfptpd_config_option_t ntp_config_options[] =
 		"NTP authentication key. Both ID and ascii key value must "
 		"match a key configured in NTPD's keys file. The key value "
 		"can be up to 31 characters long.",
-		2, SFPTPD_CONFIG_SCOPE_INSTANCE, false, parse_ntp_key},
+		2, SFPTPD_CONFIG_SCOPE_INSTANCE, false, parse_ntp_key,
+		.confidential = true},
 };
 
 static const sfptpd_config_option_set_t ntp_config_option_set =

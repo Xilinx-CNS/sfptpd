@@ -33,6 +33,8 @@
 #define OPT_DAEMON    0x10002
 #define OPT_CONSOLE   0x10003
 
+#define CONFIG_REDACTION_STRING "********"
+
 static const char *command_line_options_short = "hf:i:tvu:";
 static const struct option command_line_options_long[] = 
 {
@@ -276,6 +278,11 @@ static int config_syntax_check(unsigned int num_tokens, char *tokens[])
 }
 
 
+/* Parse config option.
+ * Returns: 1 for a confidential option,
+ *          -errno on error,
+ *          0 otherwise.
+ */
 static int config_parse_option(struct sfptpd_config *config,
 			       struct sfptpd_config_section *section,
 			       unsigned int num_tokens,
@@ -300,7 +307,7 @@ static int config_parse_option(struct sfptpd_config *config,
 	/* Find the config options for this category. If there aren't any then
 	 * return no-entry */
 	if (config_options[section->category] == NULL)
-		return ENOENT;
+		return -ENOENT;
 
 	num_options = config_options[section->category]->num_options;
 	options = config_options[section->category]->options;
@@ -317,7 +324,7 @@ static int config_parse_option(struct sfptpd_config *config,
 				ERROR("global configuration option \'%s\' cannot "
 				      "be used in instance configuration \'%s\'\n",
 				      opt->option, section->name);
-				return EINVAL;
+				return -EINVAL;
 			}
 
 			/* Are there an appropriate number of parameters? */
@@ -335,7 +342,7 @@ static int config_parse_option(struct sfptpd_config *config,
 					  num_reqd == 1 ? "" : "s",
 					  num_params,
 					  (num_params > 0)? ',': ' ', params);
-				return EINVAL;
+				return -EINVAL;
 			}
 
 			/* Parse the option! */
@@ -345,16 +352,16 @@ static int config_parse_option(struct sfptpd_config *config,
 			if (rc == EINVAL) {
 				CFG_ERROR(section, "option %s expects %s, but have %s\n",
 					  opt->option, opt->params, params);
-				return rc;
+				return -rc;
 			} else if (rc != 0) {
 				CFG_ERROR(section, "failed to parse %s %s, error %s\n",
 					  opt->option, params, strerror(rc));
-				return rc;
+				return -rc;
 			}
 
 			TRACE_L2("config [%s]: %s %c %s\n",
 				 section->name, opt->option,
-			         (num_params > 0)? '=': ' ', params);
+			         (num_params > 0)? '=': ' ', opt->confidential ? CONFIG_REDACTION_STRING : params);
 
 			// TODO ideally want to not overwrite if already
 			// assigned in instance!!!
@@ -371,16 +378,16 @@ static int config_parse_option(struct sfptpd_config *config,
 					assert(rc == 0);
 					TRACE_L3("config [%s]: %s %c %s\n",
 						 s->name, opt->option,
-						 (num_params > 0)? '=': ' ', params);
+						 (num_params > 0)? '=': ' ', opt->confidential ? CONFIG_REDACTION_STRING : params);
 				}
 			}
 
-			return 0;
+			return opt->confidential ? 1 : 0;
 		}
 	}
 
 	ERROR("config [%s]: option %s not found\n", section->name, tokens[0]);
-	return ENOENT;
+	return -ENOENT;
 }
 
 
@@ -839,12 +846,12 @@ int sfptpd_config_parse_file(struct sfptpd_config *config)
 				 */
 				rc = config_parse_option(config, section, num_tokens,
 							 (const char * const *)tokens);
-				if (rc != 0)
-					return rc;
+				if (rc < 0)
+					return -rc;
 
 				for (i = 0; i < num_tokens; i++) {
 					sfptpd_log_lexed_config("%s%c",
-								tokens[i],
+								i > 0 && rc == 1 ? CONFIG_REDACTION_STRING : tokens[i],
 								(i < num_tokens - 1) ? ' ' : '\n');
 				}
 			} else {
