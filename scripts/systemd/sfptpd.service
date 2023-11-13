@@ -4,6 +4,7 @@
 [Unit]
 Description=Solarflare Enhanced PTP Daemon
 Documentation=man:sfptpd(8)
+Documentation=https://docs.xilinx.com/r/en-US/ug1602-ptp-user
 After=network-online.target
 
 [Service]
