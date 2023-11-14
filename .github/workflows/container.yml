@@ -1,0 +1,84 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# (c) Copyright 2023 Advanced Micro Devices, Inc.
+name: "Container Image"
+
+on:
+  workflow_dispatch:
+    inputs:
+      registry-prefix:
+        description: Registry host and org
+        type: string
+      sfptpd-version:
+        description: sfptpd version
+        type: string
+      ubi-image:
+        description: UBI_IMAGE
+        type: string
+  push:
+    branches: [ master ]
+    tags: [ v*, sfptpd-* ]
+
+permissions:
+  contents: read
+  packages: write
+jobs:
+  container-build:
+    name: Container Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      REGISTRY_PREFIX: ${{ inputs.registry-prefix || '' }}
+      UBI_IMAGE: ${{ inputs.ubi-image || 'registry.access.redhat.com/ubi9-minimal:9.2' }}
+      SFPTPD_VERSION: ${{ inputs.sfptpd-version || '' }}
+      IMAGE_TAG_SUFFIX: ${{ vars.RELEASE == '' && '-dev' || '' }}
+    steps:
+
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-tags: true
+
+    - name: Metadata - env
+      run: |
+        repo="${GITHUB_REPOSITORY@L}"
+        echo "REGISTRY_PREFIX=${REGISTRY_PREFIX:-ghcr.io/$repo}" | tee -a "$GITHUB_ENV"
+
+        versioning_output=$(./scripts/sfptpd_versioning derive)
+        echo "SFPTPD_VERSION=${SFPTPD_VERSION:-$versioning_output}" | tee -a "$GITHUB_ENV"
+
+    - name: Metadata - Docker tagging
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: |
+          ${{ env.REGISTRY_PREFIX }}/sfptpd
+        tags: |
+          type=semver,pattern={{version}},suffix=${{ env.IMAGE_TAG_SUFFIX }}
+          type=match,pattern=sfptpd-([\d\.]+),group=1,suffix=${{ env.IMAGE_TAG_SUFFIX }}
+          type=ref,event=pr,prefix=pr-
+          type=raw,value=${{ env.SFPTPD_VERSION }},suffix=${{ env.IMAGE_TAG_SUFFIX }}
+          type=ref,event=branch,suffix=${{ env.IMAGE_TAG_SUFFIX }}
+          type=sha,prefix=git-,format=short
+        labels: |
+          org.opencontainers.image.version=${{ env.SFPTPD_VERSION }}
+
+    - if: ${{ contains(env.REGISTRY_PREFIX, 'ghcr.io') }}
+      name: Login to registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+
+    - name: Build
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: Containerfile
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        push: true
+        build-args: |
+          SFPTPD_VERSION=${{ env.SFPTPD_VERSION }}
+          UBI_IMAGE=${{ env.UBI_IMAGE }}
