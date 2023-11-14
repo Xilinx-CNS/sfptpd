@@ -60,7 +60,8 @@ rpmbuild -bs sfptpd.spec
 
 ### Building a container image
 ```
-docker build .
+make patch_version
+docker build -f Containerfile .
 ```
 
 ### Running a container image
