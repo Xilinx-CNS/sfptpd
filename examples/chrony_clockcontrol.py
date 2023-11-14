@@ -1,7 +1,7 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 #
-# Example script for enabling/disabling chronyd control of the
-# system clock
+# Example Python 3 script with Python 2 compat for enabling/disabling chronyd
+# control of the system clock
 #
 # SPDX-License-Identifier: BSD-3-Clause
 # (c) Copyright 2022 Xilinx, Inc.

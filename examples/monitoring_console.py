@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# Python 3 script
 #
 # Example script for monitoring remote PTP nodes using JSON logging.
 #
