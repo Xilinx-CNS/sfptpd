@@ -40,7 +40,7 @@ jobs:
 
     - name: Metadata - env
       run: |
-        repo="${GITHUB_REPOSITORY@L}"
+        repo="${GITHUB_REPOSITORY_OWNER@L}"
         echo "REGISTRY_PREFIX=${REGISTRY_PREFIX:-ghcr.io/$repo}" | tee -a "$GITHUB_ENV"
 
         versioning_output=$(./scripts/sfptpd_versioning derive)
