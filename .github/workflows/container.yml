@@ -61,6 +61,7 @@ jobs:
           type=sha,prefix=git-,format=short
         labels: |
           org.opencontainers.image.version=${{ env.SFPTPD_VERSION }}
+          org.opencontainers.image.licenses=BSD-3-Clause AND BSD-2-Clause AND NTP AND ISC
 
     - if: ${{ contains(env.REGISTRY_PREFIX, 'ghcr.io') }}
       name: Login to registry
