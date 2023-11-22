@@ -87,7 +87,7 @@ static const struct sfptpd_stats_collection_defn clockfeed_stats_defns[] =
 #define CLOCKFEED_MSG(x) SFPTPD_CLOCKFEED_MSG(x)
 
 /* Add a clock source.
- * It is an synchronous message.
+ * It is a synchronous message.
  */
 #define CLOCKFEED_MSG_ADD_CLOCK   CLOCKFEED_MSG(1)
 struct clockfeed_add_clock {
@@ -96,7 +96,7 @@ struct clockfeed_add_clock {
 };
 
 /* Remove a clock source.
- * It is an synchronous message.
+ * It is a synchronous message.
  */
 #define CLOCKFEED_MSG_REMOVE_CLOCK   CLOCKFEED_MSG(2)
 struct clockfeed_remove_clock {
@@ -127,6 +127,11 @@ struct clockfeed_unsubscribe {
  * It is an asynchronous message with no reply. To be multicast.
  */
 #define CLOCKFEED_MSG_SYNC_EVENT   SFPTPD_CLOCKFEED_MSG_SYNC_EVENT
+
+/* Next message code to be allocated. Avoid overlapping with above
+ * message code that is defined in the header file.
+ */
+#define CLOCKFEED_MSG_NEXT_UNALLOCATED   CLOCKFEED_MSG(6)
 
 /* Union of all clock feed messages
  * @hdr Standard message header
@@ -315,6 +320,17 @@ static void clockfeed_reap_zombies(struct sfptpd_clockfeed *module,
 	}
 }
 
+/* This is the key function of the clock feed component. Periodically sample
+ * all clock differences (against the system clock) for all interesting clocks.
+ * These may have different cadences configured (internally - this is not used
+ * at present).
+ *
+ * Snapshots of the clocks are stored in a lock-free circular buffer
+ * structure for consumption in another thread via helper functions. Typically
+ * only the last snapshot available will be consumed but additional samples
+ * are present to help avoid losing samples through contention and in case
+ * future consumers can benefit from out-of-date history.
+ */
 static void clockfeed_on_timer(void *user_context, unsigned int id)
 {
 	struct sfptpd_clockfeed *clockfeed = (struct sfptpd_clockfeed *)user_context;
@@ -750,7 +766,7 @@ struct sfptpd_clockfeed *sfptpd_clockfeed_create(struct sfptpd_thread **threadre
 		goto fail;
 	}
 
-	/* Create the service thread- the thread start up routine will
+	/* Create the service thread - the thread start up routine will
 	 * carry out the rest of the initialisation. */
 	rc = sfptpd_thread_create("clocks", &clockfeed_thread_ops, clockfeed, threadret);
 	if (rc != 0) {

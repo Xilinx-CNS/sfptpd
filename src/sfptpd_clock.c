@@ -1226,7 +1226,7 @@ static int ptr_compar(const void *a, const void *b)
 
 	if (*pa < *pb)
 		return -1;
-	else if (*pa  > *pb)
+	else if (*pa > *pb)
 		return 1;
 	else
 		return 0;
@@ -1263,6 +1263,8 @@ struct sfptpd_clock **sfptpd_clock_get_active_snapshot(size_t *num_clocks)
 	}
 	assert(index == count);
 
+	/* Sort the active clock list by pointer as part of contract with
+	 * caller to make it easier for the caller to analyse changes. */
 	qsort(snapshot, count, sizeof *snapshot, ptr_compar);
 
 finish:
