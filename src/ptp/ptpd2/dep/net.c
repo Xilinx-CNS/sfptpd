@@ -64,6 +64,10 @@
 #include <linux/errqueue.h>
 #include <linux/net_tstamp.h>
 
+#ifdef HAVE_ONLOAD_EXT
+#include <onload/extensions.h>
+#endif
+
 /* SO_EE_ORIGIN_TIMESTAMPING is defined in linux/errqueue.h in recent kernels.
  * Define it for compilation with older kernels.
  */
@@ -822,6 +826,76 @@ netSetMulticastLoopback(struct ptpd_transport *transport, Boolean value, int add
 }
 
 
+static int parse_timestamp(uint8_t *pdu, size_t pdu_len,
+			   ptpd_timestamp_type_e ts_type,
+			   enum ptpd_ts_fmt ts_fmt,
+			   TimeInternal *timestamp,
+			   bool tx)
+{
+	const char *type = ts_fmt == PTPD_TS_ONLOAD_EXT ? "onload extension timestamp" : "so_timestamping";
+	Boolean haveTs = FALSE;
+	union {
+		void *ptr;
+		struct timespec *lnx;
+#ifdef HAVE_ONLOAD_EXT
+		struct onload_timestamp *onload;
+#endif
+	} ts;
+
+	if (
+#ifdef HAVE_ONLOAD_EXT
+	    (ts_fmt == PTPD_TS_ONLOAD_EXT && pdu_len < CMSG_LEN(sizeof(*ts.onload) * 1)) ||
+#endif
+	    (ts_fmt == PTPD_TS_LINUX && pdu_len < CMSG_LEN(sizeof(*ts.lnx) * 3))) {
+		ERROR("received short %s (%zu)\n", type, pdu_len);
+		return ENOTIMESTAMP;
+	}
+
+	ts.ptr = pdu;
+
+	if (ts_fmt == PTPD_TS_ONLOAD_EXT) {
+#ifdef HAVE_ONLOAD_EXT
+		if (ts.onload->sec) {
+			timestamp->seconds = ts.onload->sec;
+			timestamp->nanoseconds = ts.onload->nsec;
+			haveTs = TRUE;
+		}
+#endif
+	} else {
+		/* array of three time stamps: SW, HW, raw HW */
+		switch (ts_type) {
+		case PTPD_TIMESTAMP_TYPE_SW:
+			ts.lnx += 0;
+			break;
+		case PTPD_TIMESTAMP_TYPE_HW_SYS:
+			ts.lnx += 1;
+			break;
+		case PTPD_TIMESTAMP_TYPE_HW_RAW:
+			ts.lnx += 2;
+			break;
+		default:
+			ERROR("invalid timestamp type %d\n",
+			      ts_type);
+			break;
+		}
+
+		if (ts.lnx->tv_sec) {
+			timestamp->seconds = ts.lnx->tv_sec;
+			timestamp->nanoseconds = ts.lnx->tv_nsec;
+			haveTs = TRUE;
+		}
+	}
+
+	if (haveTs) {
+		DBG("%s timestamp: " SFPTPD_FORMAT_TIMESPEC "\n",
+		    tx ? "Tx" : "Rx",
+		    ts.lnx->tv_sec, ts.lnx->tv_nsec);
+	}
+
+	return haveTs;
+}
+
+
 static int getTxTimestamp(PtpClock *ptpClock, char *pdu, int pdulen,
 			  ptpd_timestamp_type_e tsType, TimeInternal *timestamp)
 {
@@ -864,7 +938,6 @@ static int getTxTimestamp(PtpClock *ptpClock, char *pdu, int pdulen,
 			struct iovec vec[1];
 			struct msghdr msg;
 			struct sock_extended_err *err;
-			struct timespec *ts;
 			int cnt, level, type;
 			size_t len;
 			char control[512];
@@ -904,36 +977,10 @@ static int getTxTimestamp(PtpClock *ptpClock, char *pdu, int pdulen,
 
 					if ((SOL_SOCKET == level) &&
 					    (SO_TIMESTAMPING == type)) {
-						if (len < CMSG_LEN(sizeof(*ts) * 3)) {
-							ERROR("received short so_timestamping\n");
-							return ENOTIMESTAMP;
-						}
-
-						/* array of three time stamps: SW, HW, raw HW */
-						ts = (struct timespec*)CMSG_DATA(cmsg);
-
-						switch (tsType) {
-						case PTPD_TIMESTAMP_TYPE_SW:
-							break;
-						case PTPD_TIMESTAMP_TYPE_HW_SYS:
-							ts++;
-							break;
-						case PTPD_TIMESTAMP_TYPE_HW_RAW:
-							ts += 2;
-							break;
-						default:
-							ERROR("invalid timestamp type %d\n",
-							      tsType);
-							break;
-						}
-
-						if (ts->tv_sec || ts->tv_nsec) {
-							DBG("TX timestamp: " SFPTPD_FORMAT_TIMESPEC "\n",
-							    ts->tv_sec, ts->tv_nsec);
-							timestamp->seconds = ts->tv_sec;
-							timestamp->nanoseconds = ts->tv_nsec;
-							haveTs = TRUE;
-						}
+						haveTs = parse_timestamp(CMSG_DATA(cmsg), len,
+									 tsType,
+									 ptpClock->interface->ts_fmt,
+									 timestamp, TRUE);
 					} else if ((ipproto == level) &&
 						   (iptype == type)) {
 						havePkt = TRUE;
@@ -1058,38 +1105,11 @@ static Boolean getRxTimestamp(PtpInterface *ptpInterface, char *pdu, int pduLeng
 			break;
 
 		case SO_TIMESTAMPING:
-			/* Array of three time stamps: sw, hw, raw hw */
-			ts = (struct timespec*)CMSG_DATA(cmsg);
+			return parse_timestamp(CMSG_DATA(cmsg), cmsg->cmsg_len,
+					       tsType,
+					       ptpInterface->ts_fmt,
+					       timestamp, FALSE);
 
-			if (cmsg->cmsg_len < CMSG_LEN(sizeof(*ts) * 3)) {
-				ERROR("received short SO_TIMESTAMPING (%zu)\n",
-				cmsg->cmsg_len);
-				return FALSE;
-			}
-
-			switch (tsType) {
-			case PTPD_TIMESTAMP_TYPE_SW:
-				break;
-			case PTPD_TIMESTAMP_TYPE_HW_SYS:
-				ts++;
-				break;
-			case PTPD_TIMESTAMP_TYPE_HW_RAW:
-				ts += 2;
-				break;
-			default:
-				ERROR("Invalid timestamp type %d\n",
-				      tsType);
-				break;
-			}
-
-			if (ts->tv_sec || ts->tv_nsec) {
-				DBG("RX timestamp " SFPTPD_FORMAT_TIMESPEC "\n",
-				    ts->tv_sec, ts->tv_nsec);
-			}
-			timestamp->seconds = ts->tv_sec;
-			timestamp->nanoseconds = ts->tv_nsec;
-			return TRUE;
-			break;
 		}
 	}
 
@@ -1178,6 +1198,26 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 		      strerror(errno));
 		return FALSE;
 	}
+
+	/* Try Onload extensions API if available */
+#ifdef HAVE_ONLOAD_EXT
+	if (onload_is_present() && ptpInterface->ifOpts.use_onload_ext) {
+		int rc = onload_timestamping_request(ptpInterface->transport.eventSock,
+						     ONLOAD_TIMESTAMPING_FLAG_TX_NIC |
+						     ONLOAD_TIMESTAMPING_FLAG_RX_NIC);
+		if (rc == 0) {
+			INFO("using Onload Extensions API NIC timestamps\n");
+			ptpInterface->tsMethod = TS_METHOD_SO_TIMESTAMPING;
+			ptpInterface->ts_fmt = PTPD_TS_ONLOAD_EXT;
+			return TRUE;
+		} else if (rc == ENOTTY) {
+			INFO("using Onload but PTP event socket not accelerated\n");
+		} else {
+			ERROR("error trying to enable Onload timestamps, %s\n",
+			      strerror(rc));
+		}
+	}
+#endif
 
 	/* Configure hardware timestamping */
 	DBG("trying SO_TIMESTAMPING hardware timestamping...\n");

@@ -1240,6 +1240,25 @@ static int parse_announce_comm_caps(struct sfptpd_config_section *section, const
 	return 0;
 }
 
+static int parse_onload_ext(struct sfptpd_config_section *section, const char *option,
+			    unsigned int num_params, const char * const params[])
+{
+	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
+	assert(num_params == 1);
+
+	if (strcmp(params[0], "off") == 0) {
+		ptp->ptpd_intf.use_onload_ext = false;
+	} else if (strcmp(params[0], "on") == 0) {
+		ptp->ptpd_intf.use_onload_ext = true;
+#ifndef HAVE_ONLOAD_EXT
+		WARNING("config: onload extensions requested but not compiled in\n");
+#endif
+	} else {
+		return EINVAL;
+	}
+
+	return 0;
+}
 
 static int parse_bmc_discriminator(struct sfptpd_config_section *section, const char *option,
 				   unsigned int num_params, const char * const params[])
@@ -1576,6 +1595,12 @@ static const sfptpd_config_option_t ptp_config_options[] =
 		"Specify whether to append port communications capabilities to Announce messages. Disabled by default",
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_announce_comm_caps},
+	{"onload_ext", "<off | on>",
+		"Specify whether to use Onload extensions API if avaialable. "
+		"Disabled by default",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_onload_ext,
+		.hidden = true},
 };
 
 

@@ -13,11 +13,17 @@ PACKAGE_VERSION = $(SFPTPD_VERSION)
 ### Exclude unsupported features by default
 # The GPS module is not supported; use 'make NO_GPS=' to enable build
 NO_GPS = 1
+#NO_ONLOAD = 1
+
+### Base definitions
+INCDIRS := $(ONLOAD_INC)
+TEST_CC := $(CC) $(INCDIRS) -x c
 
 ### Definitions conditional on build environment
-if_header_then = printf "\#include <$1>" | $(CC) -E -x c - > /dev/null 2>&1 && echo $2
-if_defn_then = printf "\#include <$1>\nint a=$2;" | $(CC) -c -S -x c -o - - > /dev/null 2>&1 && echo -DHAVE_$2
+if_header_then = printf "\#include <$1>" | $(TEST_CC) -E - > /dev/null 2>&1 && echo $2
+if_defn_then = printf "\#include <$1>\nint a=$2;" | $(TEST_CC) $(INCDIRS) -c -S -o - - > /dev/null 2>&1 && echo -DHAVE_$2
 
+### Conditional definitions
 CONDITIONAL_DEFS := \
  $(shell $(call if_header_then,sys/capability.h,-DHAVE_CAPS)) \
  $(shell $(call if_header_then,linux/ethtool_netlink.h,-DHAVE_ETHTOOL_NETLINK)) \
@@ -29,6 +35,11 @@ CONDITIONAL_LIBS := \
 ifndef NO_GPS
 CONDITIONAL_DEFS += $(shell $(call if_header_then,gps.h,-DHAVE_GPS))
 CONDITIONAL_LIBS += $(shell $(call if_header_then,gps.h,-lgps))
+endif
+
+ifndef NO_ONLOAD
+CONDITIONAL_DEFS += $(shell $(call if_header_then,onload/extensions.h,-DHAVE_ONLOAD_EXT))
+CONDITIONAL_LIBS += $(shell $(call if_header_then,onload/extensions.h,-lonload_ext))
 endif
 
 ### Unit testing
@@ -49,7 +60,6 @@ CFLAGS += -MMD -MP -Wall -Werror -Wundef -Wstrict-prototypes \
 ARFLAGS = rcs
 LDFLAGS +=
 LDLIBS = -lm -lrt -lpthread -lmnl $(CONDITIONAL_LIBS)
-INCDIRS :=
 STATIC_LIBRARIES :=
 TARGETS :=
 MKDIR = mkdir -p

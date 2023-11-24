@@ -367,6 +367,10 @@ typedef enum {
 	PTPD_TIMESTAMP_TYPE_AUTO,
 } ptpd_timestamp_type_e;
 
+enum ptpd_ts_fmt {
+	PTPD_TS_LINUX,
+	PTPD_TS_ONLOAD_EXT,
+};
 
 /**
 * \enum Bad timestamp types enumeration
@@ -418,9 +422,9 @@ typedef struct ptpd_intf_config {
 	Boolean masterRefreshIgmp;
 	unsigned int masterIgmpRefreshInterval;
 
+	Boolean use_onload_ext;
 	Boolean multicast_needed;
 	Boolean snmp_enabled; /* SNMP subsystem enabled / disabled even if compiled in */
-
 	Boolean displayPackets;
 
 	/* Access list settings */
@@ -677,6 +681,7 @@ struct ptpd_intf_context {
 	PtpClock *ports;
 
 	TsMethod tsMethod;
+	enum ptpd_ts_fmt ts_fmt;
 
 	// TODO this copy of the clock is no longer really required
 	struct sfptpd_clock *clock;

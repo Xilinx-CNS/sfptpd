@@ -165,6 +165,7 @@ typedef struct sfptpd_config_timestamping {
  * @test_mode: Indicates features to facilitate testing are enabled
  * @daemon: Run as a daemon
  * @lock: Use a lock file to lock access to the clocks
+ * @rtc_adjust: Allow kernel to update hardware RTC when sys clock in sync
  * @timestamping: Timestamping configuration
  * @convergence_threshold: Convergence threshold in ns
  * @step_threshold: Step threshold in ns
