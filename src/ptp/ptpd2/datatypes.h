@@ -45,14 +45,6 @@ typedef struct sfptpd_ptp_profile_def {
 
 
 /**
-* \brief Time structure to handle Linux time information
- */
-typedef struct {
-	Integer32 seconds;
-	Integer32 nanoseconds;
-} TimeInternal;
-
-/**
 * \brief Structure used as a timer
 */
 typedef struct {
@@ -509,7 +501,7 @@ typedef struct ptpd_port_config {
 	enum sfptpd_clock_ctrl clock_ctrl;
 
 	Octet unicastAddress[MAXHOSTNAMELEN];
-	TimeInternal inboundLatency, outboundLatency;
+	struct sfptpd_timespec inboundLatency, outboundLatency;
 	Integer16 max_foreign_records;
 	ptpd_delay_mechanism_e delayMechanism;
 
@@ -931,7 +923,7 @@ struct ptpd_port_context {
 
 typedef enum ptpd_tlv_result (*tlv_handler_fn)(const MsgHeader* header,
 					       ssize_t length,
-					       TimeInternal * time,
+					       struct sfptpd_timespec * time,
 					       Boolean timestampValid,
 					       Boolean isFromSelf,
 					       RunTimeOpts *rtOpts,

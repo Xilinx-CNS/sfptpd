@@ -829,7 +829,7 @@ netSetMulticastLoopback(struct ptpd_transport *transport, Boolean value, int add
 static int parse_timestamp(uint8_t *pdu, size_t pdu_len,
 			   ptpd_timestamp_type_e ts_type,
 			   enum ptpd_ts_fmt ts_fmt,
-			   TimeInternal *timestamp,
+			   struct sfptpd_timespec *timestamp,
 			   bool tx)
 {
 	const char *type = ts_fmt == PTPD_TS_ONLOAD_EXT ? "onload extension timestamp" : "so_timestamping";
@@ -856,8 +856,9 @@ static int parse_timestamp(uint8_t *pdu, size_t pdu_len,
 	if (ts_fmt == PTPD_TS_ONLOAD_EXT) {
 #ifdef HAVE_ONLOAD_EXT
 		if (ts.onload->sec) {
-			timestamp->seconds = ts.onload->sec;
-			timestamp->nanoseconds = ts.onload->nsec;
+			timestamp->sec = ts.onload->sec;
+			timestamp->nsec = ts.onload->nsec;
+			timestamp->nsec_frac = (uint32_t) ts.onload->nsec_frac << 8;
 			haveTs = TRUE;
 		}
 #endif
@@ -880,16 +881,17 @@ static int parse_timestamp(uint8_t *pdu, size_t pdu_len,
 		}
 
 		if (ts.lnx->tv_sec) {
-			timestamp->seconds = ts.lnx->tv_sec;
-			timestamp->nanoseconds = ts.lnx->tv_nsec;
+			timestamp->sec = ts.lnx->tv_sec;
+			timestamp->nsec = ts.lnx->tv_nsec;
+			timestamp->nsec_frac = 0;
 			haveTs = TRUE;
 		}
 	}
 
 	if (haveTs) {
-		DBG("%s timestamp: " SFPTPD_FORMAT_TIMESPEC "\n",
+		DBG("%s timestamp: " SFPTPD_FMT_SFTIMESPEC "\n",
 		    tx ? "Tx" : "Rx",
-		    ts.lnx->tv_sec, ts.lnx->tv_nsec);
+		    SFPTPD_ARGS_SFTIMESPEC(*timestamp));
 	}
 
 	return haveTs;
@@ -897,7 +899,7 @@ static int parse_timestamp(uint8_t *pdu, size_t pdu_len,
 
 
 static int getTxTimestamp(PtpClock *ptpClock, char *pdu, int pdulen,
-			  ptpd_timestamp_type_e tsType, TimeInternal *timestamp)
+			  ptpd_timestamp_type_e tsType, struct sfptpd_timespec *timestamp)
 {
 	struct timespec start, elapsed, sleep;
 	struct ptpd_transport *transport = &ptpClock->interface->transport;
@@ -1056,7 +1058,7 @@ static int getTxTimestamp(PtpClock *ptpClock, char *pdu, int pdulen,
 /* Used to get receive timestamps  */
 static Boolean getRxTimestamp(PtpInterface *ptpInterface, char *pdu, int pduLength,
 			      struct msghdr *msg, ptpd_timestamp_type_e tsType,
-			      TimeInternal *timestamp)
+			      struct sfptpd_timespec *timestamp)
 {
 	struct cmsghdr *cmsg;
 
@@ -1085,8 +1087,9 @@ static Boolean getRxTimestamp(PtpInterface *ptpInterface, char *pdu, int pduLeng
 				return FALSE;
 			}
 
-			timestamp->seconds = tv->tv_sec;
-			timestamp->nanoseconds = tv->tv_usec * 1000;
+			timestamp->sec = tv->tv_sec;
+			timestamp->nsec = tv->tv_usec * 1000;
+			timestamp->nsec_frac = 0;
 			return TRUE;
 			break;
 
@@ -1099,8 +1102,9 @@ static Boolean getRxTimestamp(PtpInterface *ptpInterface, char *pdu, int pduLeng
 				return FALSE;
 			}
 
-			timestamp->seconds = ts->tv_sec;
-			timestamp->nanoseconds = ts->tv_nsec;
+			timestamp->sec = ts->tv_sec;
+			timestamp->nsec = ts->tv_nsec;
+			timestamp->nsec_frac = 0;
 			return TRUE;
 			break;
 
@@ -1493,7 +1497,7 @@ netInit(struct ptpd_transport * transport, InterfaceOpts * ifOpts, PtpInterface 
 
 /*Check if data have been received*/
 int
-netSelect(TimeInternal *timeout, struct ptpd_transport *transport, fd_set *readfds)
+netSelect(struct sfptpd_timespec *timeout, struct ptpd_transport *transport, fd_set *readfds)
 {
 	int ret, nfds;
 	struct timespec tv;
@@ -1504,8 +1508,8 @@ netSelect(TimeInternal *timeout, struct ptpd_transport *transport, fd_set *readf
 #endif
 
 	if (timeout) {
-		tv.tv_sec = timeout->seconds;
-		tv.tv_nsec = timeout->nanoseconds;
+		tv.tv_sec = timeout->sec;
+		tv.tv_nsec = timeout->nsec;
 		tv_ptr = &tv;
 	} else {
 		tv_ptr = NULL;
@@ -1569,7 +1573,7 @@ netSelect(TimeInternal *timeout, struct ptpd_transport *transport, fd_set *readf
  */
 ssize_t
 netRecvEvent(Octet *buf, PtpInterface *ptpInterface, InterfaceOpts *ifOpts,
-	     TimeInternal *timestamp, Boolean *timestampValid)
+	     struct sfptpd_timespec *timestamp, Boolean *timestampValid)
 {
 	ssize_t ret;
 	struct msghdr msg;
@@ -1751,7 +1755,7 @@ static int sendMessage(int sockfd, const void *buf, size_t length,
 int
 netSendEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 	     RunTimeOpts *rtOpts, const struct sockaddr_storage *altDst,
-	     socklen_t altDstLen, TimeInternal *timestamp)
+	     socklen_t altDstLen, struct sfptpd_timespec *timestamp)
 {
 	int ret;
 	struct sockaddr_storage addr;
@@ -1930,7 +1934,7 @@ netSendPeerGeneral(Octet *buf, UInteger16 length, PtpClock *ptpClock)
 
 int
 netSendPeerEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
-		 RunTimeOpts *rtOpts, TimeInternal *timestamp)
+		 RunTimeOpts *rtOpts, struct sfptpd_timespec *timestamp)
 {
 	int ret;
 	struct sockaddr_storage addr;

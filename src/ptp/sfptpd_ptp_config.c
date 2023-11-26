@@ -278,12 +278,13 @@ static int parse_tx_latency(struct sfptpd_config_section *section, const char *o
 	assert(num_params == 1);
 	int tokens, outboundLatency;
 
-	ptp->ptpd_port.outboundLatency.seconds = 0;
+	ptp->ptpd_port.outboundLatency.sec = 0;
+	ptp->ptpd_port.outboundLatency.nsec_frac = 0;
 	tokens = sscanf(params[0], "%i", &outboundLatency);
 	if (tokens != 1)
 		return EINVAL;
 
-	ptp->ptpd_port.outboundLatency.nanoseconds = (Integer32)outboundLatency;
+	ptp->ptpd_port.outboundLatency.nsec = (Integer32)outboundLatency;
 	return 0;
 }
 
@@ -294,12 +295,12 @@ static int parse_rx_latency(struct sfptpd_config_section *section, const char *o
 	assert(num_params == 1);
 	int tokens, inboundLatency;
 
-	ptp->ptpd_port.inboundLatency.seconds = 0;
+	ptp->ptpd_port.inboundLatency.sec = 0;
 	tokens = sscanf(params[0], "%i", &inboundLatency);
 	if (tokens != 1)
 		return EINVAL;
 
-	ptp->ptpd_port.inboundLatency.nanoseconds = (Integer32)inboundLatency;
+	ptp->ptpd_port.inboundLatency.nsec = (Integer32)inboundLatency;
 	return 0;
 }
 

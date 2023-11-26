@@ -62,10 +62,16 @@ typedef enum sfptpd_component_id {
 #define SFPTPD_FORMAT_TOPOLOGY_FLOAT      SFPTPD_FORMAT_FLOAT " ns"
 #define SFPTPD_FORMAT_TIMESPEC            "%ld.%09ld"
 #define SFPTPD_FORMAT_STIMESPEC           "%s%ld.%09ld"
+#define SFPTPD_FMT_SFTIMESPEC             "%" PRIu64 ".%09" PRIu32 "%03" PRIu32
+#define SFPTPD_FMT_SSFTIMESPEC            "%" PRId64 ".%09" PRIu32 "%03" PRIu32
 #define SFPTPD_ARGS_STIMESPEC(ts) \
 	((ts).tv_sec == -1 && ((ts).tv_nsec != 0) ? "-" : ""), \
 	((ts).tv_sec >= 0 || (ts).tv_nsec == 0 ? ((ts).tv_sec) : (ts).tv_sec + 1), \
 	((ts).tv_sec >= 0 || (ts).tv_nsec == 0 ? (ts).tv_nsec : 1000000000 - (ts).tv_nsec)
+#define SFPTPD_ARGS_SFTIMESPEC(ts) \
+	(ts).sec, \
+	(ts).nsec, \
+	(uint32_t) ((uint64_t)((ts).nsec_frac) * 1000 >> 32)
 
 /** Forward structure declarations */
 struct sfptpd_config;

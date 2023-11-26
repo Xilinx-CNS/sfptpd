@@ -245,7 +245,7 @@ displayPortIdentity(PtpClock *ptpClock, PortIdentity *port, const char *prefixMe
 
 
 void
-getTime(TimeInternal * time)
+getTime(struct sfptpd_timespec * time)
 {
 #if defined(_POSIX_TIMERS) && (_POSIX_TIMERS > 0)
 
@@ -254,15 +254,17 @@ getTime(TimeInternal * time)
 		PERROR("clock_gettime() failed, exiting.");
 		exit(0);
 	}
-	time->seconds = tp.tv_sec;
-	time->nanoseconds = tp.tv_nsec;
+	time->sec = tp.tv_sec;
+	time->nsec = tp.tv_nsec;
+	time->nsec_frac = 0;
 
 #else
 
 	struct timeval tv;
 	gettimeofday(&tv, 0);
-	time->seconds = tv.tv_sec;
-	time->nanoseconds = tv.tv_usec * 1000;
+	time->sec = tv.tv_sec;
+	time->nsec = tv.tv_usec * 1000;
+	tims->nsec_frac = 0;
 
 #endif /* _POSIX_TIMERS */
 }

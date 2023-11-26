@@ -62,11 +62,11 @@
 #include "ptpd_lib.h"
 
 static void handleAnnounce(MsgHeader*, ssize_t, Boolean, RunTimeOpts*, PtpClock*);
-static void handleSync(const MsgHeader*, ssize_t, TimeInternal*, Boolean, Boolean, RunTimeOpts*, PtpClock*);
+static void handleSync(const MsgHeader*, ssize_t, struct sfptpd_timespec*, Boolean, Boolean, RunTimeOpts*, PtpClock*);
 static void handleFollowUp(const MsgHeader*, ssize_t, const MsgFollowUp*, Boolean, Boolean, RunTimeOpts*, PtpClock*);
-static void handlePDelayReq(MsgHeader*, ssize_t, TimeInternal*, Boolean, Boolean, RunTimeOpts*, PtpClock*);
-static void handleDelayReq(const MsgHeader*, ssize_t, TimeInternal*, Boolean, Boolean, RunTimeOpts*, PtpClock*);
-static void handlePDelayResp(const MsgHeader*, ssize_t, TimeInternal*, Boolean, Boolean, RunTimeOpts*, PtpClock*);
+static void handlePDelayReq(MsgHeader*, ssize_t, struct sfptpd_timespec*, Boolean, Boolean, RunTimeOpts*, PtpClock*);
+static void handleDelayReq(const MsgHeader*, ssize_t, struct sfptpd_timespec*, Boolean, Boolean, RunTimeOpts*, PtpClock*);
+static void handlePDelayResp(const MsgHeader*, ssize_t, struct sfptpd_timespec*, Boolean, Boolean, RunTimeOpts*, PtpClock*);
 static void handleDelayResp(const MsgHeader*, ssize_t, RunTimeOpts*, PtpClock*);
 static void handlePDelayRespFollowUp(const MsgHeader*, ssize_t, Boolean, RunTimeOpts*, PtpClock*);
 static void handleManagement(MsgHeader*, ssize_t, Boolean, RunTimeOpts*, PtpClock*);
@@ -74,32 +74,32 @@ static void handleSignaling(PtpClock*);
 
 static void issueAnnounce(RunTimeOpts*, PtpClock*);
 static void issueSync(RunTimeOpts*, PtpClock*);
-static void issueFollowup(const TimeInternal*, RunTimeOpts*, PtpClock*, const UInteger16);
+static void issueFollowup(const struct sfptpd_timespec*, RunTimeOpts*, PtpClock*, const UInteger16);
 static void issuePDelayReq(RunTimeOpts*, PtpClock*);
 static void issueDelayReq(RunTimeOpts*, PtpClock*);
-static void issuePDelayResp(TimeInternal*, MsgHeader*, RunTimeOpts*, PtpClock*);
-static void issueDelayResp(TimeInternal*, MsgHeader*, RunTimeOpts*, PtpClock*);
-static void issuePDelayRespFollowUp(TimeInternal*, MsgHeader*, RunTimeOpts*, PtpClock*, const UInteger16);
+static void issuePDelayResp(struct sfptpd_timespec*, MsgHeader*, RunTimeOpts*, PtpClock*);
+static void issueDelayResp(struct sfptpd_timespec*, MsgHeader*, RunTimeOpts*, PtpClock*);
+static void issuePDelayRespFollowUp(struct sfptpd_timespec*, MsgHeader*, RunTimeOpts*, PtpClock*, const UInteger16);
 static void issueManagementRespOrAck(MsgManagement*, RunTimeOpts*, PtpClock*, const struct sockaddr_storage *address, socklen_t addressLength);
 static void issueManagementErrorStatus(MsgManagement*, RunTimeOpts*, PtpClock*, const struct sockaddr_storage *address, socklen_t addressLength);
-static void processMessage(InterfaceOpts *ifOpts, PtpInterface *ptpInterface, TimeInternal *timestamp, Boolean timestampValid, ssize_t length);
-static void processPortMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock, TimeInternal *timestamp, Boolean timestampValid, ssize_t length, int offset, acl_bitmap_t acls_checked, acl_bitmap_t acls_passed);
+static void processMessage(InterfaceOpts *ifOpts, PtpInterface *ptpInterface, struct sfptpd_timespec *timestamp, Boolean timestampValid, ssize_t length);
+static void processPortMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock, struct sfptpd_timespec *timestamp, Boolean timestampValid, ssize_t length, int offset, acl_bitmap_t acls_checked, acl_bitmap_t acls_passed);
 static ssize_t unpackPortMessage(PtpClock *ptpClock, ssize_t safe_length);
 static bool processTLVs(RunTimeOpts *rtOpts, PtpClock *ptpClock, int payload_offset,
 			ssize_t  unpack_result, ssize_t safe_length, Boolean isFromSelf,
-			TimeInternal *timestamp, Boolean timestampValid,
+			struct sfptpd_timespec *timestamp, Boolean timestampValid,
 			acl_bitmap_t acls_checked, acl_bitmap_t acls_passed);
 static void handleMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
 			  ssize_t safe_length, Boolean isFromSelf,
-			  TimeInternal *timestamp, Boolean timestampValid);
-static void processSyncFromSelf(const TimeInternal *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock, const UInteger16 sequenceId);
-static void processDelayReqFromSelf(const TimeInternal *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock);
-static void processPDelayReqFromSelf(const TimeInternal *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock);
-static void processPDelayRespFromSelf(const TimeInternal *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock, const UInteger16 sequenceId);
-static void issueDelayRespWithMonitoring(TimeInternal *time, MsgHeader *header, RunTimeOpts *rtOpts, PtpClock *ptpClock);
+			  struct sfptpd_timespec *timestamp, Boolean timestampValid);
+static void processSyncFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock, const UInteger16 sequenceId);
+static void processDelayReqFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock);
+static void processPDelayReqFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock);
+static void processPDelayRespFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock, const UInteger16 sequenceId);
+static void issueDelayRespWithMonitoring(struct sfptpd_timespec *time, MsgHeader *header, RunTimeOpts *rtOpts, PtpClock *ptpClock);
 static void issueSyncForMonitoring(RunTimeOpts*, PtpClock*, UInteger16 sequenceId);
-static void issueFollowupForMonitoring(const TimeInternal*, RunTimeOpts*, PtpClock*, const UInteger16);
-static void processMonitoringSyncFromSelf(const TimeInternal *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock, const UInteger16 sequenceId);
+static void issueFollowupForMonitoring(const struct sfptpd_timespec*, RunTimeOpts*, PtpClock*, const UInteger16);
+static void processMonitoringSyncFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock, const UInteger16 sequenceId);
 
 struct tlv_dispatch_info {
 	TLV tlv;
@@ -111,25 +111,25 @@ struct tlv_dispatch_info {
 
 static enum ptpd_tlv_result
 ptpmon_req_tlv_handler(const MsgHeader *header, ssize_t length,
-		       TimeInternal *time, Boolean timestampValid, Boolean isFromSelf,
+		       struct sfptpd_timespec *time, Boolean timestampValid, Boolean isFromSelf,
 		       RunTimeOpts *rtOpts, PtpClock *ptpClock,
 		       TLV *tlv, size_t tlv_offset);
 
 static enum ptpd_tlv_result
 mtie_req_tlv_handler(const MsgHeader *header, ssize_t length,
-		     TimeInternal *time, Boolean timestampValid, Boolean isFromSelf,
+		     struct sfptpd_timespec *time, Boolean timestampValid, Boolean isFromSelf,
 		     RunTimeOpts *rtOpts, PtpClock *ptpClock,
 		     TLV *tlv, size_t tlv_offset);
 
 static enum ptpd_tlv_result
 port_communication_capabilities_handler(const MsgHeader *header, ssize_t length,
-					TimeInternal *time, Boolean timestampValid, Boolean isFromSelf,
+					struct sfptpd_timespec *time, Boolean timestampValid, Boolean isFromSelf,
 					RunTimeOpts *rtOpts, PtpClock *ptpClock,
 					TLV *tlv, size_t tlv_offset);
 
 static void statsAddNode(Octet *buf, MsgHeader *header, PtpInterface *ptpInterface);
 
-static void applyUtcOffset(TimeInternal *time, RunTimeOpts *rtOpts, PtpClock *ptpClock);
+static void applyUtcOffset(struct sfptpd_timespec *time, RunTimeOpts *rtOpts, PtpClock *ptpClock);
 
 static const struct tlv_handling tlv_handlers[] = {
 	{
@@ -922,7 +922,7 @@ static bool checkACLmask(acl_bitmap_t mask,
 
 
 static void
-processMessage(InterfaceOpts *ifOpts, PtpInterface *ptpInterface, TimeInternal *timestamp,
+processMessage(InterfaceOpts *ifOpts, PtpInterface *ptpInterface, struct sfptpd_timespec *timestamp,
 	       Boolean timestampValid, ssize_t length)
 {
 	PtpClock *port;
@@ -1027,7 +1027,7 @@ processMessage(InterfaceOpts *ifOpts, PtpInterface *ptpInterface, TimeInternal *
 
 static void
 processPortMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
-		   TimeInternal *timestamp, Boolean timestampValid,
+		   struct sfptpd_timespec *timestamp, Boolean timestampValid,
 		   ssize_t length, int offset,
 		   acl_bitmap_t acls_checked, acl_bitmap_t acls_passed)
 {
@@ -1105,7 +1105,7 @@ processPortMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
 	 * subtract the inbound latency adjustment if it is not a loop
 	 *  back and the time stamp seems reasonable
 	 */
-	if (!isFromSelf && timestamp->seconds > 0)
+	if (!isFromSelf && timestamp->sec > 0)
 		subTime(timestamp, timestamp, &rtOpts->inboundLatency);
 
 	unpack_result = unpackPortMessage(ptpClock,
@@ -1200,7 +1200,7 @@ unpackPortMessage(PtpClock *ptpClock, ssize_t safe_length)
 static bool
 processTLVs(RunTimeOpts *rtOpts, PtpClock *ptpClock, int payload_offset,
 	    ssize_t  unpack_result, ssize_t safe_length, Boolean isFromSelf,
-	    TimeInternal *timestamp, Boolean timestampValid,
+	    struct sfptpd_timespec *timestamp, Boolean timestampValid,
 	    acl_bitmap_t acls_checked, acl_bitmap_t acls_passed)
 {
 	PtpInterface *ptpInterface;
@@ -1415,7 +1415,7 @@ processTLVs(RunTimeOpts *rtOpts, PtpClock *ptpClock, int payload_offset,
 static void
 handleMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
 	      ssize_t safe_length, Boolean isFromSelf,
-	      TimeInternal *timestamp, Boolean timestampValid)
+	      struct sfptpd_timespec *timestamp, Boolean timestampValid)
 {
 	PtpInterface *ptpInterface;
 
@@ -1486,7 +1486,7 @@ doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 {
 	ssize_t length;
 	Boolean timestampValid = FALSE;
-	TimeInternal timestamp = { 0, 0 };
+	struct sfptpd_timespec timestamp = { 0, 0, 0 };
 
 	if (event) {
 		length = netRecvEvent(ptpInterface->msgIbuf, ptpInterface, ifOpts,
@@ -1639,7 +1639,7 @@ handleAnnounce(MsgHeader *header, ssize_t length,
 
 static void
 handleSync(const MsgHeader *header, ssize_t length,
-	   TimeInternal *time, Boolean timestampValid, Boolean isFromSelf,
+	   struct sfptpd_timespec *time, Boolean timestampValid, Boolean isFromSelf,
 	   RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
 	Integer8 msgInterval;
@@ -1714,7 +1714,7 @@ handleSync(const MsgHeader *header, ssize_t length,
 			    ((header->sequenceId % rtOpts->test.bad_timestamp.interval_pkts) == 0)) {
 				Integer32 jitter = (Integer32)((getRand() - 0.5) * 2.0 *
 						               rtOpts->test.bad_timestamp.max_jitter);
-				time->nanoseconds += jitter;
+				time->nsec += jitter;
 				normalizeTime(time);
 				INFO("ptp %s: added jitter %d to sync RX timestamp\n",
 				     rtOpts->name, jitter);
@@ -1888,10 +1888,10 @@ handleSync(const MsgHeader *header, ssize_t length,
 
 
 static void
-processSyncFromSelf(const TimeInternal *time, RunTimeOpts *rtOpts,
+processSyncFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts,
 		    PtpClock *ptpClock, const UInteger16 sequenceId)
 {
-	TimeInternal timestamp;
+	struct sfptpd_timespec timestamp;
 
 	/* Add latency */
 	addTime(&timestamp, time, &rtOpts->outboundLatency);
@@ -1902,10 +1902,10 @@ processSyncFromSelf(const TimeInternal *time, RunTimeOpts *rtOpts,
 
 
 static void
-processMonitoringSyncFromSelf(const TimeInternal *time, RunTimeOpts *rtOpts,
+processMonitoringSyncFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts,
 			      PtpClock *ptpClock, const UInteger16 sequenceId)
 {
-	TimeInternal timestamp;
+	struct sfptpd_timespec timestamp;
 
 	/* Add latency */
 	addTime(&timestamp, time, &rtOpts->outboundLatency);
@@ -2045,7 +2045,7 @@ handleFollowUp(const MsgHeader *header, ssize_t length,
 
 static void
 handleDelayReq(const MsgHeader *header, ssize_t length,
-	       TimeInternal *time, Boolean timestampValid, Boolean isFromSelf,
+	       struct sfptpd_timespec *time, Boolean timestampValid, Boolean isFromSelf,
 	       RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
 	DBGV("delayReq message received : \n");
@@ -2147,7 +2147,7 @@ handleDelayReq(const MsgHeader *header, ssize_t length,
 
 
 static void
-processDelayReqFromSelf(const TimeInternal *time, RunTimeOpts *rtOpts, PtpClock *ptpClock)
+processDelayReqFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
 	struct timespec latency;
 
@@ -2324,7 +2324,7 @@ handleDelayResp(const MsgHeader *header, ssize_t length,
 
 static void
 handlePDelayReq(MsgHeader *header, ssize_t length,
-		TimeInternal *time, Boolean timestampValid, Boolean isFromSelf,
+		struct sfptpd_timespec *time, Boolean timestampValid, Boolean isFromSelf,
 		RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
 	DBGV("PdelayReq message received : \n");
@@ -2400,7 +2400,7 @@ handlePDelayReq(MsgHeader *header, ssize_t length,
 
 
 static void
-processPDelayReqFromSelf(const TimeInternal *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock)
+processPDelayReqFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
 	struct timespec latency;
 
@@ -2428,7 +2428,7 @@ processPDelayReqFromSelf(const TimeInternal *tint, RunTimeOpts *rtOpts, PtpClock
 
 static void
 handlePDelayResp(const MsgHeader *header, ssize_t length,
-		 TimeInternal *time, Boolean timestampValid, Boolean isFromSelf,
+		 struct sfptpd_timespec *time, Boolean timestampValid, Boolean isFromSelf,
 		 RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
 	DBGV("PdelayResp message received : \n");
@@ -2578,10 +2578,10 @@ handlePDelayResp(const MsgHeader *header, ssize_t length,
 
 
 static void
-processPDelayRespFromSelf(const TimeInternal *tint, RunTimeOpts *rtOpts,
+processPDelayRespFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts,
 			  PtpClock *ptpClock, UInteger16 sequenceId)
 {
-	TimeInternal timestamp;
+	struct sfptpd_timespec timestamp;
 
 	/* Provide the new measurements to any egress event monitors. */
 	egressEventMonitor(ptpClock, rtOpts, PTPD_MSG_PDELAY_RESP, tint);
@@ -3129,7 +3129,7 @@ handleSignaling(PtpClock *ptpClock)
 
 static enum ptpd_tlv_result
 ptpmon_req_tlv_handler(const MsgHeader *header, ssize_t length,
-		       TimeInternal *time, Boolean timestampValid, Boolean isFromSelf,
+		       struct sfptpd_timespec *time, Boolean timestampValid, Boolean isFromSelf,
 		       RunTimeOpts *rtOpts, PtpClock *ptpClock,
 		       TLV *tlv, size_t tlv_offset)
 {
@@ -3186,7 +3186,7 @@ ptpmon_req_tlv_handler(const MsgHeader *header, ssize_t length,
 
 static enum ptpd_tlv_result
 mtie_req_tlv_handler(const MsgHeader *header, ssize_t length,
-		     TimeInternal *time, Boolean timestampValid, Boolean isFromSelf,
+		     struct sfptpd_timespec *time, Boolean timestampValid, Boolean isFromSelf,
 		     RunTimeOpts *rtOpts, PtpClock *ptpClock,
 		     TLV *tlv, size_t tlv_offset)
 {
@@ -3199,7 +3199,7 @@ mtie_req_tlv_handler(const MsgHeader *header, ssize_t length,
 
 static enum ptpd_tlv_result
 port_communication_capabilities_handler(const MsgHeader *header, ssize_t length,
-					TimeInternal *time, Boolean timestampValid, Boolean isFromSelf,
+					struct sfptpd_timespec *time, Boolean timestampValid, Boolean isFromSelf,
 					RunTimeOpts *rtOpts, PtpClock *ptpClock,
 					TLV *tlv, size_t tlv_offset)
 {
@@ -3273,7 +3273,7 @@ static void
 issueSync(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
 	int rc;
-	TimeInternal timestamp;
+	struct sfptpd_timespec timestamp;
 
 	/* Test Function: Suppress Sync messsages */
 	if (rtOpts->test.no_sync_pkts)
@@ -3325,7 +3325,7 @@ static void
 issueSyncForMonitoring(RunTimeOpts *rtOpts, PtpClock *ptpClock, UInteger16 sequenceId)
 {
 	int rc;
-	TimeInternal timestamp;
+	struct sfptpd_timespec timestamp;
 
 	msgPackSync(ptpClock->msgObuf, sizeof ptpClock->msgObuf, ptpClock);
 
@@ -3373,7 +3373,7 @@ issueSyncForMonitoring(RunTimeOpts *rtOpts, PtpClock *ptpClock, UInteger16 seque
 
 /*Pack and send on general multicast ip address a FollowUp message*/
 static void
-issueFollowup(const TimeInternal *time, RunTimeOpts *rtOpts, PtpClock *ptpClock,
+issueFollowup(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts, PtpClock *ptpClock,
 	      const UInteger16 sequenceId)
 {
 	Timestamp preciseOriginTimestamp;
@@ -3399,7 +3399,7 @@ issueFollowup(const TimeInternal *time, RunTimeOpts *rtOpts, PtpClock *ptpClock,
 
 /* task 70154: Pack and send on general unicast ip address a FollowUp message*/
 static void
-issueFollowupForMonitoring(const TimeInternal *time, RunTimeOpts *rtOpts, PtpClock *ptpClock,
+issueFollowupForMonitoring(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts, PtpClock *ptpClock,
 			   const UInteger16 sequenceId)
 {
 	Timestamp preciseOriginTimestamp;
@@ -3429,7 +3429,7 @@ static void
 issueDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
 	int rc;
-	TimeInternal timestamp;
+	struct sfptpd_timespec timestamp;
 
 	ptpClock->waitingForDelayResp = FALSE;
 
@@ -3504,7 +3504,7 @@ static void
 issuePDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
 	int rc;
-	TimeInternal timestamp;
+	struct sfptpd_timespec timestamp;
 
 	ptpClock->waitingForPDelayResp = false;
 	ptpClock->waitingForPDelayRespFollow = false;
@@ -3563,11 +3563,11 @@ issuePDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 
 /*Pack and send on event multicast ip address a PDelayResp message*/
 void
-issuePDelayResp(TimeInternal *time, MsgHeader *header,
+issuePDelayResp(struct sfptpd_timespec *time, MsgHeader *header,
 		RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
 	Timestamp requestReceiptTimestamp;
-	TimeInternal timestamp;
+	struct sfptpd_timespec timestamp;
 	int rc;
 
 	/* Test Function: Suppress Delay Response messsages */
@@ -3579,7 +3579,7 @@ issuePDelayResp(TimeInternal *time, MsgHeader *header,
 	    ((header->sequenceId % rtOpts->test.bad_timestamp.interval_pkts) == 0)) {
 		Integer32 jitter = (Integer32)((getRand() - 0.5) * 2.0 *
 					       rtOpts->test.bad_timestamp.max_jitter);
-		time->nanoseconds += jitter;
+		time->nsec += jitter;
 		normalizeTime(time);
 		INFO("ptp %s: added jitter %d to pdelay req RX timestamp\n",
 		     rtOpts->name, jitter);
@@ -3631,7 +3631,7 @@ issuePDelayResp(TimeInternal *time, MsgHeader *header,
 
 /*Pack and send on event multicast ip address a DelayResp message*/
 static void
-issueDelayResp(TimeInternal *time,MsgHeader *header,RunTimeOpts *rtOpts, PtpClock *ptpClock)
+issueDelayResp(struct sfptpd_timespec *time,MsgHeader *header,RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
 	Timestamp requestReceiptTimestamp;
 	Integer64 correction;
@@ -3645,7 +3645,7 @@ issueDelayResp(TimeInternal *time,MsgHeader *header,RunTimeOpts *rtOpts, PtpCloc
 	    ((header->sequenceId % rtOpts->test.bad_timestamp.interval_pkts) == 0)) {
 		Integer32 jitter = (Integer32)((getRand() - 0.5) * 2.0 *
 					       rtOpts->test.bad_timestamp.max_jitter);
-		time->nanoseconds += jitter;
+		time->nsec += jitter;
 		normalizeTime(time);
 		INFO("ptp %s: added jitter %d to delay req RX timestamp\n",
 		     rtOpts->name, jitter);
@@ -3655,7 +3655,7 @@ issueDelayResp(TimeInternal *time,MsgHeader *header,RunTimeOpts *rtOpts, PtpCloc
 	if (rtOpts->test.xparent_clock.enable) {
 		correction = (Integer64)(getRand() *
 				       rtOpts->test.xparent_clock.max_correction);
-		time->nanoseconds += (Integer32)correction;
+		time->nsec += (Integer32)correction;
 		normalizeTime(time);
 		INFO("ptp %s: set correction field of delay resp to %"PRIi64" ns\n",
 		     rtOpts->name, correction);
@@ -3708,11 +3708,11 @@ issueDelayResp(TimeInternal *time,MsgHeader *header,RunTimeOpts *rtOpts, PtpCloc
 
 /* @task70154: Pack and send a unicast DelayResp message with monitoring TLV */
 static void
-issueDelayRespWithMonitoring(TimeInternal *time, MsgHeader *header,
+issueDelayRespWithMonitoring(struct sfptpd_timespec *time, MsgHeader *header,
 			     RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
 	Timestamp requestReceiptTimestamp;
-	TimeInternal lastSyncTime;
+	struct sfptpd_timespec lastSyncTime;
 	PTPMonRespTLV ptp_mon_resp_tlv;
 	ssize_t length;
 
@@ -3767,7 +3767,7 @@ issueDelayRespWithMonitoring(TimeInternal *time, MsgHeader *header,
 
 
 static void
-issuePDelayRespFollowUp(TimeInternal *time, MsgHeader *header,
+issuePDelayRespFollowUp(struct sfptpd_timespec *time, MsgHeader *header,
 			RunTimeOpts *rtOpts, PtpClock *ptpClock,
 			const UInteger16 sequenceId)
 {
@@ -3778,7 +3778,7 @@ issuePDelayRespFollowUp(TimeInternal *time, MsgHeader *header,
 	    ((header->sequenceId % rtOpts->test.bad_timestamp.interval_pkts) == 0)) {
 		Integer32 jitter = (Integer32)((getRand() - 0.5) * 2.0 *
 					       rtOpts->test.bad_timestamp.max_jitter);
-		time->nanoseconds += jitter;
+		time->nsec += jitter;
 		normalizeTime(time);
 		INFO("ptp %s: added jitter %d to pdelay resp TX timestamp\n",
 		     rtOpts->name, jitter);
@@ -3888,7 +3888,7 @@ static void statsAddNode(Octet *buf, MsgHeader *header, PtpInterface *ptpInterfa
  *   - when operating as a TAI master
  */
 static void
-applyUtcOffset(TimeInternal *time, RunTimeOpts *rtOpts, PtpClock *ptpClock)
+applyUtcOffset(struct sfptpd_timespec *time, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
 	if ((ptpClock->portState != PTPD_MASTER &&
 	     (ptpClock->timePropertiesDS.currentUtcOffsetValid ||
@@ -3898,8 +3898,8 @@ applyUtcOffset(TimeInternal *time, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	     ptpClock->timePropertiesDS.ptpTimescale)) {
 
 		/* Convert timestamp to TAI */
-		time->seconds += ptpClock->timePropertiesDS.currentUtcOffset;
-		time->seconds -= ptpClock->fakeUtcAdjustment;
+		time->sec += ptpClock->timePropertiesDS.currentUtcOffset;
+		time->sec -= ptpClock->fakeUtcAdjustment;
 	}
 }
 

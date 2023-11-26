@@ -414,7 +414,7 @@ calculateForeignOffset(ForeignSyncSnapshot *syncSnapshot, const Timestamp *syncO
 
 
 void
-recordForeignSync(const MsgHeader *header, PtpClock *ptpClock, TimeInternal *timestamp)
+recordForeignSync(const MsgHeader *header, PtpClock *ptpClock, const struct sfptpd_timespec *timestamp)
 {
 	if (ptpClock->discriminator_valid) {
 		ForeignMasterRecord *record = findForeignMasterRecord(header, &ptpClock->foreign);

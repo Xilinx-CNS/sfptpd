@@ -923,11 +923,11 @@ ptpd_mgmt_error_e handleMMTime(MsgManagement *incoming,
 		XMALLOC(outgoing->tlv->dataField, sizeof(MMTime));
 		data = (MMTime*)outgoing->tlv->dataField;
 		/* GET actions */
-		TimeInternal internalTime;
+		struct sfptpd_timespec internalTime;
 		getTime(&internalTime);
 		if ((ptpClock->portState != PTPD_MASTER) &&
 		    (ptpClock->timePropertiesDS.currentUtcOffsetValid || rtOpts->alwaysRespectUtcOffset)) {
-			internalTime.seconds -= ptpClock->timePropertiesDS.currentUtcOffset;
+			internalTime.sec -= ptpClock->timePropertiesDS.currentUtcOffset;
 		}
 		fromInternalTime(&internalTime, &data->currentTime);
 		timestamp_display(&data->currentTime);

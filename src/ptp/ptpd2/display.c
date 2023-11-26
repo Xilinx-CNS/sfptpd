@@ -76,12 +76,21 @@ uInteger48_display(const char *fieldName, const UInteger48 * bigint)
   DBGV("%s : %"PRIu64"\n", fieldName, (*bigint) & 0xFFFFFFFFFFFFULL);
 }
 
-/** \brief Display a TimeInternal Structure*/
+/** \brief Display a struct timespec Structure*/
 void
 timespec_display(const struct timespec *time)
 {
 	DBGV("seconds : %ld \n", time->tv_sec);
 	DBGV("nanoseconds : %ld \n", time->tv_nsec);
+}
+
+/** \brief Display a struct sfptpd_timespec Structure*/
+void
+sftimespec_display(const struct sfptpd_timespec *time)
+{
+	DBGV("seconds : %ld \n", time->sec);
+	DBGV("nanoseconds : %ld.%03d \n", time->nsec,
+	     (uint32_t) (((uint64_t) time->nsec_frac) * 1000 >> 32));
 }
 
 /** \brief Display a Timestamp Structure*/

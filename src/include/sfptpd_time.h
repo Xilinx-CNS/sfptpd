@@ -23,6 +23,13 @@ typedef long double sfptpd_time_t;
 
 typedef int64_t sfptpd_time_fp16_t;
 
+/* sfptpd high precision time struct */
+struct sfptpd_timespec {
+	uint64_t sec;
+	uint32_t nsec;
+	uint32_t nsec_frac;
+};
+
 extern const struct timespec SFPTPD_NULL_TIME;
 
 

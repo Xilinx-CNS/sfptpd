@@ -72,10 +72,12 @@ void ptpd_config_port_initialise(struct ptpd_port_config *config,
 	config->servoKP = PTPD_DEFAULT_KP;
 	config->servoKI = PTPD_DEFAULT_KI;
 	config->servoKD = PTPD_DEFAULT_KD;
-	config->inboundLatency.seconds = 0;
-	config->inboundLatency.nanoseconds = 0;
-	config->outboundLatency.seconds = 0;
-	config->outboundLatency.nanoseconds = 0;
+	config->inboundLatency.sec = 0;
+	config->inboundLatency.nsec = 0;
+	config->inboundLatency.nsec_frac = 0;
+	config->outboundLatency.sec = 0;
+	config->outboundLatency.nsec = 0;
+	config->outboundLatency.nsec_frac = 0;
 	config->max_foreign_records = DEFAULT_MAX_FOREIGN_RECORDS;
 	config->delayMechanism = PTPD_DELAY_MECHANISM_E2E;
 
@@ -797,8 +799,8 @@ void ptpd_publish_mtie_window(struct ptpd_port_context *ptpd,
 			      const struct timespec *min_time,
 			      const struct timespec *max_time)
 {
-	TimeInternal min_time_ti;
-	TimeInternal max_time_ti;
+	struct sfptpd_timespec min_time_ti;
+	struct sfptpd_timespec max_time_ti;
 
 	ptpd->mtie_window.mtie_valid = mtie_valid ? TRUE : FALSE;
 	ptpd->mtie_window.mtie_window_number = (UInteger16) window_number;

@@ -96,35 +96,35 @@
 /* arith.c */
 
 /**
- * \brief Convert TimeInternal into Timestamp structure (defined by the spec)
+ * \brief Convert struct sfptpd_timespec into Timestamp structure (defined by the spec)
  */
-void fromInternalTime(const TimeInternal*, Timestamp*);
+void fromInternalTime(const struct sfptpd_timespec*, Timestamp*);
 
 /**
- * \brief Convert Timestamp to TimeInternal structure (defined by the spec)
+ * \brief Convert Timestamp to struct timespec structure (defined by the spec)
  */
 void toInternalTime(struct timespec *, const Timestamp*);
 
-void ts_to_InternalTime(const struct timespec *, TimeInternal *);
-void internalTime_to_ts(const TimeInternal *a, struct timespec *b);
+void ts_to_InternalTime(const struct timespec *, struct sfptpd_timespec *);
+void internalTime_to_ts(const struct sfptpd_timespec *a, struct timespec *b);
 
 /**
- * \brief Use to normalize a TimeInternal structure
+ * \brief Use to normalize a struct sfptpd_timespec structure
  *
  * The nanosecondsField member must always be less than 10⁹
- * This function is used after adding or substracting TimeInternal
+ * This function is used after adding or substracting struct sfptpd_timespec
  */
-void normalizeTime(TimeInternal*);
+void normalizeTime(struct sfptpd_timespec *);
 
 /**
  * \brief Add two InternalTime structure and normalize
  */
-void addTime(TimeInternal*, const TimeInternal*, const TimeInternal*);
+void addTime(struct sfptpd_timespec*, const struct sfptpd_timespec*, const struct sfptpd_timespec*);
 
 /**
  * \brief Substract two InternalTime structure and normalize
  */
-void subTime(TimeInternal*, const TimeInternal*, const TimeInternal*);
+void subTime(struct sfptpd_timespec*, const struct sfptpd_timespec*, const struct sfptpd_timespec*);
 /** \}*/
 
 /** \name bmc.c
@@ -187,7 +187,7 @@ void expireForeignMasterRecords(ForeignMasterDS*, const struct timespec *);
 Boolean doesForeignMasterEarliestAnnounceQualify(ForeignMasterRecord *, const struct timespec *);
 Boolean doesForeignMasterLatestAnnounceQualify(ForeignMasterRecord *, const struct timespec *);
 void getForeignMasterExpiryTime(PtpClock *, struct timespec *);
-void recordForeignSync(const MsgHeader *header, PtpClock *ptpClock, TimeInternal *timestamp);
+void recordForeignSync(const MsgHeader *header, PtpClock *ptpClock, const struct sfptpd_timespec *timestamp);
 void recordForeignFollowUp(const MsgHeader *header, PtpClock *ptpClock, const MsgFollowUp *payload);
 
 /** \}*/
@@ -279,7 +279,7 @@ void address_display(const char *key,
 void netPath_display(const struct ptpd_transport*, const PtpClock*);
 void intervalTimer_display(const IntervalTimer*);
 void integer64_display (const char *, const Integer64*);
-void timeInterval_display(const TimeInterval*);
+void timeInterval_display(const struct sfptpd_timespec*);
 void portIdentity_display(const PortIdentity*);
 void clockQuality_display (const ClockQuality*);
 void PTPText_display(const PTPText*, const PtpClock*);
@@ -333,31 +333,31 @@ void signalingInitOutgoingMsg(MsgSignaling *outgoing,
 			      PtpClock *ptpClock);
 
 void ingressEventMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts);
-void egressEventMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts, ptpd_msg_id_e type, const TimeInternal *time);
+void egressEventMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts, ptpd_msg_id_e type, const struct sfptpd_timespec *time);
 void slaveStatusMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts,
 			int missingMessageAlarms, int otherAlarms, int events, int flags);
 
 enum ptpd_tlv_result
 slave_rx_sync_timing_data_handler(const MsgHeader *header, ssize_t length,
-				  TimeInternal *time, Boolean timestampValid, Boolean isFromSelf,
+				  struct sfptpd_timespec *time, Boolean timestampValid, Boolean isFromSelf,
 				  RunTimeOpts *rtOpts, PtpClock *ptpClock,
 				  TLV *tlv, size_t tlv_offset);
 
 enum ptpd_tlv_result
 slave_rx_sync_computed_data_handler(const MsgHeader *header, ssize_t length,
-				    TimeInternal *time, Boolean timestampValid, Boolean isFromSelf,
+				    struct sfptpd_timespec *time, Boolean timestampValid, Boolean isFromSelf,
 				    RunTimeOpts *rtOpts, PtpClock *ptpClock,
 				    TLV *tlv, size_t tlv_offset);
 
 enum ptpd_tlv_result
 slave_tx_event_timestamps_handler(const MsgHeader *header, ssize_t length,
-				  TimeInternal *time, Boolean timestampValid, Boolean isFromSelf,
+				  struct sfptpd_timespec *time, Boolean timestampValid, Boolean isFromSelf,
 				  RunTimeOpts *rtOpts, PtpClock *ptpClock,
 				  TLV *tlv, size_t tlv_offset);
 
 enum ptpd_tlv_result
 slave_status_handler(const MsgHeader *header, ssize_t length,
-		     TimeInternal *time, Boolean timestampValid, Boolean isFromSelf,
+		     struct sfptpd_timespec *time, Boolean timestampValid, Boolean isFromSelf,
 		     RunTimeOpts *rtOpts, PtpClock *ptpClock,
 		     TLV *tlv, size_t tlv_offset);
 

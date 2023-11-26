@@ -62,7 +62,7 @@
 #include "ptpd.h"
 
 void
-fromInternalTime(const TimeInternal * internal, Timestamp * external)
+fromInternalTime(const struct sfptpd_timespec * internal, Timestamp * external)
 {
 
 	/*
@@ -70,18 +70,18 @@ fromInternalTime(const TimeInternal * internal, Timestamp * external)
 	 * to a timestamp.  As a consequence, no negative value can normally
 	 * be found in (internal)
 	 *
-	 * Note that offsets are also represented with TimeInternal structure,
-	 * and can be negative, but offset are never convert into Timestamp
-	 * so there is no problem here.
+	 * Note that offsets are also represented with struct sfptpd_timespec
+	 * structure, and can be negative, but offset are never convert into
+	 * Timestamp so there is no problem here.
 	 */
 
-	if ((internal->seconds & ~INT_MAX) ||
-	    (internal->nanoseconds & ~INT_MAX)) {
+	if ((internal->sec & ~INT64_MAX) ||
+	    (internal->nsec & ~INT32_MAX)) {
 		DBG("Negative value cannot be converted into timestamp \n");
 		return;
 	} else {
-		external->secondsField = internal->seconds;
-		external->nanosecondsField = internal->nanoseconds;
+		external->secondsField = internal->sec;
+		external->nanosecondsField = internal->nsec;
 	}
 }
 
@@ -93,50 +93,65 @@ toInternalTime(struct timespec * internal, const Timestamp * external)
 }
 
 void 
-ts_to_InternalTime(const struct timespec *a, TimeInternal *b)
+ts_to_InternalTime(const struct timespec *a, struct sfptpd_timespec *b)
 {
 
-	b->seconds = a->tv_sec;
-	b->nanoseconds = a->tv_nsec;
+	b->sec = a->tv_sec;
+	b->nsec = a->tv_nsec;
+	b->nsec_frac = 0;
 }
 
 void 
-internalTime_to_ts(const TimeInternal *a, struct timespec *b)
+internalTime_to_ts(const struct sfptpd_timespec *a, struct timespec *b)
 {
 
-	b->tv_sec = a->seconds;
-	b->tv_nsec = a->nanoseconds;
+	b->tv_sec = a->sec;
+	b->tv_nsec = a->nsec;
 }
 
 void
-normalizeTime(TimeInternal * r)
+normalizeTime(struct sfptpd_timespec * r)
 {
-	r->seconds += r->nanoseconds / 1000000000;
-	r->nanoseconds -= (r->nanoseconds / 1000000000) * 1000000000;
+	r->sec += r->nsec / 1000000000;
+	r->nsec -= (r->nsec / 1000000000) * 1000000000;
 
-	if (r->seconds > 0 && r->nanoseconds < 0) {
-		r->seconds -= 1;
-		r->nanoseconds += 1000000000;
-	} else if (r->seconds < 0 && r->nanoseconds > 0) {
-		r->seconds += 1;
-		r->nanoseconds -= 1000000000;
+	if (r->sec > 0 && r->nsec < 0) {
+		r->sec -= 1;
+		r->nsec += 1000000000;
+	} else if (r->sec < 0 && r->nsec > 0) {
+		r->sec += 1;
+		r->nsec -= 1000000000;
 	}
 }
 
 void
-addTime(TimeInternal * r, const TimeInternal * x, const TimeInternal * y)
+addTime(struct sfptpd_timespec * r, const struct sfptpd_timespec * x, const struct sfptpd_timespec * y)
 {
-	r->seconds = x->seconds + y->seconds;
-	r->nanoseconds = x->nanoseconds + y->nanoseconds;
+	uint64_t nsec_fp32 =
+		((uint64_t) x->nsec << 32) +
+		((uint64_t) y->nsec << 32) +
+		x->nsec_frac +
+		y->nsec_frac;
+
+	r->nsec_frac = nsec_fp32;
+	r->nsec = nsec_fp32 >> 32;
+	r->sec = x->sec + y->sec;
 
 	normalizeTime(r);
 }
 
 void
-subTime(TimeInternal * r, const TimeInternal * x, const TimeInternal * y)
+subTime(struct sfptpd_timespec * r, const struct sfptpd_timespec * x, const struct sfptpd_timespec * y)
 {
-	r->seconds = x->seconds - y->seconds;
-	r->nanoseconds = x->nanoseconds - y->nanoseconds;
+	uint64_t nsec_fp32 =
+		((uint64_t) x->nsec << 32) -
+		((uint64_t) y->nsec << 32) +
+		x->nsec_frac -
+		y->nsec_frac;
+
+	r->nsec_frac = nsec_fp32;
+	r->nsec = nsec_fp32 >> 32;
+	r->sec = x->sec - y->sec;
 
 	normalizeTime(r);
 }

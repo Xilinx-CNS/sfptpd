@@ -229,16 +229,16 @@ Boolean testInterface(char* ifaceName);
 Boolean netInit(struct ptpd_transport*,InterfaceOpts*,PtpInterface*);
 Boolean netInitPort(PtpClock *ptpClock, RunTimeOpts *rtOpts);
 Boolean netShutdown(struct ptpd_transport*);
-int netSelect(TimeInternal*,struct ptpd_transport*,fd_set*);
-ssize_t netRecvEvent(Octet*,PtpInterface*,InterfaceOpts*,TimeInternal*,Boolean*);
+int netSelect(struct sfptpd_timespec*,struct ptpd_transport*,fd_set*);
+ssize_t netRecvEvent(Octet*,PtpInterface*,InterfaceOpts*,struct sfptpd_timespec*,Boolean*);
 ssize_t netRecvGeneral(Octet*,struct ptpd_transport*);
 
 /* These functions all return 0 for success or an errno in the case of failure */
-int netSendEvent(Octet*,UInteger16,PtpClock*,RunTimeOpts*,const struct sockaddr_storage*,socklen_t,TimeInternal*);
+int netSendEvent(Octet*,UInteger16,PtpClock*,RunTimeOpts*,const struct sockaddr_storage*,socklen_t,struct sfptpd_timespec*);
 int netSendGeneral(Octet*,UInteger16,PtpClock*,RunTimeOpts*,const struct sockaddr_storage*,socklen_t);
 int netSendMonitoring(Octet*,UInteger16,PtpClock*,RunTimeOpts*,const struct sockaddr_storage*,socklen_t);
 int netSendPeerGeneral(Octet*,UInteger16,PtpClock*);
-int netSendPeerEvent(Octet*,UInteger16,PtpClock*,RunTimeOpts*,TimeInternal*);
+int netSendPeerEvent(Octet*,UInteger16,PtpClock*,RunTimeOpts*,struct sfptpd_timespec*);
 
 Boolean netRefreshIGMP(struct ptpd_transport *, InterfaceOpts *, PtpInterface *);
 Boolean hostLookup(const char* hostname, Integer32* addr);
@@ -317,7 +317,7 @@ void dump(const char *text, void *addr, int len);
 void displayStatus(PtpClock *ptpClock, const char *prefixMessage);
 void displayPortIdentity(PtpClock *ptpClock,
 			 PortIdentity *port, const char *prefixMessage);
-void getTime(TimeInternal*);
+void getTime(struct sfptpd_timespec*);
 long double getRand(void);
 #if defined(MOD_TAI) &&  NTP_API == 4
 void setKernelUtcOffset(int utc_offset);

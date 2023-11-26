@@ -197,7 +197,7 @@ rxSyncTimingDataMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts)
 		if (timing_data_state->skip_count == 0) {
 			SlaveRxSyncTimingDataElement *record =
 				&timing_data_records[timing_data_state->num_events];
-			TimeInternal tx, rx;
+			struct sfptpd_timespec tx, rx;
 
 			/* If the source port has changed, flush the old entries out. */
 			if (memcmp(ptpClock->parentPortIdentity.clockIdentity,
@@ -335,7 +335,7 @@ flushSlaveTxEventTimestamps(PtpClock *ptpClock, RunTimeOpts *rtOpts, ptpd_slave_
 /* @task71778: Slave Event Monitoring (egress) (IEEE1588-Rev draft 16.11.5) */
 void
 egressEventMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts,
-		   ptpd_msg_id_e msg_type, const TimeInternal *time)
+		   ptpd_msg_id_e msg_type, const struct sfptpd_timespec *time)
 {
 	ptpd_slave_tx_ts_msg_e type = ptpd_msg_type_to_tx_ts_type(msg_type);
 	SlaveEventMonitoringConfig *config = &rtOpts->tx_event_timestamps_config;
