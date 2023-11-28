@@ -15,7 +15,7 @@ on:
         description: UBI_IMAGE
         type: string
   push:
-    branches: [ master ]
+    branches: [ master, v3_7 ]
     tags: [ v*, sfptpd-* ]
 
 permissions:
