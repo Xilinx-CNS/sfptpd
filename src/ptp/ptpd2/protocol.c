@@ -3702,7 +3702,7 @@ issueDelayRespWithMonitoring(TimeInternal *time, MsgHeader *header,
 
 	ts_to_InternalTime(&ptpClock->sync_send_time, &lastSyncTime);
 	fromInternalTime(time, &requestReceiptTimestamp);
-	fromInternalTime(time, &ptp_mon_resp_tlv.lastSyncTimestamp);
+	fromInternalTime(&lastSyncTime, &ptp_mon_resp_tlv.lastSyncTimestamp);
 
 	/* Populate the TLV */
 	ptp_mon_resp_tlv.tlvType = PTPD_TLV_PTPMON_RESP_OLD;
