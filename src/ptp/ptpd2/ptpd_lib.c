@@ -805,9 +805,9 @@ void ptpd_publish_mtie_window(struct ptpd_port_context *ptpd,
 	ptpd->mtie_window.mtie_valid = mtie_valid ? TRUE : FALSE;
 	ptpd->mtie_window.mtie_window_number = (UInteger16) window_number;
 	ptpd->mtie_window.mtie_window_duration = (UInteger16) window_seconds;
-	ptpd->mtie_window.min_offs_from_master.scaledNanoseconds =
+	ptpd->mtie_window.min_offs_from_master =
 		sfptpd_time_float_ns_to_scaled_ns(min);
-	ptpd->mtie_window.max_offs_from_master.scaledNanoseconds =
+	ptpd->mtie_window.max_offs_from_master =
 		sfptpd_time_float_ns_to_scaled_ns(max);
 	ts_to_InternalTime(min_time, &min_time_ti);
 	ts_to_InternalTime(max_time, &max_time_ti);

@@ -249,6 +249,7 @@ DECLARE_PACK( Integer8 )
 DECLARE_PACK( UInteger24 )
 DECLARE_PACK( UInteger48 )
 DECLARE_PACK( Integer64 )
+DECLARE_PACK( TimeInterval )
 
 #define DECLARE_UNPACK( type ) ssize_t unpack##type( void*, size_t length, void*, PtpClock *ptpClock );
 
@@ -258,6 +259,7 @@ DECLARE_UNPACK( Octet )
 DECLARE_UNPACK( UInteger24 )
 DECLARE_UNPACK( UInteger48 )
 DECLARE_UNPACK( Integer64 )
+DECLARE_UNPACK( TimeInterval )
 
 //Diplay functions usefull to debug
 void displayRunTimeOpts(const RunTimeOpts*);

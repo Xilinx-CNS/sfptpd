@@ -678,8 +678,8 @@ static void monitor_output_text(struct sfptpd_ptp_monitor *monitor)
 
 			rx_event = events_result.record_ptrs[j];
 			if (rx_event->computed_data_present) {
-				offset = sfptpd_time_scaled_ns_to_float_ns(rx_event->computed_data.offsetFromMaster.scaledNanoseconds);
-				mpd = sfptpd_time_scaled_ns_to_float_ns(rx_event->computed_data.meanPathDelay.scaledNanoseconds);
+				offset = sfptpd_time_scaled_ns_to_float_ns(rx_event->computed_data.offsetFromMaster);
+				mpd = sfptpd_time_scaled_ns_to_float_ns(rx_event->computed_data.meanPathDelay);
 			}
 			if (rx_event->timing_data_present) {
 				ts.tv_sec = (time_t) rx_event->timing_data.syncEventIngressTimestamp.secondsField;
@@ -772,8 +772,8 @@ static void monitor_write_json_rx_event(void *record, void *context)
 	char monitor_time[32];
 
 	if (rx_event->computed_data_present) {
-		offset = sfptpd_time_scaled_ns_to_float_ns(rx_event->computed_data.offsetFromMaster.scaledNanoseconds);
-		mpd = sfptpd_time_scaled_ns_to_float_ns(rx_event->computed_data.meanPathDelay.scaledNanoseconds);
+		offset = sfptpd_time_scaled_ns_to_float_ns(rx_event->computed_data.offsetFromMaster);
+		mpd = sfptpd_time_scaled_ns_to_float_ns(rx_event->computed_data.meanPathDelay);
 	}
 	if (rx_event->timing_data_present) {
 		ts.tv_sec = (time_t) rx_event->timing_data.syncEventIngressTimestamp.secondsField;

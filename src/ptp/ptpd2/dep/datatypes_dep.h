@@ -37,6 +37,8 @@ typedef unsigned char NibbleUpper;
 typedef unsigned char NibbleLower;
 typedef long double LongDouble;
 
+/* 5.3.2 TimeInterval */
+typedef Integer64 TimeInterval;
 
 /**
 * \brief Struct used to average the offset from master

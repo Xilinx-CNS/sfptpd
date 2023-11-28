@@ -144,6 +144,7 @@ PACK_ENDIAN( UInteger16, 16 )
 PACK_ENDIAN( Integer32, 32 )
 PACK_ENDIAN( UInteger32, 32 )
 PACK_ENDIAN( Integer64, 64 )
+PACK_ENDIAN( TimeInterval, 64 )
 
 PACK_LOWER_AND_UPPER( Enumeration4 )
 PACK_LOWER_AND_UPPER( UInteger4 )
@@ -1210,39 +1211,6 @@ packClockQuality( ClockQuality *c, Octet *buf, size_t space)
 
 void
 freeClockQuality( ClockQuality *c)
-{
-	/* nothing to free */
-}
-
-ssize_t
-unpackTimeInterval( Octet *buf, size_t length, TimeInterval *t, PtpClock *ptpClock)
-{
-	ssize_t result = UNPACK_INIT;
-        int offset = 0;
-        TimeInterval* data = t;
-        #define OPERATE( name, size, type) \
-		CHECK_INPUT_LENGTH(offset, size, length, name, result, finish); \
-                unpack##type (buf + offset, length - offset, &data->name, ptpClock); \
-                offset = offset + size;
-        #include "../def/derivedData/timeInterval.def"
- finish:
-	return result;
-}
-
-ssize_t
-packTimeInterval( TimeInterval *t, Octet *buf, size_t space)
-{
-	ssize_t result = PACK_INIT;
-        int offset = 0;
-        TimeInterval *data = t;
-	#define OPERATE( name, size, type ) STANDARD_PACKING_OPERATION(name, size, type)
-        #include "../def/derivedData/timeInterval.def"
- finish:
-	return result;
-}
-
-void
-freeTimeInterval( TimeInterval *t)
 {
 	/* nothing to free */
 }

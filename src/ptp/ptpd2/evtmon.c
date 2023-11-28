@@ -218,7 +218,7 @@ rxSyncTimingDataMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts)
 			ts_to_InternalTime(&ptpClock->sync_receive_time, &rx);
 			fromInternalTime(&tx, &record->syncOriginTimestamp);
 			fromInternalTime(&rx, &record->syncEventIngressTimestamp);
-			record->totalCorrectionField.scaledNanoseconds =
+			record->totalCorrectionField =
 				sfptpd_time_float_ns_to_scaled_ns(ptpClock->sync_correction_field);
 			record->cumulativeScaledRateOffset = 0;
 
@@ -269,8 +269,8 @@ rxSyncComputedDataMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts)
 			record->sequenceId = ptpClock->recvSyncSequenceId;
 			offset = servo_get_offset_from_master(&ptpClock->servo);
 			mpd = servo_get_mean_path_delay(&ptpClock->servo);
-			record->offsetFromMaster.scaledNanoseconds = sfptpd_time_float_ns_to_scaled_ns(offset);
-			record->meanPathDelay.scaledNanoseconds = sfptpd_time_float_ns_to_scaled_ns(mpd);
+			record->offsetFromMaster = sfptpd_time_float_ns_to_scaled_ns(offset);
+			record->meanPathDelay = sfptpd_time_float_ns_to_scaled_ns(mpd);
 			record->scaledNeighbourRateRatio = 0;
 
 			/* When we have filled a set of records, flush them. */

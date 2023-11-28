@@ -430,9 +430,9 @@ void populateCurrentDataSet(MMCurrentDataSet *data, PtpClock *ptpClock)
 
 	data->stepsRemoved = ptpClock->stepsRemoved;
 	ofm = servo_get_offset_from_master(&ptpClock->servo);
-	data->offsetFromMaster.scaledNanoseconds = sfptpd_time_float_ns_to_scaled_ns(ofm);
+	data->offsetFromMaster = sfptpd_time_float_ns_to_scaled_ns(ofm);
 	mpd = servo_get_mean_path_delay(&ptpClock->servo);
-	data->meanPathDelay.scaledNanoseconds = sfptpd_time_float_ns_to_scaled_ns(mpd);
+	data->meanPathDelay = sfptpd_time_float_ns_to_scaled_ns(mpd);
 }
 
 /**\brief Handle incoming CURRENT_DATA_SET management message type*/
@@ -575,7 +575,7 @@ ptpd_mgmt_error_e handleMMPortDataSet(MsgManagement *incoming,
 		mpd = servo_get_mean_path_delay(&ptpClock->servo);
 		/* TODO The IEEE spec specifies the peer delay but this looks
 		 * like it might be a bug. */
-		data->peerMeanPathDelay.scaledNanoseconds = sfptpd_time_float_ns_to_scaled_ns(mpd);
+		data->peerMeanPathDelay = sfptpd_time_float_ns_to_scaled_ns(mpd);
 		data->logAnnounceInterval = ptpClock->logAnnounceInterval;
 		data->announceReceiptTimeout = ptpClock->announceReceiptTimeout;
 		data->logSyncInterval = ptpClock->logSyncInterval;

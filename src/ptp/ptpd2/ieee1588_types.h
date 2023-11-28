@@ -15,15 +15,6 @@
 
 
 /**
-* \brief The TimeInterval type represents time intervals
-*/
-typedef struct {
-	/* see src/def/README for a note on this X-macro */
-	#define OPERATE( name, size, type ) type name;
-	#include "def/derivedData/timeInterval.def"
-} TimeInterval;
-
-/**
 * \brief The Timestamp type represents a positive time with respect to the epoch
 */
 typedef struct  {
