@@ -9,18 +9,8 @@ ARG SFPTPD_VERSION
 WORKDIR /src
 
 # hadolint ignore=DL3040
-RUN microdnf install -y tar gzip bzip2 redhat-rpm-config make gcc
-
-# Obtain headers from source packages in lieu of libmnl-devel and libcap-devel
-RUN microdnf -y --enablerepo=ubi-*-baseos-source download --source libmnl libcap
-RUN mkdir libcap libmnl
-RUN rpm -i libcap-*.src.rpm \
- && tar xzf ~/rpmbuild/SOURCES/libcap-*.tar.gz --strip-components=1 -C libcap \
- && make -C libcap/libcap install
-# hadolint ignore=DL3003,SC1083
-RUN rpm -i libmnl-*.src.rpm \
- && tar xjf ~/rpmbuild/SOURCES/libmnl-*.tar.bz2 --strip-components=1 -C libmnl \
- && { cd libmnl && ./configure --prefix=/usr && make install; }
+RUN microdnf --setopt install_weak_deps=0 install -y \
+  redhat-rpm-config make gcc libmnl-devel libcap-devel
 
 # Use build flags from redhat-rpm-config to select the same optimisations
 # and hardening chosen by base platform
