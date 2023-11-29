@@ -86,19 +86,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Allow running as non-root user with minimum required capabilities (SWPTP-442)
    - enable with `user` configuration or `--user` command line options
    - example `udev` rules support hotplug with non-root user
-   > [!NOTE]
-   > The root user is required if the `chronyd` clock control script example
-   > is used to restart `chronyd`
 - Support multiple PPS sources (SWPTP-776)
 - Support bridges including over bonds in similar way to LACP bonds (SWPTP-826)
 - Support MACVLANs when timestamping enabled in host netns (SWPTP-992)
 - Allow a bond, bridge or vlan to be specified for freerun clock (SWPTP-1169)
 - Replace bond, team and interface probing with netlink scanning (SWPTP-1269)
-  > [!NOTE]
-  > All options for `hotplug_detection_mode` other than the synonyms `auto` and
-  > `netlink` are now redundant and ignored. None of the old modes has any
-  > benefit over the new netlink implementation, which eliminates many
-  > system calls.
 - Mix `efx` clock diff method with list of preferred phc methods (SWPTP-1285)
 - Add sync-instances file showing factors influencing selection (SWPTP-1286)
 - Add ntp and servo logging modules for targetted diagnostics (SWPTP-1291)
@@ -121,6 +113,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
      RHEL 9 is confirmed to be fully interoperable with sfptpd, allowing
      system clock disciplining to be controlled at runtime.
 
+> [!IMPORTANT]
+> The root user is required if the `chronyd` clock control script example
+> is used to restart `chronyd`
+
+> [!NOTE]
+> All options for `hotplug_detection_mode` other than the synonyms `auto` and
+> `netlink` are now redundant and ignored. None of the old modes has any
+> benefit over the new netlink implementation, which eliminates many
+> system calls.
+
 ### Removed
 
 - Special provision for SFN5000 and SFN6000 series adapters removed (SWPTP-1306)
@@ -139,14 +141,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Alter buffering for RT JSON stats output to avoid excessive writes per sec
 - Issue SWPTP-1347
   - Remove bogus reserved field from rx timing event monitoring TLV
-  > [!IMPORTANT]
-  > Faulty senders and receivers need updating together.
-  > This only applies to users of the `mon_rx_sync_timing_data` option.
 - Issue SWPTP-1358
   - Fix `chronyd` client state handling avoiding crashes after system startup
 - Issue SWPTP-1366
   - Fix `ntpd` client handling to avoid quitting when peer stats not available
 
+> [!WARNING]
+> Where sfptpd clients emit Rx Sync Timing Data event monitoring they need
+> to be updated from older versions at the same time as upgrading from
+> an sfptpd remote monitor or the monitored data will be unusable.
+> This only applies to users of the `mon_rx_sync_timing_data` option.
 
 ## [3.6.0.1015] - 2023-01-30 [Feature Release]
 
@@ -167,10 +171,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     [general]
     sync_module crny
     ```
-  > [!IMPORTANT]
-  > It is recommended to be *explicit* about whether or not sfptpd should talk
-  > to the chrony service to be resilient to future changes in defaults.
-  > (Added: 2023-10-27)
 - Allow user-defined scripts to reconfigure and restart a chronyd service
   as a workaround to lack of a 'clock control' facility in chronyd. This
   brings parity in the supportable use cases of ntpd and chronyd. (SWPTP-1216)
@@ -178,16 +178,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     [crny]
     control_script /usr/share/doc/sfptpd/examples/chrony_clockcontrol.py
     ```
-  > [!NOTE]
-  > Restarting chronyd is destabilising for NTP synchronisation so this
-  > feature should be avoided when chrony's time sync performance influences
-  > sync instance selection. In the absence of native runtime control for
-  > chronyd it is best used in an always-on or always-off mode with sfptpd. If
-  > chronyd control is required for fallback it is advisable to give it a
-  > lower (numerically higher) `priority` setting so it is only selected on
-  > total failure of PTP and to increase `selection_holdoff_period` to 60s.
-  > Similarly, it would not be recommended to use this clock control method
-  > while chrony was operating as a clustering determinant (i.e. discriminator).
 - Allow operation but block system clock updates when an uncontrollable
   chronyd service is running, except when this condition holds at startup.
   This is improved behaviour when the conflict is transient. It is, however,
@@ -216,6 +206,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     [general]
     trace_level bic 3
     ```
+> [!IMPORTANT]
+> Restarting chronyd is destabilising for NTP synchronisation so this
+> feature should be avoided when chrony's time sync performance influences
+> sync instance selection. In the absence of native runtime control for
+> chronyd it is best used in an always-on or always-off mode with sfptpd. If
+> chronyd control is required for fallback it is advisable to give it a
+> lower (numerically higher) `priority` setting so it is only selected on
+> total failure of PTP and to increase `selection_holdoff_period` to 60s.
+> Similarly, it would not be recommended to use this clock control method
+> while chrony was operating as a clustering determinant (i.e. discriminator).
+
+> [!TIP]
+> It is recommended to be *explicit* about whether or not sfptpd should talk
+> to the chrony service to be resilient to future changes in defaults, by
+> using the `sync_module` option to enable or disable it.
+> (Added: 2023-10-27)
 
 ### Changed
 
@@ -263,10 +269,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
      [general]
      assume_one_phc_per_nic off
     ```
-  > [!NOTE]
-  > It is no longer clear that this is the most effective solution and users
-  > may be better off selecting an explicit `clock_list` for third party NICs.
-  > (Added: 2023-10-26)
 - Allow hardware or software timestamping to be required for a given PTP
   sync instance and refuse to start if requirement cannot be met (SWPTP-212)
     ```
@@ -284,6 +286,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Allow control socket location to be specified (SWPTP-624)
 - Detect if `systemd-timesyncd` is running (SWPTP-986)
   - Alarm secondary servo on 30s of sustained sync failure (SWPTP-1049)
+
+> [!IMPORTANT]
+> It is no longer clear that `assume_one_phc_per_nic off` is the most
+> effective solution for working around the limitations of the way
+> PHC clocks are made available on non-Solarflare interfaces and users
+> may be better off selecting an explicit `clock_list` for third party NICs.
+> (Added: 2023-10-26)
 
 ### Fixed
 
@@ -325,12 +334,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
  'discriminator' between multiple active sync instances (e.g. PTP) to
   allow wildly divergent time sources to be excluded in sync instance
   selection.
-  > [!NOTE]
-  > While similar to the sfptpd Best Master Clock (BMC) Discriminator
-  > feature this operates between sync instances (on separate PTP domains
-  > and/or interfaces) rather than within a PTP domain and is a preferable
-  > solution because full clock reconstruction is continuously performed for
-  > each candidate source.
   Example configuration for preferring instances within 100ms of NTP ref:
     ```
     [general]
@@ -375,9 +378,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (SWPTP-1109)
 - Convert example scripts to python 3 (SWPTP-957).
 - Report outlier statistics in long term stats (SWPTP-540).
-  > [!NOTE]
-  > Frequent outliers are always expected as this is intrinsic to the adaptive
-  > algorithm.
+
+> [!TIP]
+> While similar to the sfptpd Best Master Clock (BMC) Discriminator
+> feature, the 'clustering' feature operates between sync instances
+> (i.e. on separate PTP domains and/or interfaces) rather than within
+> a PTP domain and is a preferable solution because full clock reconstruction
+> is continuously performed for each candidate source.
+
+> [!NOTE]
+> Frequent outliers are always expected to show up in statistics as they
+> are intrinsic to the adaptive algorithm.
 
 ### Fixed
 - Issue SWPTP-1098, SWPTP-1102
@@ -421,11 +432,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Provide option to disqualify PTP masters which advertise a time that
   differs by more than a given threshold from a specific time source such
   as the selected NTP server.
-  > [!NOTE]
-  > The [sync instances clustering feature](#3401003---2021-10-29-feature-release)
-  > is preferred to the BMC discriminator wherever possible. The use case for
-  > the BMC discriminator is rogue time sources within a single PTP domain on
-  > the same interface. (Added: 2023-10-26)
 - Hybrid Network Mode Without Fallback (SWPTP-684)  
   Provide a new mode for DelayReq/DelayResp messaging that does not fall
   back to multicast when there is no response.
@@ -455,6 +461,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   intervention to handle leap seconds.
 - Log sync instance alarm changes (SWPTP-988)  
   Any change in alarms or lack of alarms is shown in the message log.
+
+> [!NOTE]
+> The [sync instances clustering feature](#3401003---2021-10-29-feature-release)
+> is preferred to the BMC discriminator wherever possible. The use case for
+> the BMC discriminator is rogue time sources within a single PTP domain on
+> the same interface. (Added: 2023-10-26)
 
 ### Fixed
 
