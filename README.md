@@ -7,7 +7,7 @@ later.
 
 ## Copyright and license for sfptpd
 
-SPDX-License: BSD-3-Clause AND BSD-2-Clause AND NTP AND ISC
+SPDX-License-Identifier: BSD-3-Clause AND BSD-2-Clause AND NTP AND ISC
 
 See [LICENSE](LICENSE) file for details.
 
