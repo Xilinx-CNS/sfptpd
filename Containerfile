@@ -23,7 +23,7 @@ RUN echo "export \
 WORKDIR /src/sfptpd
 RUN --mount=target=. \
   source /build.env \
-  && make install BUILD_DIR=/src/sfptpd-build DESTDIR=/staging INST_INITS= \
+  && make install BUILD_DIR=/src/sfptpd-build DESTDIR=/staging prefix=/usr INST_INITS= \
   && cp LICENSE /staging
 
 FROM $UBI_IMAGE AS runtime
