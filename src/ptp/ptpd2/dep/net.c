@@ -901,7 +901,7 @@ static int parse_timestamp(uint8_t *pdu, size_t pdu_len,
 static int getTxTimestamp(PtpClock *ptpClock, char *pdu, int pdulen,
 			  ptpd_timestamp_type_e tsType, struct sfptpd_timespec *timestamp)
 {
-	struct timespec start, elapsed, sleep;
+	struct sfptpd_timespec start, elapsed, sleep;
 	struct ptpd_transport *transport = &ptpClock->interface->transport;
 	int ipproto = ptpClock->interface->ifOpts.transportAF == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP;
 	int iptype = ipproto == IPPROTO_IPV6 ? IPV6_RECVERR : IP_RECVERR;
@@ -922,9 +922,8 @@ static int getTxTimestamp(PtpClock *ptpClock, char *pdu, int pdulen,
 	 * have to check system time for the total timeout as nanosleep
 	 * typically sleeps much longer than we specify. If we don't get the
 	 * timestamp each time, we backoff progressively. */
-	(void)clock_gettime(CLOCK_MONOTONIC, &start);
-	sleep.tv_sec = 0;
-	sleep.tv_nsec = 5000;
+	(void)sfclock_gettime(CLOCK_MONOTONIC, &start);
+	sfptpd_time_from_ns(&sleep, 5000);
 
 	switch (ptpClock->interface->tsMethod) {
 	case TS_METHOD_SYSTEM:
@@ -1030,8 +1029,8 @@ static int getTxTimestamp(PtpClock *ptpClock, char *pdu, int pdulen,
 			} else if ((errno == EAGAIN) || (errno == EINTR)) {
 				/* We don't have the timestamp, sleep and
 				 * increment the backoff */
-				(void)clock_nanosleep(CLOCK_MONOTONIC, 0, &sleep, NULL);
-				sleep.tv_nsec <<= 1;
+				(void)sfclock_nanosleep(CLOCK_MONOTONIC, 0, &sleep, NULL);
+				sleep.nsec <<= 1;
 			} else {
 				ERROR("recvmsg failed: %s\n", strerror(errno));
 				return ENOTIMESTAMP;
@@ -1039,9 +1038,9 @@ static int getTxTimestamp(PtpClock *ptpClock, char *pdu, int pdulen,
 
 			/* Check whether we have timed out - if not, go round
 			 * the loop again */
-			(void)clock_gettime(CLOCK_MONOTONIC, &elapsed);
+			(void)sfclock_gettime(CLOCK_MONOTONIC, &elapsed);
 			sfptpd_time_subtract(&elapsed, &elapsed, &start);
-		} while ((elapsed.tv_sec == 0) && (elapsed.tv_nsec < 100000000));
+		} while ((elapsed.sec == 0) && (elapsed.nsec < 100000000));
 		break;
 
 	default:
@@ -1086,10 +1085,7 @@ static Boolean getRxTimestamp(PtpInterface *ptpInterface, char *pdu, int pduLeng
 				      cmsg->cmsg_len);
 				return FALSE;
 			}
-
-			timestamp->sec = tv->tv_sec;
-			timestamp->nsec = tv->tv_usec * 1000;
-			timestamp->nsec_frac = 0;
+			sfptpd_time_init(timestamp, tv->tv_sec, tv->tv_usec * 1000, 0);
 			return TRUE;
 			break;
 
@@ -1101,10 +1097,7 @@ static Boolean getRxTimestamp(PtpInterface *ptpInterface, char *pdu, int pduLeng
 				      cmsg->cmsg_len);
 				return FALSE;
 			}
-
-			timestamp->sec = ts->tv_sec;
-			timestamp->nsec = ts->tv_nsec;
-			timestamp->nsec_frac = 0;
+			sfptpd_time_init(timestamp, ts->tv_sec, ts->tv_nsec, 0);
 			return TRUE;
 			break;
 
@@ -1508,6 +1501,7 @@ netSelect(struct sfptpd_timespec *timeout, struct ptpd_transport *transport, fd_
 #endif
 
 	if (timeout) {
+		
 		tv.tv_sec = timeout->sec;
 		tv.tv_nsec = timeout->nsec;
 		tv_ptr = &tv;

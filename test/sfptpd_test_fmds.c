@@ -217,6 +217,19 @@ const struct fm_evt_in test_9[] = {
  * Local Functions
  ****************************************************************************/
 
+int sfnanosleep(const struct sfptpd_timespec *sfrequest,
+		struct sfptpd_timespec *sfremain)
+{
+	struct timespec request = { .tv_sec = sfrequest->sec,
+				    .tv_nsec = sfrequest->nsec };
+	struct timespec remain;
+	int rc = nanosleep(&request, &remain);
+	sfremain->sec = remain.tv_sec;
+	sfremain->nsec = remain.tv_nsec;
+	sfremain->nsec_frac = 0;
+	return rc;
+}
+
 static int check_integrity(ForeignMasterDS *ds, const struct fm_evt_in *best, int slots)
 {
 	int errors = 0;
@@ -267,22 +280,22 @@ static int test_fmds(const char *name,
 		     int slots)
 {
 	ForeignMasterDS ds;
-	struct timespec now;
-	struct timespec next_announce;
-	struct timespec next_event;
-	struct timespec delay;
-	struct timespec remaining;
+	struct sfptpd_timespec now = { 0 };
+	struct sfptpd_timespec next_announce = { 0 };
+	struct sfptpd_timespec next_event = { 0 };
+	struct sfptpd_timespec delay = { 0 };
+	struct sfptpd_timespec remaining = { 0 };
 	int i;
 	int rc;
 	int errors = 0;
 	const struct fm_evt_in *last_best_event = NULL;
-	struct timespec announce_interval = {
-		.tv_sec = 2,
-		.tv_nsec = 0
+	struct sfptpd_timespec announce_interval = {
+		.sec = 2,
+		.nsec = 0
 	};
 
 	/* Start initial announce timer */
-	clock_gettime(CLOCK_MONOTONIC, &now);
+	sfclock_gettime(CLOCK_MONOTONIC, &now);
 	sfptpd_time_add(&next_announce, &now, &announce_interval);
 	
 	initForeignMasterDS(&ds, slots);
@@ -299,7 +312,7 @@ static int test_fmds(const char *name,
 
 		//printf("  step %d\n", i);
 
-		clock_gettime(CLOCK_MONOTONIC, &now);
+		sfclock_gettime(CLOCK_MONOTONIC, &now);
 
 		sockaddr.sin_family = AF_INET;
 		sockaddr.sin_addr = *event->address;
@@ -331,8 +344,8 @@ static int test_fmds(const char *name,
 		}
 
 		/* Pace the test as specified in the sequence */
-		delay.tv_sec = event->delay_after_ms / 1000;
-		delay.tv_nsec = (event->delay_after_ms % 1000) * 1000000;
+		delay.sec = event->delay_after_ms / 1000;
+		delay.nsec = (event->delay_after_ms % 1000) * 1000000;
 
 		/* Record time for next event */
 		sfptpd_time_add(&next_event, &now, &delay);
@@ -340,7 +353,7 @@ static int test_fmds(const char *name,
 		displayForeignMasterRecords(&ds, NULL);
 
 		do {
-			clock_gettime(CLOCK_MONOTONIC, &now);
+			sfclock_gettime(CLOCK_MONOTONIC, &now);
 
 			if (sfptpd_time_is_greater_or_equal(&next_event, &next_announce)) {
 
@@ -350,7 +363,7 @@ static int test_fmds(const char *name,
 					//printf("announce interval expired\n");
 
 					/* And it has now expired */
-					struct timespec threshold;
+					struct sfptpd_timespec threshold;
 
 					/* Calculate the threshold for expiring foreign master entries */
 					sfptpd_time_float_s_to_timespec(4.0 * sfptpd_time_timespec_to_float_s(&announce_interval),
@@ -366,7 +379,7 @@ static int test_fmds(const char *name,
 
 					/* Wait for the announce interval to expire */
 					sfptpd_time_subtract(&delay, &next_announce, &now);
-					nanosleep(&delay, &remaining);
+					sfnanosleep(&delay, &remaining);
 				}
 			} else {
 
@@ -383,7 +396,7 @@ static int test_fmds(const char *name,
 
 					/* Wait for the next event */
 					sfptpd_time_subtract(&delay, &next_event, &now);
-					rc = nanosleep(&delay, &remaining);
+					rc = sfnanosleep(&delay, &remaining);
 					if (rc != 0 && rc != EINTR) {
 						perror("nanosleep");
 						return 1;

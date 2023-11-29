@@ -60,6 +60,7 @@
 
 #include "ptpd.h"
 #include "ptpd_lib.h"
+#include "sfptpd_time.h"
 
 static void handleAnnounce(MsgHeader*, ssize_t, Boolean, RunTimeOpts*, PtpClock*);
 static void handleSync(const MsgHeader*, ssize_t, struct sfptpd_timespec*, Boolean, Boolean, RunTimeOpts*, PtpClock*);
@@ -631,7 +632,7 @@ doTimerTick(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 				   (FOREIGN_MASTER_TIME_CHECK * powl(2,ptpClock->logAnnounceInterval)),
 				   ptpClock->itimer);
 
-			struct timespec threshold;
+			struct sfptpd_timespec threshold;
 
 			/* Expire old foreign master records */
 			getForeignMasterExpiryTime(ptpClock, &threshold);
@@ -1106,7 +1107,7 @@ processPortMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
 	 *  back and the time stamp seems reasonable
 	 */
 	if (!isFromSelf && timestamp->sec > 0)
-		subTime(timestamp, timestamp, &rtOpts->inboundLatency);
+		sfptpd_time_subtract(timestamp, timestamp, &rtOpts->inboundLatency);
 
 	unpack_result = unpackPortMessage(ptpClock,
 					  safe_length);
@@ -1715,12 +1716,12 @@ handleSync(const MsgHeader *header, ssize_t length,
 				Integer32 jitter = (Integer32)((getRand() - 0.5) * 2.0 *
 						               rtOpts->test.bad_timestamp.max_jitter);
 				time->nsec += jitter;
-				normalizeTime(time);
+				sfptpd_time_normalise(time);
 				INFO("ptp %s: added jitter %d to sync RX timestamp\n",
 				     rtOpts->name, jitter);
 			}
 
-			internalTime_to_ts(time, &ptpClock->sync_receive_time);
+			ptpClock->sync_receive_time = *time;
 
 			/* We have received a sync so clear the Sync packet alarm */
 			SYNC_MODULE_ALARM_CLEAR(ptpClock->portAlarms, NO_SYNC_PKTS);
@@ -1742,7 +1743,7 @@ handleSync(const MsgHeader *header, ssize_t length,
 			/* Test mode: emulate transparent clock */
 			if (rtOpts->test.xparent_clock.enable) {
 				sfptpd_time_t adj_fl;
-				struct timespec adj_ts;
+				struct sfptpd_timespec adj_ts;
 				sfptpd_time_fp16_t adj_sns;
 				
 				adj_fl = getRand() * rtOpts->test.xparent_clock.max_correction;
@@ -1759,8 +1760,7 @@ handleSync(const MsgHeader *header, ssize_t length,
 			}
 
 			/* Save the correctionField of Sync message */
-			ptpClock->sync_correction_field
-				= sfptpd_time_scaled_ns_to_float_ns(header->correctionField);
+			sfptpd_time_from_ns16(&ptpClock->sync_correction_field, header->correctionField);
 
 			/* If the correction field is more than 1ns then infer
 			 * that there is a transparent clock in the network */
@@ -1788,7 +1788,7 @@ handleSync(const MsgHeader *header, ssize_t length,
 				if (servo_provide_m2s_ts(&ptpClock->servo,
 							 &ptpClock->sync_send_time,
 							 &ptpClock->sync_receive_time,
-							 ptpClock->sync_correction_field)) {
+							 &ptpClock->sync_correction_field)) {
 					servo_update_clock(&ptpClock->servo);
 
 					if (ptpClock->portState == PTPD_UNCALIBRATED &&
@@ -1894,7 +1894,7 @@ processSyncFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts,
 	struct sfptpd_timespec timestamp;
 
 	/* Add latency */
-	addTime(&timestamp, time, &rtOpts->outboundLatency);
+	sfptpd_time_add(&timestamp, time, &rtOpts->outboundLatency);
 
 	/* Issue follow-up CORRESPONDING TO THIS SYNC */
 	issueFollowup(&timestamp, rtOpts, ptpClock, sequenceId);
@@ -1908,7 +1908,7 @@ processMonitoringSyncFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *r
 	struct sfptpd_timespec timestamp;
 
 	/* Add latency */
-	addTime(&timestamp, time, &rtOpts->outboundLatency);
+	sfptpd_time_add(&timestamp, time, &rtOpts->outboundLatency);
 
 	/* Issue follow-up CORRESPONDING TO THIS SYNC */
 	issueFollowupForMonitoring(&timestamp, rtOpts, ptpClock, sequenceId);
@@ -1989,7 +1989,7 @@ handleFollowUp(const MsgHeader *header, ssize_t length,
 			/* Test mode: emulate transparent clock */
 			if (rtOpts->test.xparent_clock.enable) {
 				sfptpd_time_t adj_fl;
-				struct timespec adj_ts;
+				struct sfptpd_timespec adj_ts;
 				sfptpd_time_fp16_t adj_sns;
 				
 				adj_fl = getRand() * rtOpts->test.xparent_clock.max_correction;
@@ -2008,8 +2008,7 @@ handleFollowUp(const MsgHeader *header, ssize_t length,
 			ptpClock->followXparent
 				= (header->correctionField >= 65536)? TRUE: FALSE;
 
-			ptpClock->sync_correction_field
-				+= sfptpd_time_scaled_ns_to_float_ns(header->correctionField);
+			sfptpd_time_from_ns16(&ptpClock->sync_correction_field, header->correctionField);
 
 			/* Provide the new measurements to any ingress event monitors. */
 			ingressEventMonitor(ptpClock, rtOpts);
@@ -2018,7 +2017,7 @@ handleFollowUp(const MsgHeader *header, ssize_t length,
 			if (servo_provide_m2s_ts(&ptpClock->servo,
 						 &ptpClock->sync_send_time,
 						 &ptpClock->sync_receive_time,
-						 ptpClock->sync_correction_field)) {
+						 &ptpClock->sync_correction_field)) {
 				servo_update_clock(&ptpClock->servo);
 
 				if (ptpClock->portState == PTPD_UNCALIBRATED &&
@@ -2149,26 +2148,17 @@ handleDelayReq(const MsgHeader *header, ssize_t length,
 static void
 processDelayReqFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
-	struct timespec latency;
-
 	ptpClock->waitingForDelayResp = TRUE;
 
 	/* Provide the new measurements to any egress event monitors. */
 	egressEventMonitor(ptpClock, rtOpts, PTPD_MSG_DELAY_REQ, time);
 
-	internalTime_to_ts(time, &ptpClock->delay_req_send_time);
-
-	internalTime_to_ts(&rtOpts->outboundLatency, &latency);
-	
 	/* Add latency */
-	sfptpd_time_add(&ptpClock->delay_req_send_time,
-			&ptpClock->delay_req_send_time,
-			&latency);
+	sfptpd_time_add(&ptpClock->delay_req_send_time, time, &rtOpts->outboundLatency);
 
-	DBGV("processDelayReqFromSelf: seq# %d ts " SFPTPD_FORMAT_TIMESPEC "\n",
+	DBGV("processDelayReqFromSelf: seq# %d ts " SFPTPD_FMT_SFTIMESPEC "\n",
 	     ptpClock->sentDelayReqSequenceId,
-	     ptpClock->delay_req_send_time.tv_sec,
-	     ptpClock->delay_req_send_time.tv_nsec);
+	     SFPTPD_ARGS_SFTIMESPEC(ptpClock->delay_req_send_time));
 }
 
 
@@ -2253,8 +2243,7 @@ handleDelayResp(const MsgHeader *header, ssize_t length,
 			toInternalTime(&ptpClock->delay_req_receive_time,
 				       &ptpClock->interface->msgTmp.resp.receiveTimestamp);
 
-			ptpClock->delay_correction_field
-				= sfptpd_time_scaled_ns_to_float_ns(header->correctionField);
+			sfptpd_time_from_ns16(&ptpClock->delay_correction_field, header->correctionField);
 
 			/*
 			 * send_time = delay_req_send_time (received as CMSG in handleEvent)
@@ -2264,7 +2253,7 @@ handleDelayResp(const MsgHeader *header, ssize_t length,
 			servo_provide_s2m_ts(&ptpClock->servo,
 					     &ptpClock->delay_req_send_time,
 					     &ptpClock->delay_req_receive_time,
-					     ptpClock->delay_correction_field);
+					     &ptpClock->delay_correction_field);
 
 			ptpClock->delayRespXparent = (header->correctionField >= 65536)
 						      ? TRUE : FALSE;
@@ -2400,29 +2389,20 @@ handlePDelayReq(MsgHeader *header, ssize_t length,
 
 
 static void
-processPDelayReqFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock)
+processPDelayReqFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
-	struct timespec latency;
-
 	ptpClock->waitingForPDelayResp = true;
 	ptpClock->waitingForPDelayRespFollow = false;
 
 	/* Provide the new measurements to any egress event monitors. */
-	egressEventMonitor(ptpClock, rtOpts, PTPD_MSG_PDELAY_REQ, tint);
-
-	internalTime_to_ts(tint, &ptpClock->pdelay_req_send_time);
-
-	internalTime_to_ts(&rtOpts->outboundLatency, &latency);
+	egressEventMonitor(ptpClock, rtOpts, PTPD_MSG_PDELAY_REQ, time);
 
 	/* Add latency */
-	sfptpd_time_add(&ptpClock->pdelay_req_send_time,
-			&ptpClock->pdelay_req_send_time,
-			&latency);
+	sfptpd_time_add(&ptpClock->pdelay_req_send_time, time, &rtOpts->outboundLatency);
 
-	DBGV("processPDelayReqFromSelf: seq# %d ts " SFPTPD_FORMAT_TIMESPEC "\n",
+	DBGV("processPDelayReqFromSelf: seq# %d ts " SFPTPD_FMT_SFTIMESPEC "\n",
 	     ptpClock->sentPDelayReqSequenceId,
-	     ptpClock->pdelay_req_send_time.tv_sec,
-	     ptpClock->pdelay_req_send_time.tv_nsec);
+	     SFPTPD_ARGS_SFTIMESPEC(ptpClock->pdelay_req_send_time));
 }
 
 
@@ -2517,11 +2497,10 @@ handlePDelayResp(const MsgHeader *header, ssize_t length,
 				       &ptpClock->interface->msgTmp.presp.requestReceiptTimestamp);
 
 			/* Store t4 (Fig 35)*/
-			internalTime_to_ts(time, &ptpClock->pdelay_resp_receive_time);
+			ptpClock->pdelay_resp_receive_time = *time;
 
 			/* Store the correction field */
-			ptpClock->pdelay_correction_field
-				= sfptpd_time_scaled_ns_to_float_ns(header->correctionField);
+			sfptpd_time_from_ns16(&ptpClock->pdelay_correction_field, header->correctionField);
 
 			ptpClock->delayRespXparent
 				= (header->correctionField >= 65536)? TRUE: FALSE;
@@ -2560,7 +2539,7 @@ handlePDelayResp(const MsgHeader *header, ssize_t length,
 						     &ptpClock->pdelay_req_receive_time,
 						     &ptpClock->pdelay_resp_send_time,
 						     &ptpClock->pdelay_resp_receive_time,
-						     ptpClock->pdelay_correction_field);
+						     &ptpClock->pdelay_correction_field);
 			}
 		} else {
 			DBGV("HandlePdelayResp : Pdelayresp doesn't "
@@ -2586,7 +2565,7 @@ processPDelayRespFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpt
 	/* Provide the new measurements to any egress event monitors. */
 	egressEventMonitor(ptpClock, rtOpts, PTPD_MSG_PDELAY_RESP, tint);
 
-	addTime(&timestamp, tint, &rtOpts->outboundLatency);
+	sfptpd_time_add(&timestamp, tint, &rtOpts->outboundLatency);
 
 	issuePDelayRespFollowUp(&timestamp, &ptpClock->PdelayReqHeader,
 				rtOpts, ptpClock, sequenceId);
@@ -2675,8 +2654,7 @@ handlePDelayRespFollowUp(const MsgHeader *header, ssize_t length,
 			toInternalTime(&ptpClock->pdelay_resp_send_time,
 				       &ptpClock->interface->msgTmp.prespfollow.responseOriginTimestamp);
 
-			ptpClock->pdelay_correction_field
-				+= sfptpd_time_scaled_ns_to_float_ns(header->correctionField);
+			sfptpd_time_from_ns16(&ptpClock->pdelay_correction_field, header->correctionField);
 
 			/* Provide the new measurements to the servo. */
 			servo_provide_p2p_ts(&ptpClock->servo,
@@ -2684,7 +2662,7 @@ handlePDelayRespFollowUp(const MsgHeader *header, ssize_t length,
 					     &ptpClock->pdelay_req_receive_time,
 					     &ptpClock->pdelay_resp_send_time,
 					     &ptpClock->pdelay_resp_receive_time,
-					     ptpClock->pdelay_correction_field);
+					     &ptpClock->pdelay_correction_field);
 
 			ptpClock->pDelayRespFollowXparent
 				= (header->correctionField >= 65536)? TRUE: FALSE;
@@ -3580,7 +3558,7 @@ issuePDelayResp(struct sfptpd_timespec *time, MsgHeader *header,
 		Integer32 jitter = (Integer32)((getRand() - 0.5) * 2.0 *
 					       rtOpts->test.bad_timestamp.max_jitter);
 		time->nsec += jitter;
-		normalizeTime(time);
+		sfptpd_time_normalise(time);
 		INFO("ptp %s: added jitter %d to pdelay req RX timestamp\n",
 		     rtOpts->name, jitter);
 	}
@@ -3646,7 +3624,7 @@ issueDelayResp(struct sfptpd_timespec *time,MsgHeader *header,RunTimeOpts *rtOpt
 		Integer32 jitter = (Integer32)((getRand() - 0.5) * 2.0 *
 					       rtOpts->test.bad_timestamp.max_jitter);
 		time->nsec += jitter;
-		normalizeTime(time);
+		sfptpd_time_normalise(time);
 		INFO("ptp %s: added jitter %d to delay req RX timestamp\n",
 		     rtOpts->name, jitter);
 	}
@@ -3656,7 +3634,7 @@ issueDelayResp(struct sfptpd_timespec *time,MsgHeader *header,RunTimeOpts *rtOpt
 		correction = (Integer64)(getRand() *
 				       rtOpts->test.xparent_clock.max_correction);
 		time->nsec += (Integer32)correction;
-		normalizeTime(time);
+		sfptpd_time_normalise(time);
 		INFO("ptp %s: set correction field of delay resp to %"PRIi64" ns\n",
 		     rtOpts->name, correction);
 	} else {
@@ -3712,13 +3690,11 @@ issueDelayRespWithMonitoring(struct sfptpd_timespec *time, MsgHeader *header,
 			     RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
 	Timestamp requestReceiptTimestamp;
-	struct sfptpd_timespec lastSyncTime;
 	PTPMonRespTLV ptp_mon_resp_tlv;
 	ssize_t length;
 
-	ts_to_InternalTime(&ptpClock->sync_send_time, &lastSyncTime);
 	fromInternalTime(time, &requestReceiptTimestamp);
-	fromInternalTime(&lastSyncTime, &ptp_mon_resp_tlv.lastSyncTimestamp);
+	fromInternalTime(&ptpClock->sync_send_time, &ptp_mon_resp_tlv.lastSyncTimestamp);
 
 	/* Populate the TLV */
 	ptp_mon_resp_tlv.tlvType = PTPD_TLV_PTPMON_RESP_OLD;
@@ -3779,7 +3755,7 @@ issuePDelayRespFollowUp(struct sfptpd_timespec *time, MsgHeader *header,
 		Integer32 jitter = (Integer32)((getRand() - 0.5) * 2.0 *
 					       rtOpts->test.bad_timestamp.max_jitter);
 		time->nsec += jitter;
-		normalizeTime(time);
+		sfptpd_time_normalise(time);
 		INFO("ptp %s: added jitter %d to pdelay resp TX timestamp\n",
 		     rtOpts->name, jitter);
 	}

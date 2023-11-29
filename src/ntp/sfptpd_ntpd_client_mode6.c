@@ -432,7 +432,7 @@ STATIC_ASSERT(sizeof(struct association) == 4);
  */
 struct sfptpd_ntpclient_state {
 	int sock;
-	struct timespec timeout;
+	struct sfptpd_timespec timeout;
 	int32_t key_id;
 	char key_value[SFPTPD_NTP_KEY_MAX];
 	unsigned int legacy_mode;
@@ -602,7 +602,7 @@ static int mode6_response(struct sfptpd_ntpclient_state *ntpclient,
 	struct ntp_mode6_packet pkt;
 	fd_set fds;
 	int rc, len;
-	struct timespec end_time, time_now, timeout;
+	struct sfptpd_timespec end_time, time_now, timeout;
 	u_short offsets[MAXFRAGS+1];
 	u_short counts[MAXFRAGS+1];
 	uint16_t offset;
@@ -636,7 +636,7 @@ static int mode6_response(struct sfptpd_ntpclient_state *ntpclient,
 	seen_last_frag = 0;
 
 	/* Set time end to now + timeout duration */
-	(void)clock_gettime(CLOCK_MONOTONIC, &end_time);
+	(void)sfclock_gettime(CLOCK_MONOTONIC, &end_time);
 	sfptpd_time_add(&end_time, &end_time, &ntpclient->timeout);
 
 	/* Prepare file descriptor set */
@@ -646,15 +646,18 @@ static int mode6_response(struct sfptpd_ntpclient_state *ntpclient,
 	/* Loop until we have an error or a complete response.  Nearly all
 	 * code paths to loop again use continue. */
 	while (1) {
+		struct timespec boring_timeout;
+
 		/* Work out how much time we have left. If we've run out of
 		 * time, return now. */
-		(void)clock_gettime(CLOCK_MONOTONIC, &time_now);
+		(void)sfclock_gettime(CLOCK_MONOTONIC, &time_now);
 		sfptpd_time_subtract(&timeout, &end_time, &time_now);
-		if (timeout.tv_sec < 0)
+		sfptpd_time_to_std_floor(&boring_timeout, &timeout);
+		if (timeout.sec < 0)
 			return ETIMEDOUT;
 
 		/* Wait on the sockets for the specified period of time */
-		rc = pselect(ntpclient->sock+1, &fds, NULL, NULL, &timeout, NULL);
+		rc = pselect(ntpclient->sock+1, &fds, NULL, NULL, &boring_timeout, NULL);
 		if (rc < 0) {
 			ERROR("ntpclient: mode6: error waiting on socket, %s\n",
 			      strerror(errno));
@@ -811,7 +814,7 @@ static int mode6_response(struct sfptpd_ntpclient_state *ntpclient,
 		memcpy(ntpclient->buffer + offset, read_ptr, count);
     
 		/* Reset timer for next packet */
-		(void)clock_gettime(CLOCK_MONOTONIC, &end_time);
+		(void)sfclock_gettime(CLOCK_MONOTONIC, &end_time);
 		sfptpd_time_add(&end_time, &end_time, &ntpclient->timeout);
 
 		/* If last fragment was seen, look for missing fragments in
@@ -1161,8 +1164,7 @@ int sfptpd_ntpclient_mode6_create(struct sfptpd_ntpclient_state **ntpclient,
 	/* Initialise other members */
 	new->legacy_mode = 0;
 	new->request_pkt_size = sizeof(struct ntp_mode6_packet);
-	new->timeout.tv_sec = 1;
-	new->timeout.tv_nsec = 0;
+	sfptpd_time_from_s(&new->timeout, 1);
 
 	/* If we have a key, copy it */
 	if (key_value != NULL)

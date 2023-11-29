@@ -248,24 +248,14 @@ void
 getTime(struct sfptpd_timespec * time)
 {
 #if defined(_POSIX_TIMERS) && (_POSIX_TIMERS > 0)
-
-	struct timespec tp;
-	if (clock_gettime(CLOCK_REALTIME, &tp) < 0) {
-		PERROR("clock_gettime() failed, exiting.");
+	if (sfclock_gettime(CLOCK_REALTIME, time) < 0) {
+		PERROR("sfclock_gettime() failed, exiting.");
 		exit(0);
 	}
-	time->sec = tp.tv_sec;
-	time->nsec = tp.tv_nsec;
-	time->nsec_frac = 0;
-
 #else
-
 	struct timeval tv;
 	gettimeofday(&tv, 0);
-	time->sec = tv.tv_sec;
-	time->nsec = tv.tv_usec * 1000;
-	tims->nsec_frac = 0;
-
+	sfptpd_time_init(time, tv.sec, tv.tv_usec * 1000, 0);
 #endif /* _POSIX_TIMERS */
 }
 

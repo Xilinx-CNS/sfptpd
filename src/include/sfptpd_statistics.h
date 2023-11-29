@@ -151,8 +151,8 @@ typedef struct sfptpd_stats_range
 	long double min;
 	long double max;
 	bool qualified;
-	struct timespec min_time;
-	struct timespec max_time;
+	struct sfptpd_timespec min_time;
+	struct sfptpd_timespec max_time;
 } sfptpd_stats_range_t;
 
 
@@ -281,8 +281,8 @@ typedef struct sfptpd_stats_time_interval
 	unsigned long seq_num;
 	bool start_valid;
 	bool end_valid;
-	struct timespec start_time;
-	struct timespec end_time;
+	struct sfptpd_timespec start_time;
+	struct sfptpd_timespec end_time;
 } sfptpd_stats_time_interval_t;
 
 
@@ -444,7 +444,7 @@ void sfptpd_stats_range_init(struct sfptpd_stats_range *range);
  */
 void sfptpd_stats_range_update(struct sfptpd_stats_range *range,
 			       long double sample,
-			       struct timespec time,
+			       struct sfptpd_timespec time,
 			       bool qualified);
 
 /** Add one set of range statistics to another. Used to accummulate
@@ -534,7 +534,7 @@ int sfptpd_stats_collection_add(struct sfptpd_stats_collection *stats,
 int sfptpd_stats_collection_update_range(struct sfptpd_stats_collection *stats,
 					 unsigned int index,
 					 long double sample,
-					 struct timespec time,
+					 struct sfptpd_timespec time,
 					 bool qualified);
 
 /** Update a count statistical measure with a new data sample
@@ -565,7 +565,7 @@ int sfptpd_stats_collection_update_count_samples(struct sfptpd_stats_collection 
  * @param end_time Realtime clock time at the end of the stats period
  */
 void sfptpd_stats_collection_end_period(struct sfptpd_stats_collection *stats,
-				        struct timespec *end_time);
+				        struct sfptpd_timespec *end_time);
 
 /** Write all the statistics to the appropriate log file.
  * @param stats Pointer to collection
@@ -602,8 +602,8 @@ int sfptpd_stats_collection_get_range(struct sfptpd_stats_collection *stats,
 				      enum sfptpd_stats_history_index instance,
 				      long double *mean, long double *min,
 				      long double *max, int *qualified,
-				      struct timespec *min_time,
-				      struct timespec *max_time);
+				      struct sfptpd_timespec *min_time,
+				      struct sfptpd_timespec *max_time);
 
 /** Read a statistic history
  * @param stats Pointer to collection

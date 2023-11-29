@@ -16,12 +16,28 @@
 
 
 /****************************************************************************
+ * Types
+ ****************************************************************************/
+
+/* sfptpd high precision time struct.
+ * This version has a signed nsec value, which is not meaningful at the API
+ * level but helps implement internal normalisation.
+ */
+struct sfptpd_signed_timespec {
+	int64_t sec;
+	int32_t nsec;
+	uint32_t nsec_frac;
+};
+
+
+/****************************************************************************
  * Constants
  ****************************************************************************/
 
-const struct timespec SFPTPD_NULL_TIME = {
-  .tv_sec = 0,
-  .tv_nsec = 0
+const struct sfptpd_timespec SFPTPD_NULL_TIME = {
+	.sec = 0,
+	.nsec = 0,
+	.nsec_frac = 0,
 };
 
 
@@ -29,127 +45,90 @@ const struct timespec SFPTPD_NULL_TIME = {
  * Time Manipulation Functions
  ****************************************************************************/
 
-void sfptpd_time_normalise(struct timespec *t)
+void sfptpd_time_normalise(struct sfptpd_timespec *t)
 {
-	assert(t);
+	struct sfptpd_signed_timespec *st = (struct sfptpd_signed_timespec *) t;
 
-	t->tv_sec += t->tv_nsec / 1000000000;
-	t->tv_nsec -= (t->tv_nsec / 1000000000) * 1000000000;
+	assert(st);
 
-	if (t->tv_nsec < 0) {
-		t->tv_sec -= 1;
-		t->tv_nsec += 1000000000;
+	st->sec += st->nsec / 1000000000;
+	st->nsec -= (st->nsec / 1000000000) * 1000000000;
+
+	if (st->nsec < 0) {
+		st->sec -= 1;
+		st->nsec += 1000000000;
 	}
 }
 
-void sfptpd_time_add(struct timespec *c, const struct timespec *a,
-		     const struct timespec *b)
+void sfptpd_time_add(struct sfptpd_timespec *c,
+		     const struct sfptpd_timespec *a,
+		     const struct sfptpd_timespec *b)
 {
+	uint64_t nsec_fp32;
+
 	assert(a);
 	assert(b);
 	assert(c);
 
-	c->tv_sec = a->tv_sec + b->tv_sec;
-	c->tv_nsec = a->tv_nsec + b->tv_nsec;
+	nsec_fp32 =
+		(((uint64_t) a->nsec) << 32) +
+		(((uint64_t) b->nsec) << 32) +
+		a->nsec_frac +
+		b->nsec_frac;
+
+	c->nsec_frac = nsec_fp32;
+	c->nsec = nsec_fp32 >> 32;
+	c->sec = a->sec + b->sec;
 	
 	sfptpd_time_normalise(c);
 }
 
-void sfptpd_time_subtract(struct timespec *c, const struct timespec *a,
-			  const struct timespec *b)
+void sfptpd_time_subtract(struct sfptpd_timespec *c,
+			  const struct sfptpd_timespec *a,
+			  const struct sfptpd_timespec *b)
 {
-	assert(a);
-	assert(b);
-	assert(c);
+	int64_t a_nsec_fp32 = (((uint64_t) a->nsec) << 32) | a->nsec_frac;
+	int64_t b_nsec_fp32 = (((uint64_t) b->nsec) << 32) | b->nsec_frac;
+	int64_t c_nsec_fp32 = a_nsec_fp32 - b_nsec_fp32;
 
-	c->tv_sec = a->tv_sec - b->tv_sec;
-	c->tv_nsec = a->tv_nsec - b->tv_nsec;
+	c->sec = a->sec - b->sec;
+	c->nsec = c_nsec_fp32 >> 32;
+	c->nsec_frac = c_nsec_fp32;
 	
 	sfptpd_time_normalise(c);
 }
 
-
-int sfptpd_time_cmp(const struct timespec *a, const struct timespec *b)
+int sfptpd_time_cmp(const struct sfptpd_timespec *a, const struct sfptpd_timespec *b)
 {
-	if (a->tv_sec < b->tv_sec)
+	if (a->sec < b->sec)
 		return -1;
-	else if (a->tv_sec > b->tv_sec)
+	else if (a->sec > b->sec)
 		return 1;
-	else if (a->tv_nsec < b->tv_nsec)
+	else if (a->nsec < b->nsec)
 		return -1;
-	else if (a->tv_nsec > b->tv_nsec)
+	else if (a->nsec > b->nsec)
+		return 1;
+	else if (a->nsec_frac < b->nsec_frac)
+		return -1;
+	else if (a->nsec_frac > b->nsec_frac)
 		return 1;
 	else
 		return 0;
 }
 
-
-void sfptpd_time_negate(struct timespec *a, struct timespec *b)
+void sfptpd_time_negate(struct sfptpd_timespec *a, struct sfptpd_timespec *b)
 {
 	sfptpd_time_subtract(a, &SFPTPD_NULL_TIME, b);
 }
 
-
-bool sfptpd_time_is_greater_or_equal(const struct timespec *a, const struct timespec *b)
+bool sfptpd_time_is_greater_or_equal(const struct sfptpd_timespec *a, const struct sfptpd_timespec *b)
 {
-	struct timespec c;
+	struct sfptpd_timespec c;
 	assert(a);
 	assert(b);
 
 	sfptpd_time_subtract(&c, a, b);
-	return (c.tv_sec >= 0);
+	return (c.sec >= 0);
 }
-
-void sfptpd_time_float_s_to_timespec(const sfptpd_time_t s, struct timespec *t)
-{
-	assert(t);
-	t->tv_sec = (time_t)floor(s);
-	t->tv_nsec = (long)(s * 1.0e9 - (t->tv_sec * 1.0e9));
-	sfptpd_time_normalise(t);
-}
-
-void sfptpd_time_float_ns_to_timespec(const sfptpd_time_t ns, struct timespec *t)
-{
-	assert(t);
-	t->tv_sec = (time_t)floor(ns / 1.0e9);
-	t->tv_nsec = (long)(ns - (t->tv_sec * 1.0e9));
-	sfptpd_time_normalise(t);
-}
-
-
-sfptpd_time_t sfptpd_time_timespec_to_float_s(struct timespec *t)
-{
-	assert(t);
-	return (sfptpd_time_t)t->tv_sec + ((sfptpd_time_t)t->tv_nsec / 1.0e9);
-}
-
-
-sfptpd_time_t sfptpd_time_timespec_to_float_ns(struct timespec *t)
-{
-	assert(t);
-	return ((sfptpd_time_t)t->tv_sec * 1.0e9) + (sfptpd_time_t)t->tv_nsec;
-}
-
-
-sfptpd_time_t sfptpd_time_scaled_ns_to_float_ns(sfptpd_time_fp16_t t)
-{
-	/* Convert from a 64bit fixed point integer of scaled nanoseconds to
-	 * a floating point ns format. */
-	return (sfptpd_time_t)t / 65536.0;
-}
-
-
-sfptpd_time_fp16_t sfptpd_time_float_ns_to_scaled_ns(sfptpd_time_t t)
-{
-	/* Convert to a scaled ns format and saturate. */
-	t *= 65536.0;
-	if (t > (sfptpd_time_t)INT64_MAX)
-		return INT64_MAX;
-	if (t < (sfptpd_time_t)INT64_MIN)
-		return INT64_MIN;
-
-	return (int64_t)t;
-}
-
 
 /* fin */

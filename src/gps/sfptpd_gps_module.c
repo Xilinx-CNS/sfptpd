@@ -69,7 +69,7 @@ struct gps_state {
 	   that NTP calculates a new offset from the selected peer.
 	   The offset is invalid if 'valid' is false. */
 	struct {
-		struct timespec offset_timestamp;
+		struct sfptpd_timespec offset_timestamp;
 		bool valid;
 	} __attribute__((packed)) offset_id_tuple;
 
@@ -95,17 +95,17 @@ struct gps_state {
 	bool offset_unsafe;
 
 	/* GPS time at which offset was last updated */
-	struct timespec offset_gps_timestamp;
+	struct sfptpd_timespec offset_gps_timestamp;
 
 	/* System time at which offset was last updated */
-	struct timespec offset_timestamp;
+	struct sfptpd_timespec offset_timestamp;
 
 	/* Cached log time */
 	struct sfptpd_log_time log_time;
 
 	/* PPS quantisation error */
 	long pps_quant_err_ps;
-	struct timespec pps_quant_err_pulse;
+	struct sfptpd_timespec pps_quant_err_pulse;
 
 	/* Boolean indicating whether we consider the slave clock to be
 	 * synchonized to the master */
@@ -143,10 +143,10 @@ struct gps_instance {
 	sfptpd_sync_module_ctrl_flags_t ctrl_flags;
 
 	/* Time for next poll of the GPS daemon */
-	struct timespec next_poll_time;
+	struct sfptpd_timespec next_poll_time;
 
 	/* Time for control reply timeout */
-	struct timespec reply_expiry_time;
+	struct sfptpd_timespec reply_expiry_time;
 
 	/* GPS module state */
 	struct gps_state state;
@@ -321,11 +321,11 @@ static void gps_convergence_init(struct gps_instance *gps)
 
 static bool gps_convergence_update(struct gps_instance *gps, struct gps_state *new_state)
 {
-	struct timespec time;
+	struct sfptpd_timespec time;
 	int rc;
 	assert(gps != NULL);
 
-	rc = clock_gettime(CLOCK_MONOTONIC, &time);
+	rc = sfclock_gettime(CLOCK_MONOTONIC, &time);
 	if (rc < 0) {
 		ERROR("gps: failed to get monotonic time, %s\n", strerror(errno));
 	}
@@ -348,7 +348,7 @@ static bool gps_convergence_update(struct gps_instance *gps, struct gps_state *n
 		/* Update the synchronized state based on the current offset
 		 * from master */
 		new_state->synchronized = sfptpd_stats_convergence_update(&gps->convergence,
-									  time.tv_sec,
+									  time.sec,
 									  /* TODO */ 0);
 	}
 
@@ -399,7 +399,7 @@ static int gps_stats_init(struct gps_instance *gps)
 void gps_stats_update(struct gps_instance *gps)
 {
 	struct sfptpd_stats_collection *stats;
-	struct timespec now;
+	struct sfptpd_timespec now;
 
 	assert(gps != NULL);
 
@@ -463,12 +463,9 @@ void gps_parse_state(struct gps_state *state, int rc, bool offset_unsafe)
 	} else {
 		state->state = state->sats_seen > 0 ?
 			SYNC_MODULE_STATE_SELECTION: SYNC_MODULE_STATE_LISTENING;
-		state->offset_gps_timestamp.tv_sec = 0;
-		state->offset_gps_timestamp.tv_nsec = 0;
-		state->offset_timestamp.tv_sec = 0;
-		state->offset_timestamp.tv_nsec = 0;
+		sfptpd_time_zero(&state->offset_gps_timestamp);
+		sfptpd_time_zero(&state->offset_timestamp);
 		state->offset_from_master = 0.0L;
-		state->offset_from_master = 0.0;
 		state->stratum = 0;
 	}
 
@@ -1136,11 +1133,12 @@ static bool gps_state_machine(struct gps_instance *gps, int read_rc)
 		next_state->est_accuracy = gps_data->fix.ept * 1.0E9;
 		TRACE_L5("gps: STATUS co-ordinates %lf/%lf\n",
 			 gps_data->fix.latitude, gps_data->fix.longitude);
-		next_state->offset_gps_timestamp = gps_data->fix.time;
+		sfptpd_time_from_std_floor(&next_state->offset_gps_timestamp,
+				     &gps_data->fix.time);
 	}
 
 	if (next_state->fix && gps_data->set & TOFF_SET) {
-		struct timespec diff;
+		struct sfptpd_timespec diff;
 
 		TRACE_L5("gps: %s"
 			 " real " SFPTPD_FORMAT_TIMESPEC
@@ -1149,11 +1147,13 @@ static bool gps_state_machine(struct gps_instance *gps, int read_rc)
 			 gps_data->pps.real.tv_sec, gps_data->pps.real.tv_nsec,
 			 gps_data->pps.clock.tv_sec, gps_data->pps.clock.tv_nsec);
 
+		sfptpd_time_from_std_floor(&next_state->offset_gps_timestamp,
+					  &gps_data->pps.real);
+		sfptpd_time_from_std_floor(&next_state->offset_timestamp,
+					  &gps_data->pps.clock);
 		sfptpd_time_subtract(&diff,
-				     &gps_data->pps.clock,
-				     &gps_data->pps.real);
-		next_state->offset_gps_timestamp = gps_data->pps.real;
-		next_state->offset_timestamp = gps_data->pps.clock;
+				     &next_state->offset_gps_timestamp,
+				     &next_state->offset_timestamp);
 		next_state->offset_from_master = sfptpd_time_timespec_to_float_ns(&diff);
 	}
 

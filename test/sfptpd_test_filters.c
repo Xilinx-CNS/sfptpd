@@ -116,7 +116,7 @@ static double normal_random(double mean, double stddev)
 
 }
 
-static sfptpd_ptp_tsd_t rand_path_delay(struct timespec time)
+static sfptpd_ptp_tsd_t rand_path_delay(struct sfptpd_timespec time)
 {
 	sfptpd_ptp_tsd_t s;
 
@@ -140,14 +140,14 @@ static int test_smallest_filter(void)
 	unsigned int num_samples, i, j, total, ttl;
 	float sum_ttl, num_ttls, exp_ttl;
 	struct sfptpd_smallest_filter *filter;
-	struct timespec time = { .tv_sec = 0, .tv_nsec = 0.0 };
+	struct sfptpd_timespec time = sfptpd_time_null();
 
 	total = 0;
 
 	for (i = 0; i < NUM_SMALLEST_ITERATIONS; i++) {
 		num_ttls = 0;
 		ttl = 0, sum_ttl = 0;
-		time.tv_sec = 0;
+		time.sec = 0;
 		float limit;
 
 		do
@@ -179,7 +179,7 @@ static int test_smallest_filter(void)
 			}
 
 			prev_min_samp = min_samp;
-			time.tv_sec++;
+			time.sec++;
 		}
 		if (ttl != 1)
 			num_ttls++;

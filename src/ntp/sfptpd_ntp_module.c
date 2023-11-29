@@ -139,7 +139,7 @@ typedef struct sfptpd_ntp_module {
 	enum ntp_query_state query_state;
 
 	/* Time for next poll of the NTP daemon */
-	struct timespec next_poll_time;
+	struct sfptpd_timespec next_poll_time;
 
 	/* Boolean indicating that the clock has been stepped and that the
 	 * recorded NTP offset may not be correct. The offset will be
@@ -147,7 +147,7 @@ typedef struct sfptpd_ntp_module {
 	bool offset_unsafe;
 
 	/* System time at which offset was last updated */
-	struct timespec offset_timestamp;
+	struct sfptpd_timespec offset_timestamp;
 
 	/* NTP module state */
 	struct ntp_state state;
@@ -354,12 +354,12 @@ static void ntp_convergence_init(ntp_module_t *ntp)
 
 static void ntp_convergence_update(ntp_module_t *ntp)
 {
-	struct timespec time;
+	struct sfptpd_timespec time;
 	struct sfptpd_ntpclient_peer *peer;
 	int rc;
 	assert(ntp != NULL);
 
-	rc = clock_gettime(CLOCK_MONOTONIC, &time);
+	rc = sfclock_gettime(CLOCK_MONOTONIC, &time);
 	if (rc < 0) {
 		ERROR("ntp: failed to get monotonic time, %s\n", strerror(errno));
 	}
@@ -383,7 +383,7 @@ static void ntp_convergence_update(ntp_module_t *ntp)
 		/* Update the synchronized state based on the current offset
 		 * from master */
 		ntp->synchronized = sfptpd_stats_convergence_update(&ntp->convergence,
-								    time.tv_sec,
+								    time.sec,
 								    peer->offset);
 	}
 }
@@ -452,7 +452,7 @@ void ntp_stats_update(ntp_module_t *ntp)
 		sfptpd_stats_collection_update_range(stats, NTP_STATS_ID_OFFSET, peer->offset,
 						     ntp->offset_timestamp, true);
 	} else {
-		struct timespec now;
+		struct sfptpd_timespec now;
 		sfptpd_clock_get_time(sfptpd_clock_get_system_clock(), &now);
 		sfptpd_stats_collection_update_range(stats, NTP_STATS_ID_OFFSET, 0.0,
 						     now, false);
@@ -801,7 +801,7 @@ bool ntp_state_machine(ntp_module_t *ntp, struct ntp_state *new_state)
 {
 	int rc;
 	bool update;
-	struct timespec time_now, time_left;
+	struct sfptpd_timespec time_now, time_left;
 	assert(ntp != NULL);
 	assert(new_state != NULL);
 
@@ -828,11 +828,11 @@ bool ntp_state_machine(ntp_module_t *ntp, struct ntp_state *new_state)
 
 	case NTP_QUERY_STATE_SLEEP:
 		/* Check whether it's time to poll the NTP daemon again */
-		(void)clock_gettime(CLOCK_MONOTONIC, &time_now);
+		(void)sfclock_gettime(CLOCK_MONOTONIC, &time_now);
 		sfptpd_time_subtract(&time_left, &ntp->next_poll_time, &time_now);
-		if (time_left.tv_sec < 0) {
+		if (time_left.sec < 0) {
 			ntp->query_state = NTP_QUERY_STATE_SYS_INFO;
-			ntp->next_poll_time.tv_sec += ntp->config->poll_interval;
+			ntp->next_poll_time.sec += ntp->config->poll_interval;
 		}
 		/* This state always succeeds */
 		rc = 0;
@@ -1251,11 +1251,10 @@ static void ntp_on_stats_end_period(ntp_module_t *ntp, sfptpd_sync_module_msg_t 
 
 static void ntp_on_run(ntp_module_t *ntp)
 {
-	struct timespec interval;
+	struct sfptpd_timespec interval;
 	int rc;
 
-	interval.tv_sec = 0;
-	interval.tv_nsec = NTP_POLL_INTERVAL;
+	sfptpd_time_from_ns(&interval, NTP_POLL_INTERVAL);
 
 	/* Start a single-shot timer for polling. This is rearmed
 	   after the timer event has been handled because if polling
@@ -1271,7 +1270,7 @@ static void ntp_on_run(ntp_module_t *ntp)
 	}
 
 	/* Determine the time when we should next poll the NTP daemon */
-	(void)clock_gettime(CLOCK_MONOTONIC, &ntp->next_poll_time);
+	(void)sfclock_gettime(CLOCK_MONOTONIC, &ntp->next_poll_time);
 	ntp->query_state = NTP_QUERY_STATE_SYS_INFO;
 	ntp->offset_unsafe = false;
 
@@ -1289,7 +1288,7 @@ static void ntp_on_timer(void *user_context, unsigned int id)
 	ntp_module_t *ntp = (ntp_module_t *)user_context;
 	struct ntp_state new_state;
 	bool update;
-	struct timespec interval;
+	struct sfptpd_timespec interval;
 	int rc;
 
 	assert(ntp != NULL);
@@ -1320,9 +1319,7 @@ static void ntp_on_timer(void *user_context, unsigned int id)
 		ntp_stats_update(ntp);
 	}
 
-	interval.tv_sec = 0;
-	interval.tv_nsec = NTP_POLL_INTERVAL;
-
+	sfptpd_time_from_ns(&interval, NTP_POLL_INTERVAL);
 	rc = sfptpd_thread_timer_start(NTP_POLL_TIMER_ID,
 				       false, false, &interval);
 	if (rc != 0) {

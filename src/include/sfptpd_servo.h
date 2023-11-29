@@ -134,7 +134,7 @@ void sfptpd_servo_set_clocks(struct sfptpd_servo *servo, struct sfptpd_clock *ma
  * @param offset Amount to step the clock
  * @return 0 for success or an errno if the operation failed.
  */
-int sfptpd_servo_step_clock(struct sfptpd_servo *servo, struct timespec *offset);
+int sfptpd_servo_step_clock(struct sfptpd_servo *servo, struct sfptpd_timespec *offset);
 
 /** Perform a sync operation using the servo. This will perform a single
  * synchronization operation on the slave clock. In order to synchronise the
@@ -145,13 +145,13 @@ int sfptpd_servo_step_clock(struct sfptpd_servo *servo, struct timespec *offset)
  * @param time  Current time
  * @return 0 for success or an errno if the sync operation failed.
  */
-int sfptpd_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_servo *servo, struct timespec *time);
+int sfptpd_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_servo *servo, struct sfptpd_timespec *time);
 
 /** Get the latest difference between the master and slave clocks
  * @param servo  Servo instance
  * @param offset Difference between master and slave clocks (master - slave)
  */
-void sfptpd_servo_get_offset_from_master(struct sfptpd_servo *servo, struct timespec *offset);
+void sfptpd_servo_get_offset_from_master(struct sfptpd_servo *servo, struct sfptpd_timespec *offset);
 
 /** Get statistics suitable for output to realtime module
  * @param servo Servo instance
@@ -174,7 +174,7 @@ void sfptpd_servo_save_state(struct sfptpd_servo *servo);
  * @param time Time to record stats against at end of stats period
  */
 void sfptpd_servo_stats_end_period(struct sfptpd_servo *servo,
-				   struct timespec *time);
+				   struct sfptpd_timespec *time);
 
 /** Write the servo slave clock offset to the topology stream
  * @param servo  Servo instance

@@ -48,7 +48,7 @@ struct ptpd_port_snapshot {
 		UInteger32 steps_removed;
 		sfptpd_time_t offset_from_master;
 		sfptpd_time_t one_way_delay;
-		struct timespec last_offset_time;
+		struct sfptpd_timespec last_offset_time;
 		LongDouble frequency_adjustment;
 		LongDouble servo_p_term;
 		LongDouble servo_i_term;
@@ -147,7 +147,7 @@ void ptpd_update_leap_second(struct ptpd_port_context *ptpd,
 			     bool leap59, bool leap61);
 
 /* Step the clock by the specified amount */
-void ptpd_step_clock(struct ptpd_port_context *ptpd, struct timespec *offset);
+void ptpd_step_clock(struct ptpd_port_context *ptpd, struct sfptpd_timespec *offset);
 
 /* Update the PID controller coefficients at runtime */
 void ptpd_pid_adjust(struct ptpd_port_context *ptpd, double kp, double ki, double kd, bool reset);
@@ -221,8 +221,8 @@ void ptpd_publish_mtie_window(struct ptpd_port_context *ptpd,
 			      int window_seconds,
 			      long double min,
 			      long double max,
-			      const struct timespec *min_time,
-			      const struct timespec *max_time);
+			      const struct sfptpd_timespec *min_time,
+			      const struct sfptpd_timespec *max_time);
 
 /* Publish state changes */
 void ptpd_publish_status(struct ptpd_port_context *ptpd,

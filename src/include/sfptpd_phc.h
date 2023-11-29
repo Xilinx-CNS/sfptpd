@@ -43,7 +43,7 @@ typedef enum {
 struct sfptpd_phc;
 
 /* Function to perform clock diff */
-typedef int (*sfptpd_phc_diff_fn)(void *context, struct timespec *diff);
+typedef int (*sfptpd_phc_diff_fn)(void *context, struct sfptpd_timespec *diff);
 
 
 extern const char *sfptpd_phc_diff_method_text[];
@@ -101,7 +101,7 @@ int sfptpd_phc_get_clk_compare_interval(struct sfptpd_phc *phc);
  * @param diff Difference between PHC and system clock
  * @return 0 on success or an errno otherwise
  */
-int sfptpd_phc_compare_to_sys_clk(struct sfptpd_phc *phc, struct timespec *diff);
+int sfptpd_phc_compare_to_sys_clk(struct sfptpd_phc *phc, struct sfptpd_timespec *diff);
 
 /** Enable or disable the external PPS input events
  * @param phc Handle of the PHC device
@@ -124,7 +124,7 @@ int sfptpd_phc_get_pps_fd(struct sfptpd_phc *phc);
  * @return 0 on success or an errno otherwise
  */
 int sfptpd_phc_get_pps_event(struct sfptpd_phc *phc,
-			     struct timespec *timestamp, uint32_t *seq_num);
+			     struct sfptpd_timespec *timestamp, uint32_t *seq_num);
 
 /** The oldest distribution we support has kernel support for PHC but the
  * syscall is missing in that glibc version. To mitigate this we create our

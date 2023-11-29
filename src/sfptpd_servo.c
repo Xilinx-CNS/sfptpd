@@ -107,7 +107,7 @@ struct sfptpd_servo {
 	} state;
 
 	/* Time of first sync failure in run */
-	struct timespec sync_failures_begin;
+	struct sfptpd_timespec sync_failures_begin;
 
 	/* Alarms */
 	sfptpd_sync_module_alarms_t alarms;
@@ -292,10 +292,10 @@ void sfptpd_servo_set_clocks(struct sfptpd_servo *servo, struct sfptpd_clock *ma
 }
 
 
-int sfptpd_servo_step_clock(struct sfptpd_servo *servo, struct timespec *offset)
+int sfptpd_servo_step_clock(struct sfptpd_servo *servo, struct sfptpd_timespec *offset)
 {
 	int rc;
-	struct timespec zero = {.tv_sec = 0, .tv_nsec = 0};
+	struct sfptpd_timespec zero = sfptpd_time_null();
 	
 	assert(servo != NULL);
 	assert(servo->slave != NULL);
@@ -334,9 +334,9 @@ int sfptpd_servo_step_clock(struct sfptpd_servo *servo, struct timespec *offset)
 }
 
 
-static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_servo *servo, struct timespec *time)
+static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_servo *servo, struct sfptpd_timespec *time)
 {
-	struct timespec diff;
+	struct sfptpd_timespec diff;
 	long double mean, diff_ns;
 	int rc;
 
@@ -363,7 +363,7 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 
 	/* Check to see if the NIC time is less than 115 days since the epoch.
 	 * If so then the NIC has reset. In this case we need to raise an alarm. */
-	struct timespec curtime;
+	struct sfptpd_timespec curtime;
 	rc = sfptpd_clock_get_time(servo->master, &curtime);
 	if (rc != 0) {
 		DBG_L4("%s: failed to get time from clock %s, error %s\n",
@@ -413,7 +413,7 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 
 	/* Check to see if the slave NIC's time is near epoch.
 	 * If so then the NIC has reset. In this case we just print a warning. */
-        struct timespec slavetime;
+        struct sfptpd_timespec slavetime;
 	rc = sfptpd_clock_get_time(servo->slave, &slavetime);
 	long double slavetime_ns = sfptpd_time_timespec_to_float_ns(&slavetime);
 	if (slavetime_ns < 1e16 || slavetime_ns > (0xFFFC0000 * 1e9)) {
@@ -523,7 +523,7 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 
 	/* Update the convergence measure */
 	servo->synchronized = sfptpd_stats_convergence_update(&servo->convergence,
-							      time->tv_sec, mean);
+							      time->sec, mean);
 
 	/* Log offset and synchronized stats with clock object */
 	sfptpd_clock_stats_record_offset(servo->slave, mean, servo->synchronized);
@@ -546,10 +546,10 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 }
 
 
-int sfptpd_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_servo *servo, struct timespec *time)
+int sfptpd_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_servo *servo, struct sfptpd_timespec *time)
 {
-	struct timespec elapsed;
-	struct timespec now;
+	struct sfptpd_timespec elapsed;
+	struct sfptpd_timespec now;
 	sfptpd_time_t elapsed_s;
 	int rc;
 
@@ -559,14 +559,14 @@ int sfptpd_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_servo *
 	case STATE_OK:
 		if (rc != 0) {
 			servo->state = STATE_FAILED;
-			clock_gettime(CLOCK_MONOTONIC, &servo->sync_failures_begin);
+			sfclock_gettime(CLOCK_MONOTONIC, &servo->sync_failures_begin);
 		}
 		break;
 	case STATE_FAILED:
 		if (rc == 0) {
 			servo->state = STATE_OK;
 		} else {
-			clock_gettime(CLOCK_MONOTONIC, &now);
+			sfclock_gettime(CLOCK_MONOTONIC, &now);
 			sfptpd_time_subtract(&elapsed, &now, &servo->sync_failures_begin);
 			elapsed_s = sfptpd_time_timespec_to_float_s(&elapsed);
 
@@ -595,7 +595,7 @@ int sfptpd_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_servo *
 	return rc;
 }
 
-void sfptpd_servo_get_offset_from_master(struct sfptpd_servo *servo, struct timespec *offset)
+void sfptpd_servo_get_offset_from_master(struct sfptpd_servo *servo, struct sfptpd_timespec *offset)
 {
 	assert(servo != NULL);
 	assert(offset != NULL);
@@ -685,7 +685,7 @@ void sfptpd_servo_save_state(struct sfptpd_servo *servo)
 
 
 void sfptpd_servo_stats_end_period(struct sfptpd_servo *servo,
-				   struct timespec *time)
+				   struct sfptpd_timespec *time)
 {
 	assert(servo != NULL);
 	assert(servo->slave != NULL);

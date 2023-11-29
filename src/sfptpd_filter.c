@@ -43,7 +43,7 @@ struct sfptpd_smallest_filter {
 	unsigned int write_idx;
 
 	/* Maximum age samples can be before they are disqualified */
-	struct timespec timeout;
+	struct sfptpd_timespec timeout;
 
 	/* Array of data samples. */
 	sfptpd_ptp_tsd_t data[0];
@@ -168,8 +168,7 @@ void sfptpd_pid_filter_reset(sfptpd_pid_filter_t *pid)
 	pid->i = 0.0;
 	pid->d = 0.0;
 	pid->freq_adjust = 0.0;
-	pid->last_update.tv_sec = 0;
-	pid->last_update.tv_nsec = 0;
+	sfptpd_time_zero(&pid->last_update);
 
 	pid->average_interval = pid->configured_interval;
 }
@@ -184,8 +183,7 @@ void sfptpd_pid_filter_adjust(sfptpd_pid_filter_t *pid, long double k_p,
 	if (!isnan(k_p))
 		pid->k_p = k_p;
 
-	if (!isnan(k_i))
-		pid->k_i = k_i;
+	if (!isnan(k_i))pid->k_i = k_i;
 
 	if (!isnan(k_d))
 		pid->k_d = k_d;
@@ -196,20 +194,18 @@ void sfptpd_pid_filter_adjust(sfptpd_pid_filter_t *pid, long double k_p,
 
 
 long double sfptpd_pid_filter_update(sfptpd_pid_filter_t *pid, long double delta,
-				     struct timespec *time)
+				     struct sfptpd_timespec *time)
 {
 	long double interval;
-	struct timespec diff;
+	struct sfptpd_timespec diff;
 
 	assert(pid != NULL);
 
 	interval = pid->configured_interval;
 	if (time != NULL) {
-		if ((pid->last_update.tv_sec != 0) ||
-		    (pid->last_update.tv_nsec != 0)) {
+		if (!sfptpd_time_is_zero(&pid->last_update)) {
 			sfptpd_time_subtract(&diff, time, &pid->last_update);
-			interval = (long double)diff.tv_sec
-				 + ((long double)diff.tv_nsec / 1.0e9);
+			interval = sfptpd_time_timespec_to_float_s(&diff);
 
 			/* Limit the interval to between half and double the
 			 * average value */
@@ -444,8 +440,7 @@ struct sfptpd_smallest_filter *sfptpd_smallest_filter_create(unsigned int max_sa
 
 	new->max_samples = max_samples;
 	new->ageing = ageing_coefficient;
-	new->timeout.tv_sec = timeout;
-	new->timeout.tv_nsec = 0.0;
+	sfptpd_time_from_s(&new->timeout, timeout);
 
 	sfptpd_smallest_filter_reset(new);
 
@@ -464,8 +459,7 @@ void sfptpd_smallest_filter_set_timeout(struct sfptpd_smallest_filter *filter,
 					time_t timeout)
 {
 	assert(filter != NULL);
-	filter->timeout.tv_sec = timeout;
-	filter->timeout.tv_nsec = 0;
+	sfptpd_time_from_s(&filter->timeout, timeout);
 }
 
 
@@ -482,7 +476,7 @@ sfptpd_ptp_tsd_t *sfptpd_smallest_filter_update(struct sfptpd_smallest_filter *f
 {
 	sfptpd_ptp_tsd_t *best_sample;
 	sfptpd_time_t path_delay, best_path_delay, aged_path_delay;
-	struct timespec now, age;
+	struct sfptpd_timespec now, age;
 	unsigned int i;
 
 	assert(filter != NULL);
@@ -508,7 +502,7 @@ sfptpd_ptp_tsd_t *sfptpd_smallest_filter_update(struct sfptpd_smallest_filter *f
 		 * be fed into the filter. */
 		age = sfptpd_ptp_tsd_get_monotonic_time(&filter->data[i]);
 		sfptpd_time_subtract(&age, &now, &age);
-		assert(age.tv_sec >= 0);
+		assert(age.sec >= 0);
 
 		path_delay = sfptpd_ptp_tsd_get_path_delay(&filter->data[i]);
 		aged_path_delay = path_delay

@@ -258,7 +258,7 @@ struct sfptpd_ptp_intf {
 	bool bond_changed;
 
 	/* Next time bond state can be refreshed. */
-	struct timespec next_bond_refresh_time;
+	struct sfptpd_timespec next_bond_refresh_time;
 
 	sfptpd_ptp_intf_t *next;
 };
@@ -570,11 +570,11 @@ static unsigned int ptp_get_alarms_snapshot(sfptpd_ptp_instance_t *instance)
 static void ptp_convergence_update(sfptpd_ptp_instance_t *instance)
 {
 	sfptpd_time_t ofm_ns;
-	struct timespec time;
+	struct sfptpd_timespec time;
 	int rc;
 	assert(instance != NULL);
 
-	rc = clock_gettime(CLOCK_MONOTONIC, &time);
+	rc = sfclock_gettime(CLOCK_MONOTONIC, &time);
 	if (rc < 0) {
 		ERROR("ptp %s: failed to get monotonic time, %s\n",
 		       SFPTPD_CONFIG_GET_NAME(instance->config), strerror(errno));
@@ -598,7 +598,7 @@ static void ptp_convergence_update(sfptpd_ptp_instance_t *instance)
 		ofm_ns = instance->ptpd_port_snapshot.current.offset_from_master;
 
 		instance->synchronized = sfptpd_stats_convergence_update(&instance->convergence,
-									 time.tv_sec, ofm_ns);
+									 time.sec, ofm_ns);
 	}
 }
 
@@ -648,8 +648,8 @@ static void ptp_publish_mtie_window(sfptpd_ptp_instance_t *instance)
 	long double mean;
 	long double min;
 	long double max;
-	struct timespec min_time = { .tv_sec = 0, .tv_nsec = 0};
-	struct timespec max_time = { .tv_sec = 0, .tv_nsec = 0};
+	struct sfptpd_timespec min_time = { 0, 0, 0 };
+	struct sfptpd_timespec max_time = { 0, 0, 0 };
 	struct sfptpd_stats_time_interval interval;
 	int rc;
 
@@ -705,7 +705,7 @@ static void ptp_stats_update(sfptpd_ptp_instance_t *instance)
 	struct sfptpd_stats_collection *stats;
 	struct ptpd_counters ptpd_counters;
 	struct sfptpd_ptp_bond_info *bond_info = ptp_get_bond_info(instance);
-	struct timespec sync_time;
+	struct sfptpd_timespec sync_time;
 	ptpd_state_e port_state;
 	int rc;
 
@@ -719,7 +719,7 @@ static void ptp_stats_update(sfptpd_ptp_instance_t *instance)
 
 	if (port_state != PTPD_SLAVE ||
 	    port_state != PTPD_UNCALIBRATED) {
-		struct timespec sync_time;
+		struct sfptpd_timespec sync_time;
 
 		/* Record unqualified samples if not in slave state by polling.
 		   Qualified samples are recorded by the servo when available. */
@@ -2343,8 +2343,7 @@ static void ptp_on_get_status(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 		sfptpd_time_float_ns_to_timespec(instance->ptpd_port_snapshot.current.offset_from_master,
 						 &status->offset_from_master);
 	} else {
-		status->offset_from_master.tv_sec = 0;
-		status->offset_from_master.tv_nsec = 0;
+		sfptpd_time_zero(&status->offset_from_master);
 	}
 
 	ptp_translate_master_characteristics(instance, status);
@@ -3212,7 +3211,7 @@ static void ptp_on_link_table(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 static bool ptp_measure_offset_from_discriminator(struct sfptpd_ptp_instance *instance,
 						  sfptpd_time_t *result)
 {
-	struct timespec discrim_to_instance_lrc;
+	struct sfptpd_timespec discrim_to_instance_lrc;
 	bool discriminator_valid = false;
 	int rc = 0;
 
@@ -3226,10 +3225,8 @@ static bool ptp_measure_offset_from_discriminator(struct sfptpd_ptp_instance *in
 		rc = sfptpd_sync_module_get_status(instance->discriminator.sync_instance->module,
 						   instance->discriminator.sync_instance->handle,
 						   &status);
-		if ((rc == 0) &&
-		    ((status.offset_from_master.tv_sec != 0) ||
-		     (status.offset_from_master.tv_nsec != 0))) {
-			struct timespec discrim_lrc_to_instance_lrc;
+		if (rc == 0 && sfptpd_time_is_zero(&status.offset_from_master)) {
+			struct sfptpd_timespec discrim_lrc_to_instance_lrc;
 			rc = sfptpd_clock_compare(status.clock,
 						  instance->intf->clock,
 						  &discrim_lrc_to_instance_lrc);
@@ -3249,10 +3246,9 @@ static bool ptp_measure_offset_from_discriminator(struct sfptpd_ptp_instance *in
 	}
 
 	if (discriminator_valid) {
-		TRACE_L5("ptp: measured offset from BMC discriminator to %s lrc of %22ld.%09ld\n",
+		TRACE_L5("ptp: measured offset from BMC discriminator to %s lrc of " SFPTPD_FMT_SSFTIMESPEC "\n",
 			 SFPTPD_CONFIG_GET_NAME(instance->config),
-			 discrim_to_instance_lrc.tv_sec,
-			 discrim_to_instance_lrc.tv_nsec);
+			 SFPTPD_ARGS_SSFTIMESPEC(discrim_to_instance_lrc));
 		*result = sfptpd_time_timespec_to_float_ns(&discrim_to_instance_lrc);
 	} else if (instance->discriminator_type != DISC_NONE) {
 		TRACE_L4("ptp: could not measure offset from BMC discriminator for %s%s%s\n",
@@ -3852,7 +3848,7 @@ static void ptp_on_run(sfptpd_ptp_module_t *ptp)
 {
 	struct sfptpd_ptp_instance *instance;
 	struct sfptpd_ptp_intf *interface;
-	struct timespec interval;
+	struct sfptpd_timespec interval;
 	int rc;
 
 	assert(ptp->timers_started == false);
@@ -3863,8 +3859,7 @@ static void ptp_on_run(sfptpd_ptp_module_t *ptp)
 	for (instance = ptp_get_first_instance(ptp); instance != NULL; instance = ptp_get_next_instance(instance))
 		ptp_setup_discriminator(instance);
 
-	interval.tv_sec = 0;
-	interval.tv_nsec = PTP_TIMER_INTERVAL_NS;
+	sfptpd_time_from_ns(&interval, PTP_TIMER_INTERVAL_NS);
 
 	rc = sfptpd_thread_timer_start(PTP_TIMER_ID,
 				       true, false, &interval);

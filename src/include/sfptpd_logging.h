@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include <inttypes.h>
 
 #include "sfptpd_misc.h"
 
@@ -63,15 +64,28 @@ typedef enum sfptpd_component_id {
 #define SFPTPD_FORMAT_TIMESPEC            "%ld.%09ld"
 #define SFPTPD_FORMAT_STIMESPEC           "%s%ld.%09ld"
 #define SFPTPD_FMT_SFTIMESPEC             "%" PRIu64 ".%09" PRIu32 "%03" PRIu32
-#define SFPTPD_FMT_SSFTIMESPEC            "%" PRId64 ".%09" PRIu32 "%03" PRIu32
+#define SFPTPD_FMT_SSFTIMESPEC            "%s%" PRId64 ".%012" PRIu64
+#define SFPTPD_FMT_SFTIMESPEC_FIXED       "%22" PRIu64 ".%09" PRIu32 "%03" PRIu32
+#define SFPTPD_ARGS_TIMESPEC(ts) \
+	(ts).tv_sec, \
+	(ts).tv_nsec
 #define SFPTPD_ARGS_STIMESPEC(ts) \
 	((ts).tv_sec == -1 && ((ts).tv_nsec != 0) ? "-" : ""), \
 	((ts).tv_sec >= 0 || (ts).tv_nsec == 0 ? ((ts).tv_sec) : (ts).tv_sec + 1), \
 	((ts).tv_sec >= 0 || (ts).tv_nsec == 0 ? (ts).tv_nsec : 1000000000 - (ts).tv_nsec)
+#define _SFPTPD_NSEC_FRAC_TO_DEC(ts) \
+	(uint32_t) (((uint64_t)((ts).nsec_frac) * 1000 + 0x80000000UL) >> 32)
 #define SFPTPD_ARGS_SFTIMESPEC(ts) \
 	(ts).sec, \
 	(ts).nsec, \
-	(uint32_t) ((uint64_t)((ts).nsec_frac) * 1000 >> 32)
+	_SFPTPD_NSEC_FRAC_TO_DEC((ts))
+#define SFPTPD_ARGS_SSFTIMESPEC(ts) \
+	((ts).sec == -1 && ((ts).nsec != 0) ? "-" : ""), \
+	((ts).sec >= 0 || (ts).nsec == 0 ? ((ts).sec) : (ts).sec + 1), \
+	((ts).sec >= 0 || (ts).nsec == 0 ? \
+		1000 * ((uint64_t)((ts).nsec)) + _SFPTPD_NSEC_FRAC_TO_DEC((ts)) : \
+		1000000000000 - 1000 * ((uint64_t)((ts).nsec)) - _SFPTPD_NSEC_FRAC_TO_DEC((ts)))
+
 
 /** Forward structure declarations */
 struct sfptpd_config;

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
-/* (c) Copyright 2012-2019 Xilinx, Inc. */
+/* (c) Copyright 2012-2023 Xilinx, Inc. */
 /* (c) Copyright prior contributors */
 
 /**
@@ -101,31 +101,14 @@
 void fromInternalTime(const struct sfptpd_timespec*, Timestamp*);
 
 /**
- * \brief Convert Timestamp to struct timespec structure (defined by the spec)
+ * \brief Convert Timestamp to struct sfptpd_timespec structure (defined by the spec)
  */
-void toInternalTime(struct timespec *, const Timestamp*);
-
-void ts_to_InternalTime(const struct timespec *, struct sfptpd_timespec *);
-void internalTime_to_ts(const struct sfptpd_timespec *a, struct timespec *b);
-
-/**
- * \brief Use to normalize a struct sfptpd_timespec structure
- *
- * The nanosecondsField member must always be less than 10⁹
- * This function is used after adding or substracting struct sfptpd_timespec
- */
-void normalizeTime(struct sfptpd_timespec *);
-
-/**
- * \brief Add two InternalTime structure and normalize
- */
-void addTime(struct sfptpd_timespec*, const struct sfptpd_timespec*, const struct sfptpd_timespec*);
-
-/**
- * \brief Substract two InternalTime structure and normalize
- */
-void subTime(struct sfptpd_timespec*, const struct sfptpd_timespec*, const struct sfptpd_timespec*);
-/** \}*/
+static inline void toInternalTime(struct sfptpd_timespec * internal, const Timestamp * external)
+{
+	internal->sec = external->secondsField;
+	internal->nsec = external->nanosecondsField;
+	internal->nsec_frac = 0;
+}
 
 /** \name bmc.c
  * -Best Master Clock Algorithm functions*/
@@ -183,10 +166,10 @@ int insertIntoForeignMasterDS(MsgHeader *header,
 			      const struct sockaddr_storage *senderAddr,
 			      socklen_t senderAddrLen);
 void addForeign(Octet*, size_t length, MsgHeader*, PtpClock*);
-void expireForeignMasterRecords(ForeignMasterDS*, const struct timespec *);
-Boolean doesForeignMasterEarliestAnnounceQualify(ForeignMasterRecord *, const struct timespec *);
-Boolean doesForeignMasterLatestAnnounceQualify(ForeignMasterRecord *, const struct timespec *);
-void getForeignMasterExpiryTime(PtpClock *, struct timespec *);
+void expireForeignMasterRecords(ForeignMasterDS*, const struct sfptpd_timespec *);
+Boolean doesForeignMasterEarliestAnnounceQualify(ForeignMasterRecord *, const struct sfptpd_timespec *);
+Boolean doesForeignMasterLatestAnnounceQualify(ForeignMasterRecord *, const struct sfptpd_timespec *);
+void getForeignMasterExpiryTime(PtpClock *, struct sfptpd_timespec *);
 void recordForeignSync(const MsgHeader *header, PtpClock *ptpClock, const struct sfptpd_timespec *timestamp);
 void recordForeignFollowUp(const MsgHeader *header, PtpClock *ptpClock, const MsgFollowUp *payload);
 
@@ -269,7 +252,7 @@ void displayParent (PtpClock*);
 void displayGlobal (PtpClock*);
 void displayPort (PtpClock*);
 void displayForeignMaster (PtpClock*);
-void displayForeignMasterRecords (ForeignMasterDS *,const struct timespec *);
+void displayForeignMasterRecords (ForeignMasterDS *,const struct sfptpd_timespec *);
 void displayOthers (PtpClock*);
 void displayBuffer (PtpClock*);
 void displayPtpClock (PtpClock*);

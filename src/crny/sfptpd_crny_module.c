@@ -137,7 +137,7 @@ struct ntp_state {
 	bool offset_unsafe;
 
 	/* System time at which offset was last updated */
-	struct timespec offset_timestamp;
+	struct sfptpd_timespec offset_timestamp;
 
 	/* Boolean indicating whether we consider the slave clock to be
 	 * synchonized to the master */
@@ -188,10 +188,10 @@ typedef struct sfptpd_crny_module {
 	int query_src_idx;
 
 	/* Time for next poll of the NTP daemon */
-	struct timespec next_poll_time;
+	struct sfptpd_timespec next_poll_time;
 
 	/* Time for control reply timeout */
-	struct timespec reply_expiry_time;
+	struct sfptpd_timespec reply_expiry_time;
 
 	/* NTP module state */
 	struct ntp_state state;
@@ -483,14 +483,15 @@ static void ntp_convergence_init(crny_module_t *ntp)
 
 static bool ntp_convergence_update(crny_module_t *ntp, struct ntp_state *new_state)
 {
-	struct timespec time;
+	struct sfptpd_timespec time;
 	struct sfptpd_ntpclient_peer *peer;
 	int rc;
 	assert(ntp != NULL);
 
-	rc = clock_gettime(CLOCK_MONOTONIC, &time);
+	rc = sfclock_gettime(CLOCK_MONOTONIC, &time);
 	if (rc < 0) {
 		ERROR("crny: failed to get monotonic time, %s\n", strerror(errno));
+		return false;
 	}
 
 	/* If not in the slave state or we failed to get the time for some
@@ -512,7 +513,7 @@ static bool ntp_convergence_update(crny_module_t *ntp, struct ntp_state *new_sta
 		/* Update the synchronized state based on the current offset
 		 * from master */
 		new_state->synchronized = sfptpd_stats_convergence_update(&ntp->convergence,
-									  time.tv_sec,
+									  time.sec,
 									  peer->offset);
 	}
 
@@ -592,7 +593,7 @@ void crny_stats_update(crny_module_t *ntp)
 		sfptpd_stats_collection_update_range(stats, NTP_STATS_ID_OFFSET, peer->offset,
 						     ntp->state.offset_timestamp, true);
 	} else {
-		struct timespec now;
+		struct sfptpd_timespec now;
 		sfptpd_clock_get_time(sfptpd_clock_get_system_clock(), &now);
 		sfptpd_stats_collection_update_range(stats, NTP_STATS_ID_OFFSET, 0.0,
 						     now, false);
@@ -866,8 +867,8 @@ static int issue_request(crny_module_t *ntp)
 	int rc;
 	struct crny_comm *comm = &ntp->crny_comm;
 	struct crny_cmd_request *req = &comm->req;
-	const struct timespec timeout = { .tv_sec = REPLY_TIMEOUT / 1000000000L,
-					  .tv_nsec = REPLY_TIMEOUT % 1000000000L };
+	const struct sfptpd_timespec timeout = { .sec = REPLY_TIMEOUT / 1000000000L,
+						 .nsec = REPLY_TIMEOUT % 1000000000L };
 
 	assert(ntp != NULL);
 
@@ -880,7 +881,7 @@ static int issue_request(crny_module_t *ntp)
 	       ntohs(req->cmd1), ntohs(req->ignore), req->randoms);
 
 	/* Determine the timeout for this request */
-	(void)clock_gettime(CLOCK_MONOTONIC, &ntp->reply_expiry_time);
+	(void)sfclock_gettime(CLOCK_MONOTONIC, &ntp->reply_expiry_time);
 	sfptpd_time_add(&ntp->reply_expiry_time, &ntp->reply_expiry_time, &timeout);
 
 	rc = send(comm->sock, req, sizeof(*req), 0);
@@ -1267,7 +1268,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 	int rc;
 	bool update = false;
 	bool disconnect = false;
-	struct timespec time_now, time_left;
+	struct sfptpd_timespec time_now, time_left;
 	struct ntp_state *next_state = &ntp->next_state;
 	enum ntp_query_state next_query_state = ntp->query_state;
 
@@ -1289,9 +1290,9 @@ static bool crny_state_machine(crny_module_t *ntp,
 	    ntp->query_state != NTP_QUERY_STATE_CONNECT &&
 	    ntp->query_state != NTP_QUERY_STATE_SLEEP_DISCONNECTED &&
 	    ntp->query_state != NTP_QUERY_STATE_SLEEP_CONNECTED) {
-		struct timespec now;
+		struct sfptpd_timespec now;
 
-		(void)clock_gettime(CLOCK_MONOTONIC, &now);
+		(void)sfclock_gettime(CLOCK_MONOTONIC, &now);
 		if (sfptpd_time_cmp(&now, &ntp->reply_expiry_time) >= 0)
 			event = NTP_QUERY_EVENT_REPLY_TIMEOUT;
 	}
@@ -1397,27 +1398,27 @@ static bool crny_state_machine(crny_module_t *ntp,
 
 	case NTP_QUERY_STATE_SLEEP_DISCONNECTED:
 		/* Check whether it's time to poll the NTP daemon again */
-		(void)clock_gettime(CLOCK_MONOTONIC, &time_now);
+		(void)sfclock_gettime(CLOCK_MONOTONIC, &time_now);
 		sfptpd_time_subtract(&time_left, &ntp->next_poll_time, &time_now);
-		if (time_left.tv_sec < 0 || event == NTP_QUERY_EVENT_RUN) {
+		if (time_left.sec < 0 || event == NTP_QUERY_EVENT_RUN) {
 			if (crny_resolve(ntp) == 0)
 				next_query_state = NTP_QUERY_STATE_CONNECT;
 			else
 				crny_parse_state(next_state, ENOPROTOOPT, next_state->offset_unsafe);
-			ntp->next_poll_time.tv_sec += ntp->config->poll_interval;
+			ntp->next_poll_time.sec += ntp->config->poll_interval;
 		}
 		break;
 
 	case NTP_QUERY_STATE_SLEEP_CONNECTED:
 		/* Check whether it's time to poll the NTP daemon again */
-		(void)clock_gettime(CLOCK_MONOTONIC, &time_now);
+		(void)sfclock_gettime(CLOCK_MONOTONIC, &time_now);
 		sfptpd_time_subtract(&time_left, &ntp->next_poll_time, &time_now);
-		if (time_left.tv_sec < 0) {
+		if (time_left.sec < 0) {
 			if (issue_get_sys_info(ntp) != 0) {
 				disconnect = true;
 			} else {
 				next_query_state = NTP_QUERY_STATE_SYS_INFO;
-				ntp->next_poll_time.tv_sec += ntp->config->poll_interval;
+				ntp->next_poll_time.sec += ntp->config->poll_interval;
 			}
 		}
 		break;
@@ -1594,8 +1595,8 @@ static char *clock_control_op_name(enum chrony_clock_control_op op) {
 static int do_clock_control(crny_module_t *ntp,
 			    enum chrony_clock_control_op op_req)
 {
-	static struct timespec last_changed;
-	struct timespec now, delta;
+	static struct sfptpd_timespec last_changed;
+	struct sfptpd_timespec now, delta;
 	enum chrony_clock_control_op op_do;
 	bool clock_control;
 	bool have_control = strlen(ntp->config->chronyd_script) != 0;
@@ -1629,14 +1630,14 @@ static int do_clock_control(crny_module_t *ntp,
 	if (op_do == CRNY_CTRL_OP_SAVE)
 		ntp->clock_control_at_save = clock_control;
 
-	if (!(last_changed.tv_sec == 0 && last_changed.tv_nsec == 0) &&
+	if (!(last_changed.sec == 0 && last_changed.nsec == 0) &&
 	    op_do != CRNY_CTRL_OP_RESTORE &&
 	    op_do != CRNY_CTRL_OP_RESTORENORESTART) {
-		clock_gettime(CLOCK_MONOTONIC_RAW, &now);
+		sfclock_gettime(CLOCK_MONOTONIC_RAW, &now);
 		sfptpd_time_subtract(&delta, &now, &last_changed);
-		if (delta.tv_sec < CLOCK_CONTROL_MIN_INTERVAL) {
+		if (delta.sec < CLOCK_CONTROL_MIN_INTERVAL) {
 			INFO("crny: chrony_clock_control - return EAGAIN as delta = %d s\n",
-			     delta.tv_sec);
+			     delta.sec);
 			return EAGAIN; /* too soon since we last changed */
 		}
 	}
@@ -1669,7 +1670,7 @@ static int do_clock_control(crny_module_t *ntp,
 			strerror(rc));
 
 	if (op_do != CRNY_CTRL_OP_SAVE)
-		clock_gettime(CLOCK_MONOTONIC_RAW, &last_changed);
+		sfclock_gettime(CLOCK_MONOTONIC_RAW, &last_changed);
 	free(command);
 	return rc;
 }
@@ -2093,15 +2094,14 @@ static void update_state(crny_module_t *ntp)
 
 static void ntp_on_run(crny_module_t *ntp)
 {
-	struct timespec interval;
+	struct sfptpd_timespec interval;
 	int rc;
 	bool have_control = strlen(ntp->config->chronyd_script) != 0;
 
 	assert(ntp);
 
 	ntp->running_phase = true;
-	interval.tv_sec = 0;
-	interval.tv_nsec = NTP_POLL_INTERVAL;
+	sfptpd_time_from_ns(&interval, NTP_POLL_INTERVAL);
 
 	/* Start a single-shot timer for polling. This is rearmed
 	   after the timer event has been handled because if polling
@@ -2117,7 +2117,7 @@ static void ntp_on_run(crny_module_t *ntp)
 	}
 
 	/* Determine the time when we should next poll the NTP daemon */
-	(void)clock_gettime(CLOCK_MONOTONIC, &ntp->next_poll_time);
+	(void)sfclock_gettime(CLOCK_MONOTONIC, &ntp->next_poll_time);
 	ntp->query_state = NTP_QUERY_STATE_SLEEP_DISCONNECTED;
 	ntp->state.offset_unsafe = false;
 
@@ -2162,7 +2162,7 @@ static void ntp_on_run(crny_module_t *ntp)
 static void ntp_on_timer(void *user_context, unsigned int id)
 {
 	crny_module_t *ntp = (crny_module_t *)user_context;
-	struct timespec interval;
+	struct sfptpd_timespec interval;
 	int rc;
 
 	assert(ntp != NULL);
@@ -2172,8 +2172,7 @@ static void ntp_on_timer(void *user_context, unsigned int id)
 	if (crny_state_machine(ntp, NTP_QUERY_EVENT_TICK))
 		update_state(ntp);
 
-	interval.tv_sec = 0;
-	interval.tv_nsec = NTP_POLL_INTERVAL;
+	sfptpd_time_from_ns(&interval, NTP_POLL_INTERVAL);
 
 	rc = sfptpd_thread_timer_start(NTP_POLL_TIMER_ID,
 				       false, false, &interval);

@@ -43,7 +43,7 @@ CONDITIONAL_LIBS += $(shell $(call if_header_then,onload/extensions.h,-lonload_e
 endif
 
 ### Unit testing
-FAST_TESTS = bic filters hash stats config
+FAST_TESTS = bic filters hash stats config time
 TEST_CMD = valgrind --track-origins=yes --error-exitcode=1 build/sfptpd_test
 
 ### Build flags for all targets

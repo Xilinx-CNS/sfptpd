@@ -76,7 +76,7 @@ uInteger48_display(const char *fieldName, const UInteger48 * bigint)
   DBGV("%s : %"PRIu64"\n", fieldName, (*bigint) & 0xFFFFFFFFFFFFULL);
 }
 
-/** \brief Display a struct timespec Structure*/
+/** \brief Display a struct sfptpd_timespec Structure*/
 void
 timespec_display(const struct timespec *time)
 {
@@ -643,7 +643,7 @@ displayPort(PtpClock * ptpClock)
 
 /**\brief Display ForeignMaster data set of a PtpClock*/
 void
-displayForeignMasterRecords(ForeignMasterDS *ds, const struct timespec *threshold)
+displayForeignMasterRecords(ForeignMasterDS *ds, const struct sfptpd_timespec *threshold)
 {
 
 	ForeignMasterRecord *record;
@@ -658,7 +658,7 @@ displayForeignMasterRecords(ForeignMasterDS *ds, const struct timespec *threshol
 
 		for (j = 0; j < record->announceTimesCount; j++) {
 			int read_ptr;
-			struct timespec *tn;
+			struct sfptpd_timespec *tn;
 
 			read_ptr = record->announceTimesWriteIdx - j - 1;
 			if (read_ptr < 0)
@@ -667,8 +667,8 @@ displayForeignMasterRecords(ForeignMasterDS *ds, const struct timespec *threshol
 
 			tn = &record->announceTimes[read_ptr];
 
-			DBGV("announce time t%d: %lld.%.9ld\n",
-			     -j, tn->tv_sec, tn->tv_nsec);
+			DBGV("announce time t%d: " SFPTPD_FMT_SFTIMESPEC "\n",
+			     -j, SFPTPD_ARGS_SFTIMESPEC(*tn));
 		}
 		if (threshold) {
 			if (doesForeignMasterEarliestAnnounceQualify(record, threshold) &&
@@ -692,7 +692,7 @@ void
 displayForeignMaster(PtpClock *ptpClock)
 {
 	ForeignMasterDS *dataset = &ptpClock->foreign;
-	struct timespec threshold;
+	struct sfptpd_timespec threshold;
 
 	if (dataset->number_records > 0) {
 
@@ -733,19 +733,19 @@ displayOthers(PtpClock * ptpClock)
 	DBGV("\n");
 	DBGV("\n");
 	DBGV("delay_req_receive_time :\n");
-	timespec_display(&ptpClock->pdelay_req_receive_time);
+	sftimespec_display(&ptpClock->pdelay_req_receive_time);
 	DBGV("\n");
 	DBGV("delay_req_send_time :\n");
-	timespec_display(&ptpClock->pdelay_req_send_time);
+	sftimespec_display(&ptpClock->pdelay_req_send_time);
 	DBGV("\n");
 	DBGV("delay_resp_receive_time :\n");
-	timespec_display(&ptpClock->pdelay_resp_receive_time);
+	sftimespec_display(&ptpClock->pdelay_resp_receive_time);
 	DBGV("\n");
 	DBGV("delay_resp_send_time :\n");
-	timespec_display(&ptpClock->pdelay_resp_send_time);
+	sftimespec_display(&ptpClock->pdelay_resp_send_time);
 	DBGV("\n");
 	DBGV("sync_receive_time :\n");
-	timespec_display(&ptpClock->sync_receive_time);
+	sftimespec_display(&ptpClock->sync_receive_time);
 	DBGV("\n");
 	DBGV("sentPdelayReq : %d\n", ptpClock->sentPDelayReq);
 	DBGV("sentPDelayReqSequenceId : %d\n", ptpClock->sentPDelayReqSequenceId);

@@ -54,7 +54,7 @@ typedef struct {
 } IntervalTimer;
 
 typedef struct {
-	struct timespec timestamp;
+	struct sfptpd_timespec timestamp;
 	sfptpd_time_t offset;
 	bool have_timestamp;
 	bool have_offset;
@@ -81,7 +81,7 @@ typedef struct
 
 	/* The last times announcements were received from this
 	   foreign master according to CLOCK_MONOTONIC. */
-	struct timespec announceTimes[FOREIGN_MASTER_THRESHOLD];
+	struct sfptpd_timespec announceTimes[FOREIGN_MASTER_THRESHOLD];
 	int announceTimesWriteIdx;
 	int announceTimesCount;
 
@@ -241,7 +241,7 @@ typedef struct sfptpd_clustering_evaluator PtpClusteringEvaluator;
 
 typedef struct ptpd_critical_stats {
 	bool valid;
-	struct timespec sync_time;
+	struct sfptpd_timespec sync_time;
 	sfptpd_time_t ofm_ns;
 	sfptpd_time_t owd_ns;
 	long double freq_adj;
@@ -800,17 +800,17 @@ struct ptpd_port_context {
 	MsgHeader delayReqHeader;
 
 	/* Stored packet timestamps */
-	struct timespec pdelay_req_send_time;
-	struct timespec pdelay_req_receive_time;
-	struct timespec pdelay_resp_send_time;
-	struct timespec pdelay_resp_receive_time;
-	sfptpd_time_t pdelay_correction_field;
-	struct timespec sync_send_time;
-	struct timespec sync_receive_time;
-	sfptpd_time_t sync_correction_field;
-	struct timespec delay_req_send_time;
-	struct timespec delay_req_receive_time;
-	sfptpd_time_t delay_correction_field;
+	struct sfptpd_timespec pdelay_req_send_time;
+	struct sfptpd_timespec pdelay_req_receive_time;
+	struct sfptpd_timespec pdelay_resp_send_time;
+	struct sfptpd_timespec pdelay_resp_receive_time;
+	struct sfptpd_timespec pdelay_correction_field;
+	struct sfptpd_timespec sync_send_time;
+	struct sfptpd_timespec sync_receive_time;
+	struct sfptpd_timespec sync_correction_field;
+	struct sfptpd_timespec delay_req_send_time;
+	struct sfptpd_timespec delay_req_receive_time;
+	struct sfptpd_timespec delay_correction_field;
 
 	Boolean sentPDelayReq;
 	UInteger16 sentPDelayReqSequenceId;

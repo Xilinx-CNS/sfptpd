@@ -269,10 +269,10 @@ void servo_set_interval(ptp_servo_t *, long double interval);
 
 void servo_control(ptp_servo_t *, sfptpd_sync_module_ctrl_flags_t ctrl_flags);
 
-void servo_step_clock(ptp_servo_t *, struct timespec *);
+void servo_step_clock(ptp_servo_t *, struct sfptpd_timespec *);
 
 sfptpd_time_t servo_get_offset_from_master(ptp_servo_t *);
-struct timespec servo_get_time_of_last_offset(ptp_servo_t *);
+struct sfptpd_timespec servo_get_time_of_last_offset(ptp_servo_t *);
 sfptpd_time_t servo_get_mean_path_delay(ptp_servo_t *);
 long double servo_get_p_term(ptp_servo_t *servo);
 long double servo_get_i_term(ptp_servo_t *servo);
@@ -286,19 +286,19 @@ void servo_missing_p2p_ts(ptp_servo_t *);
 void servo_missing_m2s_ts(ptp_servo_t *);
 
 bool servo_provide_s2m_ts(ptp_servo_t *,
-			  struct timespec *send_time,
-			  struct timespec *recv_time,
-			  sfptpd_time_t correction);
+			  struct sfptpd_timespec *send_time,
+			  struct sfptpd_timespec *recv_time,
+			  struct sfptpd_timespec *correction);
 bool servo_provide_p2p_ts(ptp_servo_t *,
-			  struct timespec *req_send_time,
-			  struct timespec *req_recv_time,
-			  struct timespec *resp_send_time,
-			  struct timespec *resp_recv_time,
-			  sfptpd_time_t correction);
+			  struct sfptpd_timespec *req_send_time,
+			  struct sfptpd_timespec *req_recv_time,
+			  struct sfptpd_timespec *resp_send_time,
+			  struct sfptpd_timespec *resp_recv_time,
+			  struct sfptpd_timespec *correction);
 bool servo_provide_m2s_ts(ptp_servo_t *,
-			  struct timespec *send_time,
-			  struct timespec *recv_time,
-			  sfptpd_time_t correction);
+			  struct sfptpd_timespec *send_time,
+			  struct sfptpd_timespec *recv_time,
+			  struct sfptpd_timespec *correction);
 
 void servo_update_clock(ptp_servo_t *);
 

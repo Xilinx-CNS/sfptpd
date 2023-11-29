@@ -235,7 +235,7 @@ static void test_send_wait(struct test_thread *t, unsigned int recipient,
 
 static int test_on_startup(void *context)
 {
-	struct timespec interval;
+	struct sfptpd_timespec interval;
 	unsigned int i;
 	int rc, flags;
 	struct sockaddr_in addr;
@@ -255,9 +255,8 @@ static int test_on_startup(void *context)
 
 			/* Set interval 10ms + thread * 3ms + timer * 5ms */
 			t->timer_interval[i] = 10000000 + ((t->id * 3) + (i * 5)) * 1000000;
-
-			interval.tv_sec = t->timer_interval[i] / 1000000000;
-			interval.tv_nsec = t->timer_interval[i] % 1000000000;
+			interval.sec = t->timer_interval[i] / 1000000000;
+			interval.nsec = t->timer_interval[i] % 1000000000;
 			rc = sfptpd_thread_timer_start(i, true, false, &interval);
 			if (rc != 0) {
 				printf("thread %d: failed to start timer %d, %d\n",
@@ -285,8 +284,8 @@ static int test_on_startup(void *context)
 			return rc;
 		}
 
-		interval.tv_sec = 0;
-		interval.tv_nsec = TEST_SIGNAL_TEST_INTERVAL * (t->id + 1);
+		interval.sec = 0;
+		interval.nsec = TEST_SIGNAL_TEST_INTERVAL * (t->id + 1);
 		rc = sfptpd_thread_timer_start(100, true, false, &interval);
 		if (rc != 0) {
 			printf("ERROR: failed to start signal timer, %d\n", rc);
@@ -580,7 +579,7 @@ static int root_on_startup(void *context)
 {
 	int rc;
 	unsigned int i;
-	struct timespec interval;
+	struct sfptpd_timespec interval;
 	sigset_t signal_set;
 	test_msg_t *msg;
 
@@ -627,8 +626,8 @@ static int root_on_startup(void *context)
 		}
 	}
 
-	interval.tv_sec = TEST_TIMER_TEST_LEN;
-	interval.tv_nsec = 0;
+	interval.sec = TEST_TIMER_TEST_LEN;
+	interval.nsec = 0;
 	rc = sfptpd_thread_timer_start(0, false, false, &interval);
 	if (rc != 0) {
 		printf("ERROR: failed to start exit timer, %d\n", rc);

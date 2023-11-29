@@ -711,18 +711,16 @@ static void clock_determine_max_freq_adj(struct sfptpd_clock *clock)
 }
 
 
-static int clock_compare_using_efx(void *context, struct timespec *diff)
+static int clock_compare_using_efx(void *context, struct sfptpd_timespec *diff)
 {
 	struct sfptpd_clock *clock = (struct sfptpd_clock *) context;
 	struct efx_sock_ioctl req = { .cmd = EFX_TS_SYNC };
 	int rc;
 
 	rc = sfptpd_interface_ioctl(clock->u.nic.primary_if, SIOCEFX, &req);
-	if (rc == 0) {
+	if (rc == 0)
 		/* Store the difference- this is (Tptp - Tsys) */
-		diff->tv_sec = req.u.ts_sync.ts.tv_sec;
-		diff->tv_nsec = req.u.ts_sync.ts.tv_nsec;
-	}
+		sfptpd_time_init(diff, req.u.ts_sync.ts.tv_sec, req.u.ts_sync.ts.tv_nsec, 0);
 
 	return rc;
 }
@@ -1492,7 +1490,7 @@ void sfptpd_clock_stats_record_offset(struct sfptpd_clock *clock,
 				      long double offset, bool synchronized)
 {
 	struct sfptpd_stats_collection *stats;
-	struct timespec now;
+	struct sfptpd_timespec now;
 
 	clock_lock();
 
@@ -1500,7 +1498,7 @@ void sfptpd_clock_stats_record_offset(struct sfptpd_clock *clock,
 	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
 
 	stats = &clock->stats;
-	clock_gettime(CLOCK_REALTIME, &now);
+	sfclock_gettime(CLOCK_REALTIME, &now);
 	sfptpd_stats_collection_update_range(stats, CLOCK_STATS_ID_OFFSET,
 					     offset, now, true);
 	sfptpd_stats_collection_update_count(stats, CLOCK_STATS_ID_SYNCHRONIZED,
@@ -1544,7 +1542,7 @@ void sfptpd_clock_stats_record_clustering_alarm(struct sfptpd_clock *clock,
 
 
 void sfptpd_clock_stats_end_period(struct sfptpd_clock *clock,
-				   struct timespec *time)
+				   struct sfptpd_timespec *time)
 {
 	struct sfptpd_stats_collection *stats;
 
@@ -1658,7 +1656,7 @@ long double sfptpd_clock_get_max_frequency_adjustment(struct sfptpd_clock *clock
 
 /****************************************************************************/
 
-int sfptpd_clock_adjust_time(struct sfptpd_clock *clock, struct timespec *offset)
+int sfptpd_clock_adjust_time(struct sfptpd_clock *clock, struct sfptpd_timespec *offset)
 {
 	int rc = 0;
 	struct timex t;
@@ -1693,8 +1691,8 @@ int sfptpd_clock_adjust_time(struct sfptpd_clock *clock, struct timespec *offset
 
 	memset(&t, 0, sizeof(t));
 	t.modes = ADJ_SETOFFSET | ADJ_NANO;
-	t.time.tv_sec  = offset->tv_sec;
-	t.time.tv_usec = offset->tv_nsec;
+	t.time.tv_sec  = offset->sec;
+	t.time.tv_usec = offset->nsec;
 
 	if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM &&
 	    clock->cfg_rtc_adjust) {
@@ -1724,7 +1722,7 @@ finish:
 int sfptpd_clock_adjust_frequency(struct sfptpd_clock *clock, long double freq_adj_ppb)
 {
 	int rc = 0;
-	struct timespec now;
+	struct sfptpd_timespec now;
 
 	clock_lock();
 
@@ -1754,7 +1752,7 @@ int sfptpd_clock_adjust_frequency(struct sfptpd_clock *clock, long double freq_a
 		 clock->short_name, freq_adj_ppb);
 
 	/* Record the new frequency */
-	clock_gettime(CLOCK_REALTIME, &now);
+	sfclock_gettime(CLOCK_REALTIME, &now);
 	sfptpd_stats_collection_update_range(&clock->stats,
 					     CLOCK_STATS_ID_FREQ_ADJ,
 					     freq_adj_ppb,
@@ -1886,7 +1884,7 @@ int sfptpd_clock_schedule_leap_second(enum sfptpd_leap_second_type type)
 int sfptpd_clock_leap_second_now(enum sfptpd_leap_second_type type)
 {
 	struct sfptpd_clock *clock;
-	struct timespec step;
+	struct sfptpd_timespec step;
 
 	struct sfptpd_config_general *config = sfptpd_general_config_get(sfptpd_clock_config);
 
@@ -1895,8 +1893,7 @@ int sfptpd_clock_leap_second_now(enum sfptpd_leap_second_type type)
 		return EINVAL;
 	}
 
-	step.tv_sec = (type == SFPTPD_LEAP_SECOND_59)? 1: -1;
-	step.tv_nsec = 0;
+	sfptpd_time_from_s(&step, (type == SFPTPD_LEAP_SECOND_59)? 1: -1);
 
 	/* No action is required for the system clock as it supports leap
 	 * second scheduling rather than manually stepping the clock at
@@ -1915,7 +1912,7 @@ int sfptpd_clock_leap_second_now(enum sfptpd_leap_second_type type)
 }
 
 
-int sfptpd_clock_get_time(const struct sfptpd_clock *clock, struct timespec *time)
+int sfptpd_clock_get_time(const struct sfptpd_clock *clock, struct sfptpd_timespec *time)
 {
 	int rc = 0;
 
@@ -1932,7 +1929,7 @@ int sfptpd_clock_get_time(const struct sfptpd_clock *clock, struct timespec *tim
 		goto finish;
 	}
 
-	if (clock_gettime(clock->posix_id, time) < 0) {
+	if (sfclock_gettime(clock->posix_id, time) < 0) {
 		ERROR("clock %s: error getting system time, %s\n",
 		      clock->long_name, strerror(errno));
 		rc = errno;
@@ -1945,9 +1942,9 @@ int sfptpd_clock_get_time(const struct sfptpd_clock *clock, struct timespec *tim
 
 
 int sfptpd_clock_compare(struct sfptpd_clock *clock1, struct sfptpd_clock *clock2,
-			 struct timespec *diff)
+			 struct sfptpd_timespec *diff)
 {
-	struct timespec diff2;
+	struct sfptpd_timespec diff2;
 	int rc = 0;
 
 	clock_lock();
@@ -1959,8 +1956,7 @@ int sfptpd_clock_compare(struct sfptpd_clock *clock1, struct sfptpd_clock *clock
 	assert(diff != NULL);
 
 	/* Make sure the difference is zero */
-	diff->tv_sec = 0;
-	diff->tv_nsec = 0;
+	sfptpd_time_zero(diff);
 
 	/* If either clock has been deleted we can't proceed */
 	if (clock1->deleted || clock2->deleted) {
@@ -2057,9 +2053,9 @@ int sfptpd_clock_compare(struct sfptpd_clock *clock1, struct sfptpd_clock *clock
 
 int sfptpd_clock_set_time(struct sfptpd_clock *clock_to,
 			  struct sfptpd_clock *clock_from,
-			  const struct timespec *threshold)
+			  const struct sfptpd_timespec *threshold)
 {
-	struct timespec diff;
+	struct sfptpd_timespec diff;
 	int rc;
 
 	if (clock_to == clock_from)
@@ -2237,7 +2233,7 @@ int sfptpd_clock_pps_disable(struct sfptpd_clock *clock)
 void sfptpd_clock_correct_new(struct sfptpd_clock *clock)
 {
 	long double not_used;
-	struct timespec time;
+	struct sfptpd_timespec time;
 	int rc;
 
 	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
@@ -2255,7 +2251,7 @@ void sfptpd_clock_correct_new(struct sfptpd_clock *clock)
 		if (rc != 0) {
 			ERROR("failed to read clock %s time, %s\n",
 			      clock->long_name, strerror(rc));
-		} else if (time.tv_sec < SFPTPD_NIC_TIME_VALID_THRESHOLD) {
+		} else if (time.sec < SFPTPD_NIC_TIME_VALID_THRESHOLD) {
 			sfptpd_clock_set_time(clock, sfptpd_clock_system, NULL);
 		}
 	}
@@ -2281,7 +2277,7 @@ int sfptpd_clock_pps_get_fd(struct sfptpd_clock *clock)
 
 
 int sfptpd_clock_pps_get(struct sfptpd_clock *clock, uint32_t *sequence_num,
-			 struct timespec *time)
+			 struct sfptpd_timespec *time)
 {
 	struct efx_sock_ioctl sfc_req;
 	int rc = 0;
@@ -2315,12 +2311,12 @@ int sfptpd_clock_pps_get(struct sfptpd_clock *clock, uint32_t *sequence_num,
 	rc = sfptpd_interface_ioctl(clock->u.nic.primary_if, SIOCEFX, &sfc_req);
 	if (rc == 0) {
 		*sequence_num = sfc_req.u.pps_event.sequence;
-		time->tv_sec = sfc_req.u.pps_event.nic_assert.tv_sec;
-		time->tv_nsec = sfc_req.u.pps_event.nic_assert.tv_nsec;
+		sfptpd_time_init(time,
+				 sfc_req.u.pps_event.nic_assert.tv_sec,
+				 sfc_req.u.pps_event.nic_assert.tv_nsec, 0);
 
-		TRACE_L5("clock %s: external timestamp at %lld.%09u\n",
-			 clock->short_name,
-			 time->tv_sec, time->tv_nsec);
+		TRACE_L5("clock %s: external timestamp at " SFPTPD_FMT_SFTIMESPEC "\n",
+			 clock->short_name, SFPTPD_ARGS_SFTIMESPEC(*time));
 		goto finish;
 	}
 

@@ -97,6 +97,7 @@ int main(int argc, char **argv)
 	register_unit_test("bic", sfptpd_test_bic);
 	register_unit_test("fmds", sfptpd_test_fmds);
 	register_unit_test("link", sfptpd_test_link);
+	register_unit_test("time", sfptpd_test_time);
 
 	/* If no arguments or just "all" are specified, run all tests */
 	if (argc < 2 || (strcmp(argv[1], "all") == 0))

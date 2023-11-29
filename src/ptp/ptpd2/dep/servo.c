@@ -280,7 +280,7 @@ sfptpd_time_t servo_get_offset_from_master(ptp_servo_t *servo)
 }
 
 
-struct timespec servo_get_time_of_last_offset(ptp_servo_t *servo)
+struct sfptpd_timespec servo_get_time_of_last_offset(ptp_servo_t *servo)
 {
 	assert(servo != NULL);
 	return sfptpd_ptp_tsd_get_protocol_time(&servo->timestamps);
@@ -404,9 +404,9 @@ void servo_missing_m2s_ts(ptp_servo_t *servo)
 
 
 bool servo_provide_s2m_ts(ptp_servo_t *servo,
-			  struct timespec *send_time,
-			  struct timespec *recv_time,
-			  sfptpd_time_t correction)
+			  struct sfptpd_timespec *send_time,
+			  struct sfptpd_timespec *recv_time,
+			  struct sfptpd_timespec *correction)
 {
 	assert(servo != NULL);
 	assert(send_time != NULL);
@@ -428,11 +428,11 @@ bool servo_provide_s2m_ts(ptp_servo_t *servo,
 
 
 bool servo_provide_p2p_ts(ptp_servo_t *servo,
-			  struct timespec *req_send_time,
-			  struct timespec *req_recv_time,
-			  struct timespec *resp_send_time,
-			  struct timespec *resp_recv_time,
-			  sfptpd_time_t correction)
+			  struct sfptpd_timespec *req_send_time,
+			  struct sfptpd_timespec *req_recv_time,
+			  struct sfptpd_timespec *resp_send_time,
+			  struct sfptpd_timespec *resp_recv_time,
+			  struct sfptpd_timespec *correction)
 {
 	assert(servo != NULL);
 	assert(req_send_time != NULL);
@@ -456,8 +456,10 @@ bool servo_provide_p2p_ts(ptp_servo_t *servo,
 }
 
 
-bool servo_provide_m2s_ts(ptp_servo_t *servo, struct timespec *send_time,
-		          struct timespec *recv_time, sfptpd_time_t correction)
+bool servo_provide_m2s_ts(ptp_servo_t *servo,
+			  struct sfptpd_timespec *send_time,
+		          struct sfptpd_timespec *recv_time,
+			  struct sfptpd_timespec *correction)
 {
 	assert(servo != NULL);
 	assert(send_time != NULL);
@@ -508,9 +510,9 @@ void servo_control(ptp_servo_t *servo,
 }
 
 
-void servo_step_clock(ptp_servo_t *servo, struct timespec *offset)
+void servo_step_clock(ptp_servo_t *servo, struct sfptpd_timespec *offset)
 {
-	struct timespec o;
+	struct sfptpd_timespec o;
 
 	assert(servo != NULL);
 	assert(offset != NULL);
@@ -601,7 +603,7 @@ static void servo_adjust_frequency(ptp_servo_t *servo, LongDouble adj)
 void servo_update_clock(ptp_servo_t *servo)
 {
 	LongDouble max_adj;
-	struct timespec monotonic_time;
+	struct sfptpd_timespec monotonic_time;
 	struct ptpd_critical_stats stats;
 
 	assert(servo != NULL);
@@ -653,7 +655,7 @@ void servo_update_clock(ptp_servo_t *servo)
 	            ((servo->clock_ctrl == SFPTPD_CLOCK_CTRL_STEP_AT_STARTUP ||
                       servo->clock_ctrl == SFPTPD_CLOCK_CTRL_STEP_ON_FIRST_LOCK) && !servo->clock_first_updated) || 
 		    ((servo->clock_ctrl == SFPTPD_CLOCK_CTRL_STEP_FORWARD) && (servo->offset_from_master < 0))) {
-			struct timespec step;
+			struct sfptpd_timespec step;
 			sfptpd_time_float_ns_to_timespec(servo->offset_from_master, &step);
 			servo_step_clock(servo, &step);
 
@@ -680,7 +682,7 @@ void servo_update_clock(ptp_servo_t *servo)
 		/* Get the current monotonic time to perform the PID filter
 		 * update. This ensures that the integral term is calculated
 		 * correctly when in unicast mode. */
-		(void)clock_gettime(CLOCK_MONOTONIC, &monotonic_time);
+		(void)sfclock_gettime(CLOCK_MONOTONIC, &monotonic_time);
 
 		/* If we are not currently controlling the clock, the frequency
 		 * adjustment is the saved value. If we are controlling the clock then

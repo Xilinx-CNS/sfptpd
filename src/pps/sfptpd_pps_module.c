@@ -77,7 +77,7 @@ typedef struct sfptpd_pps_module {
 		struct sfptpd_sync_instance_info source;
 
 		/* Next poll time */
-		struct timespec next_poll_time;
+		struct sfptpd_timespec next_poll_time;
 
 		/* State of the sync module */
 		sfptpd_sync_instance_status_t status;
@@ -107,15 +107,15 @@ struct sfptpd_pps_instance {
 	sfptpd_sync_module_alarms_t alarms;
 
 	/* Monotonic time of last PPS event */
-	struct timespec last_pps_time;
+	struct sfptpd_timespec last_pps_time;
 
 	/* Monotonic time of PPS module start */
-	struct timespec instance_started_time;
+	struct sfptpd_timespec instance_started_time;
 	bool instance_has_started;
 	bool pps_pulse_check_timer_expired;
 
 	/* Time reported in PPS event */
-	struct timespec pps_timestamp;
+	struct sfptpd_timespec pps_timestamp;
 
 	/* PPS event sequence number */
 	uint32_t pps_seq_num;
@@ -124,7 +124,7 @@ struct sfptpd_pps_instance {
 	int poll_fd;
 
 	/* Time of day offset */
-	struct timespec tod_offset;
+	struct sfptpd_timespec tod_offset;
 
 	/* Notch filter used to detect bad PPS periods */
 	sfptpd_notch_filter_t notch_filter;
@@ -229,9 +229,9 @@ static const struct sfptpd_stats_collection_defn pps_stats_defns[] =
 	{PPS_STATS_ID_OUTLIERS,           SFPTPD_STATS_TYPE_COUNT, "outliers-rejected"}
 };
 
-static const struct timespec pps_timeout_interval = {60, 0};
-static const struct timespec pps_pulse_timeout_interval = {8, 0};
-static const struct timespec pps_alarm_interval = {1, 100000000};
+static const struct sfptpd_timespec pps_timeout_interval = {60, 0};
+static const struct sfptpd_timespec pps_pulse_timeout_interval = {8, 0};
+static const struct sfptpd_timespec pps_alarm_interval = {1, 100000000};
 
 
 /****************************************************************************
@@ -693,7 +693,7 @@ const char *pps_state_text(sfptpd_sync_module_state_t state, unsigned int alarms
 static int pps_test_mode_bogus_event(pps_module_t *pps,
 				     struct sfptpd_pps_instance *instance,
 				     unsigned int *seq_num,
-				     struct timespec *time)
+				     struct sfptpd_timespec *time)
 {
 	assert(pps != NULL);
 	assert(seq_num != NULL);
@@ -703,7 +703,7 @@ static int pps_test_mode_bogus_event(pps_module_t *pps,
 	if ((rand() & 0xf) == 0) {
 		*seq_num = 12345678;
 		*time = instance->pps_timestamp;
-		time->tv_nsec += ((rand() * rand()) % 1000000000);
+		time->nsec += ((rand() * rand()) % 1000000000);
 		sfptpd_time_normalise(time);
 		return 0;
 	}
@@ -725,11 +725,9 @@ static void pps_servo_reset(pps_module_t *pps,
 	instance->freq_adjust_ppb = instance->freq_adjust_base;
 	instance->offset_from_master_ns = 0.0;
 
-	pps->time_of_day.status.offset_from_master.tv_sec = 0;
-	pps->time_of_day.status.offset_from_master.tv_nsec = 0;
+	sfptpd_time_zero(&pps->time_of_day.status.offset_from_master);
+	sfptpd_time_zero(&instance->pps_timestamp);
 
-	instance->pps_timestamp.tv_sec = 0;
-	instance->pps_timestamp.tv_nsec = 0;
 	instance->pps_period_ns = 0.0;
 
 	TRACE_L4("pps %s: reset servo filters\n",
@@ -739,10 +737,10 @@ static void pps_servo_reset(pps_module_t *pps,
 
 static void pps_servo_step_clock(pps_module_t *pps,
 				 struct sfptpd_pps_instance *instance,
-				 struct timespec *offset)
+				 struct sfptpd_timespec *offset)
 {
 	int rc;
-	struct timespec zero = {.tv_sec = 0, .tv_nsec = 0};
+	struct sfptpd_timespec zero = sfptpd_time_null();
 
 	assert(pps != NULL);
 	assert(offset != NULL);
@@ -780,14 +778,14 @@ static void pps_servo_step_clock(pps_module_t *pps,
 
 static void pps_servo_update(pps_module_t *pps,
 			     struct sfptpd_pps_instance *instance,
-			     struct timespec *pps_timestamp,
-			     struct timespec *time_of_day)
+			     struct sfptpd_timespec *pps_timestamp,
+			     struct sfptpd_timespec *time_of_day)
 {
 	int rc;
-	long double diff_ns, mean;
+	sfptpd_time_t diff_ns, mean;
 	struct sfptpd_config_general *general_config;
 	enum sfptpd_clock_ctrl clock_ctrl;
-	struct timespec diff;
+	struct sfptpd_timespec diff;
 
 	assert(pps != NULL);
 	assert(pps_timestamp != NULL);
@@ -797,16 +795,17 @@ static void pps_servo_update(pps_module_t *pps,
 	clock_ctrl = general_config->clocks.control;
 
 	/* The seconds is the time of day rounded to the nearest second */
-	diff.tv_sec = time_of_day->tv_sec;
-	if (time_of_day->tv_nsec >= 500000000)
-		diff.tv_sec += 1;
+	diff.sec = time_of_day->sec;
+	if (time_of_day->nsec >= 500000000)
+		diff.sec += 1;
 
 	/* The nanosecond value comes from the PPS timestamp */
-	diff.tv_nsec = pps_timestamp->tv_nsec;
-	if (diff.tv_nsec >= 500000000)
-		diff.tv_sec -= 1;
+	diff.nsec = pps_timestamp->nsec;
+	if (diff.sec >= 500000000)
+		diff.sec -= 1;
+	diff.nsec_frac = 0;
 
-	diff_ns = (long double)diff.tv_sec * 1.0e9 + (long double)diff.tv_nsec;
+	diff_ns = sfptpd_time_timespec_to_float_ns(&diff);
 
 	/* Subtract the PPS propagation delay from the difference between the remote
 	 * PPS source and local time to account for PPS cable and distribution
@@ -1001,7 +1000,7 @@ static int pps_drain_events(pps_module_t *pps, struct sfptpd_pps_instance *insta
 	int i;
 	int rc = EAGAIN;
 	uint32_t seq_num;
-	struct timespec time;
+	struct sfptpd_timespec time;
 	const int max_drain = 1000;
 
 	assert(pps != NULL);
@@ -1181,12 +1180,12 @@ static void pps_convergence_init(pps_module_t *pps,
 static void pps_convergence_update(pps_module_t *pps,
 				   struct sfptpd_pps_instance *instance)
 {
-	struct timespec time;
+	struct sfptpd_timespec time;
 	int rc;
 	assert(pps != NULL);
 	assert(instance != NULL);
 
-	rc = clock_gettime(CLOCK_MONOTONIC, &time);
+	rc = sfclock_gettime(CLOCK_MONOTONIC, &time);
 	if (rc < 0) {
 		ERROR("pps %s: failed to get monotonic time, %s\n",
                       SFPTPD_CONFIG_GET_NAME(instance->config), strerror(errno));
@@ -1207,7 +1206,7 @@ static void pps_convergence_update(pps_module_t *pps,
 		/* Update the synchronized state based on the current offset
 		 * from master */
 		instance->synchronized = sfptpd_stats_convergence_update(&instance->convergence,
-								    time.tv_sec,
+								    time.sec,
 								    instance->offset_from_master_ns);
 	}
 }
@@ -1238,7 +1237,7 @@ static void pps_stats_update(pps_module_t *pps,
 			     struct sfptpd_pps_instance *instance)
 {
 	struct sfptpd_stats_collection *stats;
-	struct timespec now;
+	struct sfptpd_timespec now;
 	int cond;
 	assert(pps != NULL);
 
@@ -1304,8 +1303,7 @@ static void pps_state_machine_reset(pps_module_t *pps,
 	instance->alarms = 0;
 	instance->prev_alarms = 0;
 	instance->consecutive_good_periods = 0;
-	instance->pps_timestamp.tv_sec = 0;
-	instance->pps_timestamp.tv_nsec = 0;
+	sfptpd_time_zero(&instance->pps_timestamp);
 	instance->pps_seq_num = 0;
 	instance->pps_period_ns = 0.0;
 	if (instance->outlier_filter != NULL)
@@ -1316,7 +1314,7 @@ static void pps_state_machine_reset(pps_module_t *pps,
 static void pps_on_no_pps_event(pps_module_t *pps,
 				struct sfptpd_pps_instance *instance)
 {
-	struct timespec time_now, interval;
+	struct sfptpd_timespec time_now, interval;
 	assert(pps != NULL);
 
 	switch (instance->state) {
@@ -1327,7 +1325,7 @@ static void pps_on_no_pps_event(pps_module_t *pps,
 
 	case SYNC_MODULE_STATE_SLAVE:
 		/* Check how long it has been since the last PPS event */
-		(void)clock_gettime(CLOCK_MONOTONIC, &time_now);
+		(void)sfclock_gettime(CLOCK_MONOTONIC, &time_now);
 		sfptpd_time_subtract(&interval, &time_now, &instance->last_pps_time);
 
 		/* We check two intervals. After a short time (just over a
@@ -1336,7 +1334,7 @@ static void pps_on_no_pps_event(pps_module_t *pps,
 		 * state. */
 		if (sfptpd_time_is_greater_or_equal(&interval, &pps_timeout_interval)) {
 			ERROR("pps %s: no event after %ld seconds. Changing to listening state.\n",
-			      SFPTPD_CONFIG_GET_NAME(instance->config), pps_timeout_interval.tv_sec);
+			      SFPTPD_CONFIG_GET_NAME(instance->config), pps_timeout_interval.sec);
 			pps_state_machine_reset(pps, instance);
 		} else if (sfptpd_time_is_greater_or_equal(&interval, &pps_alarm_interval) &&
 			   !SYNC_MODULE_ALARM_TEST(instance->alarms, PPS_NO_SIGNAL)) {
@@ -1436,9 +1434,9 @@ static void pps_send_clustering_input(struct sfptpd_pps_module *pps,
 static void pps_on_pps_event(pps_module_t *pps,
 			     struct sfptpd_pps_instance *instance,
 			     uint32_t seq_num,
-			     struct timespec *time)
+			     struct sfptpd_timespec *time)
 {
-	struct timespec period;
+	struct sfptpd_timespec period;
 	int rc = 0;
 
 	assert(pps != NULL);
@@ -1477,11 +1475,10 @@ static void pps_on_pps_event(pps_module_t *pps,
 
 		/* If the previous PPS time is valid (i.e. non zero),
 		 * calculate the PPS period */
-		if (instance->pps_timestamp.tv_sec != 0) {
+		if (instance->pps_timestamp.sec != 0) {
 			sfptpd_time_subtract(&period, time, &instance->pps_timestamp);
 
-			instance->pps_period_ns = (long double)period.tv_sec * 1.0e9
-					   + (long double)period.tv_nsec;
+			instance->pps_period_ns = sfptpd_time_timespec_to_float_ns(&period);
 
 			/* If we have a period then apply a notch filter to
 			 * detect and eliminate bad PPS pulses */
@@ -1552,7 +1549,7 @@ static void pps_on_pps_event(pps_module_t *pps,
 	 * that it has occurred in all cases. However, we only record the
 	 * timestamp itself if timestamp processing is enabled. */
 	instance->pps_seq_num = seq_num;
-	(void)clock_gettime(CLOCK_MONOTONIC, &instance->last_pps_time);
+	(void)sfclock_gettime(CLOCK_MONOTONIC, &instance->last_pps_time);
 	if (instance->ctrl_flags & SYNC_MODULE_TIMESTAMP_PROCESSING)
 		instance->pps_timestamp = *time;
 }
@@ -1582,10 +1579,9 @@ static int pps_time_of_day_init(pps_module_t *pps)
 		return ENOENT;
 	}
 
-	(void)clock_gettime(CLOCK_MONOTONIC, &pps->time_of_day.next_poll_time);
+	(void)sfclock_gettime(CLOCK_MONOTONIC, &pps->time_of_day.next_poll_time);
 	pps->time_of_day.status.state = SYNC_MODULE_STATE_LISTENING;
-	pps->time_of_day.status.offset_from_master.tv_sec = 0;
-	pps->time_of_day.status.offset_from_master.tv_nsec = 0;
+	sfptpd_time_zero(&pps->time_of_day.status.offset_from_master);
 
 	return 0;
 }
@@ -1594,19 +1590,19 @@ static int pps_time_of_day_init(pps_module_t *pps)
 static void pps_time_of_day_poll(pps_module_t *pps,
 				 struct sfptpd_pps_instance *instance)
 {
-	struct timespec time_now, time_left;
-	struct timespec system_to_nic;
+	struct sfptpd_timespec time_now, time_left;
+	struct sfptpd_timespec system_to_nic;
 	int rc;
 
 	assert(pps != NULL);
 
 	/* Check whether it's time to poll for time of day again */
-	(void)clock_gettime(CLOCK_MONOTONIC, &time_now);
+	(void)sfclock_gettime(CLOCK_MONOTONIC, &time_now);
 	sfptpd_time_subtract(&time_left, &pps->time_of_day.next_poll_time, &time_now);
-	if (time_left.tv_sec >= 0)
+	if (time_left.sec >= 0)
 		return;
 
-	pps->time_of_day.next_poll_time.tv_sec += 1;
+	pps->time_of_day.next_poll_time.sec += 1;
 
 	if (pps->time_of_day.source.module == NULL) {
 
@@ -1627,9 +1623,7 @@ static void pps_time_of_day_poll(pps_module_t *pps,
 		rc = sfptpd_sync_module_get_status(pps->time_of_day.source.module,
 						   pps->time_of_day.source.handle,
 						   &pps->time_of_day.status);
-		if ((rc == 0) &&
-		    ((pps->time_of_day.status.offset_from_master.tv_sec != 0) ||
-		     (pps->time_of_day.status.offset_from_master.tv_nsec != 0))) {
+		if (rc == 0 && !sfptpd_time_is_zero(&pps->time_of_day.status.offset_from_master)) {
 			rc = sfptpd_clock_compare(instance->clock,
 						  sfptpd_clock_get_system_clock(),
 						  &system_to_nic);
@@ -1669,7 +1663,7 @@ static int pps_do_poll(pps_module_t *pps, struct sfptpd_pps_instance *instance)
 {
 	int rc;
 	uint32_t seq_num;
-	struct timespec time;
+	struct sfptpd_timespec time;
 	bool state_changed;
 	struct sfptpd_pps_module_config *config;
 
@@ -1752,8 +1746,7 @@ static int pps_do_poll(pps_module_t *pps, struct sfptpd_pps_instance *instance)
 			status.master.freq_traceable = config->master_freq_traceable;
 			status.master.steps_removed = config->steps_removed;
 		} else {
-			status.offset_from_master.tv_sec = 0;
-			status.offset_from_master.tv_nsec = 0;
+			sfptpd_time_zero(&status.offset_from_master);
 			status.user_priority = instance->config->priority;
 			status.master.remote_clock = false;
 			status.master.clock_class = SFPTPD_CLOCK_CLASS_FREERUNNING;
@@ -1778,7 +1771,7 @@ static int pps_do_poll(pps_module_t *pps, struct sfptpd_pps_instance *instance)
 static void pps_on_timer(void *user_context, unsigned int id)
 {
 	int rc;
-	struct timespec current_time, interval;
+	struct sfptpd_timespec current_time, interval;
 	pps_module_t *pps = (pps_module_t *)user_context;
 	struct sfptpd_pps_instance *instance;
 
@@ -1789,11 +1782,11 @@ static void pps_on_timer(void *user_context, unsigned int id)
 		/* If the PPS pulse check timer hasn't started yet, start it. */
 		if (!instance->instance_has_started) {
 			instance->instance_has_started = true;
-			clock_gettime(CLOCK_MONOTONIC, &instance->instance_started_time);
+			sfclock_gettime(CLOCK_MONOTONIC, &instance->instance_started_time);
 		} else if (!instance->pps_pulse_check_timer_expired) {
 
 			/* Check if timer has expired. */
-			clock_gettime(CLOCK_MONOTONIC, &current_time);
+			sfclock_gettime(CLOCK_MONOTONIC, &current_time);
 			sfptpd_time_subtract(&interval, &current_time, &instance->instance_started_time);
 			/* If timer has expired, then check if we haven't see 4 good pulses. */
 			if (sfptpd_time_is_greater_or_equal(&interval, &pps_pulse_timeout_interval)) {
@@ -1802,7 +1795,7 @@ static void pps_on_timer(void *user_context, unsigned int id)
 					WARNING("pps %s: did not see %d consecutive good PPS events after %ld seconds.\n",
 						SFPTPD_CONFIG_GET_NAME(instance->config),
 						PPS_REQUIRED_GOOD_PERIODS + 1,
-						pps_pulse_timeout_interval.tv_sec);
+						pps_pulse_timeout_interval.sec);
 					SYNC_MODULE_ALARM_SET(instance->alarms, PPS_NO_SIGNAL);
 				}
 			}
@@ -1876,8 +1869,7 @@ static void pps_on_get_status(pps_module_t *pps, sfptpd_sync_module_msg_t *msg)
 		status->master.freq_traceable = instance->config->master_freq_traceable;
 		status->master.steps_removed = instance->config->steps_removed;
 	} else {
-		status->offset_from_master.tv_sec = 0;
-		status->offset_from_master.tv_nsec = 0;
+		sfptpd_time_zero(&status->offset_from_master);
 		status->user_priority = instance->config->priority;
 		status->master.remote_clock = false;
 		status->master.clock_class = SFPTPD_CLOCK_CLASS_FREERUNNING;
@@ -1922,8 +1914,7 @@ static void pps_on_control(pps_module_t *pps,
 		/* Reset the timestamp. Leave everything else alone as
 		 * typically this is used as a temporary measure e.g. when
 		 * stepping the clocks. */
-		instance->pps_timestamp.tv_sec = 0;
-		instance->pps_timestamp.tv_nsec = 0;
+		sfptpd_time_zero(&instance->pps_timestamp);
 	}
 
 	/* Record the new control flags */
@@ -2216,13 +2207,12 @@ static int pps_start_instance(pps_module_t *pps,
 static void pps_on_run(pps_module_t *pps)
 {
 	struct sfptpd_pps_instance *instance;
-	struct timespec interval;
+	struct sfptpd_timespec interval;
 	int rc;
 
 	assert(pps->timers_started == false);
 
-	interval.tv_sec = 0;
-	interval.tv_nsec = PPS_POLL_INTERVAL_NS;
+	sfptpd_time_from_ns(&interval, PPS_POLL_INTERVAL_NS);
 
 	/* If PPS event retrieval blocks then:
 	   1. record fd for use with epoll()

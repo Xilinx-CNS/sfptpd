@@ -19,9 +19,9 @@
  */
 struct sfptpd_ptp_delay_data {
 	bool valid;
-	struct timespec tx;
-	struct timespec rx;
-	sfptpd_time_t correction;
+	struct sfptpd_timespec tx;
+	struct sfptpd_timespec rx;
+	struct sfptpd_timespec correction;
 };
 
 /** PTP timestamp dataset
@@ -37,8 +37,8 @@ struct sfptpd_ptp_delay_data {
  */
 typedef struct sfptpd_ptp_tsd {
 	bool complete;
-	struct timespec time_monotonic;
-	struct timespec time_protocol;
+	struct sfptpd_timespec time_monotonic;
+	struct sfptpd_timespec time_protocol;
 	sfptpd_time_t path_delay;
 	sfptpd_time_t offset_from_master;
 
@@ -86,9 +86,9 @@ void sfptpd_ptp_tsd_clear_p2p(sfptpd_ptp_tsd_t *tsd);
  * @return A boolean indicating whether the dataset is complete
  */
 bool sfptpd_ptp_tsd_set_m2s(sfptpd_ptp_tsd_t *tsd,
-			    struct timespec *tx_timestamp,
-			    struct timespec *rx_timestamp,
-			    sfptpd_time_t correction);
+			    struct sfptpd_timespec *tx_timestamp,
+			    struct sfptpd_timespec *rx_timestamp,
+			    struct sfptpd_timespec *correction);
 
 /** Set the slave to master timestamps. This is used when a PTP node is
  * operating in end-to-end mode when a PTP DelayReq/Resp packet exchange
@@ -102,9 +102,9 @@ bool sfptpd_ptp_tsd_set_m2s(sfptpd_ptp_tsd_t *tsd,
  * @return A boolean indicating whether the dataset is complete
  */
 bool sfptpd_ptp_tsd_set_s2m(sfptpd_ptp_tsd_t *tsd,
-			    struct timespec *tx_timestamp,
-			    struct timespec *rx_timestamp,
-			    sfptpd_time_t correction);
+			    struct sfptpd_timespec *tx_timestamp,
+			    struct sfptpd_timespec *rx_timestamp,
+			    struct sfptpd_timespec *correction);
 
 /** Set the peer to peer timestamps. This is used when a PTP node is
  * operating in peer-to-peer mode when a PTP PeerDelayReq/Resp/Followup
@@ -124,11 +124,11 @@ bool sfptpd_ptp_tsd_set_s2m(sfptpd_ptp_tsd_t *tsd,
  * @return A boolean indicating whether the dataset is complete
  */
 bool sfptpd_ptp_tsd_set_p2p(sfptpd_ptp_tsd_t *tsd,
-			    struct timespec *s2p_tx_timestamp,
-			    struct timespec *s2p_rx_timestamp,
-			    struct timespec *p2s_tx_timestamp,
-			    struct timespec *p2s_rx_timestamp,
-			    sfptpd_time_t correction);
+			    struct sfptpd_timespec *s2p_tx_timestamp,
+			    struct sfptpd_timespec *s2p_rx_timestamp,
+			    struct sfptpd_timespec *p2s_tx_timestamp,
+			    struct sfptpd_timespec *p2s_rx_timestamp,
+			    struct sfptpd_timespec *correction);
 
 /** Return the offset from master based on the current set of timestamps.
  * @param tsd Pointer to dataset object
@@ -146,13 +146,13 @@ sfptpd_time_t sfptpd_ptp_tsd_get_path_delay(sfptpd_ptp_tsd_t *tsd);
  * @param tsd Pointer to dataset object
  * @return The time in the dataset
 */
-struct timespec sfptpd_ptp_tsd_get_monotonic_time(sfptpd_ptp_tsd_t *tsd);
+struct sfptpd_timespec sfptpd_ptp_tsd_get_monotonic_time(sfptpd_ptp_tsd_t *tsd);
 
 /** Return the protocol time of the current set of timestamps.
  * @param tsd Pointer to dataset object
  * @return The time in the dataset
 */
-struct timespec sfptpd_ptp_tsd_get_protocol_time(sfptpd_ptp_tsd_t *tsd);
+struct sfptpd_timespec sfptpd_ptp_tsd_get_protocol_time(sfptpd_ptp_tsd_t *tsd);
 
 
 #endif /* _SFPTPD_PTP_TIMESTAMP_DATASET_H */

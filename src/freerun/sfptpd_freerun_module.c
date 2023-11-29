@@ -469,8 +469,7 @@ static void freerun_on_get_status(freerun_module_t *fr,
 	status->state = SYNC_MODULE_STATE_SLAVE;
 	status->alarms = 0;
 	status->clock = instance->clock;
-	status->offset_from_master.tv_sec = 0;
-	status->offset_from_master.tv_nsec = 0;
+	sfptpd_time_zero(&status->offset_from_master);
 	status->user_priority = instance->config->priority;
 	status->master.clock_id = SFPTPD_CLOCK_ID_UNINITIALISED;
 	status->master.remote_clock = false;

@@ -24,6 +24,7 @@
 
 #include "sfptpd_logging.h"
 #include "sfptpd_thread.h"
+#include "sfptpd_time.h"
 
 
 /****************************************************************************
@@ -737,7 +738,7 @@ static void sfptpd_timer_destroy(struct sfptpd_timer *timer)
 
 
 static int timer_start(struct sfptpd_timer *timer, bool periodic,
-		       bool absolute, const struct timespec *interval)
+		       bool absolute, const struct sfptpd_timespec *interval)
 {
 	struct itimerspec timer_spec;
 	int flags = 0;
@@ -749,13 +750,8 @@ static int timer_start(struct sfptpd_timer *timer, bool periodic,
 	if (absolute)
 		flags |= TIMER_ABSTIME;
 
-	timer_spec.it_value = *interval;
-	if (periodic) {
-		timer_spec.it_interval = *interval;
-	} else {
-		timer_spec.it_interval.tv_sec = 0;
-		timer_spec.it_interval.tv_nsec = 0;
-	}
+	sfptpd_time_to_std_floor(&timer_spec.it_value, interval);
+	sfptpd_time_to_std_floor(&timer_spec.it_interval, periodic ? interval : &SFPTPD_NULL_TIME);
 
 	if (timerfd_settime(timer->fd, flags, &timer_spec, NULL) < 0) {
 		ERROR("thread %s timer %d: failed to start timer, %s\n",
@@ -763,10 +759,11 @@ static int timer_start(struct sfptpd_timer *timer, bool periodic,
 		return errno;
 	}
 
-	DBG_L5("thread %s timer %d: started with interval %ld.%09ld, %ld.%09ld\n",
+	DBG_L5("thread %s timer %d: started with interval "
+	       SFPTPD_FMT_SFTIMESPEC SFPTPD_FORMAT_TIMESPEC "\n",
 	       thread_get_name(), timer->id,
-	       timer_spec.it_value.tv_sec, timer_spec.it_value.tv_nsec,
-	       timer_spec.it_interval.tv_sec, timer_spec.it_interval.tv_nsec);
+	       SFPTPD_ARGS_TIMESPEC(timer_spec.it_value),
+	       SFPTPD_ARGS_TIMESPEC(timer_spec.it_interval));
 	return 0;
 }
 
@@ -794,7 +791,7 @@ static int timer_stop(struct sfptpd_timer *timer)
 }
 
 
-static int timer_get_time_left(struct sfptpd_timer *timer, struct timespec *interval)
+static int timer_get_time_left(struct sfptpd_timer *timer, struct sfptpd_timespec *interval)
 {
 	struct itimerspec timer_spec;
 
@@ -808,8 +805,7 @@ static int timer_get_time_left(struct sfptpd_timer *timer, struct timespec *inte
 		return errno;
 	}
 
-	*interval = timer_spec.it_value;
-
+	sfptpd_time_from_std_floor(interval, &timer_spec.it_value);
 	return 0;
 }
 
@@ -1918,7 +1914,7 @@ int sfptpd_thread_timer_create(unsigned int timer_id, clockid_t clock_id,
 
 
 int sfptpd_thread_timer_start(unsigned int timer_id, bool periodic,
-			      bool absolute, const struct timespec *interval)
+			      bool absolute, const struct sfptpd_timespec *interval)
 {
 	struct sfptpd_thread *self;
 	struct sfptpd_timer *timer;
@@ -1952,7 +1948,7 @@ int sfptpd_thread_timer_stop(unsigned int timer_id)
 }
 
 
-int sfptpd_thread_timer_get_time_left(unsigned int timer_id, struct timespec *interval)
+int sfptpd_thread_timer_get_time_left(unsigned int timer_id, struct sfptpd_timespec *interval)
 {
 	struct sfptpd_thread *self;
 	struct sfptpd_timer *timer;

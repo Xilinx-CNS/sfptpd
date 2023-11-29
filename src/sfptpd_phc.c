@@ -102,10 +102,10 @@ struct sfptpd_phc {
 	struct pps_ktime pps_prev;
 
 	/* Last PPS event time - used to avoid spamming the ioctl */
-	struct timespec pps_prev_monotime;
+	struct sfptpd_timespec pps_prev_monotime;
 
 	/* Last calculated diff value */
-	struct timespec diff_prev;
+	struct sfptpd_timespec diff_prev;
 
 	/* Step since last sample */
 	bool stepped_since_sample;
@@ -130,11 +130,11 @@ struct sfptpd_phc {
 
 static int phc_set_fallback_diff_method(struct sfptpd_phc *phc);
 
-static int phc_compare_using_precise_offset(void *phc, struct timespec *diff);
-static int phc_compare_using_extended_offset(void *phc, struct timespec *diff);
-static int phc_compare_using_sys_offset(void *phc, struct timespec *diff);
-static int phc_compare_using_pps(void *phc, struct timespec *diff);
-static int phc_compare_by_reading_time(void *phc, struct timespec *diff);
+static int phc_compare_using_precise_offset(void *phc, struct sfptpd_timespec *diff);
+static int phc_compare_using_extended_offset(void *phc, struct sfptpd_timespec *diff);
+static int phc_compare_using_sys_offset(void *phc, struct sfptpd_timespec *diff);
+static int phc_compare_using_pps(void *phc, struct sfptpd_timespec *diff);
+static int phc_compare_by_reading_time(void *phc, struct sfptpd_timespec *diff);
 
 
 /****************************************************************************
@@ -201,15 +201,25 @@ static sfptpd_phc_pps_method_t phc_pps_methods[SFPTPD_PPS_METHOD_MAX + 1] = {
  * Internal Functions
  ****************************************************************************/
 
+static inline int phc_gettime(clockid_t clk_id, struct sfptpd_timespec *sfts)
+{
+	struct timespec ts;
+	int rc = clock_gettime(clk_id, &ts);
+	sfts->sec = ts.tv_sec;
+	sfts->nsec = ts.tv_nsec;
+	sfts->nsec_frac = 0;
+	return rc;
+}
 
 /* Computes diff = a - b */
-static void phc_pct_subtract(struct timespec *diff, struct ptp_clock_time *a,
+static void phc_pct_subtract(struct sfptpd_timespec *diff, struct ptp_clock_time *a,
 			     struct ptp_clock_time *b)
 {
-	diff->tv_sec = a->sec - b->sec;
-	/* Careful: ptp_clock_time.nsec is u32 ! */
-	diff->tv_nsec = (long)a->nsec - (long)b->nsec;
-	sfptpd_time_normalise(diff);
+	struct sfptpd_timespec subtrahend;
+
+	sfptpd_time_init(diff, a->sec, a->nsec, 0);
+	sfptpd_time_init(&subtrahend, b->sec, b->nsec, 0);
+	sfptpd_time_subtract(diff, diff, &subtrahend);
 }
 
 
@@ -222,11 +232,11 @@ static void phc_pct_subtract(struct timespec *diff, struct ptp_clock_time *a,
  * @param dev_start_diff d - b (device - sys_before)
  * @param diff_out will be updated iif window is smaller
  * @return true if diff_out is updated, false otherwise. */
-static bool phc_update_smallest_window_diff(struct timespec *window,
-	sfptpd_time_t *smallest_window, struct timespec *dev_start_diff,
-	struct timespec *diff_out)
+static bool phc_update_smallest_window_diff(struct sfptpd_timespec *window,
+	sfptpd_time_t *smallest_window, struct sfptpd_timespec *dev_start_diff,
+	struct sfptpd_timespec *diff_out)
 {
-	struct timespec ts;
+	struct sfptpd_timespec ts;
 	sfptpd_time_t w = sfptpd_time_timespec_to_float_ns(window);
 
 	/* Is the window positive and the smallest seen so far? */
@@ -331,8 +341,7 @@ static int phc_configure_pps(struct sfptpd_phc *phc)
 	}
 
 	/* Reset previous sample time */
-	phc->pps_prev_monotime.tv_sec = 0;
-	phc->pps_prev_monotime.tv_nsec = 0;
+	sfptpd_time_zero(&phc->pps_prev_monotime);
 
 	/* Reset previous sample data */
 	phc->pps_prev.sec = 0;
@@ -482,9 +491,9 @@ static int phc_open_devpps(struct sfptpd_phc *phc)
 
 
 static int phc_compare_by_reading_time_n(struct sfptpd_phc *phc, unsigned int num_samples,
-					 struct timespec *diff)
+					 struct sfptpd_timespec *diff)
 {
-	struct timespec sys_ts[2], phc_ts, window, ts;
+	struct sfptpd_timespec sys_ts[2], phc_ts, window, ts;
 	unsigned int i;
 	sfptpd_time_t smallest_window;
 	int rc;
@@ -497,9 +506,9 @@ static int phc_compare_by_reading_time_n(struct sfptpd_phc *phc, unsigned int nu
 
 	for (i = 0; i < num_samples; i++) {
 		/* Read the PHC time bounded either side by the system time */
-		if ((clock_gettime(CLOCK_REALTIME, &sys_ts[0]) != 0) ||
-		    (clock_gettime(phc->posix_id, &phc_ts) != 0) ||
-		    (clock_gettime(CLOCK_REALTIME, &sys_ts[1]) != 0)) {
+		if ((phc_gettime(CLOCK_REALTIME, &sys_ts[0]) != 0) ||
+		    (phc_gettime(phc->posix_id, &phc_ts) != 0) ||
+		    (phc_gettime(CLOCK_REALTIME, &sys_ts[1]) != 0)) {
 			ERROR("phc%d read-time: failed to read time, %s\n",
 			      phc->phc_idx, strerror(errno));
 			return errno;
@@ -520,19 +529,19 @@ static int phc_compare_by_reading_time_n(struct sfptpd_phc *phc, unsigned int nu
 }
 
 
-static int phc_compare_using_pps(void *context, struct timespec *diff)
+static int phc_compare_using_pps(void *context, struct sfptpd_timespec *diff)
 {
 	struct sfptpd_phc *phc = (struct sfptpd_phc *) context;
 	struct pps_fdata pps;
 	int rc;
-	struct timespec approx, mono_now;
+	struct sfptpd_timespec approx, mono_now;
 
 	assert(phc != NULL);
 	assert(diff != NULL);
 
 	/* By definition, PPS events only happen once per second.
 	 * So we only start calling the ioctl when it's close to happening. */
-	clock_gettime(CLOCK_MONOTONIC, &mono_now);
+	phc_gettime(CLOCK_MONOTONIC, &mono_now);
 	sfptpd_time_t ns_diff = sfptpd_time_timespec_to_float_ns(&mono_now) -
 			sfptpd_time_timespec_to_float_ns(&phc->pps_prev_monotime);
 
@@ -592,18 +601,19 @@ static int phc_compare_using_pps(void *context, struct timespec *diff)
 	}
 
 	/* The seconds is the rough offset rounded to the nearest second */
-	diff->tv_sec = approx.tv_sec;
-	if (approx.tv_nsec >= 500000000)
-		diff->tv_sec += 1;
+	diff->sec = approx.sec;
+	if (approx.nsec >= 500000000)
+		diff->sec += 1;
 
 	/* The nanosecond value comes from the PPS timestamp */
-	diff->tv_nsec = 1000000000 - pps.info.assert_tu.nsec;
-	if (diff->tv_nsec >= 500000000)
-		diff->tv_sec -= 1;
+	diff->nsec_frac = 0;
+	diff->nsec = 1000000000 - pps.info.assert_tu.nsec;
+	if (diff->nsec >= 500000000)
+		diff->sec -= 1;
 
-	TRACE_L6("phc%d pps: approx " SFPTPD_FORMAT_STIMESPEC "\n",
+	TRACE_L6("phc%d pps: approx " SFPTPD_FMT_SSFTIMESPEC "\n",
 		 phc->phc_idx,
-		 SFPTPD_ARGS_STIMESPEC(approx));
+		 SFPTPD_ARGS_SSFTIMESPEC(approx));
 
 	/* Store the PPS event time and calculated diff */
 	phc->pps_prev = pps.info.assert_tu;
@@ -615,7 +625,7 @@ static int phc_compare_using_pps(void *context, struct timespec *diff)
 
 
 static int phc_compare_using_precise_offset(void *context,
-					    struct timespec *diff)
+					    struct sfptpd_timespec *diff)
 {
 	int rc = EOPNOTSUPP;
 
@@ -649,14 +659,14 @@ static int phc_compare_using_precise_offset(void *context,
 
 static int phc_compare_using_extended_offset_n(struct sfptpd_phc *phc,
 					       int n_samples,
-					       struct timespec *diff)
+					       struct sfptpd_timespec *diff)
 {
 	int rc = EOPNOTSUPP;
 
 #ifdef PTP_SYS_OFFSET_EXTENDED
 	int i;
 	struct ptp_sys_offset_extended sysoff;
-	struct timespec ts, window;
+	struct sfptpd_timespec ts, window;
 	sfptpd_time_t smallest_window;
 	bool test_mode = false;
 
@@ -708,11 +718,11 @@ static int phc_compare_using_extended_offset_n(struct sfptpd_phc *phc,
 
 static int phc_compare_using_kernel_readings_n(struct sfptpd_phc *phc,
 					       int n_samples,
-					       struct timespec *diff)
+					       struct sfptpd_timespec *diff)
 {
 	int rc, i;
 	struct ptp_sys_offset sysoff;
-	struct timespec ts, window;
+	struct sfptpd_timespec ts, window;
 	sfptpd_time_t smallest_window;
 
 	assert(phc != NULL);
@@ -757,7 +767,7 @@ static int phc_set_fallback_diff_method(struct sfptpd_phc *phc)
 	enum sfptpd_phc_diff_method method;
 	const struct phc_diff_method *defn;
 	int sys_offset_extended_rc;
-	struct timespec sink;
+	struct sfptpd_timespec sink;
 	int rc;
 
 	assert(phc != NULL);
@@ -910,7 +920,7 @@ static int phc_enable_devptp(struct sfptpd_phc *phc, bool on)
 }
 
 
-static int phc_get_devptp_event(struct sfptpd_phc *phc, struct timespec *timestamp)
+static int phc_get_devptp_event(struct sfptpd_phc *phc, struct sfptpd_timespec *timestamp)
 {
 	struct ptp_extts_event event;
 	const int pin = 0;
@@ -929,8 +939,7 @@ static int phc_get_devptp_event(struct sfptpd_phc *phc, struct timespec *timesta
 		} else if (event.index == pin) {
 			TRACE_L5("phc%d: external timestamp at %lld.%09u\n",
 				 phc->phc_idx, event.t.sec, event.t.nsec);
-			timestamp->tv_sec = event.t.sec;
-			timestamp->tv_nsec = event.t.nsec;
+			sfptpd_time_init(timestamp, event.t.sec, event.t.nsec, 0);
 		}
 	} while (event.index != pin);
 	return 0;
@@ -979,7 +988,7 @@ static int phc_enable_devpps(struct sfptpd_phc *phc, bool on)
 }
 
 
-static int phc_get_devpps_event(struct sfptpd_phc *phc, struct timespec *timestamp, uint32_t *seq)
+static int phc_get_devpps_event(struct sfptpd_phc *phc, struct sfptpd_timespec *timestamp, uint32_t *seq)
 {
 	struct pps_fdata pps_data;
 	int rc;
@@ -1009,8 +1018,9 @@ static int phc_get_devpps_event(struct sfptpd_phc *phc, struct timespec *timesta
 			 phc->phc_idx,
 			 pps_data.info.assert_tu.sec,
 			 pps_data.info.assert_tu.nsec);
-		timestamp->tv_sec = pps_data.info.assert_tu.sec;
-		timestamp->tv_nsec = pps_data.info.assert_tu.nsec;
+		sfptpd_time_init(timestamp,
+			         pps_data.info.assert_tu.sec,
+				 pps_data.info.assert_tu.nsec, 0);
 		*seq = pps_data.info.assert_sequence;
 
 		phc->devpps_prev = pps_data.info;
@@ -1191,7 +1201,7 @@ int sfptpd_phc_get_max_freq_adj(struct sfptpd_phc *phc)
 }
 
 
-static int phc_compare_using_extended_offset(void *context, struct timespec *diff)
+static int phc_compare_using_extended_offset(void *context, struct sfptpd_timespec *diff)
 {
 	struct sfptpd_phc *phc = (struct sfptpd_phc *) context;
 
@@ -1199,7 +1209,7 @@ static int phc_compare_using_extended_offset(void *context, struct timespec *dif
 }
 
 
-static int phc_compare_using_sys_offset(void *context, struct timespec *diff)
+static int phc_compare_using_sys_offset(void *context, struct sfptpd_timespec *diff)
 {
 	struct sfptpd_phc *phc = (struct sfptpd_phc *) context;
 
@@ -1207,7 +1217,7 @@ static int phc_compare_using_sys_offset(void *context, struct timespec *diff)
 }
 
 
-static int phc_compare_by_reading_time(void *context, struct timespec *diff)
+static int phc_compare_by_reading_time(void *context, struct sfptpd_timespec *diff)
 {
 	struct sfptpd_phc *phc = (struct sfptpd_phc *) context;
 
@@ -1215,7 +1225,7 @@ static int phc_compare_by_reading_time(void *context, struct timespec *diff)
 }
 
 
-int sfptpd_phc_compare_to_sys_clk(struct sfptpd_phc *phc, struct timespec *diff)
+int sfptpd_phc_compare_to_sys_clk(struct sfptpd_phc *phc, struct sfptpd_timespec *diff)
 {
 	const struct phc_diff_method *method_def;
 	int rc;
@@ -1238,10 +1248,10 @@ int sfptpd_phc_compare_to_sys_clk(struct sfptpd_phc *phc, struct timespec *diff)
 		rc = EOPNOTSUPP;
 
 	if (rc == 0) {
-		TRACE_L5("phc%d %s: phc-sys diff: " SFPTPD_FORMAT_STIMESPEC "\n",
+		TRACE_L5("phc%d %s: phc-sys diff: " SFPTPD_FMT_SSFTIMESPEC "\n",
 			 phc->phc_idx,
 			 sfptpd_phc_get_diff_method_name(phc),
-			 SFPTPD_ARGS_STIMESPEC(*diff));
+			 SFPTPD_ARGS_SSFTIMESPEC(*diff));
 	}
 
 	return rc;
@@ -1337,7 +1347,7 @@ int sfptpd_phc_get_pps_fd(struct sfptpd_phc *phc)
 
 
 int sfptpd_phc_get_pps_event(struct sfptpd_phc *phc,
-			     struct timespec *timestamp, uint32_t *seq)
+			     struct sfptpd_timespec *timestamp, uint32_t *seq)
 {
 	int rc;
 

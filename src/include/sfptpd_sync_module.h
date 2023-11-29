@@ -50,7 +50,7 @@ struct sfptpd_config;
 struct sfptpd_clock;
 struct sfptpd_engine;
 struct sfptpd_log_time;
-struct timespec;
+struct sfptpd_timespec;
 
 /** Flag indicating that the sync module instance is selected */
 #define SYNC_MODULE_SELECTED               (1<<0)
@@ -212,7 +212,7 @@ typedef struct sfptpd_sync_instance_status {
 	sfptpd_sync_module_alarms_t alarms;
 	sfptpd_sync_module_constraints_t constraints;
 	struct sfptpd_clock *clock;
-	struct timespec offset_from_master;
+	struct sfptpd_timespec offset_from_master;
 	unsigned int user_priority;
 	struct sfptpd_grandmaster_info master;
 	long double local_accuracy;
@@ -373,7 +373,7 @@ void sfptpd_sync_module_update_leap_second(struct sfptpd_thread *sync_module,
  */
 int sfptpd_sync_module_step_clock(struct sfptpd_thread *sync_module,
 				  struct sfptpd_sync_instance *sync_instance,
-				  struct timespec *offset);
+				  struct sfptpd_timespec *offset);
 
 /** Write statistics information about current state of sync module to stdout
  * @param sync_module Pointer to sync module
@@ -401,7 +401,7 @@ void sfptpd_sync_module_write_topology(struct sfptpd_thread *sync_module,
  * @param time Time to record stats against at end of stats period
  */
 void sfptpd_sync_module_stats_end_period(struct sfptpd_thread *sync_module,
-					 struct timespec *time);
+					 struct sfptpd_timespec *time);
 
 /** Configure a test mode in the sync module
  * @param sync_module Pointer to sync module
@@ -455,7 +455,7 @@ struct sfptpd_sync_module_get_status_resp {
 #define SFPTPD_SYNC_MODULE_MSG_STEP_CLOCK SFPTPD_SYNC_MODULE_MSG(2)
 struct sfptpd_sync_module_step_clock_req {
 	struct sfptpd_sync_instance *instance_handle;
-	struct timespec offset;
+	struct sfptpd_timespec offset;
 };
 
 /** Message to log stats. This message applies to all instances of a sync
@@ -498,7 +498,7 @@ struct sfptpd_sync_module_write_topology_req {
  */
 #define SFPTPD_SYNC_MODULE_MSG_STATS_END_PERIOD SFPTPD_SYNC_MODULE_MSG(6)
 struct sfptpd_sync_module_stats_end_period_req {
-	struct timespec time;
+	struct sfptpd_timespec time;
 };
 
 /** Message to configure a test mode.

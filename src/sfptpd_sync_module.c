@@ -405,7 +405,7 @@ void sfptpd_sync_module_update_gm_info(struct sfptpd_thread *sync_module,
 
 int sfptpd_sync_module_step_clock(struct sfptpd_thread *sync_module,
 				  struct sfptpd_sync_instance *sync_instance,
-				  struct timespec *offset)
+				  struct sfptpd_timespec *offset)
 {
 	sfptpd_sync_module_msg_t msg;
 	int rc;
@@ -497,7 +497,7 @@ void sfptpd_sync_module_write_topology(struct sfptpd_thread *sync_module,
 
 
 void sfptpd_sync_module_stats_end_period(struct sfptpd_thread *sync_module,
-					 struct timespec *time)
+					 struct sfptpd_timespec *time)
 {
 	sfptpd_sync_module_msg_t *msg;
 

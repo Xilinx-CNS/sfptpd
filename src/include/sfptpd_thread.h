@@ -9,6 +9,7 @@
 #include <signal.h>
 
 #include "sfptpd_message.h"
+#include "sfptpd_time.h"
 
 
 /****************************************************************************
@@ -201,7 +202,7 @@ int sfptpd_thread_timer_create(unsigned int timer_id, clockid_t clock_id,
  * @return 0 on success or an errno otherwise
  */
 int sfptpd_thread_timer_start(unsigned int timer_id, bool periodic,
-			      bool absolute, const struct timespec *interval);
+			      bool absolute, const struct sfptpd_timespec *interval);
 
 /** Stop a timer
  * @param timer_id ID of the timer
@@ -215,7 +216,7 @@ int sfptpd_thread_timer_stop(unsigned int timer_id);
  *                 If both fields are zero, the timer is currently disarmed.
  * @return 0 on success or an errno otherwise
  */
-int sfptpd_thread_timer_get_time_left(unsigned int timer_id, struct timespec *interval);
+int sfptpd_thread_timer_get_time_left(unsigned int timer_id, struct sfptpd_timespec *interval);
 
 /** Configure the thread to wait on the supplied file descriptor. When the
  * file descriptor becomes ready the thread user handler

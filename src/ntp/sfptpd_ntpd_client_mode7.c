@@ -713,7 +713,7 @@ struct ntp_sys_flags {
  */
 struct sfptpd_ntpclient_state {
 	int sock;
-	struct timespec timeout;
+	struct sfptpd_timespec timeout;
 	int32_t key_id;
 	char key_value[SFPTPD_NTP_KEY_MAX];
 	unsigned int legacy_mode;
@@ -838,12 +838,12 @@ static int cmp_host_address(const struct sockaddr_storage *addr,
 static void mode7_get_systime(l_fp *now)
 {
 	long double dtemp;
-	struct timespec ts;
+	struct sfptpd_timespec ts;
 
 	/* Convert Unix clock from seconds and nanoseconds to seconds. */
-	clock_gettime(CLOCK_REALTIME, &ts);
-	now->l_i = ts.tv_sec + JAN_1970;
-	dtemp = ts.tv_nsec / 1e9;
+	sfclock_gettime(CLOCK_REALTIME, &ts);
+	now->l_i = ts.sec + JAN_1970;
+	dtemp = ts.nsec / 1e9;
 
 	/* Renormalize to seconds past 1900 and fraction. */
 	if (dtemp >= 1.0) {
@@ -1000,7 +1000,7 @@ static int mode7_response(struct sfptpd_ntpclient_state *ntpclient,
 	unsigned int num_items, item_size, pad_size;
 	unsigned int seq_num, last_seq_num;
 	unsigned int error_code;
-	struct timespec end_time, time_now, timeout;
+	struct sfptpd_timespec end_time, time_now, timeout;
 	unsigned int pkts_received;
 	bool have_seq[MAXSEQ + 1];
 	unsigned char *write_ptr, *read_ptr;
@@ -1026,7 +1026,7 @@ static int mode7_response(struct sfptpd_ntpclient_state *ntpclient,
 	FD_ZERO(&fds);
 	FD_SET(ntpclient->sock, &fds);
 
-	(void)clock_gettime(CLOCK_MONOTONIC, &end_time);
+	(void)sfclock_gettime(CLOCK_MONOTONIC, &end_time);
 	sfptpd_time_add(&end_time, &end_time, &ntpclient->timeout);
 
 	/* The algorithm is fairly conplicated because the response may be
@@ -1035,15 +1035,18 @@ static int mode7_response(struct sfptpd_ntpclient_state *ntpclient,
 	 * In addition, we don't know how many packets there will be in the
 	 * sequence until we get the packet with the end marker. */
 	while (pkts_received <= last_seq_num) {
+		struct timespec boring_timeout;
+
 		/* Work out how much time we have left. If we've run out of
 		 * time, return now. */
-		(void)clock_gettime(CLOCK_MONOTONIC, &time_now);
+		(void)sfclock_gettime(CLOCK_MONOTONIC, &time_now);
 		sfptpd_time_subtract(&timeout, &end_time, &time_now);
-		if (timeout.tv_sec < 0)
+		sfptpd_time_to_std_floor(&boring_timeout, &timeout);
+		if (timeout.sec < 0)
 			return ETIMEDOUT;
 
 		/* Wait on the sockets for the specified period of time */
-		rc = pselect(ntpclient->sock+1, &fds, NULL, NULL, &timeout, NULL);
+		rc = pselect(ntpclient->sock+1, &fds, NULL, NULL, &boring_timeout, NULL);
 		if (rc < 0) {
 			ERROR("ntpclient: mode7: error waiting on socket, %s\n",
 			      strerror(errno));
@@ -1234,8 +1237,7 @@ int sfptpd_ntpclient_mode7_create(struct sfptpd_ntpclient_state **ntpclient,
 	/* Initialise other members */
 	new->legacy_mode = 0;
 	new->request_pkt_size = ntp_legacy_pkt_sizes[new->legacy_mode];
-	new->timeout.tv_sec = 1;
-	new->timeout.tv_nsec = 0;
+	sfptpd_time_from_s(&new->timeout, 1);
 
 	/* If we have a key, copy it */
 	if (key_value != NULL)

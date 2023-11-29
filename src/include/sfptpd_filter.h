@@ -60,7 +60,7 @@ typedef struct sfptpd_pid_filter {
 	long double average_interval;
 
 	/** Time of last PID filter update */
-	struct timespec last_update;
+	struct sfptpd_timespec last_update;
 
 	/** Maximum size for the integral term or 0 if feature not enabled */
 	long double i_max;
@@ -209,7 +209,7 @@ void sfptpd_pid_filter_adjust(sfptpd_pid_filter_t *pid, long double k_p,
  * @return The calculated frequency adjust that should be applied
  */
 long double sfptpd_pid_filter_update(sfptpd_pid_filter_t *pid, long double delta,
-				     struct timespec *time);
+				     struct sfptpd_timespec *time);
 
 /** Get the current proportional term for the PID filter
  * @param pid PID filter instance

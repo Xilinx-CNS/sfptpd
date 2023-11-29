@@ -75,7 +75,7 @@ const struct sfptpd_stats_period_info sfptpd_stats_periods[SFPTPD_STATS_PERIOD_M
 	{"week",        60*60*24*7}
 };
 
-const struct timespec zero_time = { 0, 0 };
+const struct sfptpd_timespec zero_time = { 0, 0 };
 
 const char *sfptpd_stats_ethtool_names[SFPTPD_DRVSTAT_MAX] = {
 	[ SFPTPD_DRVSTAT_PPS_OFLOW ]    = "pps_in_oflow",
@@ -295,16 +295,14 @@ void sfptpd_stats_range_init(struct sfptpd_stats_range *range)
 	range->min = 1.0e100;
 	range->max = -1.0e100;
 	range->qualified = true;
-	range->min_time.tv_sec = 0;
-	range->min_time.tv_nsec = 0;
-	range->max_time.tv_sec = 0;
-	range->max_time.tv_nsec = 0;
+	sfptpd_time_zero(&range->min_time);
+	sfptpd_time_zero(&range->max_time);
 }
 
 
 void sfptpd_stats_range_update(struct sfptpd_stats_range *range,
 			       long double sample,
-			       struct timespec time,
+			       struct sfptpd_timespec time,
 			       bool qualified)
 {
 	assert(range != NULL);
@@ -424,14 +422,14 @@ static void stats_range_history_update(struct sfptpd_stats_item *item, va_list a
 {
 	struct stats_range_history *stat = (struct stats_range_history *)item;
 	long double sample;
-	struct timespec time;
+	struct sfptpd_timespec time;
 	int qualified;
 
 	assert(stat != NULL);
 	assert(stat->parent.type == SFPTPD_STATS_TYPE_RANGE);
 
 	sample = va_arg(args, long double);
-	time = va_arg(args, struct timespec);
+	time = va_arg(args, struct sfptpd_timespec);
 	qualified = va_arg(args, int);
 	sfptpd_stats_range_update(&stat->active, sample, time, (bool) qualified);
 }
@@ -513,18 +511,18 @@ static void stats_range_history_write_data(struct sfptpd_stats_item *item,
 		long double sd_sqr = (entry->total_squares / entry->num_samples)
 				   - (mean * mean);
 
-		if (entry->min_time.tv_sec == 0) {
+		if (entry->min_time.sec == 0) {
 			snprintf(min_time_str, sizeof min_time_str, "---");
 		} else {
 			sfptpd_local_strftime(min_time_str, sizeof min_time_str,
-					      "%Y-%m-%d %X", &entry->min_time.tv_sec);
+					      "%Y-%m-%d %X", &entry->min_time.sec);
 		}
 
-		if (entry->max_time.tv_sec == 0) {
+		if (entry->max_time.sec == 0) {
 			snprintf(max_time_str, sizeof max_time_str, "---");
 		} else {
 			sfptpd_local_strftime(max_time_str, sizeof max_time_str,
-					      "%Y-%m-%d %X", &entry->max_time.tv_sec);
+					      "%Y-%m-%d %X", &entry->max_time.sec);
 		}
 
 		fprintf(stream, stats_range_format_data, name,
@@ -599,18 +597,18 @@ static void stats_range_history_write_json_data(
 	else
 		fprintf(stream, ",\"end-time\":\"%s\"", end);
 
-	if (entry->min_time.tv_sec == 0)
+	if (entry->min_time.sec == 0)
 		snprintf(time_str, sizeof time_str, "null");
 	else
 		sfptpd_local_strftime(time_str, sizeof time_str,
-				      "\"%Y-%m-%d %X\"", &entry->min_time.tv_sec);
+				      "\"%Y-%m-%d %X\"", &entry->min_time.sec);
 	fprintf(stream, ",\"min-time\":%s", time_str);
 
-	if (entry->max_time.tv_sec == 0)
+	if (entry->max_time.sec == 0)
 		snprintf(time_str, sizeof time_str, "null");
 	else
 		sfptpd_local_strftime(time_str, sizeof time_str,
-				      "\"%Y-%m-%d %X\"", &entry->max_time.tv_sec);
+				      "\"%Y-%m-%d %X\"", &entry->max_time.sec);
 	fprintf(stream, ",\"max-time\":%s", time_str);
 
 	fprintf(stream, ",\"qualified\":%s}", entry->qualified ? "true" : "false");
@@ -633,7 +631,7 @@ static int stats_range_history_get(sfptpd_stats_item_t *item,
 	struct stats_range_history *stat = (struct stats_range_history *)item;
 	long double *mean, *max, *min;
 	int *qualified;
-	struct timespec *max_time, *min_time;
+	struct sfptpd_timespec *max_time, *min_time;
 
 	assert(stat != NULL);
 	assert(stat->parent.type == SFPTPD_STATS_TYPE_RANGE);
@@ -648,8 +646,8 @@ static int stats_range_history_get(sfptpd_stats_item_t *item,
 	max = va_arg(args, long double *);
 	min = va_arg(args, long double *);
 	qualified = va_arg(args, int *);
-	max_time = va_arg(args, struct timespec *);
-	min_time = va_arg(args, struct timespec *);
+	max_time = va_arg(args, struct sfptpd_timespec *);
+	min_time = va_arg(args, struct sfptpd_timespec *);
 	if (mean != NULL) *mean = entry->total / entry->num_samples;
 	if (max != NULL) *max = entry->max;
 	if (min != NULL) *min = entry->min;
@@ -897,7 +895,7 @@ int sfptpd_stats_collection_alloc(struct sfptpd_stats_collection *stats,
 				  const char *name)
 {
 	enum sfptpd_stats_time_period p;
-	struct timespec time;
+	struct sfptpd_timespec time;
 
 	assert(stats != NULL);
 	assert(name != NULL);
@@ -906,7 +904,7 @@ int sfptpd_stats_collection_alloc(struct sfptpd_stats_collection *stats,
 	assert(SFPTPD_STATS_COLLECTION_INTERVAL == 60);
 
 	/* Get the time and initialise the statistics measures */
-	if (clock_gettime(CLOCK_REALTIME, &time) < 0) {
+	if (sfclock_gettime(CLOCK_REALTIME, &time) < 0) {
 		ERROR("failed to get realtime time, %s\n", strerror(errno));
 		return errno;
 	}
@@ -1120,7 +1118,7 @@ static int sfptpd_stats_collection_update(struct sfptpd_stats_collection *stats,
 int sfptpd_stats_collection_update_range(struct sfptpd_stats_collection *stats,
 					 unsigned int index,
 					 long double sample,
-					 struct timespec time,
+					 struct sfptpd_timespec time,
 					 bool qualified)
 {
 	return sfptpd_stats_collection_update(stats, index,
@@ -1148,7 +1146,7 @@ int sfptpd_stats_collection_update_count_samples(struct sfptpd_stats_collection 
 
 
 void sfptpd_stats_collection_end_period(struct sfptpd_stats_collection *stats,
-					struct timespec *time)
+					struct sfptpd_timespec *time)
 {
 	enum sfptpd_stats_time_period p;
 	unsigned int i;
@@ -1228,8 +1226,8 @@ int sfptpd_stats_collection_get_range(struct sfptpd_stats_collection *stats,
 				      enum sfptpd_stats_history_index instance,
 				      long double *mean, long double *min,
 				      long double *max, int *qualified,
-				      struct timespec *min_time,
-				      struct timespec *max_time)
+				      struct sfptpd_timespec *min_time,
+				      struct sfptpd_timespec *max_time)
 {
 	int rc;
 
@@ -1349,7 +1347,7 @@ void sfptpd_stats_collection_dump(struct sfptpd_stats_collection *stats,
 					 sfptpd_stats_periods[p].name, -h);
 
 				sfptpd_local_strftime(start, sizeof(start), "%Y-%m-%d %X",
-						      &interval->start_time.tv_sec);
+						      &interval->start_time.sec);
 
 				/* If this is the current stats for a time
 				 * period, we don't print an end time */
@@ -1357,7 +1355,7 @@ void sfptpd_stats_collection_dump(struct sfptpd_stats_collection *stats,
 					sfptpd_strncpy(end, "---", sizeof(end));
 				} else {
 					sfptpd_local_strftime(end, sizeof(end), "%Y-%m-%d %X",
-							      &interval->end_time.tv_sec);
+							      &interval->end_time.sec);
 				}
 
 				item->ops->write_data(item, stream, name,

@@ -102,7 +102,7 @@ findForeignMasterRecord(const MsgHeader *header, ForeignMasterDS *ds)
 
 static void recordForeignMasterAnnounce(ForeignMasterRecord *record)
 {
-	clock_gettime(CLOCK_MONOTONIC,
+	sfclock_gettime(CLOCK_MONOTONIC,
 		      &record->announceTimes[record->announceTimesWriteIdx]);
 	record->announceTimesWriteIdx++;
 	if (record->announceTimesWriteIdx == FOREIGN_MASTER_THRESHOLD)
@@ -113,7 +113,7 @@ static void recordForeignMasterAnnounce(ForeignMasterRecord *record)
 
 
 Boolean doesForeignMasterLatestAnnounceQualify(ForeignMasterRecord *record,
-					       const struct timespec *threshold)
+					       const struct sfptpd_timespec *threshold)
 {
 	if (record->announceTimesCount != 0) {
 		int index = record->announceTimesWriteIdx - 1;
@@ -131,7 +131,7 @@ Boolean doesForeignMasterLatestAnnounceQualify(ForeignMasterRecord *record,
 
 
 Boolean doesForeignMasterEarliestAnnounceQualify(ForeignMasterRecord *record,
-						 const struct timespec *threshold)
+						 const struct sfptpd_timespec *threshold)
 {
 	if (record->announceTimesCount != 0) {
 		int index = record->announceTimesWriteIdx - record->announceTimesCount;
@@ -294,15 +294,15 @@ addForeign(Octet *buf, size_t length, MsgHeader *header, PtpClock *ptpClock)
 }
 
 static void
-removeUtcOffset(struct timespec *time, RunTimeOpts *rtOpts, PtpClock *ptpClock) {
+removeUtcOffset(struct sfptpd_timespec *time, RunTimeOpts *rtOpts, PtpClock *ptpClock) {
 	if ((ptpClock->portState != PTPD_MASTER) &&
 	    (ptpClock->timePropertiesDS.currentUtcOffsetValid || rtOpts->alwaysRespectUtcOffset)) {
-		time->tv_sec -= ptpClock->timePropertiesDS.currentUtcOffset;
+		time->sec -= ptpClock->timePropertiesDS.currentUtcOffset;
 	}
 }
 
 static void
-applyForeignUtcOffset(struct timespec *time, int UtcOffset, RunTimeOpts *rtOpts, ForeignMasterRecord *record, PtpClock *ptpClock) {
+applyForeignUtcOffset(struct sfptpd_timespec *time, int UtcOffset, RunTimeOpts *rtOpts, ForeignMasterRecord *record, PtpClock *ptpClock) {
 	/* Check if the foreign master has announced its own UTC offset as invalid. 
 		record->header is the header of the announce message, which was stored 
 		into record->header by insertIntoForeignMasterDS */
@@ -312,9 +312,9 @@ applyForeignUtcOffset(struct timespec *time, int UtcOffset, RunTimeOpts *rtOpts,
 		the GM and instead apply the override value.
 	*/
 	if (rtOpts->overrideUtcOffset) {
-		time->tv_sec -= rtOpts->overrideUtcOffsetSeconds;
+		time->sec -= rtOpts->overrideUtcOffsetSeconds;
 	} else if ((currentUtcOffsetValid || rtOpts->alwaysRespectUtcOffset)) {
-		time->tv_sec -= UtcOffset;
+		time->sec -= UtcOffset;
 	}
 }
 
@@ -322,8 +322,8 @@ void
 calculateForeignOffset(ForeignSyncSnapshot *syncSnapshot, const Timestamp *syncOriginTimestamp,
 		       ForeignMasterRecord *record, PtpClock *ptpClock)
 {
-	struct timespec sync_time;
-/* sync_time will store the sync origin timestamp, which is from the foreign
+	struct sfptpd_timespec sync_time;
+	/* sync_time will store the sync origin timestamp, which is from the foreign
 	master under scrutiny and has NOT had the UTC offset applied to it. 
 
 	This timestamp could be in UTC or it could be in TAI. 
@@ -351,10 +351,10 @@ calculateForeignOffset(ForeignSyncSnapshot *syncSnapshot, const Timestamp *syncO
 	we must wait until the announce message arrives, which is why we check
 	for record->announceTimesCount in order to decide whether to return a 
 	result or not. 
-*/
-	struct timespec foreign_offset; /* foreign_offset holds the result. */
-	struct timespec local_time;
-/* local_time will hold the local timestamp from the NIC that has already 
+	*/
+	struct sfptpd_timespec foreign_offset; /* foreign_offset holds the result. */
+	struct sfptpd_timespec local_time;
+	/* local_time will hold the local timestamp from the NIC that has already 
 	had the	applyUtcOffset function called on it. 
 
 	This means it may or may not have had a UTC offset added to it. If a 
@@ -392,8 +392,7 @@ calculateForeignOffset(ForeignSyncSnapshot *syncSnapshot, const Timestamp *syncO
 	if (syncSnapshot->have_timestamp && record->announceTimesCount) {
 		toInternalTime(&sync_time, syncOriginTimestamp);
 
-		local_time.tv_sec = syncSnapshot->timestamp.tv_sec;
-		local_time.tv_nsec = syncSnapshot->timestamp.tv_nsec;
+		local_time = syncSnapshot->timestamp;
 
 		/* Undo the applyUtcOffset function. 
 		   This ensures that local_time is now in UTC. 
@@ -423,7 +422,7 @@ recordForeignSync(const MsgHeader *header, PtpClock *ptpClock, const struct sfpt
 
 			snapshot->have_timestamp = true;
 			snapshot->seq = header->sequenceId;
-			internalTime_to_ts(timestamp, &snapshot->timestamp);
+			snapshot->timestamp = *timestamp;
 
 			if ((header->flagField0 & PTPD_FLAG_TWO_STEP) == 0) {
 				calculateForeignOffset(snapshot,
@@ -463,11 +462,11 @@ recordForeignFollowUp(const MsgHeader *header, PtpClock *ptpClock, const MsgFoll
 
 
 void
-getForeignMasterExpiryTime(PtpClock *ptpClock, struct timespec *threshold)
+getForeignMasterExpiryTime(PtpClock *ptpClock, struct sfptpd_timespec *threshold)
 {
-	struct timespec window;
+	struct sfptpd_timespec window;
 
-	clock_gettime(CLOCK_MONOTONIC, threshold);
+	sfclock_gettime(CLOCK_MONOTONIC, threshold);
 	sfptpd_time_float_s_to_timespec(FOREIGN_MASTER_TIME_WINDOW *
 					powl(2, ptpClock->logAnnounceInterval), &window);
 	sfptpd_time_subtract(threshold, threshold, &window);
@@ -475,7 +474,7 @@ getForeignMasterExpiryTime(PtpClock *ptpClock, struct timespec *threshold)
 
 
 void
-expireForeignMasterRecords(ForeignMasterDS *ds, const struct timespec *threshold)
+expireForeignMasterRecords(ForeignMasterDS *ds, const struct sfptpd_timespec *threshold)
 {
 	ForeignMasterRecord *record;
 	int i;

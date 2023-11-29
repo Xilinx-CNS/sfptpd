@@ -208,10 +208,10 @@ struct sfptpd_engine {
 		enum sfptpd_leap_second_type type;
 
 		/* Time that scheduled leap second will occur */
-		struct timespec time;
+		struct sfptpd_timespec time;
 
 		/* Guard interval to apply around leap second */
-		struct timespec guard_interval;
+		struct sfptpd_timespec guard_interval;
 	} leap_second;
 
 	/* Sync modules (fixed-size array) */
@@ -232,7 +232,7 @@ struct sfptpd_engine {
 	struct sync_instance_record *clustering_discriminator;
 
 	/* Time instance last changed */
-	struct timespec last_instance_change;
+	struct sfptpd_timespec last_instance_change;
 
 	/* Pointer to the currently selected local reference clock */
 	struct sfptpd_clock *lrc;
@@ -517,8 +517,8 @@ static int create_servos(struct sfptpd_engine *engine, struct sfptpd_config *con
 
 static int create_timers(struct sfptpd_engine *engine)
 {
-	struct timespec interval;
-	long double sync_interval;
+	struct sfptpd_timespec interval;
+	sfptpd_time_t sync_interval;
 	unsigned int i;
 	int rc;
 
@@ -539,10 +539,8 @@ static int create_timers(struct sfptpd_engine *engine)
 	}
 
 	/* Calculate the sync timer interval in seconds and nanoseconds */
-	sync_interval = powl(2, (long double)engine->general_config->clocks.sync_interval);
-	interval.tv_sec = (long)sync_interval;
-	interval.tv_nsec = (long)((sync_interval - (long double)interval.tv_sec) * 1000000000);
-
+	sync_interval = powl(2, (sfptpd_time_t)engine->general_config->clocks.sync_interval);
+	sfptpd_time_float_s_to_timespec(sync_interval, &interval);
 	rc = sfptpd_thread_timer_start(ENGINE_TIMER_SYNCHRONIZE,
 				       true, false, &interval);
 	if (rc != 0) {
@@ -551,9 +549,7 @@ static int create_timers(struct sfptpd_engine *engine)
 	}
 
 	/* Start the stats logging timer */
-	interval.tv_sec = SFPTPD_STATISTICS_LOGGING_INTERVAL;
-	interval.tv_nsec = 0;
-
+	sfptpd_time_from_s(&interval, SFPTPD_STATISTICS_LOGGING_INTERVAL);
 	rc = sfptpd_thread_timer_start(ENGINE_TIMER_LOG_STATS,
 				       true, false, &interval);
 	if (rc != 0) {
@@ -562,9 +558,7 @@ static int create_timers(struct sfptpd_engine *engine)
 	}
 
 	/* Start a long-term stats collection timer to go off every minute */
-	interval.tv_sec = SFPTPD_STATS_COLLECTION_INTERVAL;
-	interval.tv_nsec = 0;
-
+	sfptpd_time_from_s(&interval, SFPTPD_STATS_COLLECTION_INTERVAL);
 	rc = sfptpd_thread_timer_start(ENGINE_TIMER_STATS_PERIOD_END,
 				       true, false, &interval);
 	if (rc != 0) {
@@ -573,9 +567,7 @@ static int create_timers(struct sfptpd_engine *engine)
 	}
 
 	/* Start the state save timer */
-	interval.tv_sec = SFPTPD_STATE_SAVE_INTERVAL;
-	interval.tv_nsec = 0;
-
+	sfptpd_time_from_s(&interval, SFPTPD_STATE_SAVE_INTERVAL);
 	rc = sfptpd_thread_timer_start(ENGINE_TIMER_SAVE_STATE,
 				       true, false, &interval);
 	if (rc != 0) {
@@ -589,8 +581,7 @@ static int create_timers(struct sfptpd_engine *engine)
 	    engine->general_config->selection_policy.strategy == SFPTPD_SELECTION_STRATEGY_MANUAL_STARTUP &&
 	    engine->candidate != engine->selected) {
 
-		interval.tv_sec = engine->general_config->selection_holdoff_interval;
-		interval.tv_nsec = 0;
+		sfptpd_time_from_s(&interval, engine->general_config->selection_holdoff_interval);
 
 		rc = sfptpd_thread_timer_start(ENGINE_TIMER_SELECTION_HOLDOFF,
 					       false, false, &interval);
@@ -604,8 +595,7 @@ static int create_timers(struct sfptpd_engine *engine)
 	/* Start the netlink rescan timer */
 	if (engine->general_config->netlink_rescan_interval != 0) {
 
-		interval.tv_sec = engine->general_config->netlink_rescan_interval;
-		interval.tv_nsec = 0;
+		sfptpd_time_from_s(&interval, engine->general_config->netlink_rescan_interval);
 
 		rc = sfptpd_thread_timer_start(ENGINE_TIMER_NETLINK_RESCAN,
 					       true, false, &interval);
@@ -855,8 +845,8 @@ static int select_sync_instance(struct sfptpd_engine *engine,
 				struct sync_instance_record *the_new)
 {
 	struct sync_instance_record *the_old;
-	struct timespec time_now;
-	struct timespec time_last_instance = { 0 };
+	struct sfptpd_timespec time_now;
+	struct sfptpd_timespec time_last_instance = { 0 };
 	int rc;
 	bool lrc_change;
 	struct sfptpd_log_time log_time;
@@ -928,7 +918,7 @@ static int select_sync_instance(struct sfptpd_engine *engine,
 
 	/* Record the time of this change and print how long the previous
 	 * instance was selected for. */
-	(void)clock_gettime(CLOCK_MONOTONIC, &time_now);
+	(void)sfclock_gettime(CLOCK_MONOTONIC, &time_now);
 	if (the_old != NULL) {
 		sfptpd_time_subtract(&time_last_instance, &time_now, &engine->last_instance_change);
 	}
@@ -1011,7 +1001,7 @@ static void write_rt_stats_json(FILE* json_stats_fp,
 {
 	char* comma = "";
 	char ftime[24];
-	struct timespec time;
+	struct sfptpd_timespec time;
 	size_t len = 0;
 
 	assert(json_stats_fp != NULL);
@@ -1036,9 +1026,9 @@ static void write_rt_stats_json(FILE* json_stats_fp,
 	/* Add clock time */
 	if (entry->clock_master != NULL) {
 		sfptpd_clock_get_time(entry->clock_master, &time);
-		time_t secs = time.tv_sec;
+		time_t secs = time.sec;
 		sfptpd_local_strftime(ftime, (sizeof ftime) - 1, "%Y-%m-%d %H:%M:%S", &secs);
-		LPRINTF(json_stats_fp, ",\"time\":\"%s.%09ld\"", ftime, time.tv_nsec);
+		LPRINTF(json_stats_fp, ",\"time\":\"%s.%09" PRIu32 "\"", ftime, time.nsec);
 
 		/* Extra info about clock interface, mostly useful when using bonds */
 		if (entry->clock_master != sfptpd_clock_get_system_clock())
@@ -1049,10 +1039,10 @@ static void write_rt_stats_json(FILE* json_stats_fp,
 
 	/* Slave clock info */
 	sfptpd_clock_get_time(entry->clock_slave, &time);
-	time_t secs = time.tv_sec;
+	time_t secs = time.sec;
 	sfptpd_local_strftime(ftime, (sizeof ftime) - 1, "%Y-%m-%d %H:%M:%S", &secs);
-	LPRINTF(json_stats_fp, "},\"clock-slave\":{\"name\":\"%s\",\"time\":\"%s.%09ld\"",
-			sfptpd_clock_get_long_name(entry->clock_slave), ftime, time.tv_nsec);
+	LPRINTF(json_stats_fp, "},\"clock-slave\":{\"name\":\"%s\",\"time\":\"%s.%09" PRIu32 "\"",
+			sfptpd_clock_get_long_name(entry->clock_slave), ftime, time.nsec);
 
 	/* Extra info about clock interface, mostly useful when using bonds */
 	if (entry->clock_slave != sfptpd_clock_get_system_clock())
@@ -1167,7 +1157,7 @@ static void on_schedule_leap_second(struct sfptpd_engine *engine,
 				    enum sfptpd_leap_second_type type,
 				    long double guard_interval)
 {
-	struct timespec now, expiry_time;
+	struct sfptpd_timespec now, expiry_time;
 	struct sfptpd_config_general *general_cfg;
 	int rc;
 
@@ -1198,19 +1188,17 @@ static void on_schedule_leap_second(struct sfptpd_engine *engine,
 	}
 
 	/* Work out when the leap second will occur */
-	if (clock_gettime(CLOCK_REALTIME, &now) < 0) {
+	if (sfclock_gettime(CLOCK_REALTIME, &now) < 0) {
 		ERROR("Failed to get realtime time, %s\n", strerror(errno));
 	} else {
 		/* Work out when the end of the current day is as an absolute
 		 * UTC time in seconds */
-		engine->leap_second.time.tv_sec =
-			now.tv_sec - (now.tv_sec % 86400) + 86400;
-		engine->leap_second.time.tv_nsec = 0;
+		sfptpd_time_from_s(&engine->leap_second.time, now.sec - (now.sec % 86400) + 86400);
 
 		/* If this is a leap second 59, then the second is deleted one
 		 * second before midnight i.e. the day is one second shorter. */
 		if (type == SFPTPD_LEAP_SECOND_59)
-			engine->leap_second.time.tv_sec--;
+			engine->leap_second.time.sec--;
 
 		/* Record the leap second type and the guard interval */
 		engine->leap_second.type = type;
@@ -1275,7 +1263,7 @@ static void on_test_adjust_frequency(struct sfptpd_engine *engine,
 static void on_test_leap_second(struct sfptpd_engine *engine,
 				enum sfptpd_leap_second_type type)
 {
-	struct timespec now;
+	struct sfptpd_timespec now;
 	int rc;
 	struct sync_instance_record *instance = engine->selected;
 
@@ -1301,20 +1289,18 @@ static void on_test_leap_second(struct sfptpd_engine *engine,
 		return;
 
 	/* Work out when the leap second will occur */
-	if (clock_gettime(CLOCK_REALTIME, &now) < 0) {
+	if (sfclock_gettime(CLOCK_REALTIME, &now) < 0) {
 		ERROR("Failed to get realtime time, %s\n", strerror(errno));
 	} else {
 		/* Work out when the end of the current day is as an
 		 * absolute UTC time in seconds */
-		engine->leap_second.time.tv_sec =
-			now.tv_sec - (now.tv_sec % 86400) + 86400;
-		engine->leap_second.time.tv_nsec = 0;
+		sfptpd_time_from_s(&engine->leap_second.time, now.sec - (now.sec % 86400) + 86400);
 
 		/* If this is a leap second 59, then the second is
 		 * deleted one second before midnight i.e. the day is
 		 * one second shorter. */
 		if (type == SFPTPD_LEAP_SECOND_59)
-			engine->leap_second.time.tv_sec--;
+			engine->leap_second.time.sec--;
 
 		/* If we are testing leap seconds then the master has to be
 		 * serving the atomic timescale. Setting the timer for midnight
@@ -1349,7 +1335,7 @@ static void on_test_leap_second(struct sfptpd_engine *engine,
 
 static void on_leap_second_timer(void *user_context, unsigned int timer_id)
 {
-	struct timespec expiry_time;
+	struct sfptpd_timespec expiry_time;
 	int rc;
 	struct sfptpd_engine *engine = (struct sfptpd_engine *)user_context;
 	struct sync_instance_record *instance = engine->selected;
@@ -1557,7 +1543,7 @@ static void engine_handle_new_link_table(struct sfptpd_engine *engine, int versi
 static void engine_on_user_fds(void *context, unsigned int num_fds, int fd[])
 {
 	struct sfptpd_engine *engine = (struct sfptpd_engine *)context;
-	struct timespec interval;
+	struct sfptpd_timespec interval;
 	int rc;
 
 	assert(engine != NULL);
@@ -1566,8 +1552,8 @@ static void engine_on_user_fds(void *context, unsigned int num_fds, int fd[])
 	    engine->general_config->netlink_coalesce_ms != 0) {
 
 		/* Start the netlink coalesce timer */
-		interval.tv_sec = engine->general_config->netlink_coalesce_ms / 1000;
-		interval.tv_nsec = (engine->general_config->netlink_coalesce_ms % 1000) * 1000000;
+		sfptpd_time_from_ns(&interval, 1000000 *
+				    ((uint64_t)engine->general_config->netlink_coalesce_ms));
 
 		rc = sfptpd_thread_timer_start(ENGINE_TIMER_NETLINK_COALESCE,
 					       false, false, &interval);
@@ -1622,7 +1608,7 @@ static void on_netlink_coalesce_timer(void *user_context, unsigned int timer_id)
 static void on_synchronize(void *user_context, unsigned int timer_id)
 {
 	struct sfptpd_engine *engine = (struct sfptpd_engine *)user_context;
-	struct timespec time;
+	struct sfptpd_timespec time;
 	int i;
 
 	assert(engine != NULL);
@@ -1638,7 +1624,7 @@ static void on_synchronize(void *user_context, unsigned int timer_id)
 	}
 
 	/* Get the current monotonic time for the servo algorithm */
-	if (clock_gettime(CLOCK_MONOTONIC, &time) < 0) {
+	if (sfclock_gettime(CLOCK_MONOTONIC, &time) < 0) {
 		ERROR("failed to get monotonic time, %s\n", strerror(errno));
 	} else {
 		/* Run the slave servos */
@@ -1753,14 +1739,14 @@ static void on_save_state(void *user_context, unsigned int timer_id)
 static void on_stats_period_end(void *user_context, unsigned int timer_id)
 {
 	struct sfptpd_engine *engine = (struct sfptpd_engine *)user_context;
-	struct timespec time;
+	struct sfptpd_timespec time;
 	enum sfptpd_config_category type;
 	int i;
 
 	assert(engine != NULL);
 
 	/* Get the current monotonic time for the servo algorithm */
-	if (clock_gettime(CLOCK_REALTIME, &time) < 0) {
+	if (sfclock_gettime(CLOCK_REALTIME, &time) < 0) {
 		ERROR("failed to get monotonic time, %s\n", strerror(errno));
 	} else {
 		/* Request stats collection from each sync module */
@@ -1807,8 +1793,8 @@ static void on_step_clocks(struct sfptpd_engine *engine)
 	struct sync_instance_record *sync_instance;
 	struct sfptpd_sync_instance *handle;
 	struct sfptpd_sync_instance_status status;
-	struct timespec servo_offset;
-	struct timespec zero = { .tv_sec = 0, .tv_nsec = 0 };
+	struct sfptpd_timespec servo_offset;
+	struct sfptpd_timespec zero = sfptpd_time_null();
 	int rc, i;
 
 	assert(engine != NULL);
@@ -1877,7 +1863,7 @@ static void on_sync_instance_state_changed(struct sfptpd_engine *engine,
 {
 	struct sync_instance_record *instance_record;
 	struct sync_instance_record *new_candidate;
-	struct timespec interval;
+	struct sfptpd_timespec interval;
 	int rc;
 	bool state_written = false;
 
@@ -1962,8 +1948,7 @@ static void on_sync_instance_state_changed(struct sfptpd_engine *engine,
 	 * holdoff timer. */
 	if ((engine->candidate == NULL) || (engine->selected == new_candidate)) {
 		/* Stop and restart the selection holdoff timer */
-		interval.tv_sec = engine->general_config->selection_holdoff_interval;
-		interval.tv_nsec = 0;
+		sfptpd_time_from_s(&interval, engine->general_config->selection_holdoff_interval);
 
 		rc = sfptpd_thread_timer_stop(ENGINE_TIMER_SELECTION_HOLDOFF);
 		if (rc != 0) {
@@ -1989,13 +1974,13 @@ static void on_sync_instance_state_changed(struct sfptpd_engine *engine,
 	}
 
 	/* Round seconds up as usually we will get a result of the x.99 form. */
-	if (interval.tv_nsec > ONE_BILLION/2) {
-		interval.tv_sec++;
-		interval.tv_nsec = 0;
+	if (interval.nsec > ONE_BILLION/2) {
+		interval.sec++;
+		interval.nsec = 0;
 	}
 
 	INFO("will switch to sync instance %s in %d seconds if %s does not recover\n",
-	     new_candidate->info.name, interval.tv_sec, engine->selected->info.name);
+	     new_candidate->info.name, interval.sec, engine->selected->info.name);
 }
 
 
@@ -2724,10 +2709,9 @@ void sfptpd_engine_link_table_release(struct sfptpd_engine *engine, const struct
 			      ENGINE_MSG_LINK_TABLE_RELEASE, false);
 }
 
-static bool offset_valid(const struct timespec *offset_from_master)
+static bool offset_valid(const struct sfptpd_timespec *offset_from_master)
 {
-	return (offset_from_master->tv_sec != 0) ||
-	       (offset_from_master->tv_nsec != 0);
+	return !(sfptpd_time_is_zero(offset_from_master));
 }
 
 /*
@@ -2747,8 +2731,8 @@ int sfptpd_engine_calculate_clustering_score(struct sfptpd_clustering_evaluator 
 	struct sfptpd_engine *engine;
 	struct sfptpd_clustering_input *discriminator;
 	int default_score;
-	struct timespec instance_ofm;
-	struct timespec discriminator_ofm;
+	struct sfptpd_timespec instance_ofm;
+	struct sfptpd_timespec discriminator_ofm;
 
 	assert(evaluator);
 	assert(evaluator->private);
@@ -2785,9 +2769,9 @@ int sfptpd_engine_calculate_clustering_score(struct sfptpd_clustering_evaluator 
 
 	/* clock valid and discriminator valid */
 	/* compare clock against discriminator */
-	struct timespec discrim_lrc_to_instance_lrc;
-	struct timespec discrim_to_instance_lrc;
-	struct timespec discrim_to_instance;
+	struct sfptpd_timespec discrim_lrc_to_instance_lrc;
+	struct sfptpd_timespec discrim_to_instance_lrc;
+	struct sfptpd_timespec discrim_to_instance;
 
 	/* First calculate (d_lrc - i_lrc) */
 	sfptpd_clock_compare(discriminator->clock,

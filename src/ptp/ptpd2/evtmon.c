@@ -197,7 +197,6 @@ rxSyncTimingDataMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts)
 		if (timing_data_state->skip_count == 0) {
 			SlaveRxSyncTimingDataElement *record =
 				&timing_data_records[timing_data_state->num_events];
-			struct sfptpd_timespec tx, rx;
 
 			/* If the source port has changed, flush the old entries out. */
 			if (memcmp(ptpClock->parentPortIdentity.clockIdentity,
@@ -214,12 +213,9 @@ rxSyncTimingDataMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts)
 
 			/* Populate a new record */
 			record->sequenceId = ptpClock->recvSyncSequenceId;
-			ts_to_InternalTime(&ptpClock->sync_send_time, &tx);
-			ts_to_InternalTime(&ptpClock->sync_receive_time, &rx);
-			fromInternalTime(&tx, &record->syncOriginTimestamp);
-			fromInternalTime(&rx, &record->syncEventIngressTimestamp);
-			record->totalCorrectionField =
-				sfptpd_time_float_ns_to_scaled_ns(ptpClock->sync_correction_field);
+			fromInternalTime(&ptpClock->sync_send_time, &record->syncOriginTimestamp);
+			fromInternalTime(&ptpClock->sync_receive_time, &record->syncEventIngressTimestamp);
+			record->totalCorrectionField = sfptpd_time_to_ns16(ptpClock->sync_correction_field);
 			record->cumulativeScaledRateOffset = 0;
 
 			/* When we have filled a set of records, flush them. */
@@ -402,11 +398,11 @@ slaveStatusMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts,
 	MsgSignaling msgSignaling;
 	ssize_t pack_result;
 	SlaveStatus data;
-	struct timespec report_time;
+	struct sfptpd_timespec report_time;
 
 	if (rtOpts->slave_status_monitoring_enable) {
 
-		clock_gettime(CLOCK_REALTIME, &report_time);
+		sfclock_gettime(CLOCK_REALTIME, &report_time);
 
 		signalingInitOutgoingMsg(&msgSignaling, ptpClock);
 
@@ -421,8 +417,7 @@ slaveStatusMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts,
 		data.events = events;
 		data.flags = flags;
 
-		data.reportTimestamp.secondsField = report_time.tv_sec;
-		data.reportTimestamp.nanosecondsField = report_time.tv_nsec;
+		fromInternalTime(&report_time, &data.reportTimestamp);
 
 		pack_result = appendSlaveStatusTLV(&data,
 						   ptpClock->msgObuf,

@@ -483,7 +483,7 @@ size_t sfptpd_format(const struct sfptpd_interpolation *interpolators, void *con
 		     char *buffer, size_t space, const char *format)
 {
 	const struct sfptpd_interpolation *spec;
-	enum { IDLE, FMT, UNDERFLOW, ERROR } state = IDLE;
+	enum { IDLE, FMT, xUNDERFLOW, ERROR } state = IDLE;
 	ssize_t ret = 0;
 	size_t len = 0;
 	char c;
@@ -514,7 +514,7 @@ size_t sfptpd_format(const struct sfptpd_interpolation *interpolators, void *con
 					assert(spec->writer);
 					if (spec->has_opt) {
 						if (*format == '\0')
-							state = UNDERFLOW;
+							state = xUNDERFLOW;
 						opt = *format++;
 					}
 					ret = spec->writer(buffer ? buffer + len : NULL,
@@ -530,7 +530,7 @@ size_t sfptpd_format(const struct sfptpd_interpolation *interpolators, void *con
 				}
 			state = IDLE;
 			break;
-		case UNDERFLOW:
+		case xUNDERFLOW:
 		case ERROR:
 			goto error;
 		}

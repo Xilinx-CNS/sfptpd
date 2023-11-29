@@ -77,7 +77,7 @@ struct sfptpd_ptp_monitor_node {
 struct monitor_record_common {
 	PortIdentity port_id;
 	PortIdentity ref_port_id;
-	struct timespec monitor_timestamp;
+	struct sfptpd_timespec monitor_timestamp;
 	int monitor_seq_id;
 	uint16_t event_seq_id;
 };
@@ -175,7 +175,7 @@ static int common_compare_monitor_seq_id(const void *key, const void *record)
 
 static int common_compare_monitor_timestamp(const void *key, const void *record)
 {
-	return sfptpd_time_cmp((struct timespec *) key,
+	return sfptpd_time_cmp((struct sfptpd_timespec *) key,
 			       &((struct monitor_record_common *) record)->monitor_timestamp);
 }
 
@@ -353,7 +353,7 @@ static struct sfptpd_db_record_ref monitor_obtain_rx_event_record(struct sfptpd_
 		event->common.ref_port_id = *ref_port_identity;
 		event->common.event_seq_id = sync_seq;
 		event->common.monitor_seq_id = monitor->rx_event_seq_counter++;
-		clock_gettime(CLOCK_REALTIME, &event->common.monitor_timestamp);
+		sfclock_gettime(CLOCK_REALTIME, &event->common.monitor_timestamp);
 
 		/* Insert new record */
 		event_ref = sfptpd_db_table_insert(monitor->rx_event_table, &event);
@@ -451,7 +451,7 @@ void sfptpd_ptp_monitor_log_tx_timestamp(struct ptpd_remote_stats_logger *logger
 		event.common.ref_port_id = *stats.ref_port_identity;
 		event.common.event_seq_id = timestamps[i].sequenceId;
 		event.common.monitor_seq_id = monitor->tx_event_seq_counter++;
-		clock_gettime(CLOCK_REALTIME, &event.common.monitor_timestamp);
+		sfclock_gettime(CLOCK_REALTIME, &event.common.monitor_timestamp);
 		event.timestamp = timestamps[i];
 		event.message_type = message_type;
 
@@ -477,7 +477,7 @@ void sfptpd_ptp_monitor_update_slave_status(struct ptpd_remote_stats_logger *log
 	copyPortIdentity(&record.common.port_id, (PortIdentity *) stats.port_identity);
 	record.common.monitor_seq_id = monitor->slave_status_seq_counter++;
 	record.slave_status = *slave_status;
-	clock_gettime(CLOCK_REALTIME, &record.common.monitor_timestamp);
+	sfclock_gettime(CLOCK_REALTIME, &record.common.monitor_timestamp);
 
 	/* Insert new record into log */
 	sfptpd_db_table_insert(monitor->slave_status_table, &record);
@@ -674,7 +674,7 @@ static void monitor_output_text(struct sfptpd_ptp_monitor *monitor)
 			struct sfptpd_ptp_monitor_rx_event *rx_event;
 			sfptpd_time_t offset = NAN;
 			sfptpd_time_t mpd = NAN;
-			struct timespec ts = {};
+			struct sfptpd_timespec ts = {};
 
 			rx_event = events_result.record_ptrs[j];
 			if (rx_event->computed_data_present) {
@@ -682,8 +682,7 @@ static void monitor_output_text(struct sfptpd_ptp_monitor *monitor)
 				mpd = sfptpd_time_scaled_ns_to_float_ns(rx_event->computed_data.meanPathDelay);
 			}
 			if (rx_event->timing_data_present) {
-				ts.tv_sec = (time_t) rx_event->timing_data.syncEventIngressTimestamp.secondsField;
-				ts.tv_nsec = (long) rx_event->timing_data.syncEventIngressTimestamp.nanosecondsField;
+				toInternalTime(&ts, &rx_event->timing_data.syncEventIngressTimestamp);
 			}
 			sfptpd_log_table_row(stream, j + 1 == events_result.num_records,
 					     format_rx_event_data,
@@ -691,7 +690,7 @@ static void monitor_output_text(struct sfptpd_ptp_monitor *monitor)
 					     rx_event->common.event_seq_id,
 					     offset,
 					     mpd,
-					     ts.tv_sec, ts.tv_nsec);
+					     ts.sec, ts.nsec);
 		}
 		events_result.free(&events_result);
 
@@ -717,12 +716,11 @@ static void monitor_output_text(struct sfptpd_ptp_monitor *monitor)
 
 		for (j = 0; j < events_result.num_records; j++) {
 			struct sfptpd_ptp_monitor_tx_event *tx_event;
-			struct timespec ts = {};
+			struct sfptpd_timespec ts = {};
 			const char *mtype;
 
 			tx_event = events_result.record_ptrs[j];
-			ts.tv_sec = (time_t) tx_event->timestamp.eventEgressTimestamp.secondsField;
-			ts.tv_nsec = (long) tx_event->timestamp.eventEgressTimestamp.nanosecondsField;
+			toInternalTime(&ts, &tx_event->timestamp.eventEgressTimestamp);
 			mtype = outgoing_event_msg_name(tx_event->message_type);
 
 			sfptpd_log_table_row(stream, j + 1 == events_result.num_records,
@@ -730,7 +728,7 @@ static void monitor_output_text(struct sfptpd_ptp_monitor *monitor)
 					     PORT_ID_CONTENT(tx_event->common.ref_port_id),
 					     mtype,
 					     tx_event->common.event_seq_id,
-					     ts.tv_sec, ts.tv_nsec);
+					     ts.sec, ts.nsec);
 		}
 		events_result.free(&events_result);
 	}
@@ -768,7 +766,7 @@ static void monitor_write_json_rx_event(void *record, void *context)
 	FILE *stream = context;
 	sfptpd_time_t offset = NAN;
 	sfptpd_time_t mpd = NAN;
-	struct timespec ts = {};
+	struct sfptpd_timespec ts = {};
 	char monitor_time[32];
 
 	if (rx_event->computed_data_present) {
@@ -776,32 +774,31 @@ static void monitor_write_json_rx_event(void *record, void *context)
 		mpd = sfptpd_time_scaled_ns_to_float_ns(rx_event->computed_data.meanPathDelay);
 	}
 	if (rx_event->timing_data_present) {
-		ts.tv_sec = (time_t) rx_event->timing_data.syncEventIngressTimestamp.secondsField;
-		ts.tv_nsec = (long) rx_event->timing_data.syncEventIngressTimestamp.nanosecondsField;
+		toInternalTime(&ts, &rx_event->timing_data.syncEventIngressTimestamp);
 	}
 
 	sfptpd_local_strftime(monitor_time, sizeof monitor_time, "%Y-%m-%d %X",
-			      &rx_event->common.monitor_timestamp.tv_sec);
+			      &rx_event->common.monitor_timestamp.sec);
 
 	fprintf(stream,
 		"{ \"rx-event\": {"
 		"\"monitor-seq-id\": %d, "
-		"\"monitor-timestamp\": \"%s.%06ld\", "
+		"\"monitor-timestamp\": \"%s.%06d\", "
 		"\"node\": \"" PORT_ID_FORMAT_VAR_WIDTH "\", "
 		"\"parent-port\": \"" PORT_ID_FORMAT_VAR_WIDTH "\", "
 		"\"sync-seq\": %d, "
 		"\"offset-from-master\": %Lf, "
 		"\"mean-path-delay\": %Lf, "
-		"\"sync-ingress-timestamp\": %ld.%09ld } }\n",
+		"\"sync-ingress-timestamp\": %ld.%09d } }\n",
 		rx_event->common.monitor_seq_id,
 		monitor_time,
-		rx_event->common.monitor_timestamp.tv_nsec / 1000,
+		rx_event->common.monitor_timestamp.nsec / 1000,
 		PORT_ID_CONTENT(rx_event->common.port_id),
 		PORT_ID_CONTENT(rx_event->common.ref_port_id),
 		rx_event->common.event_seq_id,
 		isnormal(offset) ? offset : 0.0L,
 		isnormal(mpd) ? mpd : 0.0L,
-		ts.tv_sec, ts.tv_nsec);
+		ts.sec, ts.nsec);
 }
 
 
@@ -809,34 +806,33 @@ static void monitor_write_json_tx_event(void *record, void *context)
 {
 	struct sfptpd_ptp_monitor_tx_event *tx_event = record;
 	FILE *stream = context;
-	struct timespec ts = {};
+	struct sfptpd_timespec ts = {};
 	char monitor_time[32];
 	const char *mtype;
 
-	ts.tv_sec = (time_t) tx_event->timestamp.eventEgressTimestamp.secondsField;
-	ts.tv_nsec = (long) tx_event->timestamp.eventEgressTimestamp.nanosecondsField;
+	toInternalTime(&ts, &tx_event->timestamp.eventEgressTimestamp);
 	mtype = outgoing_event_msg_name(tx_event->message_type);
 
 	sfptpd_local_strftime(monitor_time, sizeof monitor_time, "%Y-%m-%d %X",
-			      &tx_event->common.monitor_timestamp.tv_sec);
+			      &tx_event->common.monitor_timestamp.sec);
 
 	fprintf(stream,
 		"{ \"tx-event\": {"
 		"\"monitor-seq-id\": %d, "
-		"\"monitor-timestamp\": \"%s.%06ld\", "
+		"\"monitor-timestamp\": \"%s.%06d\", "
 		"\"node\": \"" PORT_ID_FORMAT_VAR_WIDTH "\", "
 		"\"source-port\": \"" PORT_ID_FORMAT_VAR_WIDTH "\", "
 		"\"message-type\": \"%s\", "
 		"\"event-seq-id\": %d, "
-		"\"egress-timestamp\": %ld.%09ld } }\n",
+		"\"egress-timestamp\": %ld.%09d } }\n",
 		tx_event->common.monitor_seq_id,
 		monitor_time,
-		tx_event->common.monitor_timestamp.tv_nsec / 1000,
+		tx_event->common.monitor_timestamp.nsec / 1000,
 		PORT_ID_CONTENT(tx_event->common.port_id),
 		PORT_ID_CONTENT(tx_event->common.ref_port_id),
 		mtype,
 		tx_event->common.event_seq_id,
-		ts.tv_sec, ts.tv_nsec);
+		ts.sec, ts.nsec);
 }
 
 
@@ -860,7 +856,7 @@ static void monitor_write_json_slave_status(void *record, void *context)
 	}
 
 	sfptpd_local_strftime(monitor_time, sizeof monitor_time, "%Y-%m-%d %X",
-			      &slave_status->common.monitor_timestamp.tv_sec);
+			      &slave_status->common.monitor_timestamp.sec);
 
 	proto_msg_alarms = s->missingMessageAlarms;
 	proto_other_alarms = s->otherAlarms;
@@ -870,7 +866,7 @@ static void monitor_write_json_slave_status(void *record, void *context)
 	fprintf(stream,
 		"{ \"slave-status\": {"
 		"\"monitor-seq-id\": %d, "
-		"\"monitor-timestamp\": \"%s.%06ld\", "
+		"\"monitor-timestamp\": \"%s.%06d\", "
 		"\"node\": \"" PORT_ID_FORMAT_VAR_WIDTH "\", "
 		"\"gm-id\": \"" PORT_ID_FORMAT_VAR_WIDTH "\", "
 		"\"state\": \"%s\", "
@@ -880,7 +876,7 @@ static void monitor_write_json_slave_status(void *record, void *context)
 		"\"msg-alarms\": [",
 		slave_status->common.monitor_seq_id,
 		monitor_time,
-		slave_status->common.monitor_timestamp.tv_nsec / 1000,
+		slave_status->common.monitor_timestamp.nsec / 1000,
 		PORT_ID_CONTENT(slave_status->common.port_id),
 		PORT_ID_CONTENT(slave_status->common.ref_port_id),
 		state,

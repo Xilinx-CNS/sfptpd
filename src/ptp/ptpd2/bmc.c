@@ -714,7 +714,7 @@ bmcStateDecision(ForeignMasterRecord *bestForeignMaster,
 
 static enum qualification
 getQualification (ForeignMasterRecord *foreign,
-		  const struct timespec *expiry_threshold,
+		  const struct sfptpd_timespec *expiry_threshold,
 		  const sfptpd_time_t discriminator_offset,
 		  const sfptpd_time_t discriminator_threshold)
 {
@@ -764,7 +764,7 @@ deleteUnselectedMasters(ForeignMasterDS *foreignMasterDS, PtpClock *ptpClock)
 {
 	Integer16 readIndex;
 	Integer16 writeIndex;
-	struct timespec threshold;
+	struct sfptpd_timespec threshold;
 	ForeignMasterRecord *records = foreignMasterDS->records;
 
 	DBGV("deleteUnselectedMasters\n");
@@ -804,7 +804,7 @@ bmc(ForeignMasterDS *foreignMasterDS,
 
 	/* The number of qualified records */
 	Integer16 numberRecords = 0;
-	struct timespec threshold;
+	struct sfptpd_timespec threshold;
 
 	/* Flag indicating if there has been a competitive choice between qualified records */
 	Boolean hadResult = FALSE;

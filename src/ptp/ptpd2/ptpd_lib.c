@@ -532,7 +532,7 @@ void ptpd_update_leap_second(struct ptpd_port_context *ptpd,
 }
 
 
-void ptpd_step_clock(struct ptpd_port_context *ptpd, struct timespec *offset)
+void ptpd_step_clock(struct ptpd_port_context *ptpd, struct sfptpd_timespec *offset)
 {
 	if ((ptpd == NULL) || (offset == NULL)) {
 		ERROR("null ptpd context (%p) or time structure (%p) supplied\n",
@@ -653,7 +653,7 @@ int ptpd_get_snapshot(struct ptpd_port_context *ptpd, struct ptpd_port_snapshot 
 		snapshot->current.servo_p_term = servo_get_p_term(&ptpd->servo);
 		snapshot->current.servo_i_term = servo_get_i_term(&ptpd->servo);
 		if (ptpd->timePropertiesDS.currentUtcOffsetValid)
-			snapshot->current.last_offset_time.tv_sec -=
+			snapshot->current.last_offset_time.sec -=
 				ptpd->timePropertiesDS.currentUtcOffset;
 		snapshot->current.transparent_clock
 			= ((ptpd->syncXparent || ptpd->followXparent) ||
@@ -661,8 +661,7 @@ int ptpd_get_snapshot(struct ptpd_port_context *ptpd, struct ptpd_port_snapshot 
 	} else {
 		snapshot->current.offset_from_master = 0.0;
 		snapshot->current.one_way_delay = 0.0;
-		snapshot->current.last_offset_time.tv_sec = 0;
-		snapshot->current.last_offset_time.tv_nsec = 0;
+		sfptpd_time_zero(&snapshot->current.last_offset_time);
 		snapshot->current.transparent_clock = false;
 	}
 
@@ -796,12 +795,9 @@ void ptpd_publish_mtie_window(struct ptpd_port_context *ptpd,
 			      int window_seconds,
 			      long double min,
 			      long double max,
-			      const struct timespec *min_time,
-			      const struct timespec *max_time)
+			      const struct sfptpd_timespec *min_time,
+			      const struct sfptpd_timespec *max_time)
 {
-	struct sfptpd_timespec min_time_ti;
-	struct sfptpd_timespec max_time_ti;
-
 	ptpd->mtie_window.mtie_valid = mtie_valid ? TRUE : FALSE;
 	ptpd->mtie_window.mtie_window_number = (UInteger16) window_number;
 	ptpd->mtie_window.mtie_window_duration = (UInteger16) window_seconds;
@@ -809,10 +805,8 @@ void ptpd_publish_mtie_window(struct ptpd_port_context *ptpd,
 		sfptpd_time_float_ns_to_scaled_ns(min);
 	ptpd->mtie_window.max_offs_from_master =
 		sfptpd_time_float_ns_to_scaled_ns(max);
-	ts_to_InternalTime(min_time, &min_time_ti);
-	ts_to_InternalTime(max_time, &max_time_ti);
-	fromInternalTime(&min_time_ti, &ptpd->mtie_window.min_offs_from_master_at);
-	fromInternalTime(&max_time_ti, &ptpd->mtie_window.max_offs_from_master_at);
+	fromInternalTime(min_time, &ptpd->mtie_window.min_offs_from_master_at);
+	fromInternalTime(max_time, &ptpd->mtie_window.max_offs_from_master_at);
 }
 
 

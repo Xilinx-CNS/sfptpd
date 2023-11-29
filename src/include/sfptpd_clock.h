@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2022 Xilinx, Inc. */
+/* (c) Copyright 2012-2023 Xilinx, Inc. */
 
 #ifndef _SFPTPD_CLOCK_H
 #define _SFPTPD_CLOCK_H
@@ -9,6 +9,7 @@
 #include <time.h>
 #include <net/ethernet.h>
 
+#include <sfptpd_time.h>
 
 /* ANSI/T1.101-1987
  *  Synchronization Interface Standards for Digital Networks */
@@ -100,6 +101,37 @@ extern const struct sfptpd_clock_id SFPTPD_CLOCK_ID_UNINITIALISED;
 /** Forward declaration of structures */
 struct sfptpd_clock;
 struct sfptpd_config;
+
+
+/****************************************************************************
+ * Macros and inline functions for convenience operations
+****************************************************************************/
+
+static inline int sfclock_gettime(clockid_t clk_id, struct sfptpd_timespec *sfts)
+{
+	struct timespec ts;
+	int rc = clock_gettime(clk_id, &ts);
+	sfts->sec = ts.tv_sec;
+	sfts->nsec = ts.tv_nsec;
+	sfts->nsec_frac = 0;
+	return rc;
+}
+
+static inline int sfclock_nanosleep(clockid_t clk_id, int flags,
+				    const struct sfptpd_timespec *sfrequest,
+				    struct sfptpd_timespec *sfremain)
+{
+	struct timespec request = { .tv_sec = sfrequest->sec,
+				    .tv_nsec = sfrequest->nsec };
+	struct timespec remain;
+	int rc = clock_nanosleep(clk_id, flags, &request, sfremain ? &remain : NULL);
+	if (sfremain) {
+		sfremain->sec = remain.tv_sec;
+		sfremain->nsec = remain.tv_nsec;
+		sfremain->nsec_frac = 0;
+	}
+	return rc;
+}
 
 
 /****************************************************************************
@@ -237,7 +269,7 @@ void sfptpd_clock_stats_record_clustering_alarm(struct sfptpd_clock *clock,
  * @param time Time to record stats against at end of stats period
  */
 void sfptpd_clock_stats_end_period(struct sfptpd_clock *clock,
-				   struct timespec *time);
+				   struct sfptpd_timespec *time);
 
 
 /** Get the short name of a clock instance - this is just the clock name
@@ -310,7 +342,7 @@ bool sfptpd_clock_get_discipline(struct sfptpd_clock *clock);
  * @param offset Offset to be applied in seconds and nanoseconds
  * @return 0 for success otherwise an errno status code.
  */
-int sfptpd_clock_adjust_time(struct sfptpd_clock *clock, struct timespec *offset);
+int sfptpd_clock_adjust_time(struct sfptpd_clock *clock, struct sfptpd_timespec *offset);
 
 /** Adjust the clock instance by the specified frequency
  * @param clock  Pointer to clock instance
@@ -324,7 +356,7 @@ int sfptpd_clock_adjust_frequency(struct sfptpd_clock *clock, long double freq_a
  * @param time   Pointer to structure where clock time will be written
  * @return 0 for success otherwise an errno status code.
  */
-int sfptpd_clock_get_time(const struct sfptpd_clock *clock, struct timespec *time);
+int sfptpd_clock_get_time(const struct sfptpd_clock *clock, struct sfptpd_timespec *time);
 
 /** Schedule or deschedule a leap second for midnight today UTC for all
  * clocks that support leap second scheduling
@@ -347,7 +379,7 @@ int sfptpd_clock_leap_second_now(enum sfptpd_leap_second_type type);
  * @return 0 for success otherwise an errno status code.
  */
 int sfptpd_clock_compare(struct sfptpd_clock *clock1, struct sfptpd_clock *clock2,
-			 struct timespec *diff);
+			 struct sfptpd_timespec *diff);
 
 /** Set one clock to another using differences. This should be used in
  *  preference to the caller performing compare and adjustment operations to
@@ -360,7 +392,7 @@ int sfptpd_clock_compare(struct sfptpd_clock *clock1, struct sfptpd_clock *clock
  */
 int sfptpd_clock_set_time(struct sfptpd_clock *clock_to,
 			  struct sfptpd_clock *clock_from,
-			  const struct timespec *threshold);
+			  const struct sfptpd_timespec *threshold);
 
 /** Report the sync status to the NIC associated with the clock. This is used
  * by the NIC firmware to report the sync status to other interested parties
@@ -402,7 +434,7 @@ int sfptpd_clock_pps_get_fd(struct sfptpd_clock *clock);
  * read. Otherwise an errno status code.
  */
 int sfptpd_clock_pps_get(struct sfptpd_clock *clock, uint32_t *sequence_num,
-			 struct timespec *time);
+			 struct sfptpd_timespec *time);
 
 /**
  * For a new clock, load the frequency correction if configured to do
