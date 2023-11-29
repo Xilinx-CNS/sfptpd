@@ -28,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     ```
 - Ethtool queries are now conducted over netlink instead of ioctl on kernels
   where this is supported. (SWPTP-1304)
+- IP address of parent clock added to topology files (SWPTP-1312)
 - Add `step_threshold` option to change the offset threshold for allowing
   a step (when permitted by clock control setting). (SWPTP-1365)
 - Minor command line enhancements to support container usage. (SWPTP-1401)

@@ -41,6 +41,9 @@ Supported releases of sfptpd are available from
 the in-support Solarflare adapters and operating systems listed in the
 relevant release notes.
 
+The user guide for supported releases is available at
+<https://docs.xilinx.com/r/en-US/ug1602-ptp-user>.
+
 ## Using the unsupported sfptpd source project
 
 See [changelog](CHANGELOG.md) for the latest additions to the sfptpd project.
