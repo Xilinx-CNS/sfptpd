@@ -1010,7 +1010,7 @@ static int handle_get_sys_info(crny_module_t *ntp)
 		int rc = getnameinfo((struct sockaddr *) &sys_info.peer_address,
 				     sys_info.peer_address_len,
 				     host, sizeof host,
-				     NULL, 0, 0);
+				     NULL, 0, NI_NUMERICHOST);
 		DBG_L6("crny: get-sys-info: selected-peer-address: %s\n",
 		       rc == 0 ? host : gai_strerror(rc));
 	}
