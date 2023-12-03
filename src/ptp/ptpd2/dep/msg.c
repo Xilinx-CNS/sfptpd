@@ -1745,9 +1745,42 @@ msgUnpackAnnounce(Octet *buf, size_t length, MsgAnnounce * announce)
 	return result;
 }
 
+/* Set the in-payload timestamp for the following message types and the
+ * in-header correctionField to allow for sub-nanosecond precision:
+ *   Follow_Up
+ *   Delay_Resp
+ *   PDelay_Resp_Follow_Up
+ * These are the precise timestamps used for two-step clocks.
+ * Receipt timetamps being returned to the origin have the fractional
+ * part subtracted from the correctionField rather than added. */
+static int msgSetPreciseTimestamp(Octet *buf,
+				  size_t space,
+				  const struct sfptpd_timespec *preciseTimestamp,
+				  bool subtract_correction,
+				  TimeInterval extra_correction)
+{
+	Timestamp timestamp;
+	TimeInterval correction;
+	int rc = 0;
+
+	if (space < 44)
+		return ENOSPC;
+
+	rc = fromInternalTime(preciseTimestamp, &timestamp, &correction);
+	if (subtract_correction)
+		correction = -correction;
+	correction += extra_correction;
+	packUInteger48(&timestamp.secondsField, buf + 34, space - 34);
+	packUInteger32(&timestamp.nanosecondsField, buf + 40, space - 40);
+	packTimeInterval(&correction, buf + 8, space - 8);
+
+	return rc;
+}
+
 /*pack Follow_up message into OUT buffer of ptpClock*/
 ssize_t
-msgPackFollowUp(Octet *buf, size_t space, Timestamp * preciseOriginTimestamp,
+msgPackFollowUp(Octet *buf, size_t space,
+		const struct sfptpd_timespec *preciseOriginTimestamp,
 		PtpClock * ptpClock, const UInteger16 sequenceId)
 {
 	ssize_t result = msgPackHeader(buf, space, ptpClock, PTPD_MSG_FOLLOW_UP);
@@ -1762,9 +1795,10 @@ msgPackFollowUp(Octet *buf, size_t space, Timestamp * preciseOriginTimestamp,
 	/* Table 23 */
 	*(Integer8 *) (buf + 33) = ptpClock->logSyncInterval;
 
-	/* Follow_up message */
-	packUInteger48(&preciseOriginTimestamp->secondsField, buf + 34, space - 34);
-	packUInteger32(&preciseOriginTimestamp->nanosecondsField, buf + 40, space - 40);
+	/* Follow_up message includes the subnanosecond component of
+	 * of our own high precision timestamps in the correctionField. */
+	if (msgSetPreciseTimestamp(buf, space, preciseOriginTimestamp, false, 0) != 0)
+		result = PACK_ERROR;
  finish:
 	return result;
 }
@@ -1841,7 +1875,8 @@ msgPackDelayReq(Octet *buf, size_t space, PtpClock *ptpClock)
 
 /*pack delayResp message into OUT buffer of ptpClock*/
 ssize_t
-msgPackDelayResp(Octet *buf, size_t space, MsgHeader * header, Timestamp * receiveTimestamp,
+msgPackDelayResp(Octet *buf, size_t space, MsgHeader * header,
+		 const struct sfptpd_timespec * receiveTimestamp,
 		 PtpClock * ptpClock)
 {
 	ssize_t result = msgPackHeader(buf, space, ptpClock, PTPD_MSG_DELAY_RESP);
@@ -1854,9 +1889,6 @@ msgPackDelayResp(Octet *buf, size_t space, MsgHeader * header, Timestamp * recei
 
 	memset((buf + 8), 0, 8);
 
-	/* Copy correctionField of PdelayReqMessage */
-	*(Integer64 *) (buf + 8) = flip64(header->correctionField);
-
 	*(UInteger16 *) (buf + 30) = flip16(header->sequenceId);
 
 	*(UInteger8 *) (buf + 32) = 0x03;
@@ -1864,9 +1896,16 @@ msgPackDelayResp(Octet *buf, size_t space, MsgHeader * header, Timestamp * recei
 	*(Integer8 *) (buf + 33) = ptpClock->logMinDelayReqInterval;
 	/* Table 24 */
 
-	/* Pdelay_resp message */
-	packUInteger48(&receiveTimestamp->secondsField, buf + 34, space - 34);
-	packUInteger32(&receiveTimestamp->nanosecondsField, buf + 40, space - 40);
+	/* Delay_Resp message includes the correctionField
+         * value from the received Delay_Req message MINUS the
+	 * subnanosecond component we wish to add from our own
+         * high precision timetamps. */
+	if (msgSetPreciseTimestamp(buf, space,
+				   receiveTimestamp,
+				   true,
+				   header->correctionField) != 0)
+		result = PACK_ERROR;
+
 	copyClockIdentity((buf + 44), header->sourcePortIdentity.clockIdentity);
 	*(UInteger16 *) (buf + 52) =
 		flip16(header->sourcePortIdentity.portNumber);
@@ -1880,10 +1919,12 @@ msgPackDelayResp(Octet *buf, size_t space, MsgHeader * header, Timestamp * recei
 
 /*pack PdelayResp message into OUT buffer of ptpClock*/
 ssize_t
-msgPackPDelayResp(Octet *buf, size_t space, MsgHeader * header, Timestamp * requestReceiptTimestamp,
+msgPackPDelayResp(Octet *buf, size_t space, MsgHeader * header,
+		  const struct sfptpd_timespec * timestamp,
 		  PtpClock * ptpClock)
 {
 	ssize_t result = msgPackHeader(buf, space, ptpClock, PTPD_MSG_PDELAY_RESP);
+	struct sfptpd_timespec requestReceiptTimestamp = *timestamp;
 	CHECK_OUTPUT_LENGTH(34, 20, space, "P delay resp", result, finish);
 	
 	/* changes in header */
@@ -1899,9 +1940,14 @@ msgPackPDelayResp(Octet *buf, size_t space, MsgHeader * header, Timestamp * requ
 	*(Integer8 *) (buf + 33) = 0x7F;
 	/* Table 24 */
 
-	/* Pdelay_resp message */
-	packUInteger48(&requestReceiptTimestamp->secondsField, buf + 34, space - 34);
-	packUInteger32(&requestReceiptTimestamp->nanosecondsField, buf + 40, space - 40);
+	/* PDelay_Resp_follow_up message includes the fractional ns t2 receipt,
+	 * deducted from the otherwise 0 correctionField.
+	 * (1588-2019 11.4.2.c.7.Option B.i) */
+	if (msgSetPreciseTimestamp(buf, space,
+				   &requestReceiptTimestamp,
+				   true, 0) != 0)
+		result = PACK_ERROR;
+
 	copyClockIdentity((buf + 44), header->sourcePortIdentity.clockIdentity);
 	*(UInteger16 *) (buf + 52) = flip16(header->sourcePortIdentity.portNumber);
  finish:
@@ -1975,7 +2021,7 @@ msgUnpackPDelayResp(Octet *buf, size_t length, MsgPDelayResp * presp)
 /*pack PdelayRespfollowup message into OUT buffer of ptpClock*/
 ssize_t
 msgPackPDelayRespFollowUp(Octet *buf, size_t space, MsgHeader * header,
-			  Timestamp * responseOriginTimestamp,
+			  const struct sfptpd_timespec * responseOriginTimestamp,
 			  PtpClock * ptpClock, const UInteger16 sequenceId)
 {
 	ssize_t result;
@@ -1992,12 +2038,16 @@ msgPackPDelayRespFollowUp(Octet *buf, size_t space, MsgHeader * header,
 	*(Integer8 *) (buf + 33) = 0x7F;
 	/* Table 24 */
 
-	/* Copy correctionField of PdelayReqMessage */
-	*(Integer64 *) (buf + 8) = flip64(header->correctionField);
+	/* PDelay_Resp_Follow_Up message includes the correctionField
+         * value from the received PDelay_Req message PLUS the
+	 * subnanosecond component we wish to add from our own
+         * high precision timetamps. */
+	if (msgSetPreciseTimestamp(buf, space,
+				   responseOriginTimestamp,
+				   false,
+				   header->correctionField) != 0)
+		result = PACK_ERROR;
 
-	/* Pdelay_resp_follow_up message */
-	packUInteger48(&responseOriginTimestamp->secondsField, buf + 34, space - 34);
-	packUInteger32(&responseOriginTimestamp->nanosecondsField, buf + 40, space - 40);
 	copyClockIdentity((buf + 44), header->sourcePortIdentity.clockIdentity);
 	*(UInteger16 *) (buf + 52) = 
 		flip16(header->sourcePortIdentity.portNumber);

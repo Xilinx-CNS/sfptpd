@@ -900,6 +900,8 @@ ptpd_mgmt_error_e handleMMTime(MsgManagement *incoming,
 			       PtpClock *ptpClock, RunTimeOpts *rtOpts)
 {
 	ptpd_mgmt_error_e rc = PTPD_MGMT_OK;
+	struct sfptpd_timespec internalTime;
+	TimeInterval correction;
 	MMTime *data = NULL;
 
 	DBGV("received TIME message\n");
@@ -923,13 +925,12 @@ ptpd_mgmt_error_e handleMMTime(MsgManagement *incoming,
 		XMALLOC(outgoing->tlv->dataField, sizeof(MMTime));
 		data = (MMTime*)outgoing->tlv->dataField;
 		/* GET actions */
-		struct sfptpd_timespec internalTime;
 		getTime(&internalTime);
 		if ((ptpClock->portState != PTPD_MASTER) &&
 		    (ptpClock->timePropertiesDS.currentUtcOffsetValid || rtOpts->alwaysRespectUtcOffset)) {
 			internalTime.sec -= ptpClock->timePropertiesDS.currentUtcOffset;
 		}
-		fromInternalTime(&internalTime, &data->currentTime);
+		fromInternalTime(&internalTime, &data->currentTime, &correction);
 		timestamp_display(&data->currentTime);
 		break;
 	default:

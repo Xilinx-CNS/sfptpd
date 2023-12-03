@@ -61,8 +61,10 @@
 #include <math.h>
 #include "ptpd.h"
 
-void
-fromInternalTime(const struct sfptpd_timespec * internal, Timestamp * external)
+int
+fromInternalTime(const struct sfptpd_timespec * internal,
+		 Timestamp * external,
+		 TimeInterval *correction)
 {
 
 	/*
@@ -71,16 +73,17 @@ fromInternalTime(const struct sfptpd_timespec * internal, Timestamp * external)
 	 * be found in (internal)
 	 *
 	 * Note that offsets are also represented with struct sfptpd_timespec
-	 * structure, and can be negative, but offset are never convert into
+	 * structure, and can be negative, but offset are never converted into
 	 * Timestamp so there is no problem here.
 	 */
 
-	if ((internal->sec & ~INT64_MAX) ||
-	    (internal->nsec & ~INT32_MAX)) {
+	if (internal->sec < 0) {
 		DBG("Negative value cannot be converted into timestamp \n");
-		return;
+		return ERANGE;
 	} else {
 		external->secondsField = internal->sec;
 		external->nanosecondsField = internal->nsec;
+		*correction = internal->nsec_frac >> 16;
+		return 0;
 	}
 }

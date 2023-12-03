@@ -185,10 +185,17 @@ flushSlaveRxSyncComputedData(PtpClock *ptpClock, RunTimeOpts *rtOpts)
 }
 
 
-/* @task71778: Slave Event Monitoring (timing data) (IEEE1588-Rev draft 16.11.4.1) */
+/* @task71778: Slave Event Monitoring (timing data) (IEEE1588-Rev 16.11.4.1, table 124) */
 static void
 rxSyncTimingDataMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts)
 {
+	/* Sink the sub-ns value from sync send time - this is reflected
+	 * in the correction field.
+	 * Sink the sub-ns value from sync recv time - there is nowhere
+	 * allocated in the monitoring TLV to report this. Consequently the
+	 * monitored data will not reflect this. */
+	TimeInterval correction;
+
 	SlaveEventMonitoringConfig *timing_data_config = &rtOpts->rx_sync_timing_data_config;
 	SlaveEventMonitoringState *timing_data_state = &ptpClock->slave_rx_sync_timing_data_state;
 	SlaveRxSyncTimingDataElement *timing_data_records = ptpClock->slave_rx_sync_timing_data_records;
@@ -213,8 +220,12 @@ rxSyncTimingDataMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts)
 
 			/* Populate a new record */
 			record->sequenceId = ptpClock->recvSyncSequenceId;
-			fromInternalTime(&ptpClock->sync_send_time, &record->syncOriginTimestamp);
-			fromInternalTime(&ptpClock->sync_receive_time, &record->syncEventIngressTimestamp);
+			fromInternalTime(&ptpClock->sync_send_time,
+					 &record->syncOriginTimestamp,
+					 &correction);
+			fromInternalTime(&ptpClock->sync_receive_time,
+					 &record->syncEventIngressTimestamp,
+					 &correction);
 			record->totalCorrectionField = sfptpd_time_to_ns16(ptpClock->sync_correction_field);
 			record->cumulativeScaledRateOffset = 0;
 
@@ -333,6 +344,11 @@ void
 egressEventMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts,
 		   ptpd_msg_id_e msg_type, const struct sfptpd_timespec *time)
 {
+	/* Sink the sub-ns value from event egress timestamp - there is nowhere
+	 * allocated in the monitoring TLV to report this. Consequently the
+	 * monitored data will not reflect this. */
+	TimeInterval correction;
+
 	ptpd_slave_tx_ts_msg_e type = ptpd_msg_type_to_tx_ts_type(msg_type);
 	SlaveEventMonitoringConfig *config = &rtOpts->tx_event_timestamps_config;
 	SlaveEventMonitoringState *state = &ptpClock->slave_tx_event_timestamps_state[type];
@@ -372,7 +388,8 @@ egressEventMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts,
 			default:
 				assert(!"Invalid tx message type for egress monitor");
 			}
-			fromInternalTime(time, &record->eventEgressTimestamp);
+			fromInternalTime(time, &record->eventEgressTimestamp,
+					 &correction);
 
 			/* When we have filled a set of records, flush them. */
 			if (++state->num_events == config->events_per_tlv) {
@@ -400,6 +417,12 @@ slaveStatusMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts,
 	SlaveStatus data;
 	struct sfptpd_timespec report_time;
 
+	/* Sink the sub-ns value from the timestamp - there is nowhere
+	 * allocated in the monitoring TLV to report this. However,
+	 * such precision is irrelevant to status reporting and unlike
+	 * the timing and computed data reporting. */
+	TimeInterval correction;
+
 	if (rtOpts->slave_status_monitoring_enable) {
 
 		sfclock_gettime(CLOCK_REALTIME, &report_time);
@@ -417,7 +440,8 @@ slaveStatusMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts,
 		data.events = events;
 		data.flags = flags;
 
-		fromInternalTime(&report_time, &data.reportTimestamp);
+		fromInternalTime(&report_time, &data.reportTimestamp,
+				 &correction);
 
 		pack_result = appendSlaveStatusTLV(&data,
 						   ptpClock->msgObuf,

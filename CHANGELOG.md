@@ -10,6 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Operate PTP to sub-nanosecond precision. (SWPTP-58)
+  - internal structures updated throughout to use times with sub-nanosecond
+    resolution.
+  - when enabled with `onload_ext on` in the `[ptp]` configuration section,
+    attempt to retrieve timestamps with sub-nanosecond resolution via the
+    [Onload Extensions API](https://docs.xilinx.com/r/en-US/ug1586-onload-user/Onload-Extensions-API).
+  - poulate PTP correctionField to reflect sub-nanosecond timestamps (sfptpd
+    already used subnanosecond corrections received over the PTP network)
+  - see notes below for current limitations
 - Add configurable patterns for log, state, control and stats paths. (SWPTP-649)
   - supports logging to a directory shared between hosts
     ```
@@ -49,6 +58,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     [pps]
     time_of_day gps1
     ```
+
+> [!NOTE]
+> Current versions of Onload do not support the acceleration of sfptpd.
+
+> [!NOTE]
+> The Onload Extensions API does not currently retrieve NIC timestamps
+> with sub-nanosecond resolution.
 
 ### Removed
 

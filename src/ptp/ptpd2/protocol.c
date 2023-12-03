@@ -3351,18 +3351,16 @@ issueSyncForMonitoring(RunTimeOpts *rtOpts, PtpClock *ptpClock, UInteger16 seque
 
 /*Pack and send on general multicast ip address a FollowUp message*/
 static void
-issueFollowup(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts, PtpClock *ptpClock,
+issueFollowup(const struct sfptpd_timespec *preciseOriginTimestamp,
+	      RunTimeOpts *rtOpts, PtpClock *ptpClock,
 	      const UInteger16 sequenceId)
 {
-	Timestamp preciseOriginTimestamp;
-
 	/* Test Function: Suppress Follow Up messsages */
 	if (rtOpts->test.no_follow_ups)
 		return;
 
-	fromInternalTime(time, &preciseOriginTimestamp);
 	msgPackFollowUp(ptpClock->msgObuf, sizeof ptpClock->msgObuf,
-			&preciseOriginTimestamp,
+			preciseOriginTimestamp,
 			ptpClock, sequenceId);
 
 	if (netSendGeneral(ptpClock->msgObuf, PTPD_FOLLOW_UP_LENGTH,
@@ -3380,12 +3378,8 @@ static void
 issueFollowupForMonitoring(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts, PtpClock *ptpClock,
 			   const UInteger16 sequenceId)
 {
-	Timestamp preciseOriginTimestamp;
-
-	fromInternalTime(time, &preciseOriginTimestamp);
 	msgPackFollowUp(ptpClock->msgObuf, sizeof ptpClock->msgObuf,
-			&preciseOriginTimestamp,
-			ptpClock, sequenceId);
+			time, ptpClock, sequenceId);
 
 	/* Update header fields */
 	msgUpdateHeaderFlags(ptpClock->msgObuf, ~0, PTPD_FLAG_TWO_STEP);
@@ -3544,7 +3538,6 @@ void
 issuePDelayResp(struct sfptpd_timespec *time, MsgHeader *header,
 		RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
-	Timestamp requestReceiptTimestamp;
 	struct sfptpd_timespec timestamp;
 	int rc;
 
@@ -3563,11 +3556,8 @@ issuePDelayResp(struct sfptpd_timespec *time, MsgHeader *header,
 		     rtOpts->name, jitter);
 	}
 
-	fromInternalTime(time, &requestReceiptTimestamp);
-
 	msgPackPDelayResp(ptpClock->msgObuf, sizeof ptpClock->msgObuf,
-			  header, &requestReceiptTimestamp,
-			  ptpClock);
+			  header, time, ptpClock);
 
 	rc = netSendPeerEvent(ptpClock->msgObuf, PTPD_PDELAY_RESP_LENGTH,
 			      ptpClock, rtOpts, &timestamp);
@@ -3611,7 +3601,6 @@ issuePDelayResp(struct sfptpd_timespec *time, MsgHeader *header,
 static void
 issueDelayResp(struct sfptpd_timespec *time,MsgHeader *header,RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
-	Timestamp requestReceiptTimestamp;
 	Integer64 correction;
 
 	/* Test Function: Suppress Delay Response messsages */
@@ -3642,8 +3631,6 @@ issueDelayResp(struct sfptpd_timespec *time,MsgHeader *header,RunTimeOpts *rtOpt
 		correction = 0;
 	}
 
-	fromInternalTime(time, &requestReceiptTimestamp);
-
 	/* If the delay request sent in unicast and we are configured in hybrid
 	 * mode then respond with unicast. Otherwise, send a multicast response */
 	const struct sockaddr_storage *dst = NULL;
@@ -3661,8 +3648,7 @@ issueDelayResp(struct sfptpd_timespec *time,MsgHeader *header,RunTimeOpts *rtOpt
 	}
 
 	msgPackDelayResp(ptpClock->msgObuf, sizeof ptpClock->msgObuf,
-			 header, &requestReceiptTimestamp,
-			 ptpClock);
+			 header, time, ptpClock);
 
 	/* Test mode: emulate transparent clock */
 	if (rtOpts->test.xparent_clock.enable) {
@@ -3689,12 +3675,16 @@ static void
 issueDelayRespWithMonitoring(struct sfptpd_timespec *time, MsgHeader *header,
 			     RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
-	Timestamp requestReceiptTimestamp;
 	PTPMonRespTLV ptp_mon_resp_tlv;
+	TimeInterval correction;
 	ssize_t length;
 
-	fromInternalTime(time, &requestReceiptTimestamp);
-	fromInternalTime(&ptpClock->sync_send_time, &ptp_mon_resp_tlv.lastSyncTimestamp);
+	/* The last Sync timestamp is provided in the TLV; this is not part
+	 * of the timing mechanism itself, it is to associate the timing
+	 * in time. */
+	fromInternalTime(&ptpClock->sync_send_time,
+			 &ptp_mon_resp_tlv.lastSyncTimestamp,
+			 &correction);
 
 	/* Populate the TLV */
 	ptp_mon_resp_tlv.tlvType = PTPD_TLV_PTPMON_RESP_OLD;
@@ -3708,8 +3698,7 @@ issueDelayRespWithMonitoring(struct sfptpd_timespec *time, MsgHeader *header,
 
 	/* Pack the message */
 	msgPackDelayResp(ptpClock->msgObuf, sizeof ptpClock->msgObuf,
-			 header, &requestReceiptTimestamp,
-			 ptpClock);
+			 header, time, ptpClock);
 	length = appendPTPMonRespTLV(&ptp_mon_resp_tlv, ptpClock->msgObuf, sizeof ptpClock->msgObuf);
 
 	if (ptpClock->transient_packet_state.mtie_tlv_requested) {
@@ -3743,27 +3732,24 @@ issueDelayRespWithMonitoring(struct sfptpd_timespec *time, MsgHeader *header,
 
 
 static void
-issuePDelayRespFollowUp(struct sfptpd_timespec *time, MsgHeader *header,
+issuePDelayRespFollowUp(struct sfptpd_timespec *responseOriginTimestamp,
+			MsgHeader *header,
 			RunTimeOpts *rtOpts, PtpClock *ptpClock,
 			const UInteger16 sequenceId)
 {
-	Timestamp responseOriginTimestamp;
-
 	/* Test Function: Packet timestamp - bad timestamp */
 	if ((rtOpts->test.bad_timestamp.type != BAD_TIMESTAMP_TYPE_OFF) && 
 	    ((header->sequenceId % rtOpts->test.bad_timestamp.interval_pkts) == 0)) {
 		Integer32 jitter = (Integer32)((getRand() - 0.5) * 2.0 *
 					       rtOpts->test.bad_timestamp.max_jitter);
-		time->nsec += jitter;
-		sfptpd_time_normalise(time);
+		responseOriginTimestamp->nsec += jitter;
+		sfptpd_time_normalise(responseOriginTimestamp);
 		INFO("ptp %s: added jitter %d to pdelay resp TX timestamp\n",
 		     rtOpts->name, jitter);
 	}
 
-	fromInternalTime(time, &responseOriginTimestamp);
-
 	msgPackPDelayRespFollowUp(ptpClock->msgObuf, sizeof ptpClock->msgObuf,
-				  header, &responseOriginTimestamp,
+				  header, responseOriginTimestamp,
 				  ptpClock, sequenceId);
 
 	if (netSendPeerGeneral(ptpClock->msgObuf, PTPD_PDELAY_RESP_FOLLOW_UP_LENGTH,

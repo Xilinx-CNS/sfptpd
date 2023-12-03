@@ -98,7 +98,9 @@
 /**
  * \brief Convert struct sfptpd_timespec into Timestamp structure (defined by the spec)
  */
-void fromInternalTime(const struct sfptpd_timespec*, Timestamp*);
+int fromInternalTime(const struct sfptpd_timespec * internal,
+		     Timestamp * external,
+		     TimeInterval *correction);
 
 /**
  * \brief Convert Timestamp to struct sfptpd_timespec structure (defined by the spec)

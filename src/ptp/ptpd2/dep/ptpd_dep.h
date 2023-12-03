@@ -73,12 +73,12 @@ ssize_t msgUnpackTLVHeader(Octet *buf, size_t length, TLV *tlv, PtpClock* ptpClo
 ssize_t msgPackHeader(Octet *buf, size_t space, PtpClock*, unsigned int);
 ssize_t msgPackAnnounce(Octet *buf, size_t space, PtpClock*);
 ssize_t msgPackSync(Octet *buf, size_t space, PtpClock*);
-ssize_t msgPackFollowUp(Octet *buf, size_t space, Timestamp*, PtpClock*, const UInteger16);
+ssize_t msgPackFollowUp(Octet *buf, size_t space, const struct sfptpd_timespec*, PtpClock*, const UInteger16);
 ssize_t msgPackDelayReq(Octet *buf, size_t space, PtpClock*);
-ssize_t msgPackDelayResp(Octet *buf, size_t space, MsgHeader*, Timestamp*, PtpClock*);
+ssize_t msgPackDelayResp(Octet *buf, size_t space, MsgHeader*, const struct sfptpd_timespec *, PtpClock*);
 ssize_t msgPackPDelayReq(Octet *buf, size_t space, PtpClock*);
-ssize_t msgPackPDelayResp(Octet *buf, size_t space, MsgHeader*, Timestamp*, PtpClock*);
-ssize_t msgPackPDelayRespFollowUp(Octet *buf, size_t space, MsgHeader*, Timestamp*, PtpClock*, const UInteger16);
+ssize_t msgPackPDelayResp(Octet *buf, size_t space, MsgHeader*, const struct sfptpd_timespec *, PtpClock*);
+ssize_t msgPackPDelayRespFollowUp(Octet *buf, size_t space, MsgHeader*, const struct sfptpd_timespec*, PtpClock*, const UInteger16);
 ssize_t msgPackManagement(Octet *buf, size_t space, MsgManagement*, PtpClock*);
 ssize_t msgPackManagementRespAck(Octet *buf, size_t space, MsgManagement*, PtpClock*);
 ssize_t msgPackManagementTLV(Octet *buf, size_t space, MsgManagement*, PtpClock*);

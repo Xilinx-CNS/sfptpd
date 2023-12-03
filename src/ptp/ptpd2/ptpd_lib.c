@@ -798,6 +798,9 @@ void ptpd_publish_mtie_window(struct ptpd_port_context *ptpd,
 			      const struct sfptpd_timespec *min_time,
 			      const struct sfptpd_timespec *max_time)
 {
+	/* Sink the lost sub-ns timestamps that don't fit in MTIE TLV */
+	TimeInterval correction;
+
 	ptpd->mtie_window.mtie_valid = mtie_valid ? TRUE : FALSE;
 	ptpd->mtie_window.mtie_window_number = (UInteger16) window_number;
 	ptpd->mtie_window.mtie_window_duration = (UInteger16) window_seconds;
@@ -805,8 +808,10 @@ void ptpd_publish_mtie_window(struct ptpd_port_context *ptpd,
 		sfptpd_time_float_ns_to_scaled_ns(min);
 	ptpd->mtie_window.max_offs_from_master =
 		sfptpd_time_float_ns_to_scaled_ns(max);
-	fromInternalTime(min_time, &ptpd->mtie_window.min_offs_from_master_at);
-	fromInternalTime(max_time, &ptpd->mtie_window.max_offs_from_master_at);
+	fromInternalTime(min_time, &ptpd->mtie_window.min_offs_from_master_at,
+			 &correction);
+	fromInternalTime(max_time, &ptpd->mtie_window.max_offs_from_master_at,
+			 &correction);
 }
 
 
