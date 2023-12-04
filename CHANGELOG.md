@@ -78,6 +78,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Only show instance selection rankings when candidate changes.
 - Issue SWPTP-1425
   - Populate PTPMON_RESP TLV with timestamp of last sync not PTPMON_REQ receipt
+- Issue SWPTP-1429
+  - Avoid reverse name lookup in crny diagnostic gathering
 
 ## [3.7.0.1006] - 2023-08-17 [Feature Release]
 
