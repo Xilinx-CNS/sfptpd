@@ -59,6 +59,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Issue SWPTP-855
   - Redact NTP key in diagnostic output
+- Issue SWPTP-1364
+  - Let systemd restart sfptpd on failure with supplied unit configuration
 - Issue SWPTP-1395
   - Fix missing `sfptpmon` script in `.tar.gz` release package
   - Omit unnecessary new reference to system clock frequency correction state
