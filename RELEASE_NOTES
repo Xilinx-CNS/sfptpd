@@ -147,6 +147,8 @@ Issue SWPTP-1425
  ~ Populate PTPMON_RESP TLV with timestamp of last sync not PTPMON_REQ receipt
 Issue SWPTP-1429
  ~ Avoid reverse name lookup in crny diagnostic gathering
+Issue SWPTP-1432
+ ~ Wait until timers created before polling for changes via netlink
 
 
 ### v3.7.0.1006 Feature Release

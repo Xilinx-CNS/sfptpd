@@ -2252,12 +2252,6 @@ static int engine_on_startup(void *context)
 
 	config = engine->config;
 
-	rc = engine_set_netlink_polling(engine, true);
-	if (rc != 0) {
-		CRITICAL("could not start netlink polling\n");
-		goto fail;
-	}
-
 	/* Count potential sync instances, create storage for them and
 	   initialise shadow state */
 	all_instances = 0;
@@ -2421,6 +2415,12 @@ static void on_run(struct sfptpd_engine *engine)
 	rc = create_timers(engine);
 	if (rc != 0) {
 		CRITICAL("failed to create sync engine timers, %s\n", strerror(rc));
+		goto fail;
+	}
+
+	rc = engine_set_netlink_polling(engine, true);
+	if (rc != 0) {
+		CRITICAL("could not start netlink polling\n");
 		goto fail;
 	}
 
