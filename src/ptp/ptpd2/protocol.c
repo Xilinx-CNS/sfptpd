@@ -363,9 +363,15 @@ toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		break;
 
 	case PTPD_UNCALIBRATED:
-		break;
-
 	case PTPD_SLAVE:
+		/* Treat the UNCALIBRATED and SLAVE states the same way - no
+		 * need to restart timers etc. The difference is whether the
+		 * servo has started making changes. */
+		if (ptpClock->portState != state &&
+		    (ptpClock->portState == PTPD_UNCALIBRATED ||
+		     ptpClock->portState == PTPD_SLAVE))
+			break;
+
 		/* Don't reset the servo when entering or leaving the slave
 		 * state. Instead we assume let the servo continue to work.
 		 * If the time on a the next master is significantly different,
@@ -552,6 +558,7 @@ doTimerTick(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	switch (ptpClock->portState) {
 	case PTPD_LISTENING:
 	case PTPD_PASSIVE:
+	case PTPD_UNCALIBRATED:
 	case PTPD_SLAVE:
 	case PTPD_MASTER:
 		/*State decision Event*/
@@ -699,7 +706,8 @@ doTimerTick(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		if (timerExpired(PDELAYRESP_RECEIPT_TIMER, ptpClock->itimer)) {
 			/* We only make a fuss about failure to receive a
 			 * response in the slave state. */
-			if (ptpClock->portState == PTPD_SLAVE) {
+			if (ptpClock->portState == PTPD_SLAVE ||
+			    ptpClock->portState == PTPD_UNCALIBRATED) {
 				WARNING("ptp %s: failed to receive PDelayResp for "
 					"PDelayReq sequence number %d\n",
 					rtOpts->name,
@@ -1782,6 +1790,10 @@ handleSync(const MsgHeader *header, ssize_t length,
 							 &ptpClock->sync_receive_time,
 							 ptpClock->sync_correction_field)) {
 					servo_update_clock(&ptpClock->servo);
+
+					if (ptpClock->portState == PTPD_UNCALIBRATED &&
+					    sfptpd_clock_get_been_locked(ptpClock->servo.clock))
+						toState(PTPD_SLAVE, rtOpts, ptpClock);
 				}
 			}
 
@@ -2008,6 +2020,10 @@ handleFollowUp(const MsgHeader *header, ssize_t length,
 						 &ptpClock->sync_receive_time,
 						 ptpClock->sync_correction_field)) {
 				servo_update_clock(&ptpClock->servo);
+
+				if (ptpClock->portState == PTPD_UNCALIBRATED &&
+				    sfptpd_clock_get_been_locked(ptpClock->servo.clock))
+					toState(PTPD_SLAVE, rtOpts, ptpClock);
 			}
 		}
 		break;
@@ -2057,7 +2073,6 @@ handleDelayReq(const MsgHeader *header, ssize_t length,
 	case PTPD_INITIALIZING:
 	case PTPD_FAULTY:
 	case PTPD_DISABLED:
-	case PTPD_UNCALIBRATED:
 	case PTPD_LISTENING:
 	case PTPD_PASSIVE:
 		DBGV("HandledelayReq : disregard \n");
@@ -2065,6 +2080,7 @@ handleDelayReq(const MsgHeader *header, ssize_t length,
 		ptpClock->counters.delayReqMessagesReceived++;
 		break;
 
+	case PTPD_UNCALIBRATED:
 	case PTPD_SLAVE:
 		if (isFromSelf) {
 			DBG("==> Handle DelayReq (%d)\n", header->sequenceId);
@@ -2184,12 +2200,12 @@ handleDelayResp(const MsgHeader *header, ssize_t length,
 	case PTPD_INITIALIZING:
 	case PTPD_FAULTY:
 	case PTPD_DISABLED:
-	case PTPD_UNCALIBRATED:
 	case PTPD_LISTENING:
 		DBGV("HandledelayResp : disregard \n");
 		ptpClock->counters.discardedMessages++;
 		break;
 
+	case PTPD_UNCALIBRATED:
 	case PTPD_SLAVE:
 		if ((memcmp(ptpClock->portIdentity.clockIdentity,
 			    ptpClock->interface->msgTmp.resp.requestingPortIdentity.clockIdentity,
@@ -2336,13 +2352,13 @@ handlePDelayReq(MsgHeader *header, ssize_t length,
 	case PTPD_INITIALIZING:
 	case PTPD_FAULTY:
 	case PTPD_DISABLED:
-	case PTPD_UNCALIBRATED:
 		DBGV("HandlePdelayReq : disregard \n");
 		ptpClock->counters.discardedMessages++;
 		ptpClock->counters.pdelayReqMessagesReceived++;
 		break;
 
 	case PTPD_LISTENING:
+	case PTPD_UNCALIBRATED:
 	case PTPD_SLAVE:
 	case PTPD_MASTER:
 	case PTPD_PASSIVE:
@@ -2437,13 +2453,13 @@ handlePDelayResp(const MsgHeader *header, ssize_t length,
 	case PTPD_INITIALIZING:
 	case PTPD_FAULTY:
 	case PTPD_DISABLED:
-	case PTPD_UNCALIBRATED:
 		DBGV("HandlePdelayResp : disregard \n");
 		ptpClock->counters.discardedMessages++;
 		ptpClock->counters.pdelayRespMessagesReceived++;
 		break;
 
 	case PTPD_LISTENING:
+	case PTPD_UNCALIBRATED:
 	case PTPD_SLAVE:
 	case PTPD_MASTER:
 		if (isFromSelf) {
@@ -2609,12 +2625,12 @@ handlePDelayRespFollowUp(const MsgHeader *header, ssize_t length,
 	case PTPD_INITIALIZING:
 	case PTPD_FAULTY:
 	case PTPD_DISABLED:
-	case PTPD_UNCALIBRATED:
 		DBGV("HandlePdelayRespFollowUp : disregard \n");
 		ptpClock->counters.discardedMessages++;
 		break;
 
 	case PTPD_LISTENING:
+	case PTPD_UNCALIBRATED:
 	case PTPD_SLAVE:
 	case PTPD_MASTER:
 		/* If the response isn't for us ignore it. */

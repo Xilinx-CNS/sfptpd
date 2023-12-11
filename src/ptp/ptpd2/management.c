@@ -906,7 +906,9 @@ ptpd_mgmt_error_e handleMMTime(MsgManagement *incoming,
 
 	switch (incoming->actionField) {
 	case PTPD_MGMT_ACTION_SET:
-		if (ptpClock->slaveOnly || (ptpClock->portState == PTPD_SLAVE)) {
+		if (ptpClock->slaveOnly ||
+		    ptpClock->portState == PTPD_SLAVE ||
+		    ptpClock->portState == PTPD_UNCALIBRATED) {
 			return PTPD_MGMT_ERROR_NOT_SUPPORTED;
 		} else {
 			DBGV(" SET action\n");
@@ -951,7 +953,9 @@ ptpd_mgmt_error_e handleMMClockAccuracy(MsgManagement *incoming,
 
 	switch (incoming->actionField) {
 	case PTPD_MGMT_ACTION_SET:
-		if (ptpClock->slaveOnly || (ptpClock->portState == PTPD_SLAVE)) {
+		if (ptpClock->slaveOnly ||
+		    ptpClock->portState == PTPD_SLAVE ||
+		    ptpClock->portState == PTPD_UNCALIBRATED) {
 			return PTPD_MGMT_ERROR_NOT_SUPPORTED;
 		} else {
 			DBGV(" SET action\n");
@@ -991,7 +995,9 @@ ptpd_mgmt_error_e handleMMUtcProperties(MsgManagement *incoming,
 
 	switch (incoming->actionField) {
 	case PTPD_MGMT_ACTION_SET:
-		if (ptpClock->slaveOnly || (ptpClock->portState == PTPD_SLAVE)) {
+		if (ptpClock->slaveOnly ||
+		    ptpClock->portState == PTPD_SLAVE ||
+		    ptpClock->portState == PTPD_UNCALIBRATED) {
 			return PTPD_MGMT_ERROR_NOT_SUPPORTED;
 		} else {
 			DBGV(" SET action\n");
@@ -1039,7 +1045,9 @@ ptpd_mgmt_error_e handleMMTraceabilityProperties(MsgManagement *incoming,
 
 	switch (incoming->actionField) {
 	case PTPD_MGMT_ACTION_SET:
-		if (ptpClock->slaveOnly || (ptpClock->portState == PTPD_SLAVE)) {
+		if (ptpClock->slaveOnly ||
+		    ptpClock->portState == PTPD_SLAVE ||
+		    ptpClock->portState == PTPD_UNCALIBRATED) {
 			return PTPD_MGMT_ERROR_NOT_SUPPORTED;
 		} else {
 			DBGV(" SET action\n");
