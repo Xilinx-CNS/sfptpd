@@ -82,6 +82,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Populate PTPMON_RESP TLV with timestamp of last sync not PTPMON_REQ receipt
 - Issue SWPTP-1429
   - Avoid reverse name lookup in crny diagnostic gathering
+- Issue SWPTP-1432
+  - Wait until timers created before polling for changes via netlink
 
 ## [3.7.0.1006] - 2023-08-17 [Feature Release]
 
