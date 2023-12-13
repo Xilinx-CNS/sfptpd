@@ -291,7 +291,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Support `PTP_SYS_OFFSET_EXTENDED` clock diff method (SWPTP-1187)
 - Allow control socket location to be specified (SWPTP-624)
 - Detect if `systemd-timesyncd` is running (SWPTP-986)
-  - Alarm secondary servo on 30s of sustained sync failure (SWPTP-1049)
+- Alarm secondary servo on 30s of sustained sync failure (SWPTP-1049)
 
 > [!IMPORTANT]
 > It is no longer clear that `assume_one_phc_per_nic off` is the most
