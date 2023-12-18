@@ -23,6 +23,7 @@ permissions:
   packages: write
 jobs:
   container-build:
+    if: vars.PUBLISHING_REPO
     name: Container Build
     runs-on: ubuntu-latest
     timeout-minutes: 20
