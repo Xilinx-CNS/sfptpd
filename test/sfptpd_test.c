@@ -141,16 +141,16 @@ int main(int argc, char **argv)
 	}
 
 	printf("\nUNIT TEST RESULTS SUMMARY\n\n");
-	printf("|    | Unit test   | Run     | Result       |\n");
-	printf("| -- | ----------- | ------- | ------------ |\n");
+	printf("|    | Unit test   | Run     | Result                    |\n");
+	printf("| -- | ----------- | ------- | ------------------------- |\n");
 	for (i = 0; i < num_unit_tests; i++) {
 		struct sfptpd_unit_test *ut = unit_tests + i;
 
-		printf("| %2d | %-11s | %-7s | %-12s |\n",
+		printf("| %2d | %-11s | %-7s | %-25.25s |\n",
 		       i, ut->name,
 		       ut->run ? "Run" : "Not run",
 		       ut->run ? (ut->result == 0 ? "Pass" :
-				  strerrorname_np(ut->result)) :
+				  strerror(ut->result)) :
 		       "");
 	}
 
