@@ -40,6 +40,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - IP address of parent clock added to topology files (SWPTP-1312)
 - Add `step_threshold` option to change the offset threshold for allowing
   a step (when permitted by clock control setting). (SWPTP-1365)
+- Use 1588-2019 method for constructing clock ids from EUI-64s. (SWPTP-1402)
+  - Allow unique clock id bits to be set with `unique_clockid_bits`.
+  - Allow legacy (2008) clock ids to be used with `legacy_clock_ids`.
 - Add `pidadjust` control command to tweak PID controller co-efficients
   at runtime for experimental purposes only. Run `sfptpdctl` without
   arguments to see syntax. (SWPTP-1411)

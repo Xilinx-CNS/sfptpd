@@ -859,9 +859,18 @@ static int renew_clock(struct sfptpd_clock *clock)
 		 * different time domains simultaneously or would otherwise
 		 * need to avoid clashing port IDs. */
 		sfptpd_interface_get_mac_addr(clock->u.nic.primary_if, &mac);
-		memcpy(clock->hw_id.id, general_config->unique_clockid_bits, 8);
-		memcpy(clock->hw_id.id, mac.addr, mac.len < sizeof clock->hw_id.id ?
-						  mac.len : sizeof clock->hw_id.id);
+
+		if (general_config->legacy_clockids && mac.len == 6) {
+			memcpy(clock->hw_id.id, mac.addr, 3);
+			clock->hw_id.id[3] = 0xff;
+			clock->hw_id.id[4] = 0xfe;
+			memcpy(clock->hw_id.id + 5, mac.addr + 3, 3);
+		} else {
+			memcpy(clock->hw_id.id, general_config->unique_clockid_bits, 8);
+			memcpy(clock->hw_id.id, mac.addr, mac.len < sizeof clock->hw_id.id ?
+							  mac.len : sizeof clock->hw_id.id);
+		}
+
 		sfptpd_format(clock_format_specifiers, clock, clock->hw_id_string,
 			      sizeof clock->hw_id_string, general_config->clocks.format_hwid);
 		sfptpd_format(clock_format_specifiers, clock, clock->fname_string,

@@ -234,6 +234,7 @@ typedef struct sfptpd_config_general {
 	bool ignore_critical[SFPTPD_CRITICAL_MAX];
 	unsigned long declared_sync_modules;
 	uint8_t unique_clockid_bits[8];
+	bool legacy_clockids;
 } sfptpd_config_general_t;
 
 STATIC_ASSERT(sizeof ((sfptpd_config_general_t *) 0)->declared_sync_modules * 8 >= SFPTPD_CONFIG_CATEGORY_MAX);
