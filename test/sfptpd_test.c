@@ -39,6 +39,8 @@ typedef int (*sfptpd_unit_test_fn_t)(void);
 struct sfptpd_unit_test {
 	const char *name;
 	sfptpd_unit_test_fn_t fn;
+	bool run;
+	int result;
 };
 
 
@@ -62,7 +64,15 @@ static void register_unit_test(const char *name, sfptpd_unit_test_fn_t fn)
 
 	unit_tests[num_unit_tests].name = name;
 	unit_tests[num_unit_tests].fn = fn;
+	unit_tests[num_unit_tests].run = false;
 	num_unit_tests++;
+}
+
+static int find_unit_test(const char *name) {
+	int i;
+
+	for (i = 0; i < num_unit_tests && strcmp(name, unit_tests[i].name); i++);
+	return (i == num_unit_tests ? -1 : i);
 }
 
 
@@ -73,9 +83,8 @@ static void register_unit_test(const char *name, sfptpd_unit_test_fn_t fn)
 int main(int argc, char **argv)
 {
 	unsigned int i;
-	int rc;
 	int result = 0;
-	bool found = false;
+	int not_found = 0;
 
 	printf("sfptpd unit tests\n");
 
@@ -89,30 +98,67 @@ int main(int argc, char **argv)
 	register_unit_test("fmds", sfptpd_test_fmds);
 	register_unit_test("link", sfptpd_test_link);
 
-	/* If no arguments are specified, run all tests */
+	/* If no arguments or just "all" are specified, run all tests */
+	if (argc < 2 || (strcmp(argv[1], "all") == 0))
+		for (i = 0; i < num_unit_tests; i++)
+			unit_tests[i].run = true;
+	else
+		for (i = 1; i < argc; i++) {
+			int test = find_unit_test(argv[i]);
+			if (test == -1) {
+				argv[++not_found] = argv[i];
+				printf("unit test %s not found\n", argv[i]);
+				result = ENOENT;
+			} else {
+				unit_tests[test].run = true;
+			}
+		}
+
 	for (i = 0; i < num_unit_tests; i++) {
-		if ((argc == 1) || (strcmp(argv[1], "all") == 0) ||
-		    (strcmp(argv[1], unit_tests[i].name) == 0)) {
-			printf("running %s unit test...\n", unit_tests[i].name);
-			found = true;
-			rc = unit_tests[i].fn();
+		struct sfptpd_unit_test *ut = unit_tests + i;
+		int rc;
+
+		if (ut->run) {
+			printf("running %s unit test...\n", ut->name);
+			rc = ut->fn();
 			if (rc == 0) {
-				printf("%s unit test passed\n", unit_tests[i].name);
+				printf("%s unit test passed\n", ut->name);
 			} else {
 				printf("%s unit test failed, %s\n",
-				       unit_tests[i].name, strerror(rc));
+				       ut->name, strerror(rc));
 				result = rc;
 			}
+			ut->result = rc;
+		} else {
+			ut->result = 0;
 		}
 	}
 
-	if (!found) {
-		printf("unit test %s not found\n", argv[1]);
-		result++;
-	} else if (result != 0) {
+	if (result != 0) {
 		printf("unit tests failed, %s\n", strerror(result));
 	} else {
 		printf("unit tests passed\n");
+	}
+
+	printf("\nUNIT TEST RESULTS SUMMARY\n\n");
+	printf("|    | Unit test   | Run     | Result       |\n");
+	printf("| -- | ----------- | ------- | ------------ |\n");
+	for (i = 0; i < num_unit_tests; i++) {
+		struct sfptpd_unit_test *ut = unit_tests + i;
+
+		printf("| %2d | %-11s | %-7s | %-12s |\n",
+		       i, ut->name,
+		       ut->run ? "Run" : "Not run",
+		       ut->run ? (ut->result == 0 ? "Pass" :
+				  strerrorname_np(ut->result)) :
+		       "");
+	}
+
+	if (not_found != 0) {
+		printf("\nunit tests not found:");
+		for (i = 0; i < not_found; i++)
+			printf(" %s", argv[1 + i]);
+		printf("\n");
 	}
 
 	return result;

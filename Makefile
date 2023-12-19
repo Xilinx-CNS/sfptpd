@@ -97,7 +97,8 @@ test_%: build/sfptpd_test
 	$< $*
 
 .PHONY: fast_test
-fast_test: $(addprefix test_,$(FAST_TESTS))
+fast_test: build/sfptpd_test
+	$< $(FAST_TESTS)
 
 # Target to update the version string with divergence from tag in git archive
 .PHONY: patch_version
