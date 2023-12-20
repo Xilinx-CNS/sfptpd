@@ -2203,8 +2203,10 @@ static int create_sync_module(struct sfptpd_engine *engine,
 	}
 
 	if (rc != 0) {
-		CRITICAL("failed to create sync module %s, %s\n",
-			 sfptpd_sync_module_name(type), strerror(rc));
+		if (rc != EREPORTED)
+			CRITICAL("failed to create sync module %s, %s\n",
+				 sfptpd_sync_module_name(type), strerror(rc));
+		rc = EREPORTED;
 		goto fail;
 	}
 
@@ -2561,7 +2563,9 @@ int sfptpd_engine_create(struct sfptpd_config *config,
 
 	rc = sfptpd_thread_create("engine", &engine_thread_ops, new, &new->thread);
 	if (rc != 0) {
-		CRITICAL("couldn't create sync engine thread, %s\n", strerror(rc));
+		if (rc != EREPORTED)
+			CRITICAL("couldn't create sync engine thread, %s\n", strerror(rc));
+		rc = EREPORTED;
 		goto fail1;
 	}
 	TRACE_L2("sync engine created successfully\n");

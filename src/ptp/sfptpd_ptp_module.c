@@ -1663,8 +1663,10 @@ static int ptp_configure_clock(struct sfptpd_ptp_intf *interface)
 	/* For each physical interface configure timestamping. */
 	rc = ptp_timestamp_filtering_configure_all(interface);
 	if (rc != 0) {
-		CRITICAL("ptp: failed to configure timestamping on one or more "
-			 "interfaces\n");
+		if (rc != EREPORTED)
+			CRITICAL("ptp: failed to configure timestamping on one or more "
+				 "interfaces\n");
+		rc = EREPORTED;
 		return rc;
 	}
 
@@ -3513,9 +3515,10 @@ static int ptp_ensure_interface_started(sfptpd_ptp_module_t *ptp,
 	/* Determine and configure the PTP clock. */
 	rc = ptp_configure_clock(interface);
 	if (rc != 0) {
-		CRITICAL("ptp: failed to configure clock for interface %s\n",
-			 interface->defined_name);
-		return rc;
+		if (rc != EREPORTED)
+			CRITICAL("ptp: failed to configure clock for interface %s\n",
+				 interface->defined_name);
+		return EREPORTED;
 	}
 
 	interface->start_successful = true;
@@ -3566,9 +3569,11 @@ static int ptp_start_instance(struct sfptpd_ptp_instance *instance) {
 	assert(interface);
 	rc = ptp_ensure_interface_started(instance->intf->module, interface);
 	if (rc != 0) {
-		CRITICAL("ptp %s: could not start interface %s\n",
-			 SFPTPD_CONFIG_GET_NAME(instance->config),
-			 config->interface_name);
+		if (rc != EREPORTED)
+			CRITICAL("ptp %s: could not start interface %s\n",
+				 SFPTPD_CONFIG_GET_NAME(instance->config),
+				 config->interface_name);
+		rc = EREPORTED;
 		goto fail;
 	}
 
