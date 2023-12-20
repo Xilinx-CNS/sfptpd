@@ -2029,11 +2029,11 @@ int sfptpd_interface_hw_timestamping_enable(struct sfptpd_interface *interface)
 				break;
 			}
 
-			/* If we get EBUSY, retry a few times to avoid hitting bug58245.
+			/* If we get EBUSY, retry a few times to mitigate SWFWHUNT-2829.
 			 * On SFC NICs, enabling hw timestamping requires a clock sync op,
 			 * which in turn relies on the system not being overloaded. This
 			 * can be especially problematic at system startup, i.e. now. */
-			if (rc == EBUSY) {
+			if (rc == EBUSY || rc == EAGAIN) {
 				usleep(100000);
 			} else {
 				break;

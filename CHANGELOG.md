@@ -75,6 +75,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Issue SWPTP-855
   - Redact NTP key in diagnostic output
+- Issue SWPTP-1353
+  - Make timestamp enablement failure less noisy on startup
+  - Retry timestamp enablement on EAGAIN from NIC, not just EBUSY
 - Issue SWPTP-1364
   - Let systemd restart sfptpd on failure with supplied unit configuration
 - Issue SWPTP-1395

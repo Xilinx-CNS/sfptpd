@@ -84,6 +84,8 @@
 /** Additional errnos */
 /** Failure to retrieve a timestamp for a packet */
 #define ENOTIMESTAMP    (1000)
+/** Fatal error already reported; don't add more noise */
+#define EREPORTED	(1001)
 
 /** Notional accuracies associated with each type of module in ns */
 #define SFPTPD_ACCURACY_FREERUN		(0.0)
