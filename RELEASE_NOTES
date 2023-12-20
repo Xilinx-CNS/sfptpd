@@ -1,7 +1,7 @@
 Solarflare Enhanced PTP Daemon (sfptpd)
 Advanced Micro Devices, Inc.
 =======================================
-Version: v3.7.1.1002
+Version: v3.7.1.1003
 
 
 Overview
@@ -120,7 +120,7 @@ Advanced notice of possible future changes
 Changelog
 ---------
 
-### v3.7.1.1002
+### v3.7.1.1003
 
 Features:
  ~ Minor command line enhancements to support container usage (SWPTP-1401)
@@ -129,6 +129,9 @@ Features:
 
 Issue SWPTP-855
  ~ Redact NTP key in diagnostic output
+Issue SWPTP-1353
+ ~ Make timestamp enablement failure less noisy on startup
+ ~ Retry timestamp enablement on EAGAIN from NIC, not just EBUSY
 Issue SWPTP-1364
  ~ Let systemd restart sfptpd on failure with supplied unit configuration
 Issue SWPTP-1395
