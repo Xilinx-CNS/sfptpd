@@ -1,31 +1,31 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # X-SPDX-Copyright-Text: (c) Copyright 2023 Advanced Micro Devices, Inc.
 
-name: "Build and Test cns-sfptpd"
+name: "Fast checks"
 
 on: [push, pull_request]
 
 jobs:
   build_and_test:
-    name: Run make and make test
+    name: Unit tests and build
     runs-on: ubuntu-latest
     steps:
       - name: sfptpd_checkout
         uses: actions/checkout@v4
         with:
-          path: cns-sfptpd
+          path: sfptpd-src
 
-      - name: Install SFPTPD Deps
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libmnl-dev valgrind
+          sudo apt-get install -y libmnl-dev
 
       - name: build
         run: |
-          cd $GITHUB_WORKSPACE/cns-sfptpd
+          cd $GITHUB_WORKSPACE/sfptpd-src
           make -j 2
           
       - name: test
         run: |
-          cd $GITHUB_WORKSPACE/cns-sfptpd
+          cd $GITHUB_WORKSPACE/sfptpd-src
           make -j 2 fast_test
