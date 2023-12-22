@@ -403,6 +403,7 @@ typedef struct ptpd_intf_config {
 
 	Octet ifaceName[IF_NAMESIZE];
 	struct sfptpd_interface *physIface;
+	sfptpd_clock_id_t clock_id;
 
 	int transportAF;
 	Boolean linkLocalScope;

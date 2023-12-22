@@ -78,17 +78,24 @@ void initData(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	ptpClock->twoStepFlag = PTPD_TWO_STEP_FLAG;
 
 	/*
-	 * init clockIdentity with MAC address and 0xFF and 0xFE. see
-	 * spec 7.5.2.2.2
+	 * init clockIdentity with MAC address and 0xFF and 0xFF. see
+	 * spec 7.5.2.2.2 (2019 version).
+	 *
+	 * This is a fallback assignment in case of operating with system LRC
+	 * that does not have its own hw_id. Otherwise this should get
+	 * overwritten by the hw_id already assigned to the clock by sfptpd.
 	 */
 	ptpClock->clockIdentity[0] = ptpClock->interface->transport.interfaceID[0];
 	ptpClock->clockIdentity[1] = ptpClock->interface->transport.interfaceID[1];
 	ptpClock->clockIdentity[2] = ptpClock->interface->transport.interfaceID[2];
-	ptpClock->clockIdentity[3] = 0xFF;
-	ptpClock->clockIdentity[4] = 0xFE;
-	ptpClock->clockIdentity[5] = ptpClock->interface->transport.interfaceID[3];
-	ptpClock->clockIdentity[6] = ptpClock->interface->transport.interfaceID[4];
-	ptpClock->clockIdentity[7] = ptpClock->interface->transport.interfaceID[5];
+	ptpClock->clockIdentity[3] = ptpClock->interface->transport.interfaceID[3];
+	ptpClock->clockIdentity[4] = ptpClock->interface->transport.interfaceID[4];
+	ptpClock->clockIdentity[5] = ptpClock->interface->transport.interfaceID[5];
+	ptpClock->clockIdentity[6] = 0xFF;
+	ptpClock->clockIdentity[7] = 0xFF;
+
+	if (memcmp(&rtOpts->ifOpts->clock_id, &SFPTPD_CLOCK_ID_UNINITIALISED, sizeof(sfptpd_clock_id_t)))
+		memcpy(ptpClock->clockIdentity, &rtOpts->ifOpts->clock_id, 8);
 
 	if (rtOpts->slaveOnly)
 		rtOpts->clockQuality.clockClass = SLAVE_ONLY_CLOCK_CLASS;

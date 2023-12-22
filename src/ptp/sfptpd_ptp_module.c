@@ -1666,6 +1666,7 @@ static int ptp_configure_clock(struct sfptpd_ptp_intf *interface)
 		sfptpd_strncpy(iconf->ptpd_intf.ifaceName, interface->bond_info.logical_if,
 			       sizeof(iconf->ptpd_intf.ifaceName));
 		iconf->ptpd_intf.physIface = interface->bond_info.active_if;
+		sfptpd_clock_get_hw_id(interface->clock, &iconf->ptpd_intf.clock_id);
 		rc = ptp_determine_timestamp_type(&iconf->ptpd_intf.timestampType,
 						  interface,
 						  interface->bond_info.active_if);

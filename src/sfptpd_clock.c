@@ -1593,6 +1593,29 @@ const char *sfptpd_clock_get_hw_id_string(const struct sfptpd_clock *clock)
 	return clock->hw_id_string;
 }
 
+int sfptpd_clock_get_hw_id(const struct sfptpd_clock *clock,
+			   sfptpd_clock_id_t *hw_id)
+{
+	assert(clock != NULL);
+	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
+	assert(hw_id != NULL);
+
+	*hw_id = clock->hw_id;
+
+	if (!clock->deleted &&
+	    memcmp(&clock->hw_id, &SFPTPD_CLOCK_ID_UNINITIALISED, sizeof clock->hw_id))
+		return 0;
+	else
+		return ENODATA;
+}
+
+/** Get the clock ID associated with this clock
+ * @param clock Pointer to clock instance
+ * @return 0 or errno
+ */
+int sfptpd_clock_get_hw_id(const struct sfptpd_clock *clock,
+			   sfptpd_clock_id_t *hw_id);
+
 
 /* Not locked because it is an atomic operation. */
 const char *sfptpd_clock_get_fname_string(const struct sfptpd_clock *clock)

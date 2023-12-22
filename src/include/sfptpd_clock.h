@@ -285,6 +285,13 @@ const char *sfptpd_clock_get_short_name(const struct sfptpd_clock *clock);
  */
 const char *sfptpd_clock_get_long_name(const struct sfptpd_clock *clock);
 
+/** Get the clock ID associated with this clock
+ * @param clock Pointer to clock instance
+ * @return 0 or errno
+ */
+int sfptpd_clock_get_hw_id(const struct sfptpd_clock *clock,
+			   sfptpd_clock_id_t *hw_id);
+
 /** Get the formatted string form of the clock ID associated with this clock
  * @param clock Pointer to clock instance
  * @return String of clock ID
