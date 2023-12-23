@@ -101,6 +101,8 @@ static int parse_json_remote_monitor(struct sfptpd_config_section *section, cons
 				     unsigned int num_params, const char * const params[]);
 static int parse_hotplug_detection_mode(struct sfptpd_config_section *section, const char *option,
 					unsigned int num_params, const char * const params[]);
+static int parse_reporting_intervals(struct sfptpd_config_section *section, const char *option,
+				     unsigned int num_params, const char * const params[]);
 static int parse_netlink_rescan_interval(struct sfptpd_config_section *section, const char *option,
 					 unsigned int num_params, const char * const params[]);
 static int parse_netlink_coalesce_ms(struct sfptpd_config_section *section, const char *option,
@@ -291,6 +293,13 @@ static const sfptpd_config_option_t config_general_options[] =
 		"Netlink is used exclusively for this now and any other option "
 		"is ignored.",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_hotplug_detection_mode},
+	{"reporting_intervals", "<save_state|stats_log INTERVAL>*",
+		"Specifies period between saving state files and/or writing "
+		"stats log output. Default is: \"save_state "
+		STRINGIFY(SFPTPD_DEFAULT_STATE_SAVE_INTERVAL) " stats_log "
+		STRINGIFY(SFPTPD_DEFAULT_STATISTICS_LOGGING_INTERVAL) "\"",
+		~2, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_reporting_intervals},
 	{"netlink_rescan_interval", "NUMBER",
 		"Specifies period between rescanning the link table with netlink. "
 		"Periodic rescans are disabled with zero. Default is "
@@ -1295,6 +1304,44 @@ static int parse_hotplug_detection_mode(struct sfptpd_config_section *section, c
 }
 
 
+static int parse_reporting_intervals(struct sfptpd_config_section *section, const char *option,
+				     unsigned int num_params, const char * const params[])
+{
+	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+	assert(num_params >= 2);
+	int tokens;
+	float interval;
+	int i;
+
+	if ((num_params & 1) != 0)
+		return EINVAL;
+
+	for (i = 0; i < num_params; i+= 2) {
+		tokens = sscanf(params[i + 1], "%f", &interval);
+		if (tokens != 1)
+			return EINVAL;
+
+		if (interval < 0.0) {
+			ERROR("config [%s]: %s %s interval must be non-negative\n",
+			      section->name, params[i], option);
+			return ERANGE;
+		}
+
+		if (!strcmp(params[i], "save_state")) {
+			general->reporting_intervals.save_state = interval;
+		} else if (!strcmp(params[i], "stats_log")) {
+			general->reporting_intervals.stats_log = interval;
+		} else {
+			ERROR("config [%s]: no such %s key: %s\n",
+			      section->name, option, params[i]);
+			return EINVAL;
+		}
+	}
+
+	return 0;
+}
+
+
 static int parse_netlink_rescan_interval(struct sfptpd_config_section *section, const char *option,
 					 unsigned int num_params, const char * const params[])
 {
@@ -1666,6 +1713,9 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		new->clustering_score_without_discriminator = SFPTPD_DEFAULT_CLUSTERING_SCORE_ABSENT_DISCRIM;
 
 		new->limit_freq_adj = 1.0E9;
+
+		new->reporting_intervals.save_state = SFPTPD_DEFAULT_STATE_SAVE_INTERVAL;
+		new->reporting_intervals.stats_log = SFPTPD_DEFAULT_STATISTICS_LOGGING_INTERVAL;
 
 		sfptpd_strncpy(new->clocks.format_short, SFPTPD_DEFAULT_CLOCK_SHORT_FMT, sizeof new->clocks.format_short);
 		sfptpd_strncpy(new->clocks.format_long, SFPTPD_DEFAULT_CLOCK_LONG_FMT, sizeof new->clocks.format_long);

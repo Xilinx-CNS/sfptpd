@@ -549,7 +549,7 @@ static int create_timers(struct sfptpd_engine *engine)
 	}
 
 	/* Start the stats logging timer */
-	sfptpd_time_from_s(&interval, SFPTPD_STATISTICS_LOGGING_INTERVAL);
+	sfptpd_time_float_s_to_timespec((sfptpd_time_t) engine->general_config->reporting_intervals.stats_log, &interval);
 	rc = sfptpd_thread_timer_start(ENGINE_TIMER_LOG_STATS,
 				       true, false, &interval);
 	if (rc != 0) {
@@ -567,7 +567,7 @@ static int create_timers(struct sfptpd_engine *engine)
 	}
 
 	/* Start the state save timer */
-	sfptpd_time_from_s(&interval, SFPTPD_STATE_SAVE_INTERVAL);
+	sfptpd_time_float_s_to_timespec((sfptpd_time_t) engine->general_config->reporting_intervals.save_state, &interval);
 	rc = sfptpd_thread_timer_start(ENGINE_TIMER_SAVE_STATE,
 				       true, false, &interval);
 	if (rc != 0) {

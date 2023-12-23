@@ -42,6 +42,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Ethtool queries are now conducted over netlink instead of ioctl on kernels
   where this is supported. (SWPTP-1304)
 - IP address of parent clock added to topology files (SWPTP-1312)
+- Add option to configure state file and stats log update rates. (SWPTP-1326)
+  - E.g. `reporting_intervals save_state 120 stats_log 2`
 - Add `step_threshold` option to change the offset threshold for allowing
   a step (when permitted by clock control setting). (SWPTP-1365)
 - Use 1588-2019 method for constructing clock ids from EUI-64s. (SWPTP-1402)

@@ -50,6 +50,11 @@
 #define SFPTPD_DEFAULT_CLOCK_FNAM_FMT		   "%C:"
 #define SFPTPD_DEFAULT_UNIQUE_CLOCKID_BITS         "00:00"
 
+/** Statistics logging interval in seconds */
+#define SFPTPD_DEFAULT_STATISTICS_LOGGING_INTERVAL 1
+
+/** State save interval in seconds */
+#define SFPTPD_DEFAULT_STATE_SAVE_INTERVAL 60
 
 /** Maximum size of MAC address string */
 #define SFPTPD_CONFIG_MAC_STRING_MAX   (24)
@@ -175,6 +180,7 @@ typedef struct sfptpd_config_timestamping {
  * @initial_sync_instance: When selecting instances manually, the name of the initial sync instance
  * @selection_holdoff_interval: Interval to wait after detecting a better instance
  * before selecting it
+ * @reporting_intervals: Intervals between reporting from engine
  * @netlink_rescan_interval: Interval between rescanning interface with netlink
  * @pid_filter.kp: Secondary servo PID filter proportional term coefficient
  * @pid_filter.ki: Secondary servo PID filter integral term coefficient
@@ -213,6 +219,10 @@ typedef struct sfptpd_config_general {
 	long double step_threshold;
 	char initial_sync_instance[SFPTPD_CONFIG_SECTION_NAME_MAX];
 	unsigned int selection_holdoff_interval;
+	struct {
+		float save_state;
+		float stats_log;
+	} reporting_intervals;
 	unsigned int netlink_rescan_interval;
 	unsigned int netlink_coalesce_ms;
 	struct {

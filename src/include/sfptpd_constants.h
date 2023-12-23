@@ -53,12 +53,6 @@
 /** sfptpd control socket path */
 #define SFPTPD_CONTROL_SOCKET_PATH  "/var/run/sfptpd-control-v1.sock"
 
-/** Statistics logging interval in seconds */
-#define SFPTPD_STATISTICS_LOGGING_INTERVAL (1)
-
-/** State save interval in seconds */
-#define SFPTPD_STATE_SAVE_INTERVAL (60)
-
 /** Long-term statistics collection */
 #define SFPTPD_STATS_COLLECTION_INTERVAL (60)
 
