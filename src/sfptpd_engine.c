@@ -1979,8 +1979,13 @@ static void on_sync_instance_state_changed(struct sfptpd_engine *engine,
 		interval.nsec = 0;
 	}
 
-	INFO("will switch to sync instance %s in %d seconds if %s does not recover\n",
-	     new_candidate->info.name, interval.sec, engine->selected->info.name);
+	if (new_candidate == engine->selected) {
+		INFO("canceled switch away from sync instance %s as its rank recovered\n",
+		     new_candidate->info.name, interval.sec, engine->selected->info.name);
+	} else {
+		INFO("will switch to sync instance %s in %d seconds if %s does not recover\n",
+		     new_candidate->info.name, interval.sec, engine->selected->info.name);
+	}
 }
 
 
