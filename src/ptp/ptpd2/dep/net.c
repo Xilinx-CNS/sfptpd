@@ -1108,6 +1108,7 @@ static Boolean getRxTimestamp(PtpInterface *ptpInterface, char *pdu, int pduLeng
 Boolean
 netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 {
+	sfptpd_interface_ts_caps_t ts_caps;
 	int flags;
 
 	/* We want hardware timestamping. We need an interface that supports
@@ -1117,6 +1118,7 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 		ERROR("error no interface object supplied\n");
 		return false;
 	}
+	ts_caps = sfptpd_interface_ptp_caps(ptpInterface->interface);
 
 	ptpInterface->clock = sfptpd_interface_get_clock(ptpInterface->interface);
 	if (ptpInterface->clock == NULL) {
@@ -1125,12 +1127,17 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 		return FALSE;
 	}
 
-	if (ifOpts->timestampType == PTPD_TIMESTAMP_TYPE_SW) {
-#if 0
-		/* TODO @timestamping bug34842 This succeeds whether or not the
-		 * net driver supports software transmit timestamping (receive
-		 * timestamping is done in the IP stack). Need to use ethtool
-		 * -T or private ioctl to determine if it's supported. */
+	if (ifOpts->timestampType == PTPD_TIMESTAMP_TYPE_SW &&
+	    ts_caps & SFPTPD_INTERFACE_TS_CAPS_SW) {
+
+		/* SWPTP-145: on supporting kernels, SO_TIMESTAMPING enablement
+		 * for software transmit timestamping succeeds regardless of
+		 * whether the relevant net driver suports it. (Receive
+		 * timestamping is performed in the stack.) This may not
+		 * be a practical issue in 2024 but we nevertheless gate use
+		 * of this method on the timestamping capabilities retrieved
+		 * via ethtool or netlink and fall back to SO_TIMESTAMPNS
+		 * if not available. */
 
 		/* Try SO_TIMESTAMPING software timestamps */
 		DBG("trying SO_TIMESTAMPING software timestamping...\n");
@@ -1146,7 +1153,9 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 			INFO("using SO_TIMESTAMPING software timestamps\n");
 			return TRUE;
 		}
-#endif
+	}
+
+	if (ifOpts->timestampType == PTPD_TIMESTAMP_TYPE_SW) {
 
 		/* Try SO_TIMESTAMPNS software timestamps */
 		DBG("trying SO_TIMESTAMPNS software timestamping...\n");
@@ -1161,7 +1170,7 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 			return TRUE;
 		}
 
-		/* Try SO_TIMESTAMPNS software timestamps */
+		/* Try SO_TIMESTAMP software timestamps */
 		DBG("trying SO_TIMESTAMP software timestamping...\n");
 
 		/* Enable software timestamps */

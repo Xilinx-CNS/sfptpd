@@ -127,6 +127,8 @@ Features:
      - Allow config to be read from stdin with '-f -'
      - Add '--console' option to redirect logs to console
 
+Issue SWPTP-145
+ ~ Use SO_TIMESTAMPING for software timestamps when supported in driver
 Issue SWPTP-855
  ~ Redact NTP key in diagnostic output
 Issue SWPTP-1353
