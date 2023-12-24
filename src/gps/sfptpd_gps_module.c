@@ -1152,8 +1152,8 @@ static bool gps_state_machine(struct gps_instance *gps, int read_rc)
 		sfptpd_time_from_std_floor(&next_state->offset_timestamp,
 					  &gps_data->pps.clock);
 		sfptpd_time_subtract(&diff,
-				     &next_state->offset_gps_timestamp,
-				     &next_state->offset_timestamp);
+				     &next_state->offset_timestamp,
+				     &next_state->offset_gps_timestamp);
 		next_state->offset_from_master = sfptpd_time_timespec_to_float_ns(&diff);
 	}
 
