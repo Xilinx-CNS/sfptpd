@@ -444,6 +444,8 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 
 	mnl_attr_parse(nh, sizeof(*ifm), link_attr_cb, table);
 
+	DBG_L6("netlink: handling link %d\n", link->if_index);
+
 	if (table[IFLA_IFNAME])
 		strncpy(link->if_name, mnl_attr_get_str(table[IFLA_IFNAME]), sizeof link->if_name - 1);
 
