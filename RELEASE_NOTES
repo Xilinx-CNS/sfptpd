@@ -152,6 +152,8 @@ Issue SWPTP-1429
  ~ Avoid reverse name lookup in crny diagnostic gathering
 Issue SWPTP-1432
  ~ Wait until timers created before polling for changes via netlink
+Issue SWPTP-1447
+ ~ Fix false assumptions of netlink event ordering leading to assertion failure
 
 
 ### v3.7.0.1006 Feature Release
