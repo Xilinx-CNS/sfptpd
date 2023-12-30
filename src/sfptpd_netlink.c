@@ -1253,6 +1253,13 @@ static struct link_db *netlink_find_version(struct sfptpd_nl_state *state,
 	return NULL;
 }
 
+static int link_ifindex_compar(const void *pa, const void *pb)
+{
+	struct sfptpd_link *a = (struct sfptpd_link *) pa;
+	struct sfptpd_link *b = (struct sfptpd_link *) pb;
+
+	return a->if_index - b->if_index;
+}
 
 /****************************************************************************
  * Public Functions
@@ -1399,8 +1406,23 @@ int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 
 	if (any_data) {
 		DBG_L4("new link table (ver %d):\n", cur->table.version);
+		bool ordered = true;
+		int idx = 0;
 		for (row = 0; row < cur->table.count; row++) {
+			struct sfptpd_link *link = cur->table.rows + row;
+
+			if (link->if_index < idx)
+				ordered = false;
 			print_link(cur->table.rows + row);
+			idx = link->if_index;
+		}
+
+		if (!ordered) {
+			DBG_L4("new link table is out of order: sorting by if_index\n");
+			qsort(cur->table.rows,
+			      cur->table.count,
+			      sizeof *cur->table.rows,
+			      link_ifindex_compar);
 		}
 	}
 	rc = (serviced >= 0 ? 0 : -serviced);
