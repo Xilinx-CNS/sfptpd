@@ -576,7 +576,16 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 		}
 	}
 
-	assert(link->event != SFPTPD_LINK_DOWN);
+	if (link->event == SFPTPD_LINK_DOWN) {
+		/* We expect to have found all deleted links in the old table
+		 * normally... but that isn't necessarily the case, e.g. on
+		 * startup. So this is not an error: ignore it.
+		 */
+		DBG_L4("link: down event received for link %d that wasn't in "
+		       " our tables.\n", link->if_index);
+		return 0;
+	}
+
 	assert(row < db->capacity);
 
 	db->table.rows[row] = *link;
