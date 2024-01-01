@@ -475,6 +475,44 @@ static struct test_details tests[] =
 		{ OP_DUP }, { OP_PRINTX },
 		{ OP_TST_EQ },
 		{ OP_END }}},
+
+	{ 16, {
+		/* PPS sample timestamp */
+		{ OP_INIT_NS, { .i = 999971107 }},
+		{ OP_DUP },
+		{ OP_LIT_T , { .iii = {0, 999971107, 0 }}},
+		{ OP_TST_EQ },
+		{ OP_DUP },
+		/* Check if leading or trailing */
+		{ OP_INIT_NS, { .i = 500000000 }},
+		{ OP_DUP },
+		{ OP_LIT_T, { .iii = {0, 500000000, 0 }}},
+		{ OP_TST_EQ },
+		{ OP_IS_GE },
+		{ OP_TST_TRUE },
+		/* Subtract one second with API */
+		{ OP_DUP },
+		{ OP_INIT_S, { .i = 1 }},
+		{ OP_SUB },
+		{ OP_LIT_T, { .iii = {-1, 999971107, 0 }}},
+		{ OP_TST_EQ },
+		/*Force s to -1 */
+		{ OP_DUP },
+		{ OP_SET_S, { .i = -1 }},
+		{ OP_SET_FRAC , { .i = 0 }},
+		{ OP_LIT_T, { .iii = {-1, 999971107, 0 }}},
+		{ OP_TST_EQ },
+		/* Subtract one second */
+		{ OP_DIRECT_ADD, { .iii = {-1, 0, 0 }}},
+		{ OP_SET_FRAC , { .i = 0 }},
+		{ OP_DUP },
+		{ OP_LIT_T, { .iii = {-1, 999971107, 0 }}},
+		{ OP_TST_EQ },
+		/* Convert to float */
+		{ OP_TO_F_NS },
+		{ OP_LIT_F, { .f = 999971107L - 1000000000L }},
+		{ OP_TST_EQ },
+		{ OP_END }}, "SWPTP-1448: directed test for PPS regression"},
 };
 
 static void print_stack(const struct test_val *stack, int sp)
