@@ -288,12 +288,12 @@ static int test_outlier_filter(void)
 
 int sfptpd_test_filters(void)
 {
-	int rc;
+	int errors;
 
-	rc = test_smallest_filter();
-	rc += test_outlier_filter();
+	errors = test_smallest_filter();
+	errors += test_outlier_filter();
 
-	return rc;
+	return errors == 0 ? 0 : ERANGE;
 }
 
 
