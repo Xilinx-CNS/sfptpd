@@ -57,6 +57,10 @@ enum test_op {
 	OP_LIT_F,
 	OP_LIT_I,
 	OP_LIT_B,
+	OP_SET_S,
+	OP_SET_NS,
+	OP_SET_FRAC,
+	OP_DIRECT_ADD,
 	/* Non-API comparison functions */
 	OP_EQ,
 	OP_NE,
@@ -155,6 +159,11 @@ const struct oper operations[] = {
 	[OP_LIT_F]	= { OPF_AUX, 0, +1, "LIT_F" },
 	[OP_LIT_I]	= { OPF_AUX, 0, +1, "LIT_I" },
 	[OP_LIT_B]	= { OPF_AUX, 0, +1, "LIT_B" },
+	/* Set values in timespec */
+	[OP_SET_S]	= { OPF_AUX, 1,  0, "SET_S" },
+	[OP_SET_NS]	= { OPF_AUX, 1,  0, "SET_NS" },
+	[OP_SET_FRAC]	= { OPF_AUX, 1,  0, "SET_FRAC" },
+	[OP_DIRECT_ADD]	= { OPF_AUX, 1,  0, "DIRECT_ADD" },
 	/* Comparisons yielding a boolean on stack */
 	[OP_EQ]		= { OPF_AUX, 0,  0, "EQ" },
 	[OP_NE]		= { OPF_AUX, 0,  0, "NE" },
@@ -819,6 +828,28 @@ static enum result run_test(const struct test_details *test, mem_t *mem,
 			s0->t.sec = instr->operand.iii[0];
 			s0->t.nsec = instr->operand.iii[1];
 			s0->t.nsec_frac = instr->operand.iii[2];
+			break;
+		case OP_SET_S:
+			if (check_type(s1, TYPE_T))
+				return R_INTERR;
+			s1->t.sec = instr->operand.i;
+			break;
+		case OP_SET_NS:
+			if (check_type(s1, TYPE_T))
+				return R_INTERR;
+			s1->t.nsec = instr->operand.i;
+			break;
+		case OP_SET_FRAC:
+			if (check_type(s1, TYPE_T))
+				return R_INTERR;
+			s1->t.nsec_frac = instr->operand.i;
+			break;
+		case OP_DIRECT_ADD:
+			if (check_type(s1, TYPE_T))
+				return R_INTERR;
+			s1->t.sec += instr->operand.iii[0];
+			s1->t.nsec += instr->operand.iii[1];
+			s1->t.nsec_frac += instr->operand.iii[2];
 			break;
 		case OP_EQ:
 			switch (s1->type) {
