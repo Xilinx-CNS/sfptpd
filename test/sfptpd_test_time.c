@@ -16,6 +16,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 #include <ctype.h>
+#include <signal.h>
 
 #include "sfptpd_misc.h"
 #include "sfptpd_statistics.h"
@@ -29,7 +30,7 @@
 #define MEM_SZ ((MEM_MAX) - (MEM_MIN) + 1)
 
 enum result {
-	R_OK,
+	R_ROK,
 	R_INTERR,
 	R_FAIL,
 };
@@ -94,6 +95,7 @@ enum test_op {
 	OP_STO,
 	OP_RCL,
 	/* Control */
+	OP_BRK,
 	OP_END,
 	_OP_MAX
 };
@@ -182,6 +184,7 @@ const struct oper operations[] = {
 	[OP_STO]	= { OPF_MEM, 1, -1, "STO" },
 	[OP_RCL]	= { OPF_MEM, 0, +1, "RCL" },
 	/* Control */
+	[OP_BRK]	= { OPF_CTL, 0,  0, "BRK" },
 	[OP_END]	= { OPF_CTL, 0,  0, "END" },
 };
 
@@ -1025,12 +1028,16 @@ static enum result run_test(const struct test_details *test, mem_t *mem,
 				return R_INTERR;
 			*s0 = (*mem)[instr->operand.i - MEM_MIN];
 			break;
+		case OP_BRK:
+			printf("\n<BRK: pc=%d sp=%d>\n", pc, sp);
+			raise(SIGTRAP);
+			break;
 		case OP_END:
 			if (sp != 0) {
 				printf("stack not empty (sp=%d)\n", sp);
 				return R_INTERR;
 			}
-			return R_OK;
+			return R_ROK;
 		default:
 			printf("unhandled op\n");
 			return R_INTERR;
@@ -1047,12 +1054,12 @@ static enum result run_test(const struct test_details *test, mem_t *mem,
 static bool output_test_result(enum result result) {
 	if (result == R_FAIL) {
 		printf(" failed\n");
-	} else if (result == R_OK) {
+	} else if (result == R_ROK) {
 		printf("passed\n");
 	} else {
 		printf(" failed due to internal error\n");
 	}
-	return result == R_OK;
+	return result == R_ROK;
 }
 
 int sfptpd_test_time(void)
