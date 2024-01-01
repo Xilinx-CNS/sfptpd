@@ -801,7 +801,7 @@ static void pps_servo_update(pps_module_t *pps,
 
 	/* The nanosecond value comes from the PPS timestamp */
 	diff.nsec = pps_timestamp->nsec;
-	if (diff.sec >= 500000000)
+	if (diff.nsec >= 500000000)
 		diff.sec -= 1;
 	diff.nsec_frac = 0;
 
