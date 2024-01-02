@@ -152,6 +152,12 @@ Issue SWPTP-1429
  ~ Avoid reverse name lookup in crny diagnostic gathering
 Issue SWPTP-1432
  ~ Wait until timers created before polling for changes via netlink
+Issue SWPTP-1443
+ ~ Handle lack of HW PPS methods in driver cleanly
+Issue SWPTP-1444
+ ~ Handle NIC clock object creation failure cleanly
+Issue SWPTP-1445
+ ~ Ignore next PPS period after a step instead of briefly raising an alarm
 Issue SWPTP-1447
  ~ Fix false assumptions of netlink event ordering leading to assertion failure
 

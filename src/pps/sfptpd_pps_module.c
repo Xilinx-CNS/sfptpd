@@ -184,6 +184,9 @@ struct sfptpd_pps_instance {
 	/* Previous clustering score */
 	int prev_clustering_score;
 
+	/* Pause timestamp processing for the sample after a step */
+	bool step_occurred;
+
 	/* Counters to facilitate long term stats collection */
 	struct {
 		/* Count of number of clock steps */
@@ -774,6 +777,8 @@ static void pps_servo_step_clock(pps_module_t *pps,
 	sfptpd_sync_module_step_clock(pps->time_of_day.source.module,
 				      pps->time_of_day.source.handle,
 				      &zero);
+
+	instance->step_occurred = true;
 }
 
 
@@ -1473,6 +1478,15 @@ static void pps_on_pps_event(pps_module_t *pps,
 		/* If we timestamp processing is disabled go no further!!! */
 		if ((instance->ctrl_flags & SYNC_MODULE_TIMESTAMP_PROCESSING) == 0)
 			break;
+
+		/* If there was a step since the last sample, wait for another
+		 * one before processing this one. */
+		if (instance->step_occurred) {
+		        instance->step_occurred = false;
+		        instance->pps_timestamp.tv_sec = 0;
+		        instance->pps_timestamp.tv_nsec = 0;
+		        break;
+		}
 
 		/* If the previous PPS time is valid (i.e. non zero),
 		 * calculate the PPS period */
