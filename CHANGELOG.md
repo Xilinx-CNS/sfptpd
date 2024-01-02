@@ -103,6 +103,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Avoid reverse name lookup in crny diagnostic gathering
 - Issue SWPTP-1432
   - Wait until timers created before polling for changes via netlink
+- Issue SWPTP-1447
+  - Fix false assumptions of netlink event ordering leading to assertion failure
+
 
 ## [3.7.0.1006] - 2023-08-17 [Feature Release]
 

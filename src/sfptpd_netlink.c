@@ -499,6 +499,8 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 
 	DBG_L6("netlink: handling link %d\n", link->if_index);
 
+	DBG_L6("netlink: handling link %d\n", link->if_index);
+
 	if (table[IFLA_IFNAME])
 		sfptpd_strncpy(link->if_name, mnl_attr_get_str(table[IFLA_IFNAME]), sizeof link->if_name);
 
@@ -665,7 +667,16 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 		}
 	}
 
-	assert(link->event != SFPTPD_LINK_DOWN);
+	if (link->event == SFPTPD_LINK_DOWN) {
+		/* We expect to have found all deleted links in the old table
+		 * normally... but that isn't necessarily the case, e.g. on
+		 * startup. So this is not an error: ignore it.
+		 */
+		DBG_L4("link: down event received for link %d that wasn't in "
+		       " our tables.\n", link->if_index);
+		return 0;
+	}
+
 	assert(row < db->capacity);
 
 	db->table.rows[row] = *link;
@@ -1452,6 +1463,13 @@ static struct link_db *netlink_find_version(struct sfptpd_nl_state *state,
 	return NULL;
 }
 
+static int link_ifindex_compar(const void *pa, const void *pb)
+{
+	struct sfptpd_link *a = (struct sfptpd_link *) pa;
+	struct sfptpd_link *b = (struct sfptpd_link *) pb;
+
+	return a->if_index - b->if_index;
+}
 
 /****************************************************************************
  * Public Functions
@@ -1602,8 +1620,23 @@ int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 
 	if (any_data) {
 		DBG_L4("new link table (ver %d):\n", cur->table.version);
+		bool ordered = true;
+		int idx = 0;
 		for (row = 0; row < cur->table.count; row++) {
+			struct sfptpd_link *link = cur->table.rows + row;
+
+			if (link->if_index < idx)
+				ordered = false;
 			print_link(cur->table.rows + row);
+			idx = link->if_index;
+		}
+
+		if (!ordered) {
+			DBG_L4("new link table is out of order: sorting by if_index\n");
+			qsort(cur->table.rows,
+			      cur->table.count,
+			      sizeof *cur->table.rows,
+			      link_ifindex_compar);
 		}
 	}
 	rc = (serviced >= 0 ? 0 : -serviced);

@@ -141,7 +141,7 @@ int sfptpd_test_link(void)
 {
 	int rc;
 
-	sfptpd_log_set_trace_level(SFPTPD_COMPONENT_ID_NETLINK, 5);
+	sfptpd_log_set_trace_level(SFPTPD_COMPONENT_ID_NETLINK, 6);
 
 	rc = test_link();
 
