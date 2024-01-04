@@ -1,26 +1,25 @@
 # Python 3 script
 #
-# Example script for monitoring remote PTP nodes using JSON logging.
+# Example script for monitoring remote PTP nodes using JSON logging as a
+# local intermediate format for event monitoring data obtained using
+# option 16.11 of IEEE 1588-2019. This script is intended to act as a guide
+# to how users can handle the remote monitoring data obtained by the 'sfptpmon'
+# script. The executable flag is not set when this script is installed;
+# users should review and tailor the code for their own requirements and
+# invoke with an interpreter command, e.g. 'python3'.
 #
 # SPDX-License-Identifier: BSD-3-Clause
-# (c) Copyright 2012-2019 Xilinx, Inc.
+# (c) Copyright 2012-2023 Xilinx, Inc.
 #
-# Usage: python2 monitoring_console.py <remote-monitor.jsonl>
+# Usage: python3 monitoring_console.py <remote-monitor.jsonl>
 #
-# Relevant options on monitored nodes:
+# The monitoring should be performed using the 'sfptpmon' script.
+#
+# An example of relevant options on monitored nodes:
 #
 # [ptp]
 # mon_rx_sync_computed_data
 # mon_slave_status
-#
-# Relevant options on remote monitor (can also include the above
-# options for self-monitoring):
-#
-# [general]
-# json_remote_monitor <jsonl-output-path>
-#
-# [ptp]
-# remote_monitor
 
 import curses
 import time

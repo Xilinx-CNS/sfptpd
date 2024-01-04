@@ -1,15 +1,20 @@
 # Python 3 script
-
+#
+# This script is an example of how to collect stats from sfptpd for
+# aggregation by collectd. The example script does not have the executable
+# flag set; the script should be tailored to the user's environment and
+# invoked with an interpreter command, e.g. 'python3'.
+#
 # SPDX-License-Identifier: BSD-3-Clause
 # (c) Copyright 2012-2019 Xilinx, Inc.
-
+#
 # Before running this script, you may want to delete $FIFO (if it exists).
 # When $FIFO exists, sfptpd will block until this script is running,
 # so it is a good idea to start this script first.
-
+#
 # You will also want to customise which data is sent to collectd
 # by modifying the collectd_reader() function near the end of this file.
-
+#
 # You can uncomment the 'print stat' line below and run this script
 # from your shell to inspect the incoming data.
 
