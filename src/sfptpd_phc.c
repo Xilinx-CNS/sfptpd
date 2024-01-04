@@ -181,6 +181,7 @@ static enum sfptpd_phc_diff_method phc_diff_methods[SFPTPD_DIFF_METHOD_MAX + 1] 
 const char *sfptpd_phc_pps_method_text[] = {
 	"devptp",
 	"devpps",
+	"none"
 };
 
 /* Default PPS method order. */
@@ -1305,7 +1306,7 @@ int sfptpd_phc_set_pps_methods(sfptpd_phc_pps_method_t *new_order)
 int sfptpd_phc_enable_pps(struct sfptpd_phc *phc, bool on)
 {
 	assert(phc != NULL);
-	assert(phc->pps_method < SFPTPD_PPS_METHOD_MAX);
+	assert(phc->pps_method <= SFPTPD_PPS_METHOD_MAX);
 
 	switch (phc->pps_method) {
 	case SFPTPD_PPS_METHOD_DEV_PTP:
@@ -1316,7 +1317,8 @@ int sfptpd_phc_enable_pps(struct sfptpd_phc *phc, bool on)
 
 	case SFPTPD_PPS_METHOD_MAX:
 	default:
-		assert(!"unknown pps_method in sfptpd_phc_enable_pps");
+		ERROR("phc%d: HW PPS enable requested but no method available\n",
+		      phc->phc_idx);
 		return EINVAL;
 	}
 }
@@ -1325,7 +1327,7 @@ int sfptpd_phc_enable_pps(struct sfptpd_phc *phc, bool on)
 int sfptpd_phc_get_pps_fd(struct sfptpd_phc *phc)
 {
 	assert(phc != NULL);
-	assert(phc->pps_method < SFPTPD_PPS_METHOD_MAX);
+	assert(phc->pps_method <= SFPTPD_PPS_METHOD_MAX);
 
 	switch (phc->pps_method) {
 	case SFPTPD_PPS_METHOD_DEV_PTP:
@@ -1342,7 +1344,7 @@ int sfptpd_phc_get_pps_event(struct sfptpd_phc *phc,
 	int rc;
 
 	assert(phc != NULL);
-	assert(phc->pps_method < SFPTPD_PPS_METHOD_MAX);
+	assert(phc->pps_method <= SFPTPD_PPS_METHOD_MAX);
 
 	switch (phc->pps_method) {
 	case SFPTPD_PPS_METHOD_DEV_PTP:
@@ -1355,7 +1357,8 @@ int sfptpd_phc_get_pps_event(struct sfptpd_phc *phc,
 
 	case SFPTPD_PPS_METHOD_MAX:
 	default:
-		assert(!"unknown pps_method in sfptpd_phc_get_pps_event");
+		ERROR("phc%d: HW PPS event requested but no method available\n",
+		      phc->phc_idx);
 		return EINVAL;
 	}
 }
