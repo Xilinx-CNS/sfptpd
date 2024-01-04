@@ -1319,7 +1319,7 @@ int sfptpd_phc_enable_pps(struct sfptpd_phc *phc, bool on)
 	default:
 		ERROR("phc%d: HW PPS enable requested but no method available\n",
 		      phc->phc_idx);
-		return EINVAL;
+		return EOPNOTSUPP;
 	}
 }
 
@@ -1359,7 +1359,7 @@ int sfptpd_phc_get_pps_event(struct sfptpd_phc *phc,
 	default:
 		ERROR("phc%d: HW PPS event requested but no method available\n",
 		      phc->phc_idx);
-		return EINVAL;
+		return EOPNOTSUPP;
 	}
 }
 
