@@ -66,6 +66,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 > The Onload Extensions API does not currently retrieve NIC timestamps
 > with sub-nanosecond resolution.
 
+### Changed
+
+- Python scripts reorganised for installation without interpreter (SWPTP-1416)
+  - Chrony control script moved to `/usr/libexec`
+  - Supported python scripts use `/usr/bin/python3` shebang
+  - Unsupported python scripts in example directory do not have a shebang
+  - Chrony clock control can now be enabled with `clock_control` on instead
+    of specifying a path to the helper script.
+
+> [!NOTE]
+> Configurations using the old example chronyd script location will have the
+> new location substituted for compatibility but it is advised to replace this
+> with a simple `clock_control on` configuration unless this script has been
+> customised for the user's system.
+
 ### Removed
 
 - The source can no longer be built for RHEL 6 without backported kernel
@@ -73,6 +88,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Issue SWPTP-145
+  - Use `SO_TIMESTAMPING` for software timestamps when supported in driver
 - Issue SWPTP-855
   - Redact NTP key in diagnostic output
 - Issue SWPTP-1353
@@ -98,11 +115,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Issue SWPTP-1412
   - Only show instance selection rankings when candidate changes.
 - Issue SWPTP-1425
-  - Populate PTPMON_RESP TLV with timestamp of last sync not PTPMON_REQ receipt
+  - Populate `PTPMON_RESP` TLV with last Sync timestamp not `PTPMON_REQ` receipt
 - Issue SWPTP-1429
   - Avoid reverse name lookup in crny diagnostic gathering
 - Issue SWPTP-1432
   - Wait until timers created before polling for changes via netlink
+- Issue SWPTP-1443
+  - Handle lack of HW PPS methods in driver cleanly
+- Issue SWPTP-1444
+  - Handle NIC clock object creation failure cleanly
+- Issue SWPTP-1445
+  - Ignore next PPS period after a step instead of briefly raising an alarm
 - Issue SWPTP-1447
   - Fix false assumptions of netlink event ordering leading to assertion failure
 

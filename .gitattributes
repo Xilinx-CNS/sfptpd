@@ -1,13 +1,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# (c) Copyright 2022-2023 Xilinx, Inc.
+# (c) Copyright 2022-2024 Advanced Micro Devices, Inc.
 
 # Merge strategies to avoid false positives merging between branches
 
-RELEASE_NOTES merge=ours
-RELEASE_NOTES_SOURCE merge=ours
-RELEASE_NOTES.md merge=ours
-CHANGELOG merge=ours
-CHANGELOG.md merge=ours
 src/include/sfptpd_version.h merge=ours
 
 # Exclude irrelevant ancillary files from official source archives

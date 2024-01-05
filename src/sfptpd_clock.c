@@ -1047,7 +1047,6 @@ static void sfptpd_clock_init_interface(int nic_id,
 			if (rc != 0) {
 				CRITICAL("failed to create nic clock idx %d, %s\n",
 					 clock_dev_idx, strerror(rc));
-				sfptpd_clock_shutdown();
 				return;
 			}
 

@@ -1,4 +1,5 @@
-#!/usr/bin/env python3
+# Python 3 example script (with Python 2 compat) for customising for
+# application-specific control of sfptpd
 
 # SPDX-License-Identifier: BSD-3-Clause
 # (c) Copyright 2012-2019 Xilinx, Inc.

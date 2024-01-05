@@ -122,6 +122,7 @@ install: sfptpd sfptpdctl
 	install -d $(INST_PKGDOCDIR)/examples/init.d
 	install -d $(INST_PKGDOCDIR)/examples/systemd
 	install -d $(INST_PKGLICENSEDIR)
+	install -d $(INST_PKGLIBEXECDIR)
 	install -d $(INST_DEFAULTSDIR)
 	install -d $(INST_MANDIR)/man8
 	install -m 755 -p -D $(BUILD_DIR)/sfptpd $(INST_SBINDIR)/sfptpd
@@ -137,10 +138,13 @@ install: sfptpd sfptpdctl
 	install -m 644 -p -t $(INST_PKGDOCDIR)/examples/systemd scripts/systemd/*
 	install -m 644 -p -t $(INST_PKGDOCDIR)/examples scripts/sfptpd.env
 	install -m 644 -p -t $(INST_PKGDOCDIR)/examples $(wildcard examples/*.sfptpdctl)
-	install -m 755 -p -t $(INST_PKGDOCDIR)/examples $(wildcard examples/*.py)
+	install -m 644 -p -t $(INST_PKGDOCDIR)/examples examples/monitoring_console.py
+	install -m 644 -p -t $(INST_PKGDOCDIR)/examples examples/sfptpdctl.py
+	install -m 644 -p -t $(INST_PKGDOCDIR)/examples examples/sfptpd_stats_collectd.py
 	install -m 644 -p -t $(INST_PKGDOCDIR)/examples $(wildcard examples/*.html)
 	install -m 644 -p -t $(INST_PKGDOCDIR)/examples src/sfptpdctl/sfptpdctl.c
 	install -m 644 -p -t $(INST_PKGDOCDIR) CHANGELOG.md
+	install -m 755 -p -t $(INST_PKGLIBEXECDIR) examples/chrony_clockcontrol.py
 	install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/sfptpd.8)
 	install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/sfptpdctl.8)
 	[ -n "$(filter sfptpmon,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/sfptpmon.8)
