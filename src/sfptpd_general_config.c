@@ -115,7 +115,7 @@ static int parse_ignore_critical(struct sfptpd_config_section *section, const ch
 static int parse_rtc_adjust(struct sfptpd_config_section *section, const char *option,
 			    unsigned int num_params, const char * const params[]);
 
-static int validate_config(struct sfptpd_config_section *parent);
+static int validate_config(struct sfptpd_config_section *section);
 
 static const sfptpd_config_option_t config_general_options[] =
 {
@@ -1400,9 +1400,9 @@ static int parse_rtc_adjust(struct sfptpd_config_section *section, const char *o
 }
 
 
-static int validate_config(struct sfptpd_config_section *parent)
+static int validate_config(struct sfptpd_config_section *general)
 {
-	struct sfptpd_config *config = parent->config;
+	struct sfptpd_config *config = general->config;
 	struct sfptpd_config_section *section, *new;
 
 	/* Ensure an crny sync instance is declared */
@@ -1411,11 +1411,11 @@ static int validate_config(struct sfptpd_config_section *parent)
 	assert(section->scope != SFPTPD_CONFIG_SCOPE_INSTANCE);
 	assert(section->ops.create != NULL);
 
-	if ((((sfptpd_config_general_t *) parent)->declared_sync_modules & (1 << SFPTPD_CONFIG_CATEGORY_CRNY)) == 0) {
+	if ((((sfptpd_config_general_t *) general)->declared_sync_modules & (1 << SFPTPD_CONFIG_CATEGORY_CRNY)) == 0) {
 		new = section->ops.create(NULL, SFPTPD_CONFIG_SCOPE_INSTANCE,
 					  false, section);
 		if (new == NULL) {
-			CFG_ERROR(parent, "failed to create implicit crny instance\n");
+			CFG_ERROR(general, "failed to create implicit crny instance\n");
 			return ENOMEM;
 		}
 

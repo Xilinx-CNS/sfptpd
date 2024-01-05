@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2022 Xilinx, Inc. */
+/* (c) Copyright 2012-2024 Advanced Micro Devices, Inc. */
 
 /**
  * @file   sfptpd_crny_module.c
@@ -24,6 +24,7 @@
 #include <inttypes.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <regex.h>
 
 #include "sfptpd_app.h"
 #include "sfptpd_sync_module.h"
@@ -323,19 +324,56 @@ static int parse_ntp_poll_interval(struct sfptpd_config_section *section, const 
 }
 
 
+static int parse_clock_control(struct sfptpd_config_section *section,
+			       const char *option,
+			       unsigned int num_params,
+			       const char * const params[])
+{
+	sfptpd_crny_module_config_t *ntp = (sfptpd_crny_module_config_t *)section;
+	assert(num_params == 1);
+
+	if (!strcmp(params[0], "off"))
+		ntp->clock_control = false;
+	else if (!strcmp(params[0], "on"))
+		ntp->clock_control = true;
+	else
+		return EINVAL;
+
+	return 0;
+}
+
+
 static int parse_control_script(struct sfptpd_config_section *section,
 				const char *option,
 				unsigned int num_params,
 				const char * const params[])
 {
 	sfptpd_crny_module_config_t *ntp = (sfptpd_crny_module_config_t *)section;
+	regex_t legacy_path;
+
 	assert(num_params == 1);
 
-	if (access(params[0], X_OK) != 0)
-		return errno;
+	if (regcomp(&legacy_path, SFPTPD_CRNY_LEGACY_CONTROL_SCRIPT_PATTERN,
+		    REG_EXTENDED | REG_NOSUB) != 0)
+		return EBADMSG;
 
-	sfptpd_strncpy(ntp->chronyd_script, params[0],
-		       sizeof(ntp->chronyd_script));
+	if (regexec(&legacy_path, params[0], 0, NULL, 0) == 0) {
+		sfptpd_strncpy(ntp->chronyd_script,
+			       SFPTPD_CRNY_DEFAULT_CONTROL_SCRIPT,
+			       sizeof ntp->chronyd_script);
+		WARNING("crny: legacy chronyd_script path \"%s\" replaced with "
+			"\"%s\"; please update configuration.\n",
+			params[0], ntp->chronyd_script);
+	} else {
+		sfptpd_strncpy(ntp->chronyd_script, params[0],
+			       sizeof ntp->chronyd_script);
+	}
+
+	regfree(&legacy_path);
+
+	/* Implicitly enable clock control. */
+	ntp->clock_control = true;
+
 	return 0;
 }
 
@@ -358,18 +396,44 @@ static const sfptpd_config_option_t ntp_config_options[] =
 		"Specifies the NTP daemon poll interval in seconds. Default value 1",
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false,
 		parse_ntp_poll_interval},
+	{"clock_control", "<off | on>",
+		"Whether to invoke helper script to enable or disable chronyd "
+		"clock control. Off by default.",
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false, parse_clock_control},
 	{"control_script", "<filename>",
 		"Specifes the path to a script which can be used to enable or "
-		"disable chronyd clock control",
+		"disable chronyd clock control. If the legacy examples "
+		"installation location is specified this will be replaced by "
+		"the default location which is: "
+		STRINGIFY(SFPTPD_CRNY_DEFAULT_CONTROL_SCRIPT),
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE, false, parse_control_script},
 };
+
+static int crny_validate_config(struct sfptpd_config_section *section)
+{
+	sfptpd_crny_module_config_t *ntp = (sfptpd_crny_module_config_t *) section;
+	int rc = 0;
+
+	assert(ntp != NULL);
+
+	if (ntp->clock_control &&
+	    access(ntp->chronyd_script, X_OK) != 0) {
+		rc = errno;
+		CFG_ERROR(section, "chronyd clock control requested but "
+			  "specified control script \"%s\" is unusable: %s\n",
+			  ntp->chronyd_script, strerror(rc));
+	}
+
+	return rc;
+}
 
 static const sfptpd_config_option_set_t ntp_config_option_set =
 {
 	.description = "Chrony Configuration File Options",
 	.category = SFPTPD_CONFIG_CATEGORY_CRNY,
 	.num_options = sizeof(ntp_config_options)/sizeof(ntp_config_options[0]),
-	.options = ntp_config_options
+	.options = ntp_config_options,
+	.validator = crny_validate_config,
 };
 
 
@@ -2391,6 +2455,10 @@ static struct sfptpd_config_section *ntp_config_create(const char *name,
 		new->priority = SFPTPD_DEFAULT_PRIORITY;
 		new->convergence_threshold = 0.0;
 		new->poll_interval = 1;
+		new->clock_control = false;
+		sfptpd_strncpy(new->chronyd_script,
+			       SFPTPD_CRNY_DEFAULT_CONTROL_SCRIPT,
+			       sizeof new->chronyd_script);
 	}
 
 	/* If this is an implicitly created sync instance, give it the lowest

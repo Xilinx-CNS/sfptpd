@@ -817,6 +817,7 @@ int sfptpd_config_parse_file(struct sfptpd_config *config)
 			section_name = config_is_new_section(tokens[0]);
 			if (section_name != NULL) {
 
+				/* Validate the section just implicitly closed. */
 				if (section && config_options[section->category]->validator &&
 				    (rc = config_options[section->category]->validator(section)) != 0)
 					return rc;
@@ -861,6 +862,7 @@ int sfptpd_config_parse_file(struct sfptpd_config *config)
 		}
 	}
 
+	/* Validate the last section. */
 	if (config_options[section->category]->validator &&
 	    (rc = config_options[section->category]->validator(section)) != 0)
 		return rc;

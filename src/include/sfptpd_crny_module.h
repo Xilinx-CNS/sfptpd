@@ -1,10 +1,18 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2022 Xilinx, Inc. */
+/* (c) Copyright 2012-2024 Advanced Micro Devices, Inc. */
 
 #ifndef _SFPTPD_CRNY_MODULE_H
 #define _SFPTPD_CRNY_MODULE_H
 
 #include "sfptpd_config.h"
+
+
+/****************************************************************************
+ * Constants
+ ****************************************************************************/
+
+#define SFPTPD_CRNY_DEFAULT_CONTROL_SCRIPT "/usr/libexec/sfptpd/chrony_clockcontrol.py"
+#define SFPTPD_CRNY_LEGACY_CONTROL_SCRIPT_PATTERN "/usr/share/doc/sfptpd.*/examples/chrony_clockcontrol.py"
 
 
 /****************************************************************************
@@ -28,7 +36,10 @@ typedef struct sfptpd_crny_module_config {
 	/** Interval between polls of the NTP daemon, in seconds */
 	unsigned int poll_interval;
 
-	/** Optional path for script to provid chronyd clock control */
+	/** Clock control enabled */
+	bool clock_control;
+
+	/** Path for script to provide chronyd clock control */
 	char chronyd_script[PATH_MAX];
 } sfptpd_crny_module_config_t;
 

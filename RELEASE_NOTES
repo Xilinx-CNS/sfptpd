@@ -132,9 +132,14 @@ Changes:
      - Chrony control script moved to /usr/libexec
      - Supported python scripts use /usr/bin/python3 shebang
      - Unsupported python scripts in example directory do not have a shebang
+     - Chrony clock control can now be enabled with 'clock_control on' instead
+       of specifying a path to the helper script.
 
-     ** NOTE ** Configurations using the chronyd control script to enable
-                NTP fallback need to update the script location
+     ** NOTE ** Configurations using the old example chronyd script location
+                will have the new location substituted for compatibility but
+                it is advised to replace this with a simple 'clock_control on'
+                configuration unless this script has been customised for the
+                user's system.
 
 Issue SWPTP-145
  ~ Use SO_TIMESTAMPING for software timestamps when supported in driver
