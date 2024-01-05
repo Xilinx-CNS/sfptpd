@@ -127,6 +127,15 @@ Features:
      - Allow config to be read from stdin with '-f -'
      - Add '--console' option to redirect logs to console
 
+Changes:
+ ~ Python scripts reorganised for installation without interpreter (SWPTP-1416)
+     - Chrony control script moved to /usr/libexec
+     - Supported python scripts use /usr/bin/python3 shebang
+     - Unsupported python scripts in example directory do not have a shebang
+
+     ** NOTE ** Configurations using the chronyd control script to enable
+                NTP fallback need to update the script location
+
 Issue SWPTP-145
  ~ Use SO_TIMESTAMPING for software timestamps when supported in driver
 Issue SWPTP-855
