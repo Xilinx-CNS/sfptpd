@@ -20,7 +20,7 @@ CONDITIONAL_LIBS := \
  $(shell $(call if_header_then,sys/capability.h,-lcap))
 
 ### Unit testing
-FAST_TESTS = bic filters hash stats config
+FAST_TESTS = bic hash stats config link
 TEST_CMD = valgrind --track-origins=yes --error-exitcode=1 build/sfptpd_test
 
 ### Build flags for all targets
