@@ -41,6 +41,9 @@ and customisable Python equivalent of the sfptpdctl client.
 scripts/sfptpd_versioning write %{version}
 
 %build
+# Not normally required but ensures the CFLAGS etc. get set to platform
+# hardened defaults when launched from containerised github workflow
+%set_build_flags
 %make_build
 
 %install

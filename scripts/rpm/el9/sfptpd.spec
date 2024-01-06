@@ -45,6 +45,9 @@ scripts/sfptpd_versioning write %{version}
 sed -i 's,.*\(SFPTPD_USER=\).*",#\1"-u sfptpd",g' scripts/sfptpd.env
 
 %build
+# Not normally required but ensures the CFLAGS etc. get set to platform
+# hardened defaults when launched from containerised github workflow
+%set_build_flags
 %make_build
 
 %install
