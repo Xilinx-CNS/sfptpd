@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# (c) Copyright 2022 Advanced Micro Devices, Inc.
+
+u sfptpd - "sfptpd system user" /var/lib/sfptpd /sbin/nologin

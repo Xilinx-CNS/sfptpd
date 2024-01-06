@@ -59,6 +59,8 @@ LINK            = $(CC) $(LDFLAGS) -o $@ -Wl,--start-group $^ -Wl,--end-group $(
 # Include make rules
 include mk/rules.mk
 
+# Include RPM packaging helper
+include mk/rpm.mk
 
 # Include the top level makefiles
 dir := src
