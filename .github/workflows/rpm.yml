@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # (c) Copyright 2024 Advanced Micro Devices, Inc.
-name: "RPMs"
+name: "Create test packages"
 
 on:
   workflow_dispatch:
@@ -43,14 +43,48 @@ jobs:
       - name: publish srpm
         uses: actions/upload-artifact@v3
         with:
-          name: sfptpd-${{ env.version }}-srpm
+          name: sfptpd-${{ env.SFPTPD_VERSION }}-srpm
           path: ~/rpmbuild/SRPMS/
           if-no-files-found: error
       - name: build rpm
-        run: rpmbuild --rebuild ${{ env.srpms }}
+        run: rpmbuild --rebuild ${{ env.SFPTPD_SRPMS }}
       - name: publish rpms
         uses: actions/upload-artifact@v3
         with:
-          name: sfptpd-${{ env.version }}-${{ env.dist }}-rpms
+          name: sfptpd-${{ env.SFPTPD_VERSION }}-${{ env.SFPTPD_OSDIST }}-rpms
           path: ~/rpmbuild/RPMS/
+          if-no-files-found: error
+
+  bin-tgz:
+    name: binary tarball
+    runs-on: ubuntu-latest
+    env:
+      BUILD_DEPS: gcc make libmnl-devel libcap-devel
+    container:
+      image: quay.io/centos/centos:centos7
+    steps:
+      - name: checkout sfptpd
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: install build prerequisites
+        run: yum install -y ${BUILD_DEPS}
+      - name: build binary
+        run: |
+          make patch_version
+          SFPTPD_ARCH=$(uname -i)
+          SFPTPD_VERSION=$(scripts/sfptpd_versioning read)
+          SFPTPD_STAGING=sfptpd-${SFPTPD_VERSION}.${SFPTPD_ARCH}
+          # Some older gcc versions generate doubtful complaint with
+          # optimiser enabled. We'll catch real errors on the newer builds.
+          make flat_install DESTDIR=${SFPTPD_STAGING} EXTRA_CFLAGS="-O2 -Wno-strict-aliasing"
+          echo 'Built on EL7 to support glibc 2.17 or later' > README.ThisBuild
+          mkdir TGZ
+          tar cvzf TGZ/${SFPTPD_STAGING}.tgz ${SFPTPD_STAGING} README.ThisBuild
+          printf "SFPTPD_VERSION=$SFPTPD_VERSION" >> "$GITHUB_ENV"
+      - name: publish binary archive
+        uses: actions/upload-artifact@v3
+        with:
+          name: sfptpd-${{ env.SFPTPD_VERSION }}-bin
+          path: TGZ
           if-no-files-found: error

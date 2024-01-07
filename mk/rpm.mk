@@ -12,8 +12,8 @@
 # for the convenience of any further wrapper scripts.
 
 
-RPM_TOPDIR ?= $(HOME)/rpmbuild
-RPM_OSVER ?= $(shell rpm --eval '%{dist}' | cut -c2-)
+RPM_TOPDIR ?= $(shell rpm --eval '%{?_topdir}')
+RPM_OSVER ?= $(shell rpm --eval '%{?dist}' | cut -c2-)
 
 RPM_SPEC_INDIR = scripts/rpm/$(RPM_OSVER)
 RPM_SUBDIRS = SOURCES SPECS
@@ -31,7 +31,7 @@ $(RPM_ALLDIRS):
 
 .PHONY: rpm_build_tree
 rpm_build_tree: $(RPM_ALLDIRS)
-	echo ENV:dist=$(RPM_OSVER)
+	echo ENV:SFPTPD_OSDIST=$(RPM_OSVER)
 
 .PHONY: rpm_prep
 rpm_prep: SFPTPD_RPM_VER = $(shell scripts/sfptpd_versioning derive)
@@ -40,12 +40,12 @@ rpm_prep: rpm_build_tree
 	mv $(RPM_SOURCES)/$(RPM_SPECFILE) $(RPM_SPECS)/
 	tar cz --exclude=$(BUILD_DIR) --exclude=$(RPM_TOPDIR) -f $(RPM_SOURCES)/sfptpd-$(SFPTPD_RPM_VER).tgz --transform=s,^\.,sfptpd-$(SFPTPD_RPM_VER),g .
 	sed -i "s/^\(Version: \).*/\1 $(SFPTPD_RPM_VER)/g" $(RPM_SPECPATH)
-	echo ENV:version=$(SFPTPD_RPM_VER)
+	echo ENV:SFPTPD_VERSION=$(SFPTPD_RPM_VER)
 
 .PHONY: build_srpm
 build_srpm: rpm_prep
 	$(MKDIR) $(BUILD_DIR)
-	rpmbuild -bs $(RPM_SPECPATH) > $(SRPM_MANIFEST) && \
-	echo ENV:srpms=$$(sed -n 's,^Wrote: \(.*rpm\).*,\1 ,p' < $(SRPM_MANIFEST))
+	rpmbuild --define "_topdir $(RPM_TOPDIR)" -bs $(RPM_SPECPATH) > $(SRPM_MANIFEST) && \
+	echo ENV:SFPTPD_SRPMS=$$(sed -n 's,^Wrote: \(.*rpm\).*,\1 ,p' < $(SRPM_MANIFEST))
 
 # fin
