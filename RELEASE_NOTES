@@ -51,7 +51,7 @@ This package is supported on:
 - Debian 10 "Buster"
 - Debian 11 "Bullseye"
 - Debian 12 "Bookworm"
-- Linux kernels 3.0 - 6.4
+- Linux kernels 3.0 - 6.5
 
 
 Documentation
@@ -91,30 +91,25 @@ Advanced notice of possible future changes
  * Future change to default for non_xilinx_nics
 
    Future feature releases may change the default setting of non_xilinx_nics
-   from 'off' to 'on', enabling support for all NICs with suitable capabilities
-   by default. Where this change is not desired, it is recommended to change
-   configurations now to be explicit about the desired behaviour.
+   from 'off' to 'on'.
 
  * Explicit declaration of crny sync module
 
    If chronyd is in use it is recommended to specify an instance of the new
-   crny sync module explicitly as a future release may not create the implicit
-   instance or may do so only if chronyd is detected at startup time.
+   crny sync module explicitly as a future release may not default to creating
+   the implicit instance.
 
  * Supporting new IEEE1588 specifications
 
-   Future releases may default to supporting new PTP specs out of the box. If
-   it is required to avoid new features for interoperability reasons it is
-   recommended to specify 'ptp_version 2.0' in the 'ptp' configuration section.
+   Future releases may report support for PTP v2.1 on the wire by default. If
+   this causes difficulty with third-party equipment, specify 'ptp_version 2.0'
+   in the 'ptp' configuration section.
 
  * Deprecation of remote monitor
 
-   The built-in receiver for PTP event monitoring messages (controlled by the
-   'remote_monitor' and 'json_remote_monitor' configuration options) is
-   deprecated in favour of the 'sfptpmon' script, which is a more appropriate
-   solution for production use. The built-in receiver may be disabled in
-   future feature releases of sfptpd. The option for sending these event
-   messages remains supported.
+   The built-in receiver for PTP event monitoring messages ('remote_monitor')
+   has been replaced by the 'sfptpmon' script in the sfptpd-python3 package.
+   The built-in receiver may be disabled in a future feature release.
 
 
 Changelog
@@ -123,15 +118,16 @@ Changelog
 ### v3.7.1.1003
 
 Features:
- ~ Minor command line enhancements to support container usage (SWPTP-1401)
+ ~ Command line enhancements to support container usage (SWPTP-1401)
      - Allow config to be read from stdin with '-f -'
      - Add '--console' option to redirect logs to console
 
 Changes:
- ~ Python scripts reorganised for installation without interpreter (SWPTP-1416)
+ ~ Python scripts reorganised (SWPTP-1416)
+     - New RPM package 'sfptpd-python3' contains all the Python code
+     - Base 'sfptpd' package does not depend on Python.
      - Chrony control script moved to /usr/libexec
-     - Supported python scripts use /usr/bin/python3 shebang
-     - Unsupported python scripts in example directory do not have a shebang
+     - Example python scripts for customisation do not have a shebang
      - Chrony clock control can now be enabled with 'clock_control on' instead
        of specifying a path to the helper script.
 
