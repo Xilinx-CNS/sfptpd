@@ -35,12 +35,7 @@ make DESTDIR=../staging INST_INITS= install
 ## Building a source RPM
 
 ```sh
-mkdir -p ~/rpmbuild/SOURCES
-ver="$(scripts/sfptpd_versioning derive)"
-git archive --prefix="sfptpd-$ver/" --format=tgz -o ~/rpmbuild/SOURCES/sfptpd-$ver.tgz HEAD
-curl https://raw.githubusercontent.com/Xilinx-CNS/sfptpd-rpm/generic/sfptpd.spec | sed "s/^\(Version: \).*/\1 $ver/g" > sfptpd.spec
-curl https://raw.githubusercontent.com/Xilinx-CNS/sfptpd-rpm/generic/sfptpd.sysusers -o ~/rpmbuild/SOURCES/sfptpd.sysusers
-rpmbuild -bs sfptpd.spec
+make build_srpm
 ```
 
 ## Building a container image

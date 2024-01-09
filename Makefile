@@ -74,13 +74,15 @@ include mk/install.mk
 ### Build tools
 #
 
-COMPILE         = $(CC) $(CFLAGS) $(INCDIRS) -o $@ -c $<
+COMPILE         = $(CC) $(CFLAGS) $(INCDIRS) $(EXTRA_CFLAGS) -o $@ -c $<
 ARCHIVE         = $(AR) $(ARFLAGS) $@ $^
 LINK            = $(CC) $(LDFLAGS) -o $@ -Wl,--start-group $^ -Wl,--end-group $(LDLIBS)
 
 # Include make rules
 include mk/rules.mk
 
+# Include RPM packaging helper
+include mk/rpm.mk
 
 # Include the top level makefiles
 dir := src

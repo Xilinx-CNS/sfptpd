@@ -40,7 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - IP address of parent clock added to topology files (SWPTP-1312)
 - Add `step_threshold` option to change the offset threshold for allowing
   a step (when permitted by clock control setting). (SWPTP-1365)
-- Minor command line enhancements to support container usage. (SWPTP-1401)
+- Command line enhancements to support container usage. (SWPTP-1401)
   - Allow config to be read from stdin with `-f -`
   - Add `--console` option to redirect logs to console
 - Add `pidadjust` control command to tweak PID controller co-efficients
@@ -68,11 +68,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- Python scripts reorganised for installation without interpreter (SWPTP-1416)
-  - Chrony control script moved to `/usr/libexec`
-  - Supported python scripts use `/usr/bin/python3` shebang
-  - Unsupported python scripts in example directory do not have a shebang
-  - Chrony clock control can now be enabled with `clock_control` on instead
+- Python scripts reorganised (SWPTP-1416)
+  - New RPM package `sfptpd-python3` contains all the Python code
+  - Base `sfptpd` package does not depend on Python.
+  - Chrony control script moved to `/usr/libexec`.
+  - Example python scripts for customisation do not have a shebang.
+  - Chrony clock control can now be enabled with `clock_control on` instead
     of specifying a path to the helper script.
 
 > [!NOTE]
