@@ -26,6 +26,8 @@ RPM_RPMS = $(RPM_TOPDIR)/RPMS
 RPM_SPECPATH = $(RPM_SPECS)/$(RPM_SPECFILE)
 SRPM_MANIFEST = $(BUILD_DIR)/srpm.manifest
 
+VERSION_QUIRKS = $(if $(findstring $(RPM_OSVER),el6 el7),--no-post-revision-modifier)
+
 $(RPM_ALLDIRS):
 	mkdir -p $@
 
@@ -34,7 +36,8 @@ rpm_build_tree: $(RPM_ALLDIRS)
 	echo ENV:SFPTPD_OSDIST=$(RPM_OSVER)
 
 .PHONY: rpm_prep
-rpm_prep: SFPTPD_RPM_VER = $(shell scripts/sfptpd_versioning derive)
+
+rpm_prep: SFPTPD_RPM_VER := $(shell scripts/sfptpd_versioning $(VERSION_QUIRKS) derive)
 rpm_prep: rpm_build_tree
 	cp -a $(RPM_SPEC_INDIR)/* $(RPM_SOURCES)/
 	mv $(RPM_SOURCES)/$(RPM_SPECFILE) $(RPM_SPECS)/

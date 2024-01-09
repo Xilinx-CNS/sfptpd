@@ -19,12 +19,16 @@ try()  { "$@" || fail "FAILED: $*"; }
 
 usage() {
   err
-  err "usage:"
-  err "  $me read         - read embedded version string from source"
-  err "  $me write <ver>  - write <ver> into version string in source"
-  err "  $me derive       - derive a version string from version control"
-  err "  $me patch        - patch derived version string into source"
-  err "  $me clean        - restore base version in source"
+  err "usage: $me [OPTIONS] COMMAND [ARGS]"
+  err "  COMMANDS"
+  err "    read         - read embedded version string from source"
+  err "    write <ver>  - write <ver> into version string in source"
+  err "    derive       - derive a version string from version control"
+  err "    patch        - patch derived version string into source"
+  err "    clean        - restore base version in source"
+  err ""
+  err "  OPTIONS"
+  err "    --no-post-revision-modifier  - avoid '^' post-revision modifier"
   err
   exit 1
 }
@@ -83,7 +87,7 @@ derive_version () {
   then
     echo -n "Commit is tagged with viable version: " >&2
     version="${vcs_tag#v}"
-  elif echo $vcs_tag | grep -q "^v$base_version-"
+  elif $use_post_revision_modifier && echo $vcs_tag | grep -q "^v$base_version-"
   then
     echo -n "Post-release version: " >&2
     version="$base_version^$(echo $vcs_date | sed s,-,,g).git$vcs_id"
@@ -100,10 +104,14 @@ derive_version () {
 ######################################################################
 # main
 
+use_post_revision_modifier=true
+
 while [ $# -gt 0 ]; do
   case "$1" in
-    -*)  usage;;
-    *)   break;;
+    --no-post-revision-modifier)
+                  use_post_revision_modifier=false;;
+    --help | -h)  usage;;
+    *)            break;;
   esac
   shift
 done
