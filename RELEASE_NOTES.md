@@ -104,23 +104,20 @@ Advanced notice of possible future changes
 - Explicit declaration of crny sync module
 
   If chronyd is in use it is recommended to specify an instance of the new
-  crny sync module explicitly as a future release may not create the implicit
-  instance or may do so only if chronyd is detected at startup time.
+  `crny` sync module explicitly as a future release may not default to
+  creating the implicit instance.
 
 - Supporting new IEEE1588 specifications
 
-  Future releases may default to supporting new PTP specs out of the box. If
-  it is required to avoid new features for interoperability reasons it is
-  recommended to specify `ptp_version 2.0` in the `ptp` configuration section.
+  Future releases may report support for PTP v2.1 on the wire by default. If
+  this causes difficulty with third-party equipment, specify `ptp_version 2.0`
+  in the `ptp` configuration section.
 
 - Deprecation of remote monitor
 
-  The built-in receiver for PTP event monitoring messages (controlled by the
-  `remote_monitor` and `json_remote_monitor` configuration options) is
-  deprecated in favour of the `sfptpmon` script, which is a more appropriate
-  solution for production use. The built-in receiver may be disabled in
-  future feature releases of sfptpd. The option for sending these event
-  messages remains supported.
+  The built-in receiver for PTP event monitoring messages (`remote_monitor`)
+  has been replaced by the 'sfptpmon' script in the `sfptpd-python3` package.
+  The built-in receiver may be disabled in a future feature release.
 
 
 Copyright
