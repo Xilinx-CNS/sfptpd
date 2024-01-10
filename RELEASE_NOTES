@@ -1,7 +1,7 @@
 Solarflare Enhanced PTP Daemon (sfptpd)
 Advanced Micro Devices, Inc.
 =======================================
-Version: v3.7.1.1004
+Version: v3.7.1.1005
 
 
 Overview
@@ -115,7 +115,7 @@ Advanced notice of possible future changes
 Changelog
 ---------
 
-### v3.7.1.1004
+### v3.7.1.1005
 
 Features:
  ~ Command line enhancements to support container usage (SWPTP-1401)
@@ -156,6 +156,8 @@ Issue SWPTP-1403
 Issue SWPTP-1405
  ~ Avoid theoretical risk of double clock correction on startup
  ~ Extend period NIC considered to have unset time to 5 years after epoch
+Issue SWPTP-1406
+ ~ Reflect when chronyd is started or stopped in 'external constraints' rule
 Issue SWPTP-1408
  ~ Fix possible risk of stack corruption in teaming netlink handler
 Issue SWPTP-1412
