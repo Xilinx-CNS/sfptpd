@@ -852,7 +852,7 @@ static bool clock_control_at_launch(crny_module_t *ntp)
 	close(fd);
 
 finish:
-	if (!assume_absent && strlen(ntp->config->chronyd_script) == 0) {
+	if (!assume_absent && !ntp->config->clock_control) {
 		if (state == OPT_X) {
 			SYNC_MODULE_CONSTRAINT_SET(ntp->constraints, CANNOT_BE_SELECTED);
 			SYNC_MODULE_CONSTRAINT_CLEAR(ntp->constraints, MUST_BE_SELECTED);
@@ -1662,7 +1662,7 @@ static int do_clock_control(crny_module_t *ntp,
 	struct timespec now, delta;
 	enum chrony_clock_control_op op_do;
 	bool clock_control;
-	bool have_control = strlen(ntp->config->chronyd_script) != 0;
+	bool have_control = ntp->config->clock_control;
 	char *command;
 	char *action;
 	int len, total;
@@ -1772,7 +1772,7 @@ static void ntp_on_clock_control_change(crny_module_t *ntp, struct ntp_state *ne
 
 	if (new_state->sys_info.clock_control_enabled && !clock_control) {
 		CRITICAL("### chronyd is now disciplining the system clock! ###\n");
-		if (strlen(ntp->config->chronyd_script) == 0) {
+		if (!ntp->config->clock_control) {
 			SYNC_MODULE_CONSTRAINT_SET(ntp->constraints, MUST_BE_SELECTED);
 			SYNC_MODULE_CONSTRAINT_CLEAR(ntp->constraints, CANNOT_BE_SELECTED);
 		}
@@ -1780,7 +1780,7 @@ static void ntp_on_clock_control_change(crny_module_t *ntp, struct ntp_state *ne
 
 	if (!new_state->sys_info.clock_control_enabled && clock_control) {
 		WARNING("crny: chronyd is no longer disciplining the system clock!\n");
-		if (strlen(ntp->config->chronyd_script) == 0) {
+		if (!ntp->config->clock_control == 0) {
 			SYNC_MODULE_CONSTRAINT_SET(ntp->constraints, CANNOT_BE_SELECTED);
 			SYNC_MODULE_CONSTRAINT_CLEAR(ntp->constraints, MUST_BE_SELECTED);
 		}
@@ -1867,7 +1867,7 @@ static void ntp_on_get_status(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 static void ntp_on_control(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 {
 	sfptpd_sync_module_ctrl_flags_t flags;
-	bool have_control = strlen(ntp->config->chronyd_script) != 0;
+	bool have_control = ntp->config->clock_control;
 	int rc;
 
 	assert(ntp != NULL);
@@ -2159,7 +2159,7 @@ static void ntp_on_run(crny_module_t *ntp)
 {
 	struct timespec interval;
 	int rc;
-	bool have_control = strlen(ntp->config->chronyd_script) != 0;
+	bool have_control = ntp->config->clock_control;
 
 	assert(ntp);
 
