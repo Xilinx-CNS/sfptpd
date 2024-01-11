@@ -69,7 +69,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - The default value of `one_phc_per_nic` is now `off`. (SWPTP-1348)
    - See note under [v3.5.0.1004](#3501004---2022-05-13-feature-release)
-     and the [README](README.md#using-non-solarflare-ptp-capable-network-adapters).
+     and the [README](README.md#using-non-solarflare-network-adapters).
 - The source can no longer be built for RHEL 6 without backported kernel
   headers (SWPTP-1371)
 
@@ -417,7 +417,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   be backwards compatible with implementations of the 2008 revision (v2.0)
   but to assure continued interoperability with intolerant peer devices
   the protocol version must be specified to use new features, such as the
-  COMMUNICATION_CAPABILITIES TLV:
+  `COMMUNICATION_CAPABILITIES` TLV:
     ```
     [ptp]
     ptp_version 2.1
@@ -433,7 +433,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `hotplug_detection_mode probe`.
 - Raise alarm on secondary servos that fail to operate continuously for 30
   seconds or more such as due to clock comparison failure. (SWPTP-1049).
-- Use COMMUNICATIONS_CAPABILITIES TLV to agree multicast vs unicast delay
+- Use `COMMUNICATIONS_CAPABILITIES` TLV to agree multicast vs unicast delay
   request capabilities with corresponding PTP node (SWPTP-687).
 - Extend application of 'epoch guard' for hosts with multiple NICs.
   (SWPTP-1109)
@@ -455,8 +455,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Issue SWPTP-1098, SWPTP-1102
   - Fix `clock_readonly` option.
 - Issue SWPTP-1091
-  - Correct handling of timestamp when Follow_Up messages received or handled
-    ahead of Sync, occasionally resulting in large time jumps.
+  - Correct handling of timestamp when `Follow_Up` messages received or handled
+    ahead of `Sync`, occasionally resulting in large time jumps.
 - Issue SWPTP-1078
   - Fix invalid JSON in real time stats output.
 - Issue SWPTP-895
@@ -480,11 +480,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 - Issue SWPTP-1002
-  - Propagate TIME_TRACEABLE flag when acting both as master and slave
+  - Propagate `TIME_TRACEABLE` flag when acting both as master and slave
 - Issue SWPTP-1005
   - Consider UTC offset in advertisement when computing BMC discriminator offset
 - Issue SWPTP-1037
-  - Correct handling of cached Follow_Up messages received ahead of Sync
+  - Correct handling of cached `Follow_Up` messages received ahead of Sync
 
 ## [v3.3.0.1007] - 2020-03-03 [Feature Release]
 
@@ -623,7 +623,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Issue 75431:
   - Bonding. Fix issue where sfptpd does not detect interfaces in a bond
-    being brought up or taken down using ifup/ifdown.
+    being brought up or taken down using `ifup`/`ifdown`.
 
 ## [3.2.2.1000] - [Not GA]
 
@@ -641,9 +641,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Clock-ctrl-failure alarm added for primary and secondary servos.
 - Machine-readable local logging:
   JSON-format long term stats files automatically created;
-  To enable JSON Lines stats logging use the option: json_stats <filename>
+  To enable JSON Lines stats logging use the option: `json_stats <filename>`
 - Support for Meinberg NetSync Monitor extension including MTIE reporting.
-  To enable NetSync use the option: mon_meinberg_netsync
+  To enable NetSync use the option: `mon_meinberg_netsync`
 - Recording of the times of maximum and minimum events in long term stats
   along with qualification status.
 - Configurable automatic sync instance selection policy and improved logging
@@ -661,9 +661,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Fix error in estimated accuracy of NTP synchronization that could cause
     NTP to be incorrectly selected in preference to PTP.
 - Issue 71397
-  - New allow-deny, deny-allow ACL order options match behaviour of ptpd2 and
-    Apache webserver ACLs. Old permit-deny, deny-permit ACL orders have the
-    opposite behaviour and are deprecated but get translated.
+  - New `allow-deny`, `deny-allow` ACL order options match behaviour of ptpd2
+    and Apache webserver ACLs. Old `permit-deny`, `deny-permit` ACL orders have
+    the opposite behaviour and are deprecated but get translated.
 - Issue 71264
   - Write log files atomically so that they never appear empty when read.
 - Issue 70616
@@ -760,7 +760,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     configurable outlier filter based on deviation from the mean. Add bad
     PPS signal alarm and statistics to count outliers.
 - Issue 46699
-  - Fixed handling of logMessageInterval field in unicast PTP messages
+  - Fixed handling of `logMessageInterval` field in unicast PTP messages
 
 ## [2.2.2.60] - 2014-08-08
 
