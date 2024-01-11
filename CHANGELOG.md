@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-(c) Copyright 2012-2023 Advanced Micro Devices, Inc.
+(c) Copyright 2012-2024 Advanced Micro Devices, Inc.
 
 ## [Unreleased]
 
@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - when enabled with `onload_ext on` in the `[ptp]` configuration section,
     attempt to retrieve timestamps with sub-nanosecond resolution via the
     [Onload Extensions API](https://docs.xilinx.com/r/en-US/ug1586-onload-user/Onload-Extensions-API).
-  - poulate PTP correctionField to reflect sub-nanosecond timestamps (sfptpd
+  - populate PTP correctionField to reflect sub-nanosecond timestamps (sfptpd
     already used subnanosecond corrections received over the PTP network)
   - see notes below for current limitations
 - Add configurable patterns for log, state, control and stats paths. (SWPTP-649)
@@ -40,9 +40,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - IP address of parent clock added to topology files (SWPTP-1312)
 - Add `step_threshold` option to change the offset threshold for allowing
   a step (when permitted by clock control setting). (SWPTP-1365)
-- Command line enhancements to support container usage. (SWPTP-1401)
-  - Allow config to be read from stdin with `-f -`
-  - Add `--console` option to redirect logs to console
 - Add `pidadjust` control command to tweak PID controller co-efficients
   at runtime for experimental purposes only. Run `sfptpdctl` without
   arguments to see syntax. (SWPTP-1411)
@@ -68,6 +65,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 > The Onload Extensions API does not currently retrieve NIC timestamps
 > with sub-nanosecond resolution.
 
+### Removed
+
+- The default value of `one_phc_per_nic` is now `off`. (SWPTP-1348)
+   - See note under [v3.5.0.1004](#3501004---2022-05-13-feature-release)
+     and the [README](README.md#using-non-solarflare-ptp-capable-network-adapters).
+- The source can no longer be built for RHEL 6 without backported kernel
+  headers (SWPTP-1371)
+
+## [3.7.1.x] - [Unreleased]
+
+### Added
+
+- Command line enhancements to support container usage. (SWPTP-1401)
+  - Allow config to be read from stdin with `-f -`
+  - Add `--console` option to redirect logs to console
+
 ### Changed
 
 - Python scripts reorganised (SWPTP-1416)
@@ -83,14 +96,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 > new location substituted for compatibility but it is advised to replace this
 > with a simple `clock_control on` configuration unless this script has been
 > customised for the user's system.
-
-### Removed
-
-- The default value of `one_phc_per_nic` is now `off`. (SWPTP-1348)
-   - See note under [v3.5.0.1004](#3501004---2022-05-13-feature-release)
-     and the [README](README.md#using-non-solarflare-ptp-capable-network-adapters).
-- The source can no longer be built for RHEL 6 without backported kernel
-  headers (SWPTP-1371)
 
 ### Fixed
 
@@ -134,7 +139,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Ignore next PPS period after a step instead of briefly raising an alarm
 - Issue SWPTP-1447
   - Fix false assumptions of netlink event ordering leading to assertion failure
-
 
 ## [3.7.0.1006] - 2023-08-17 [Feature Release]
 
