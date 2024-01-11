@@ -15,31 +15,37 @@ jobs:
     strategy:
       max-parallel: 2
       matrix:
-        os: [stream9, stream8, centos7]
+        dist: [el9, el8, el7, el6]
         include:
-          - os: stream9
+          - dist: el9
+            build_os: stream9
             extra_build_deps: systemd-rpm-macros
-          - os: stream8
+          - dist: el8
+            build_os: stream8
             extra_build_deps: systemd-rpm-macros
-          - os: centos7
+          - dist: el7
+            build_os: centos7
             extra_build_deps: systemd
+          - dist: el6
+            build_os: centos7
+            extra_build_deps:
     runs-on: ubuntu-latest
     env:
       BUILD_DEPS: rpm-build gcc make libmnl-devel libcap-devel python3-devel
     container:
-      image: quay.io/centos/centos:${{ matrix.os }}
+      image: quay.io/centos/centos:${{ matrix.build_os }}
     steps:
       - name: checkout sfptpd
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
       - name: enable extra repositories
-        if: ${{ matrix.os == 'stream9' }}
+        if: ${{ matrix.build_os == 'stream9' }}
         run: yum install -y 'dnf-command(config-manager)' && yum config-manager --set-enabled crb
       - name: install build prerequisites
         run: yum --setopt install_weak_deps=0 install -y ${BUILD_DEPS} ${{ matrix.extra_build_deps }}
       - name: build srpm
-        run: set -o pipefail; make build_srpm | tee transcript && sed -n s,^ENV:,,p transcript >> "$GITHUB_ENV"
+        run: set -o pipefail; make RPM_OSVER=${{ matrix.dist }} build_srpm | tee transcript && sed -n s,^ENV:,,p transcript >> "$GITHUB_ENV"
       - name: publish srpm
         uses: actions/upload-artifact@v3
         with:
@@ -51,7 +57,7 @@ jobs:
       - name: publish rpms
         uses: actions/upload-artifact@v3
         with:
-          name: sfptpd-${{ env.SFPTPD_VERSION }}-${{ env.SFPTPD_OSDIST }}-rpms
+          name: sfptpd-${{ env.SFPTPD_VERSION }}-${{ matrix.dist }}-rpms
           path: ~/rpmbuild/RPMS/
           if-no-files-found: error
 

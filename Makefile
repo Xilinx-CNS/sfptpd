@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# (c) Copyright 2012-2022 Xilinx, Inc.
+# (c) Copyright 2012-2024 Xilinx, Inc.
 
 # Top-level makefile for sfptpd
 
@@ -14,6 +14,7 @@ PACKAGE_VERSION = $(SFPTPD_VERSION)
 if_header_then = echo "\#include <$1>" | $(CC) -E -x c - > /dev/null 2>&1 && echo $2
 
 CONDITIONAL_DEFS := \
+ $(if $(value GLIBC_COMPAT),-DSFPTPD_GLIBC_COMPAT) \
  $(shell $(call if_header_then,sys/capability.h,-DHAVE_CAPS)) \
  $(shell $(call if_header_then,linux/if_team.h,-DHAVE_TEAMING))
 CONDITIONAL_LIBS := \
