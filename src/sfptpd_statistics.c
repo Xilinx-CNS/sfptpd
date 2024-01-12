@@ -263,7 +263,7 @@ void sfptpd_stats_reset_pps_statistics(struct sfptpd_interface *interface)
 
 	rc = sfptpd_interface_driver_stats_reset(interface);
 	if (rc != 0) {
-		ERROR("stats: reset failed\n", strerror(rc));
+		ERROR("stats: reset failed, %s\n", strerror(rc));
 	}
 }
 
