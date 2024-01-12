@@ -3699,6 +3699,7 @@ static int ptp_on_startup(void *context)
 	}
 
 	for (interface = ptp->intf_list; interface; interface = interface->next) {
+		struct sfptpd_ptp_instance *need_pps_stats_init = NULL;
 
 		if (!interface->start_successful)
 			continue;
@@ -3733,17 +3734,19 @@ static int ptp_on_startup(void *context)
 				goto fail;
 			}
 
-			/* TODO Low priority but resetting the PPS stats should
-			 * only be done once per interface. */
-			/* If we are logging PPS stats, reset them now */
+			/* Reset the PPS stats once per interface required */
 			if (instance->config->pps_logging)
-				ptp_pps_stats_init(instance);
+				need_pps_stats_init = instance;
 
 			/* Count instances doing s/w timestamping via loopback */
 			if (interface->ptpd_intf_private->tsMethod == TS_METHOD_SYSTEM) {
 				sw_ts_instances++;
 			}
 		}
+
+		/* If we are logging PPS stats, reset them now */
+		if (need_pps_stats_init)
+			ptp_pps_stats_init(need_pps_stats_init);
 	}
 
 	/* SWPTP-790: can't have more than a single instance doing SO_TIMESTAMP */
