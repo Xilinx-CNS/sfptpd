@@ -48,6 +48,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   arguments to see syntax. (SWPTP-1411)
 - Use `UNCALIBRATED` PTP state before servo has made adjustments. (SWPTP-1431)
   - System clock is sfptpd local reference clock until PTP to NIC sync begins.
+- Add `-D` command line option to specify default PTP domain. (SWPTP-1454)
 - Add `gps` sync module to use `gpsd` for PPS time of day.
   - This is an **unsupported feature** neither compiled into supported releases
     nor compiled by default from source.

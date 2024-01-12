@@ -1713,4 +1713,21 @@ void sfptpd_ptp_module_set_default_interface(struct sfptpd_config *config,
 }
 
 
+void sfptpd_ptp_module_set_default_domain(struct sfptpd_config *config,
+					  int domain)
+{
+	struct sfptpd_ptp_module_config *ptp;
+
+	ptp = sfptpd_ptp_module_get_config(config);
+	assert(ptp != NULL);
+
+	if (domain < 0 || domain > UINT8_MAX) {
+		ERROR("ptp: ignoring default domain outside allowed range [%d,%d]\n",
+		        0, UINT8_MAX);
+		return;
+	}
+
+	ptp->ptpd_port.domainNumber = (UInteger8) domain;
+}
+
 /* fin */

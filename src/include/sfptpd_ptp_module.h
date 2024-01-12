@@ -91,6 +91,15 @@ struct sfptpd_ptp_module_config *sfptpd_ptp_module_get_config(struct sfptpd_conf
 void sfptpd_ptp_module_set_default_interface(struct sfptpd_config *config,
 					     const char *interface_name);
 
+/** Set the default PTP domain to be used by the sync module. This is supported
+ * to allow the interface to be specified on the command line which is
+ * convenient for users and non-ambiguous for simple configurations.
+ * @param config  Pointer to the configuration
+ * @param domain  Default domain
+ */
+void sfptpd_ptp_module_set_default_domain(struct sfptpd_config *config,
+					  int domain);
+
 /** Create a PTP sync module instance based on the configuration supplied
  * @param config  Pointer to configuration
  * @param engine  Pointer to sync engine

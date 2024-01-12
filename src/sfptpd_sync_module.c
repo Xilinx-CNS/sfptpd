@@ -212,7 +212,18 @@ void sfptpd_sync_module_set_default_interface(struct sfptpd_config *config,
 	sfptpd_gps_module_set_default_interface(config, interface_name);
 #endif
 
-	TRACE_L3("default interface set to %s\n", optarg);
+	TRACE_L3("default interface set to %s\n", interface_name);
+}
+
+
+void sfptpd_sync_module_set_default_ptp_domain(struct sfptpd_config *config,
+					       int ptp_domain)
+{
+	assert(config != NULL);
+
+	sfptpd_ptp_module_set_default_domain(config, ptp_domain);
+
+	TRACE_L3("default ptp domain set to %d\n", ptp_domain);
 }
 
 

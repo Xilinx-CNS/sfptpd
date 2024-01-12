@@ -250,6 +250,15 @@ int sfptpd_sync_module_config_init(struct sfptpd_config *config);
 void sfptpd_sync_module_set_default_interface(struct sfptpd_config *config,
 					      const char *interface_name);
 
+/** Set the default PTP domain to be used by sync modules. This is supported
+ * to allow the interface to be specified on the command line which is
+ * convenient for users and non-ambiguous for simple configurations.
+ * @param config  Pointer to the configuration
+ * @param ptp_domain  Default PTP domain
+ */
+void sfptpd_sync_module_set_default_ptp_domain(struct sfptpd_config *config,
+					       int domain);
+
 /** Convert a set of control flags into a textual string
  * @param flags  Bitmask of flags
  * @param buffer  Pointer to buffer to store textual representation

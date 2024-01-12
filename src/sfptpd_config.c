@@ -35,12 +35,13 @@
 
 #define CONFIG_REDACTION_STRING "********"
 
-static const char *command_line_options_short = "hf:i:tvu:";
+static const char *command_line_options_short = "hf:i:D:tvu:";
 static const struct option command_line_options_long[] = 
 {
 	{"help", 0, NULL, (int)'h'},
 	{"config-file", 1, NULL, (int)'f'},
 	{"interface", 1, NULL, (int)'i'},
+	{"ptp-domain", 1, NULL, (int)'D'},
 	{"verbose", 0, NULL, (int)'v'},
 	{"user", 1, NULL, (int)'u'},
 	{"test-config", 0, NULL, (int)'t'},
@@ -92,6 +93,7 @@ static void config_display_help(void)
 		"Command Line Options:\n"
 		"-h, --help                   Display help information\n"
 		"-i, --interface=INTERFACE    Default interface that Synchronization Modules will use\n"
+		"-D, --ptp-domain=DOMAIN      Default PTP domain to use\n"
 		"-f, --config-file=FILE       Configure from FILE, or stdin if '-'\n"
 		"-t, --test-config            Test configuration\n"
 		"-u, --user=USER[:GROUP]      Run as user USER (and group GROUP)\n"
@@ -656,6 +658,11 @@ int sfptpd_config_parse_command_line_pass1(struct sfptpd_config *config,
 			sfptpd_sync_module_set_default_interface(config, optarg);
 			break;
 
+		case 'D':
+			/* Update the PTP domain in relevant sync modules. */
+			sfptpd_sync_module_set_default_ptp_domain(config, atoi(optarg));
+			break;
+
 		case 'u':
 			if ((group = strchr(optarg, ':')))
 				*group++ = '\0';
@@ -702,6 +709,7 @@ int sfptpd_config_parse_command_line_pass2(struct sfptpd_config *config,
 		case 'h':
 		case 'f':
 		case 'i':
+		case 'D':
 		case 'u':
 		case OPT_VERSION:
 			/* We've already handled these- ignore them */
