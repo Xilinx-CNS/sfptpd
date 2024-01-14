@@ -4,6 +4,8 @@
 #ifndef _SFPTPD_LOGGING_H
 #define _SFPTPD_LOGGING_H
 
+#include "glibc_compat.h"
+
 #include <stdio.h>
 #include <syslog.h>
 #include <stdbool.h>

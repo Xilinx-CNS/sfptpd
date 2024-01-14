@@ -189,7 +189,7 @@ struct sfptpd_interface {
 	struct ethtool_stats *ethtool_stats;
 
 	/* Zero adjustment for driver counters */
-	int64_t ethtool_stat_zero_adjustment[SFPTPD_DRVSTAT_MAX];
+	int64_t stat_zero_adjustment[SFPTPD_DRVSTAT_MAX];
 
 	/* A copy of the link table object, not necessarily current */
 	struct sfptpd_link link;
@@ -2130,8 +2130,7 @@ int sfptpd_interface_driver_stats_read(struct sfptpd_interface *interface,
 		enum drv_stat_method method = interface->drv_stat_method[i];
 		switch (method) {
 		case DRV_STAT_ETHTOOL:
-			stats[i] = estats->data[interface->drv_stat_ethtool_index[i]] +
-				   interface->ethtool_stat_zero_adjustment[i];
+			stats[i] = estats->data[interface->drv_stat_ethtool_index[i]];
 			break;
 		case DRV_STAT_SYSFS:
 			rc = snprintf(path, sizeof path, "/sys/class/net/%s/device/%s",
@@ -2156,48 +2155,96 @@ int sfptpd_interface_driver_stats_read(struct sfptpd_interface *interface,
 			TRACE_L4("no method available to collect %s stat\n",
 				 sfptpd_stats_ethtool_names[i]);
 		}
+
+		/* Adjust for virtual resets */
+		stats[i] += interface->stat_zero_adjustment[i];
 	}
 
 	return 0;
 }
 
+static int interface_sysfs_stats_reset(struct sfptpd_interface *interface)
+{
+	char path[128];
+	FILE *file;
+	int rc;
+
+	assert(interface);
+
+	rc = snprintf(path, sizeof(path), "/sys/class/net/%s/device/ptp_stats",
+		      sfptpd_interface_get_name(interface));
+	if (rc > 0 && rc < sizeof(path)) {
+		file = fopen(path, "w");
+		if (file) {
+			rc = fputs("1\n", file) >= 0 ? 0 : errno;
+			fclose(file);
+		} else {
+			rc = errno;
+		}
+	} else {
+		rc = errno;
+	}
+
+	return rc;
+}
+
 int sfptpd_interface_driver_stats_reset(struct sfptpd_interface *interface)
 {
-	FILE *file;
-	char path[128];
-	int rc = 0;
 	uint64_t sample[SFPTPD_DRVSTAT_MAX];
+	bool sysfs_stats_reset = false;
+	bool stats_sampled = false;
+	bool reset_failed = false;
+	bool read_failed = false;
+	int ret = 0;
+	int rc;
 	int i;
 
 	assert(interface != NULL);
 
-	if (interface->drv_stat_methods & (1 << DRV_STAT_ETHTOOL)) {
-		rc = sfptpd_interface_driver_stats_read(interface, sample);
-		if (rc != 0)
-			return rc;
-		for (i = 0; i < SFPTPD_DRVSTAT_MAX; i++) {
-			if (drv_stats[i].counter)
-				interface->ethtool_stat_zero_adjustment[i] -= sample[i];
-		}
-	}
+	for (i = 0; i < SFPTPD_DRVSTAT_MAX; i++) {
+		if (!drv_stats[i].counter)
+			continue;
 
-	if (interface->drv_stat_methods & (1 << DRV_STAT_SYSFS)) {
-		rc = snprintf(path, sizeof(path), "/sys/class/net/%s/device/ptp_stats",
-			      sfptpd_interface_get_name(interface));
-		if (rc > 0 && rc < sizeof(path)) {
-			file = fopen(path, "w");
-			if (file) {
-				rc = fputs("1\n", file) >= 0 ? 0 : errno;
-				fclose(file);
-			} else {
-				rc = errno;
+		/* If any stats are from sysfs, perform the stats reset through
+		 * sysfs. If this fails due to permissions, e.g. not running
+		 * as root, then fall through to the ethtool stats method of
+		 * a virtual reset where we subtract the count as it was
+		 * at reset. */
+
+		switch (interface->drv_stat_method[i]) {
+		case DRV_STAT_SYSFS:
+			if (!sysfs_stats_reset && !reset_failed) {
+				rc = interface_sysfs_stats_reset(interface);
+				if (rc != 0) {
+					reset_failed = true;
+					if (rc != EACCES)
+						ret = rc;
+				} else {
+					sysfs_stats_reset = true;
+				}
 			}
-		} else {
-			rc = errno;
+			if (sysfs_stats_reset)
+				break;
+			/* Fall through to virtual reset */
+		case DRV_STAT_ETHTOOL:
+			if (!stats_sampled && !read_failed) {
+				rc = sfptpd_interface_driver_stats_read(interface, sample);
+				if (rc != 0) {
+					read_failed = true;
+					ret = rc;
+				} else {
+					stats_sampled = true;
+				}
+			}
+			if (stats_sampled)
+				interface->stat_zero_adjustment[i] -= sample[i];
+			break;
+		case DRV_STAT_NOT_AVAILABLE:
+			break;
 		}
 	}
 
-	return rc;
+	return ret;
 }
 
 

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# (c) Copyright 2012-2022 Xilinx, Inc.
+# (c) Copyright 2012-2024 Xilinx, Inc.
 
 # Top-level makefile for sfptpd
 
@@ -25,6 +25,7 @@ if_defn_then = printf "\#include <$1>\nint a=$2;" | $(TEST_CC) $(INCDIRS) -c -S 
 
 ### Conditional definitions
 CONDITIONAL_DEFS := \
+ $(if $(value GLIBC_COMPAT),-DSFPTPD_GLIBC_COMPAT) \
  $(shell $(call if_header_then,sys/capability.h,-DHAVE_CAPS)) \
  $(shell $(call if_header_then,linux/ethtool_netlink.h,-DHAVE_ETHTOOL_NETLINK)) \
  $(shell $(call if_defn_then,linux/if_link.h,IFLA_PERM_ADDRESS)) \

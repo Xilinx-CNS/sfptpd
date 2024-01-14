@@ -1531,6 +1531,10 @@ static bool ntp_handle_state_change(crny_module_t *ntp,
 		switch (new_state->state) {
 		case SYNC_MODULE_STATE_DISABLED:
 			WARNING("crny: ntpd no longer running\n");
+			if (!ntp->config->clock_control) {
+				SYNC_MODULE_CONSTRAINT_SET(ntp->constraints, CANNOT_BE_SELECTED);
+				SYNC_MODULE_CONSTRAINT_CLEAR(ntp->constraints, MUST_BE_SELECTED);
+			}
 			break;
 
 		case SYNC_MODULE_STATE_FAULTY:
@@ -1781,7 +1785,7 @@ static void ntp_on_clock_control_change(crny_module_t *ntp, struct ntp_state *ne
 
 	if (!new_state->sys_info.clock_control_enabled && clock_control) {
 		WARNING("crny: chronyd is no longer disciplining the system clock!\n");
-		if (!ntp->config->clock_control == 0) {
+		if (!ntp->config->clock_control) {
 			SYNC_MODULE_CONSTRAINT_SET(ntp->constraints, CANNOT_BE_SELECTED);
 			SYNC_MODULE_CONSTRAINT_CLEAR(ntp->constraints, MUST_BE_SELECTED);
 		}
