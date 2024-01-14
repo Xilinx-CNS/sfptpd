@@ -77,6 +77,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The source can no longer be built for RHEL 6 without backported kernel
   headers (SWPTP-1371)
 
+### Fixed
+
+- Issue SWPTP-1386
+  - Deliver clock comparisons via shared clock feed, nearly halving the number
+    of measurements needed in a multi-NIC system.
+  - Reduce impact of missing and delayed clock measurements
+- Issue SWPTP-1396
+  - Provide correct clock timestamps in real time stats corresponding to the
+    reported offsets rather than time of logging message.
+
 ## [3.7.1.x] - [Unreleased]
 
 ### Added
@@ -112,17 +122,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Retry timestamp enablement on EAGAIN from NIC, not just EBUSY
 - Issue SWPTP-1364
   - Let systemd restart sfptpd on failure with supplied unit configuration
-- Issue SWPTP-1386
-  - Deliver clock comparisons via shared clock feed, nearly halving the number
-    of measurements needed in a multi-NIC system.
-  - Reduce impact of missing and delayed clock measurements
 - Issue SWPTP-1395
   - Fix missing `sfptpmon` script in `.tar.gz` release package
   - Omit unnecessary new reference to system clock frequency correction state
     file in `.rpm` packages to avoid confusing `alien` repackager tool
-- Issue SWPTP-1396
-  - Provide correct clock timestamps in real time stats corresponding to the
-    reported offsets rather than time of logging message.
 - Issue SWPTP-1403
   - Ignore irrelevant PTP packets in `sfptpmon` event monitoring script instead
     of exiting
