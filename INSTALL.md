@@ -72,15 +72,16 @@ sudo docker run \
 
 ### Running a pre-built container image
 
-This example invokes a built-in example configuration, specifying
-a default interface on the command line.
+This **one-line quick start** example invokes a built-in example configuration, specifying
+a default interface and PTP domain on the command line.
 
 ```sh
 sudo docker run \
   --network=host \
   --cap-add NET_BIND_SERVICE,NET_ADMIN,NET_RAW,SYS_TIME \
   $(for d in $(ls /dev/ptp*); do echo "--device $d"; done) \
-  ghcr.io/xilinx-cns/sfptpd:master-dev -i ens3f0 -f /config/ptp_master_freerun.cfg
+  ghcr.io/xilinx-cns/sfptpd:master-dev -f /config/ptp_master_freerun.cfg \
+  -i bond0 -D 100
 ```
 
 Host networking is not required if a MACVLAN or IPVLAN is mapped through to the
