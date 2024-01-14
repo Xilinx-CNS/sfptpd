@@ -39,6 +39,7 @@ LABEL \
 RUN microdnf install -y libmnl && microdnf clean all
 COPY --from=builder /staging /
 COPY --from=builder /staging/LICENSE /licenses/
+RUN ln -sf /usr/share/doc/sfptpd/config /
 WORKDIR /var/lib/sfptpd
 
 # Override any 'daemon' setting in selected configuration.

@@ -6,8 +6,7 @@ supports LACP and active-backup bonds with and without VLANs. The default and
 Enterprise PTP profiles are supported.
 
 Instantaneous and long term statistics for monitoring along with support for
-'NetSync Monitor' and standard PTP event monitoring are provided to support
-compliance requirements.
+'NetSync Monitor' and standard PTP event monitoring support compliance.
 
 Integration is provided to work with NTP sources via `ntpsec`, `ntpd` and
 subject to limitations, `chronyd`. The daemon works on Linux systems for 3.0
@@ -15,6 +14,9 @@ kernels and later.
 
 See [the changelog](CHANGELOG.md) for recent additions to sfptpd.  The current
 stable branch is [v3_7](https://github.com/Xilinx-CNS/sfptpd/tree/v3_7). 
+
+For a quick start, see
+[one line docker example](/INSTALL.md#running-a-pre-built-container-image).
 
 ## Building and running from source
 
@@ -52,16 +54,22 @@ The user guide for supported releases is available at
 
 The sfptpd daemon provides a system-centric time sync solution that can
 be used with any network adapter and driver supporting standard Linux time
-APIs. This can provide advantages over other software which lacks the same
-degree of support for link aggregation and does not integrate remote and local
+APIs. This gives advantages over other software which lacks the same degree of
+support for link aggregation and which does not integrate remote and local
 synchronisation in one process.
 
 ### Using non-Solarflare network adapters
 
+Enable the use of non-Solarflare adapters with:
+
+```ini
+non_solarflare_nics on
+```
+
 By default non-Solarflare adapters are not synchronised to avoid potential
 limitations with their drivers:
 
-Sfptpd is normally configured to synchronize all available NIC clocks
+Sfptpd is normally configured to synchronise all available NIC clocks
 automatically so that applications can obtain meaningful hardware timestamps
 on all interfaces.
 
@@ -79,7 +87,7 @@ two consequences:
    occur. To mitigate this sfptpd has an option `assume_one_phc_per_nic`.
 2. If all but one of the PHC devices is treated by the driver as read only
    **and** the instance made writable by the net driver is not the one on the
-   lowest-numbered port, then with `assume_on_phc_per_nic` set to `on`, sfptpd
+   lowest-numbered port, then with `assume_one_phc_per_nic` set to `on`, sfptpd
    will attempt to discipline the clock but there will be no effect. This
    situation can be mitigated by leaving `assume_one_phc_per_nic` `off` but
    that will result in wasteful clock comparisons for all the PHC devices
@@ -89,12 +97,6 @@ The current best recommendation to mitigate these limitations is to list
 explicitly the network ports of the NIC clocks to be disciplined with
 `clock_list`. Typically other software expects the clocks to be explicitly
 listed anyway.
-
-Enable the use of non-Solarflare adapters with:
-
-```ini
-non_solarflare_nics on
-```
 
 ## Footnotes
 
