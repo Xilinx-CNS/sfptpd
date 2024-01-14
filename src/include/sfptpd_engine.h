@@ -214,4 +214,10 @@ enum sfptpd_rt_stats_key {     /* Type of following argument */
  */
 void sfptpd_engine_log_rotate(struct sfptpd_engine *engine);
 
+/** Get handle to shared clock feed.
+ * @param engine  Pointer to engine instance
+ * @return  The shared clock feed
+ */
+struct sfptpd_clockfeed *sfptpd_engine_get_clockfeed(struct sfptpd_engine *engine);
+
 #endif /* _SFPTPD_ENGINE_H */

@@ -8,6 +8,7 @@
 #include <time.h>
 
 #include "sfptpd_time.h" /* sfptpd_time_t */
+#include "sfptpd_clockfeed.h"
 
 /****************************************************************************
  * Structures and Types
@@ -93,7 +94,8 @@ STATIC_ASSERT(sizeof(sfptpd_servo_msg_t) < SFPTPD_SIZE_GLOBAL_MSGS);
  * @param idx Servo index, to create a unique name for logging
  * @return Pointer to servo on success or NULL otherwise.
  */
-struct sfptpd_servo *sfptpd_servo_create(struct sfptpd_config *config, int idx);
+struct sfptpd_servo *sfptpd_servo_create(struct sfptpd_clockfeed *clockfeed,
+					 struct sfptpd_config *config, int idx);
 
 /** Destroy a clock servo and free any resources
  * @param servo  Servo instance to destroy

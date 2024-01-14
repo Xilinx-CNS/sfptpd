@@ -123,6 +123,9 @@ struct sfptpd_servo {
 
 	/* Convergence measure */
 	struct sfptpd_stats_convergence convergence;
+
+	/* Handle to shared clock feed */
+	struct sfptpd_clockfeed *clockfeed;
 };
 
 
@@ -142,7 +145,8 @@ struct sfptpd_servo {
  * Public Functions
  ****************************************************************************/
 
-struct sfptpd_servo *sfptpd_servo_create(struct sfptpd_config *config, int idx)
+struct sfptpd_servo *sfptpd_servo_create(struct sfptpd_clockfeed *clockfeed,
+					 struct sfptpd_config *config, int idx)
 {
 	struct sfptpd_servo *servo;
 	unsigned int stiffness;
@@ -161,7 +165,7 @@ struct sfptpd_servo *sfptpd_servo_create(struct sfptpd_config *config, int idx)
 
 	servo->master = NULL;
 	servo->slave = NULL;
-
+	servo->clockfeed = clockfeed;
 	servo->clock_ctrl = general_config->clocks.control;
 	servo->epoch_guard = general_config->epoch_guard;
 	servo->step_threshold = general_config->step_threshold;
@@ -223,9 +227,9 @@ void sfptpd_servo_destroy(struct sfptpd_servo *servo)
 	assert(servo != NULL);
 
 	if (servo->master != NULL)
-		sfptpd_clockfeed_unsubscribe(servo->clock1_feed);
+		sfptpd_clockfeed_unsubscribe(servo->clockfeed, servo->clock1_feed);
 	if (servo->slave != NULL)
-		sfptpd_clockfeed_unsubscribe(servo->clock2_feed);
+		sfptpd_clockfeed_unsubscribe(servo->clockfeed, servo->clock2_feed);
 
 	/* Free the servo */
 	free(servo);
@@ -282,14 +286,14 @@ void sfptpd_servo_set_clocks(struct sfptpd_servo *servo, struct sfptpd_clock *ma
 
 	if (master != servo->master) {
 		if (servo->master != NULL)
-			sfptpd_clockfeed_unsubscribe(servo->clock1_feed);
-		sfptpd_clockfeed_subscribe(master, &servo->clock1_feed);
+			sfptpd_clockfeed_unsubscribe(servo->clockfeed, servo->clock1_feed);
+		sfptpd_clockfeed_subscribe(servo->clockfeed, master, &servo->clock1_feed);
 	}
 
 	if (slave != servo->slave) {
 		if (servo->slave != NULL)
-			sfptpd_clockfeed_unsubscribe(servo->clock2_feed);
-		sfptpd_clockfeed_subscribe(slave, &servo->clock2_feed);
+			sfptpd_clockfeed_unsubscribe(servo->clockfeed, servo->clock2_feed);
+		sfptpd_clockfeed_subscribe(servo->clockfeed, slave, &servo->clock2_feed);
 	}
 
 	if ((servo->master != master) || (servo->slave != slave)) {

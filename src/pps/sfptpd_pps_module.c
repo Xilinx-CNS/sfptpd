@@ -923,7 +923,8 @@ static void pps_destroy_instance(pps_module_t *pps,
 	}
 
 	if (instance->feed != NULL) {
-		sfptpd_clockfeed_unsubscribe(instance->feed);
+		sfptpd_clockfeed_unsubscribe(sfptpd_engine_get_clockfeed(pps->engine),
+					     instance->feed);
 		instance->feed = NULL;
 	}
 
@@ -1160,7 +1161,8 @@ static int pps_configure_clock(pps_module_t *pps,
 	}
 
 	/* Get a clock feed */
-	sfptpd_clockfeed_subscribe(clock, &instance->feed);
+	sfptpd_clockfeed_subscribe(sfptpd_engine_get_clockfeed(pps->engine),
+				   clock, &instance->feed);
 
 	/* Store the clock */
 	instance->clock = clock;

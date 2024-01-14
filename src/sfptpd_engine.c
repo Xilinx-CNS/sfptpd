@@ -509,7 +509,7 @@ static int create_servos(struct sfptpd_engine *engine, struct sfptpd_config *con
 	/* Allocate the required number of servos */
 	rc = 0;
 	for (i = 0; i < engine->total_servos; i++) {
-		servo = sfptpd_servo_create(config, i);
+		servo = sfptpd_servo_create(engine->clockfeed, config, i);
 		if (servo == NULL) {
 			CRITICAL("failed to allocate servo\n");
 			rc = ENOMEM;
@@ -3150,6 +3150,14 @@ const struct sfptpd_sync_instance_info *sfptpd_engine_get_sync_instance_by_name(
 
 	record = get_sync_instance_record_by_name(engine, name);
 	return record ? &record->info : NULL;
+}
+
+
+struct sfptpd_clockfeed *sfptpd_engine_get_clockfeed(struct sfptpd_engine *engine)
+{
+	assert(engine);
+
+	return engine->clockfeed;
 }
 
 

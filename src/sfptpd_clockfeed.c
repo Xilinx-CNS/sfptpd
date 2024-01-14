@@ -244,7 +244,6 @@ struct sfptpd_clockfeed {
  * Global variables
  ****************************************************************************/
 
-const static struct sfptpd_clockfeed *sfptpd_clockfeed = NULL;
 
 
 /****************************************************************************
@@ -613,7 +612,6 @@ static void clockfeed_on_shutdown(void *context)
 	int count;
 
 	assert(module != NULL);
-	assert(sfptpd_clockfeed == module);
 	assert(module->magic == CLOCKFEED_MODULE_MAGIC);
 
 	DBG_L2("shutting down\n");
@@ -651,7 +649,6 @@ static void clockfeed_on_shutdown(void *context)
 
 	module->magic = CLOCKFEED_DELETED_MAGIC;
 	free(module);
-	sfptpd_clockfeed = NULL;
 }
 
 static void clockfeed_on_stats_end_period(struct sfptpd_clockfeed *module, sfptpd_sync_module_msg_t *msg)
@@ -744,7 +741,6 @@ struct sfptpd_clockfeed *sfptpd_clockfeed_create(struct sfptpd_thread **threadre
 	int rc;
 
 	assert(threadret);
-	assert(!sfptpd_clockfeed);
 
 	DBG_L3("creating service\n");
 
@@ -776,7 +772,6 @@ struct sfptpd_clockfeed *sfptpd_clockfeed_create(struct sfptpd_thread **threadre
 
 	clockfeed->magic = CLOCKFEED_MODULE_MAGIC;
 	clockfeed->thread = *threadret;
-	sfptpd_clockfeed = clockfeed;
 	return clockfeed;
 
 fail:
@@ -830,14 +825,15 @@ void sfptpd_clockfeed_remove_clock(struct sfptpd_clockfeed *clockfeed,
 			     CLOCKFEED_MSG_REMOVE_CLOCK);
 }
 
-int sfptpd_clockfeed_subscribe(struct sfptpd_clock *clock,
+int sfptpd_clockfeed_subscribe(struct sfptpd_clockfeed *clockfeed,
+			       struct sfptpd_clock *clock,
 			       struct sfptpd_clockfeed_sub **sub)
 {
 	struct clockfeed_msg *msg;
 	int rc;
 
-	assert(sfptpd_clockfeed);
-	assert(sfptpd_clockfeed->magic == CLOCKFEED_MODULE_MAGIC);
+	assert(clockfeed);
+	assert(clockfeed->magic == CLOCKFEED_MODULE_MAGIC);
 	assert(clock);
 	assert(sub);
 
@@ -858,7 +854,7 @@ int sfptpd_clockfeed_subscribe(struct sfptpd_clock *clock,
 
 	msg->u.subscribe_req.clock = clock;
 
-	rc = SFPTPD_MSG_SEND_WAIT(msg, sfptpd_clockfeed->thread,
+	rc = SFPTPD_MSG_SEND_WAIT(msg, clockfeed->thread,
 				  CLOCKFEED_MSG_SUBSCRIBE);
 	if (rc == 0) {
 		assert(msg->u.subscribe_resp.sub);
@@ -869,12 +865,13 @@ int sfptpd_clockfeed_subscribe(struct sfptpd_clock *clock,
 	return rc;
 }
 
-void sfptpd_clockfeed_unsubscribe(struct sfptpd_clockfeed_sub *subscriber)
+void sfptpd_clockfeed_unsubscribe(struct sfptpd_clockfeed *clockfeed,
+				 struct sfptpd_clockfeed_sub *subscriber)
 {
 	struct clockfeed_msg *msg;
 
-	assert(sfptpd_clockfeed);
-	assert(sfptpd_clockfeed->magic == CLOCKFEED_MODULE_MAGIC);
+	assert(clockfeed);
+	assert(clockfeed->magic == CLOCKFEED_MODULE_MAGIC);
 
 	if (subscriber == NULL)
 		return;
@@ -891,7 +888,7 @@ void sfptpd_clockfeed_unsubscribe(struct sfptpd_clockfeed_sub *subscriber)
 
 	msg->u.unsubscribe.sub = subscriber;
 
-	SFPTPD_MSG_SEND_WAIT(msg, sfptpd_clockfeed->thread,
+	SFPTPD_MSG_SEND_WAIT(msg, clockfeed->thread,
 			     CLOCKFEED_MSG_UNSUBSCRIBE);
 }
 

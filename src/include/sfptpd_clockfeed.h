@@ -24,7 +24,8 @@ struct sfptpd_clockfeed;
 struct sfptpd_clockfeed_sub;
 
 /* A sample from a clock feed. This captures NIC and system clock timestamps,
- * an error code relating to the sample (or zero) and a sequence number. */
+ * an error code relating to the sample (or zero) and a sequence number.
+ * This structure is expected to be used via the helper functions. */
 struct sfptpd_clockfeed_sample {
 	uint64_t seq;
 	struct sfptpd_timespec mono;
@@ -69,17 +70,21 @@ void sfptpd_clockfeed_remove_clock(struct sfptpd_clockfeed *clockfeed,
 				   struct sfptpd_clock *clock);
 
 /* Subscribe to the feed for a given clock.
+ * @param clockfeed Handle to the clock feed state.
  * @param clock The clock to which to subscribe.
  * @param shm Pointer to which to write the subscription handle.
  * @return 0 on success, else errno.
  */
-int sfptpd_clockfeed_subscribe(struct sfptpd_clock *clock,
+int sfptpd_clockfeed_subscribe(struct sfptpd_clockfeed *clockfeed,
+			       struct sfptpd_clock *clock,
 			       struct sfptpd_clockfeed_sub **shm);
 
 /* Unsubscribe from the feed for a given clock.
+ * @param clockfeed Handle to the clock feed state.
  * @param clock The clock to which to subscribe.
  */
-void sfptpd_clockfeed_unsubscribe(struct sfptpd_clockfeed_sub *clock);
+void sfptpd_clockfeed_unsubscribe(struct sfptpd_clockfeed *clockfeed,
+				  struct sfptpd_clockfeed_sub *clock);
 
 /* Compare two clocks using clock feed samples.
  * @param feed1 The first clock feed.
