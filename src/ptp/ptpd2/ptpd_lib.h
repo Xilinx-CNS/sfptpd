@@ -41,6 +41,7 @@ struct ptpd_port_snapshot {
 		LongDouble announce_interval;
 		UInteger8 domain_number;
 		Boolean slave_only;
+		Boolean master_only;
 		PortCommunicationCapabilities effective_comm_caps;
 	} port;
 

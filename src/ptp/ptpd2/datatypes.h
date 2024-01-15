@@ -478,6 +478,7 @@ typedef struct ptpd_port_config {
 	Integer8 announceInterval;
 	Integer8 announceReceiptTimeout;
 	Boolean slaveOnly;
+	Boolean masterOnly;
 	Integer8 syncInterval;
 	Integer8 syncReceiptTimeout;
 	Integer8 minDelayReqInterval;
@@ -735,6 +736,7 @@ struct ptpd_port_context {
 	UInteger8 priority2;
 	UInteger8 domainNumber;
 	Boolean slaveOnly;
+	Boolean masterOnly; /**< 1588-2019 8.2.15.5.2 */
 
 	/* Current data set */
 

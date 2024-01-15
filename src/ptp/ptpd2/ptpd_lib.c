@@ -97,6 +97,7 @@ void ptpd_config_port_initialise(struct ptpd_port_config *config,
 	config->delay_resp_ignore_port_id = FALSE;
 
 	config->slaveOnly = TRUE;
+	config->masterOnly = FALSE;
 
 	/* Set some reasonable defaults for the slave event monitoring
 	   mechanism. */
@@ -642,6 +643,7 @@ int ptpd_get_snapshot(struct ptpd_port_context *ptpd, struct ptpd_port_snapshot 
 	snapshot->port.announce_interval = powl(2, ptpd->logAnnounceInterval);
 	snapshot->port.domain_number = ptpd->domainNumber;
 	snapshot->port.slave_only = ptpd->slaveOnly;
+	snapshot->port.master_only = ptpd->masterOnly;
 	snapshot->current.servo_outlier_threshold = servo_get_outlier_threshold(&ptpd->servo);
 	snapshot->port.effective_comm_caps = ptpd->effective_comm_caps;
 

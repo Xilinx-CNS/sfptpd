@@ -106,6 +106,7 @@ void initData(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 
 	ptpClock->domainNumber = rtOpts->domainNumber;
 	ptpClock->slaveOnly = rtOpts->slaveOnly;
+	ptpClock->masterOnly = rtOpts->masterOnly;
 
 	/* Port configuration data set */
 
@@ -816,8 +817,11 @@ bmc(ForeignMasterDS *foreignMasterDS,
 	     rtOpts->name,
 	     foreignMasterDS->number_records);
 
-	/* If no records, maintain existing state */
-	if (foreignMasterDS->number_records == 0) {
+	/* If no records, maintain existing state.
+	 * If master-only (1588-2019 9.2.2.2), admit no announcements to
+	 * best master clock algorithm.  */
+	if (foreignMasterDS->number_records == 0 ||
+	    ptpClock->masterOnly) {
 		if (ptpClock->portState == PTPD_MASTER) {
 			m1(rtOpts, ptpClock);
 		}

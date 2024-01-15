@@ -147,9 +147,19 @@ static int parse_ptp_mode(struct sfptpd_config_section *section, const char *opt
 
 	if (strcmp(params[0], "slave") == 0) {
 		ptp->ptpd_port.slaveOnly = TRUE;
+		ptp->ptpd_port.masterOnly = FALSE;
+		ptp->ptpd_port.node_type = PTPD_NODE_CLOCK;
 	} else if (strcmp(params[0], "master") == 0) {
 		ptp->ptpd_port.slaveOnly = FALSE;
+		ptp->ptpd_port.masterOnly = FALSE;
+		ptp->ptpd_port.node_type = PTPD_NODE_CLOCK;
+	} else if (strcmp(params[0], "master-only") == 0) {
+		ptp->ptpd_port.slaveOnly = FALSE;
+		ptp->ptpd_port.masterOnly = TRUE;
+		ptp->ptpd_port.node_type = PTPD_NODE_CLOCK;
 	} else if (strcmp(params[0], "monitor") == 0) {
+		ptp->ptpd_port.slaveOnly = FALSE;
+		ptp->ptpd_port.masterOnly = FALSE;
 		ptp->ptpd_port.node_type = PTPD_NODE_MONITOR;
 	} else {
 		rc = EINVAL;
@@ -1300,7 +1310,7 @@ static const sfptpd_config_option_t ptp_config_options[] =
 		"2.1 => IEEE1588-2019. The default version is 2.0.",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
 		parse_ptp_version},
-	{"ptp_mode", "<slave | master | monitor>",
+	{"ptp_mode", "<slave | master | master-only | monitor>",
 		"Specifies the PTP mode of operation. The default mode is slave",
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_ptp_mode},
