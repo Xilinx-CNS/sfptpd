@@ -308,9 +308,7 @@ void s1(ForeignMasterRecord *master, PtpClock *ptpClock, const RunTimeOpts *rtOp
 	/* TODO This is almost certainly wrong. Surely we should never get here
 	 * unless in the slave state - but note that s1 is called before setting
 	 * the state ?! */
-	if (ptpClock->portState == PTPD_SLAVE ||
-	    ptpClock->portState == PTPD_UNCALIBRATED ||
-	    ptpClock->portState == PTPD_PASSIVE) {
+	if (ptpClock->portState == PTPD_SLAVE || ptpClock->portState == PTPD_PASSIVE) {
 		previousLeap59 = ptpClock->timePropertiesDS.leap59;
 		previousLeap61 = ptpClock->timePropertiesDS.leap61;
 		previousUtcOffset = ptpClock->timePropertiesDS.currentUtcOffset;
@@ -416,8 +414,7 @@ void s1(ForeignMasterRecord *master, PtpClock *ptpClock, const RunTimeOpts *rtOp
 	/* TODO This is almost certainly wrong. Surely we should never get here
 	 * unless in the slave state - but note that s1 is called before setting
 	 * the state ?! */
-        if (ptpClock->portState == PTPD_SLAVE ||
-	    ptpClock->portState == PTPD_UNCALIBRATED) {
+        if (ptpClock->portState == PTPD_SLAVE) {
 		/* We must not take leap second updates while a leap second
 		 * is in progress. This shouldn't happen but we should not
 		 * rely on the master behaving. We'll take the update when
@@ -455,7 +452,7 @@ void s1(ForeignMasterRecord *master, PtpClock *ptpClock, const RunTimeOpts *rtOp
 				       ptpClock->timePropertiesDS.currentUtcOffset);
 		}
 	} else if (previousUtcOffset != (int)ptpClock->timePropertiesDS.currentUtcOffset)
-		INFO("ptp %s: UTC offset changed from %d to %d on entering SLAVE|UNCALIBRATED state\n",
+		INFO("ptp %s: UTC offset changed from %d to %d on entering SLAVE state\n",
 		     rtOpts->name, previousUtcOffset, ptpClock->timePropertiesDS.currentUtcOffset);
 }
 
@@ -639,12 +636,10 @@ bmcStateDecision(ForeignMasterRecord *bestForeignMaster,
 			 * to zero when master changes */
 			ptpClock->unicast_delay_resp_failures = 0;
 
-			if (ptpClock->portState == PTPD_SLAVE ||
-			    ptpClock->portState == PTPD_UNCALIBRATED)
+			if (ptpClock->portState == PTPD_SLAVE)
 				displayStatus(ptpClock, "state: ");
 		}
-		return (sfptpd_clock_get_been_locked(ptpClock->servo.clock) ?
-			PTPD_SLAVE : PTPD_UNCALIBRATED);
+		return PTPD_SLAVE;
 	}
 
 	if ((!ptpClock->foreign.number_records) &&
@@ -700,12 +695,10 @@ bmcStateDecision(ForeignMasterRecord *bestForeignMaster,
 				 * to zero when master changes */
 				ptpClock->unicast_delay_resp_failures = 0;
 
-				if(ptpClock->portState == PTPD_SLAVE ||
-				   ptpClock->portState == PTPD_UNCALIBRATED)
+				if(ptpClock->portState == PTPD_SLAVE)
 					displayStatus(ptpClock, "state: ");
 			}
-			return (sfptpd_clock_get_been_locked(ptpClock->servo.clock) ?
-				PTPD_SLAVE : PTPD_UNCALIBRATED);
+			return PTPD_SLAVE;
 		} else {
 			DBG("Error in bmcDataSetComparison..\n");
 		}
@@ -896,9 +889,7 @@ bmc(ForeignMasterDS *foreignMasterDS,
 
 		return bmcStateDecision(&foreignMasterDS->records[foreignMasterDS->best_index],
 					rtOpts, ptpClock);
-	} else if (discriminator_disqual &&
-		   (ptpClock->portState == PTPD_SLAVE ||
-		    ptpClock->portState == PTPD_UNCALIBRATED)) {
+	} else if (discriminator_disqual && ptpClock->portState == PTPD_SLAVE) {
 		WARNING("ptp %s: bmc: only remaining master is outside discriminator threshold\n", rtOpts->name);
 		return PTPD_LISTENING;
 	} else {

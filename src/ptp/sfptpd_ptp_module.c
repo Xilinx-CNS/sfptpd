@@ -389,12 +389,13 @@ static sfptpd_sync_module_state_t ptp_translate_state(ptpd_state_e ptpd_port_sta
 	case PTPD_FAULTY: sfptpd_port_state = SYNC_MODULE_STATE_FAULTY; break;
 	case PTPD_DISABLED: sfptpd_port_state = SYNC_MODULE_STATE_DISABLED; break;
 	case PTPD_LISTENING: sfptpd_port_state = SYNC_MODULE_STATE_LISTENING; break;
-	case PTPD_PRE_MASTER:
 	case PTPD_MASTER: sfptpd_port_state = SYNC_MODULE_STATE_MASTER; break;
 	case PTPD_PASSIVE: sfptpd_port_state = SYNC_MODULE_STATE_PASSIVE; break;
-	case PTPD_UNCALIBRATED:
 	case PTPD_SLAVE: sfptpd_port_state = SYNC_MODULE_STATE_SLAVE; break;
 
+	/* We don't expect these - treat the same as the default case */
+	case PTPD_PRE_MASTER:
+	case PTPD_UNCALIBRATED:
 	default:
 		sfptpd_port_state = SYNC_MODULE_STATE_FAULTY;
 		break;
@@ -412,17 +413,16 @@ const char *ptp_state_text(ptpd_state_e state, unsigned int alarms)
 		"ptp-faulty",		/* PTPD_FAULTY */
 		"ptp-disabled",		/* PTPD_DISABLED */
 		"ptp-listening",	/* PTPD_LISTENING*/
-		"ptp-pre-master",	/* PTPD_PRE_MASTER */
+		"ptp-faulty",		/* PTPD_PRE_MASTER */
 		"ptp-master",		/* PTPD_MASTER */
 		"ptp-passive",		/* PTPD_PASSIVE */
-		"ptp-uncalibrated",	/* PTPD_UNCALIBRATED */
+		"ptp-faulty",		/* PTPD_UNCALIBRATED */
 		"ptp-slave",		/* PTPD_SLAVE */
 	};
 
 	assert(state <= PTPD_SLAVE);
 
-	if ((state == PTPD_SLAVE || state == PTPD_UNCALIBRATED) &&
-	    (alarms != 0))
+	if ((state == PTPD_SLAVE) && (alarms != 0))
 		return "ptp-slave-alarm";
 
 	return states_text[state];
@@ -717,8 +717,7 @@ static void ptp_stats_update(sfptpd_ptp_instance_t *instance)
 	sync_time = ptpd_port_snapshot->current.last_offset_time;
 	port_state = ptpd_port_snapshot->port.state;
 
-	if (port_state != PTPD_SLAVE ||
-	    port_state != PTPD_UNCALIBRATED) {
+	if (port_state != PTPD_SLAVE) {
 		struct sfptpd_timespec sync_time;
 
 		/* Record unqualified samples if not in slave state by polling.
@@ -2053,14 +2052,7 @@ static bool ptp_update_instance_state(struct sfptpd_ptp_instance *instance,
 		sfptpd_sync_instance_status_t status = { 0 };
 		status.state = ptp_translate_state(snapshot.port.state);
 		status.alarms = ptp_get_alarms_snapshot(instance);
-		if (sfptpd_clock_get_been_locked(instance->intf->clock)) {
-			status.clock = instance->intf->clock;
-		} else {
-			/* If the servo has not yet operated on the PTP LRC
-			 * then this should not be reported as this sync
-			 * instance's LRC. */
-			status.clock = sfptpd_clock_get_system_clock();
-		}
+		status.clock = instance->intf->clock;
 		status.user_priority = instance->config->priority;
 		status.clustering_score = current_clustering_score;
 		sfptpd_time_float_ns_to_timespec(instance->ptpd_port_snapshot.current.offset_from_master,
@@ -2087,8 +2079,7 @@ static bool ptp_update_instance_state(struct sfptpd_ptp_instance *instance,
 	 * to the sync engine. Note that we only do this if we are the currently
 	 * selected instance and we are a slave! */
 	if (((instance->ctrl_flags & SYNC_MODULE_SELECTED) != 0) &&
-	    (snapshot.port.state == PTPD_SLAVE || snapshot.port.state == PTPD_UNCALIBRATED) &&
-	    leap_second_changed) {
+	    (snapshot.port.state == PTPD_SLAVE) && leap_second_changed) {
 		sfptpd_time_t guard_interval = 2 * snapshot.port.announce_interval;
 
 		if (snapshot.time.leap59) {
@@ -2213,8 +2204,7 @@ static void ptp_send_instance_rt_stats_update(struct sfptpd_engine *engine,
 
 	bond_info = ptp_get_bond_info(instance);
 
-	if (instance->ptpd_port_snapshot.port.state == PTPD_SLAVE ||
-	    instance->ptpd_port_snapshot.port.state == PTPD_UNCALIBRATED) {
+	if (instance->ptpd_port_snapshot.port.state == PTPD_SLAVE) {
 		struct sfptpd_timespec *offset_time = &instance->ptpd_port_snapshot.current.last_offset_time;
 		ofm_ns = instance->ptpd_port_snapshot.current.offset_from_master;
 		owd_ns = instance->ptpd_port_snapshot.current.one_way_delay;
@@ -2331,21 +2321,12 @@ static void ptp_on_get_status(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 
 	status->state = ptp_translate_state(instance->ptpd_port_snapshot.port.state);
 	status->alarms = ptp_get_alarms_snapshot(instance);
+	status->clock = instance->intf->clock;
 	status->user_priority = instance->config->priority;
 	status->local_accuracy = ptp_get_instance_accuracy(instance);
 
-	if (sfptpd_clock_get_been_locked(instance->intf->clock)) {
-		status->clock = instance->intf->clock;
-	} else {
-		/* If the servo has not yet operated on the PTP LRC
-		 * then this should not be reported as this sync
-		 * instance's LRC. */
-		status->clock = sfptpd_clock_get_system_clock();
-	}
-
 	/* The offset is only valid in the slave state */
-	if (instance->ptpd_port_snapshot.port.state == PTPD_SLAVE ||
-	    instance->ptpd_port_snapshot.port.state == PTPD_UNCALIBRATED) {
+	if (instance->ptpd_port_snapshot.port.state == PTPD_SLAVE) {
 		sfptpd_time_float_ns_to_timespec(instance->ptpd_port_snapshot.current.offset_from_master,
 						 &status->offset_from_master);
 	} else {
@@ -2553,7 +2534,6 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 		if_multicast = snapshot->port.effective_comm_caps.delayRespCapabilities & PTPD_COMM_MULTICAST_CAPABLE ? " multicast" :"";
 
 		switch (snapshot->port.state) {
-		case PTPD_UNCALIBRATED:
 		case PTPD_SLAVE:
 			ptp_port_update_derived(instance);
 			format = "instance: %s\n"
@@ -2833,7 +2813,6 @@ static void ptp_on_write_topology(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_m
 		sfptpd_log_topology_write_1to1_connector(stream, false, false, "?");
 		break;
 
-	case PTPD_UNCALIBRATED:
 	case PTPD_SLAVE:
 	case PTPD_PASSIVE:
 		sfptpd_log_topology_write_field(stream, true, "grandmaster");

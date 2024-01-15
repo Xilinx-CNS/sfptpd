@@ -211,7 +211,6 @@ displayStatus(PtpClock *ptpClock, const char *prefixMessage)
 	if (len > sizeof(sbuf)) len = sizeof(sbuf);
 
 	if (ptpClock->portState == PTPD_SLAVE ||
-	    ptpClock->portState == PTPD_UNCALIBRATED ||
 	    ptpClock->portState == PTPD_PASSIVE) {
 		len += snprintf(sbuf + len, sizeof(sbuf) - len, ", best master: ");
 		if (len > sizeof(sbuf)) len = sizeof(sbuf);

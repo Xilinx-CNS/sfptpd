@@ -645,8 +645,7 @@ int ptpd_get_snapshot(struct ptpd_port_context *ptpd, struct ptpd_port_snapshot 
 	snapshot->current.servo_outlier_threshold = servo_get_outlier_threshold(&ptpd->servo);
 	snapshot->port.effective_comm_caps = ptpd->effective_comm_caps;
 
-	if (ptpd->portState == PTPD_SLAVE ||
-	    ptpd->portState == PTPD_UNCALIBRATED) {
+	if (ptpd->portState == PTPD_SLAVE) {
 		snapshot->current.offset_from_master = servo_get_offset_from_master(&ptpd->servo);
 		snapshot->current.one_way_delay = servo_get_mean_path_delay(&ptpd->servo);
 		snapshot->current.last_offset_time = servo_get_time_of_last_offset(&ptpd->servo);
@@ -670,9 +669,7 @@ int ptpd_get_snapshot(struct ptpd_port_context *ptpd, struct ptpd_port_snapshot 
 
 	/* The grandmaster characteristics are only valid in the master, slave
 	 * and passive states. In all other states, return default values. */
-	if ((ptpd->portState == PTPD_MASTER) ||
-	    (ptpd->portState == PTPD_SLAVE) ||
-	    (ptpd->portState == PTPD_UNCALIBRATED) ||
+	if ((ptpd->portState == PTPD_MASTER) || (ptpd->portState == PTPD_SLAVE) ||
 	    (ptpd->portState == PTPD_PASSIVE)) {
 		memcpy(snapshot->parent.clock_id,
 		       ptpd->parentPortIdentity.clockIdentity,
