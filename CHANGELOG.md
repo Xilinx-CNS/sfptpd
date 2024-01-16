@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - populate PTP correctionField to reflect sub-nanosecond timestamps (sfptpd
     already used subnanosecond corrections received over the PTP network)
   - see notes below for current limitations
+- Add --socket option for sfptpdctl to control multiple processes. (SWPTP-624)
 - Add configurable patterns for log, state, control and stats paths. (SWPTP-649)
   - supports logging to a directory shared between hosts
     ```
