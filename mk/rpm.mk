@@ -15,6 +15,12 @@ HOST_DISTTAG := $(shell rpm --eval '%{?dist}' | cut -c2-)
 RPM_TOPDIR ?= $(shell rpm --eval '%{?_topdir}')
 
 RPM_OSVER ?= $(HOST_DISTTAG)
+RPM_DISTTAG ?= .$(RPM_OSVER)
+ifeq ($(strip $(RPM_DISTTAG)),none)
+USE_DISTTAG :=
+else
+USE_DISTTAG := $(RPM_DISTTAG)
+endif
 
 RPM_SPEC_INDIR = scripts/rpm/$(RPM_OSVER)
 RPM_SUBDIRS = SOURCES SPECS
@@ -28,9 +34,15 @@ RPM_SPECPATH = $(RPM_SPECS)/$(RPM_SPECFILE)
 SRPM_MANIFEST = $(BUILD_DIR)/srpm.manifest
 
 VERSION_QUIRKS = $(if $(findstring $(RPM_OSVER),el6 el7),--no-post-revision-modifier)
+ifneq ($(RPM_DISTTAG),.$(RPM_OSVER))
+FORCE_DISTTAG = 1
+FORCE_DISTTAG_TO := $(USE_DISTTAG)
+RPMBUILD_OPTS += --undefine "dist"
+else
 ifneq ($(RPM_OSVER),$(HOST_DISTTAG))
-FORCE_DISTTAG := .$(RPM_OSVER)
-RPMBUILD_OPTS += --define "dist $(FORCE_DISTTAG)"
+FORCE_DISTTAG_TO := .$(RPM_OSVER)
+RPMBUILD_OPTS += --define "dist $(FORCE_DISTTAG_TO)"
+endif
 endif
 
 $(RPM_ALLDIRS):
@@ -49,7 +61,7 @@ rpm_prep: rpm_build_tree
 	tar cz --exclude=$(BUILD_DIR) --exclude=$(RPM_TOPDIR) -f $(RPM_SOURCES)/sfptpd-$(SFPTPD_RPM_VER).tgz --transform=s,^\.,sfptpd-$(SFPTPD_RPM_VER),g .
 	sed -i "s/^\(Version: \).*/\1 $(SFPTPD_RPM_VER)/g" $(RPM_SPECPATH)
 ifdef FORCE_DISTTAG
-	sed -i "s/^\(Release: .*\)%{.*dist}/\1$(FORCE_DISTTAG)/g" $(RPM_SPECPATH)
+	sed -i "s/^\(Release: .*\)%{.*dist}/\1$(FORCE_DISTTAG_TO)/g" $(RPM_SPECPATH)
 endif
 	echo ENV:SFPTPD_VERSION=$(SFPTPD_RPM_VER)
 
