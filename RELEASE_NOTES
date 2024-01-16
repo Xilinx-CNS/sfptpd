@@ -1,7 +1,7 @@
 Solarflare Enhanced PTP Daemon (sfptpd)
 Advanced Micro Devices, Inc.
 =======================================
-Version: v3.7.1.1006
+Version: v3.7.1.1007
 
 
 Overview
@@ -882,4 +882,4 @@ NTP_COPYRIGHT.html. The following files in the source code are affected:
 The version sourced is ntp-4.2.6p5.
 
 
-(c) Copyright 2012-2023 Xilinx, Inc.
+(c) Copyright 2012-2024 Xilinx, Inc.
