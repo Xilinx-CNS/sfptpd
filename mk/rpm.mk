@@ -54,7 +54,11 @@ rpm_build_tree: $(RPM_ALLDIRS)
 
 .PHONY: rpm_prep
 
+ifdef RPM_VER
+rpm_prep: SFPTPD_RPM_VER := $(RPM_VER)
+else
 rpm_prep: SFPTPD_RPM_VER := $(shell scripts/sfptpd_versioning $(VERSION_QUIRKS) derive)
+endif
 rpm_prep: rpm_build_tree
 	cp -a $(RPM_SPEC_INDIR)/* $(RPM_SOURCES)/
 	mv $(RPM_SOURCES)/$(RPM_SPECFILE) $(RPM_SPECS)/
