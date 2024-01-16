@@ -42,6 +42,7 @@ struct ptpd_port_snapshot {
 		UInteger8 domain_number;
 		Boolean slave_only;
 		Boolean master_only;
+		UInteger32 last_sync_ifindex;
 		PortCommunicationCapabilities effective_comm_caps;
 	} port;
 

@@ -63,7 +63,7 @@
 #include "sfptpd_time.h"
 
 static void handleAnnounce(MsgHeader*, ssize_t, Boolean, RunTimeOpts*, PtpClock*);
-static void handleSync(const MsgHeader*, ssize_t, struct sfptpd_timespec*, Boolean, Boolean, RunTimeOpts*, PtpClock*);
+static void handleSync(const MsgHeader*, ssize_t, struct sfptpd_timespec*, Boolean, UInteger32, Boolean, RunTimeOpts*, PtpClock*);
 static void handleFollowUp(const MsgHeader*, ssize_t, const MsgFollowUp*, Boolean, Boolean, RunTimeOpts*, PtpClock*);
 static void handlePDelayReq(MsgHeader*, ssize_t, struct sfptpd_timespec*, Boolean, Boolean, RunTimeOpts*, PtpClock*);
 static void handleDelayReq(const MsgHeader*, ssize_t, struct sfptpd_timespec*, Boolean, Boolean, RunTimeOpts*, PtpClock*);
@@ -83,8 +83,8 @@ static void issueDelayResp(struct sfptpd_timespec*, MsgHeader*, RunTimeOpts*, Pt
 static void issuePDelayRespFollowUp(struct sfptpd_timespec*, MsgHeader*, RunTimeOpts*, PtpClock*, const UInteger16);
 static void issueManagementRespOrAck(MsgManagement*, RunTimeOpts*, PtpClock*, const struct sockaddr_storage *address, socklen_t addressLength);
 static void issueManagementErrorStatus(MsgManagement*, RunTimeOpts*, PtpClock*, const struct sockaddr_storage *address, socklen_t addressLength);
-static void processMessage(InterfaceOpts *ifOpts, PtpInterface *ptpInterface, struct sfptpd_timespec *timestamp, Boolean timestampValid, ssize_t length);
-static void processPortMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock, struct sfptpd_timespec *timestamp, Boolean timestampValid, ssize_t length, int offset, acl_bitmap_t acls_checked, acl_bitmap_t acls_passed);
+static void processMessage(InterfaceOpts *ifOpts, PtpInterface *ptpInterface, struct sfptpd_timespec *timestamp, Boolean timestampValid, UInteger32 rxPhysIfindex, ssize_t length);
+static void processPortMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock, struct sfptpd_timespec *timestamp, Boolean timestampValid, UInteger32 rxPhysIfindex, ssize_t length, int offset, acl_bitmap_t acls_checked, acl_bitmap_t acls_passed);
 static ssize_t unpackPortMessage(PtpClock *ptpClock, ssize_t safe_length);
 static bool processTLVs(RunTimeOpts *rtOpts, PtpClock *ptpClock, int payload_offset,
 			ssize_t  unpack_result, ssize_t safe_length, Boolean isFromSelf,
@@ -92,7 +92,8 @@ static bool processTLVs(RunTimeOpts *rtOpts, PtpClock *ptpClock, int payload_off
 			acl_bitmap_t acls_checked, acl_bitmap_t acls_passed);
 static void handleMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
 			  ssize_t safe_length, Boolean isFromSelf,
-			  struct sfptpd_timespec *timestamp, Boolean timestampValid);
+			  struct sfptpd_timespec *timestamp, Boolean timestampValid,
+			  UInteger32 rxPhysIfindex);
 static void processSyncFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock, const UInteger16 sequenceId);
 static void processDelayReqFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock);
 static void processPDelayReqFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock);
@@ -670,6 +671,9 @@ doTimerTick(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 			SYNC_MODULE_ALARM_SET(ptpClock->portAlarms, NO_SYNC_PKTS);
 			ptpClock->counters.syncTimeouts++;
 
+			/* Reset the last sync index */
+			ptpClock->lastSyncIfindex = 0;
+
 			/* Record the fact that the data is missing */
 			servo_missing_m2s_ts(&ptpClock->servo);
 
@@ -936,7 +940,7 @@ static bool checkACLmask(acl_bitmap_t mask,
 
 static void
 processMessage(InterfaceOpts *ifOpts, PtpInterface *ptpInterface, struct sfptpd_timespec *timestamp,
-	       Boolean timestampValid, ssize_t length)
+	       Boolean timestampValid, UInteger32 rxPhysIfindex, ssize_t length)
 {
 	PtpClock *port;
 	ssize_t unpack_result;
@@ -1019,8 +1023,8 @@ processMessage(InterfaceOpts *ifOpts, PtpInterface *ptpInterface, struct sfptpd_
 		     port->portIdentity.portNumber,
 		     port->rtOpts.name);
 		processPortMessage(&port->rtOpts, port, timestamp,
-				   timestampValid, length, UNPACK_GET_SIZE(unpack_result),
-				   acls_checked, acls_passed);
+				   timestampValid, rxPhysIfindex, length,
+				   UNPACK_GET_SIZE(unpack_result), acls_checked, acls_passed);
 	} else {
 		DBG2("ignoring message from %s for unhandled domainNumber %d\n",
 		     ptpInterface->ifOpts.ifaceName,
@@ -1041,7 +1045,7 @@ processMessage(InterfaceOpts *ifOpts, PtpInterface *ptpInterface, struct sfptpd_
 static void
 processPortMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
 		   struct sfptpd_timespec *timestamp, Boolean timestampValid,
-		   ssize_t length, int offset,
+		   UInteger32 rxPhysIfindex, ssize_t length, int offset,
 		   acl_bitmap_t acls_checked, acl_bitmap_t acls_passed)
 {
 	PtpInterface *ptpInterface;
@@ -1134,7 +1138,8 @@ processPortMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
 			handleMessage(rtOpts,
 				      ptpClock,
 				      safe_length, isFromSelf,
-				      timestamp, timestampValid);
+				      timestamp, timestampValid,
+				      rxPhysIfindex);
 		}
 	}
 }
@@ -1428,7 +1433,8 @@ processTLVs(RunTimeOpts *rtOpts, PtpClock *ptpClock, int payload_offset,
 static void
 handleMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
 	      ssize_t safe_length, Boolean isFromSelf,
-	      struct sfptpd_timespec *timestamp, Boolean timestampValid)
+	      struct sfptpd_timespec *timestamp, Boolean timestampValid,
+	      UInteger32 rxPhysIfindex)
 {
 	PtpInterface *ptpInterface;
 
@@ -1451,7 +1457,7 @@ handleMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
 		break;
 	case PTPD_MSG_SYNC:
 		handleSync(&ptpInterface->msgTmpHeader, safe_length,
-			   timestamp, timestampValid,
+			   timestamp, timestampValid, rxPhysIfindex,
 			   isFromSelf, rtOpts, ptpClock);
 		break;
 	case PTPD_MSG_FOLLOW_UP:
@@ -1500,10 +1506,11 @@ doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 	ssize_t length;
 	Boolean timestampValid = FALSE;
 	struct sfptpd_timespec timestamp = { 0, 0, 0 };
+	UInteger32 rxPhysIfindex = 0;
 
 	if (event) {
 		length = netRecvEvent(ptpInterface->msgIbuf, ptpInterface, ifOpts,
-				      &timestamp, &timestampValid);
+				      &timestamp, &timestampValid, &rxPhysIfindex);
 		if (length < 0) {
 			PERROR("failed to receive on the event socket\n");
 			toStateAllPorts(PTPD_FAULTY, ptpInterface);
@@ -1512,7 +1519,8 @@ doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 		}
 
 		if (length > 0)
-			processMessage(ifOpts, ptpInterface, &timestamp, timestampValid, length);
+			processMessage(ifOpts, ptpInterface, &timestamp, timestampValid,
+						   rxPhysIfindex, length);
 	}
 
 	if (general) {
@@ -1525,7 +1533,8 @@ doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 		}
 
 		if (length > 0)
-			processMessage(ifOpts, ptpInterface, &timestamp, FALSE, length);
+			processMessage(ifOpts, ptpInterface, &timestamp, FALSE,
+						   rxPhysIfindex, length);
 	}
 }
 
@@ -1652,7 +1661,8 @@ handleAnnounce(MsgHeader *header, ssize_t length,
 
 static void
 handleSync(const MsgHeader *header, ssize_t length,
-	   struct sfptpd_timespec *time, Boolean timestampValid, Boolean isFromSelf,
+	   struct sfptpd_timespec *time, Boolean timestampValid,
+	   UInteger32 rxPhysIfindex, Boolean isFromSelf,
 	   RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
 	Integer8 msgInterval;
@@ -1705,6 +1715,12 @@ handleSync(const MsgHeader *header, ssize_t length,
 				ptpClock->counters.rxPktNoTimestamp++;
 				WARNING("ptp %s: received Sync with no timestamp\n", rtOpts->name);
 				break;
+			}
+
+			/* If the ifindex is valid, then store it to be used later */
+			if (rxPhysIfindex != 0 &&
+				rxPhysIfindex != ptpClock->lastSyncIfindex) {
+				ptpClock->lastSyncIfindex = rxPhysIfindex;
 			}
 
 			/* Clear the RX timestamp alarm */

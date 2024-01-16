@@ -783,6 +783,7 @@ struct ptpd_port_context {
 	UInteger32 portAlarms;
 	Integer8 logMinDelayReqInterval;
 	Integer8 logDelayRespReceiptTimeout;
+	UInteger32 lastSyncIfindex;
 
 	/* Configurable members */
 	Integer8 logAnnounceInterval;

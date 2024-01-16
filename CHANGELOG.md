@@ -19,6 +19,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - populate PTP correctionField to reflect sub-nanosecond timestamps (sfptpd
     already used subnanosecond corrections received over the PTP network)
   - see notes below for current limitations
+- Improve LACP support. (SWPTP-738)
+  - select the local reference clock to be the one on which the latest sync
+    message was received (SWPTP-1434).
 - Add --socket option for sfptpdctl to control multiple processes. (SWPTP-624)
 - Add configurable patterns for log, state, control and stats paths. (SWPTP-649)
   - supports logging to a directory shared between hosts

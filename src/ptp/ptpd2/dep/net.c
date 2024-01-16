@@ -92,6 +92,11 @@
 #define SO_TIMESTAMPING  37
 #endif
 
+#ifndef SOF_TIMESTAMPING_OPT_PKTINFO
+#define SOF_TIMESTAMPING_OPT_PKTINFO (1<<13)
+#define SCM_TIMESTAMPING_PKTINFO     58
+#endif
+
 #endif /*linux*/
 
 #include "../ptpd.h"
@@ -1057,9 +1062,10 @@ static int getTxTimestamp(PtpClock *ptpClock, char *pdu, int pdulen,
 /* Used to get receive timestamps  */
 static Boolean getRxTimestamp(PtpInterface *ptpInterface, char *pdu, int pduLength,
 			      struct msghdr *msg, ptpd_timestamp_type_e tsType,
-			      struct sfptpd_timespec *timestamp)
+			      struct sfptpd_timespec *timestamp, UInteger32 *rxPhysIfindex)
 {
 	struct cmsghdr *cmsg;
+	Boolean timestampValid = FALSE;
 
 	if (msg->msg_controllen <= 0) {
 		DBG2("received PTP event packet with no timestamp (%zu)\n",
@@ -1070,6 +1076,7 @@ static Boolean getRxTimestamp(PtpInterface *ptpInterface, char *pdu, int pduLeng
 	for (cmsg = CMSG_FIRSTHDR(msg); cmsg != NULL; cmsg = CMSG_NXTHDR(msg, cmsg)) {
 		struct timeval *tv;
 		struct timespec *ts;
+		struct scm_ts_pktinfo *ts_pktinfo;
 
 		DUMP("CM", cmsg, cmsg->cmsg_len);
 
@@ -1086,7 +1093,7 @@ static Boolean getRxTimestamp(PtpInterface *ptpInterface, char *pdu, int pduLeng
 				return FALSE;
 			}
 			sfptpd_time_init(timestamp, tv->tv_sec, tv->tv_usec * 1000, 0);
-			return TRUE;
+			timestampValid = TRUE;
 			break;
 
 		case SCM_TIMESTAMPNS:
@@ -1098,19 +1105,57 @@ static Boolean getRxTimestamp(PtpInterface *ptpInterface, char *pdu, int pduLeng
 				return FALSE;
 			}
 			sfptpd_time_init(timestamp, ts->tv_sec, ts->tv_nsec, 0);
-			return TRUE;
+			timestampValid = TRUE;
 			break;
 
 		case SO_TIMESTAMPING:
-			return parse_timestamp(CMSG_DATA(cmsg), cmsg->cmsg_len,
-					       tsType,
-					       ptpInterface->ts_fmt,
-					       timestamp, FALSE);
+			timestampValid = parse_timestamp(CMSG_DATA(cmsg), cmsg->cmsg_len,
+											 tsType,
+											 ptpInterface->ts_fmt,
+											 timestamp, FALSE);
+			break;
+
+		case SCM_TIMESTAMPING_PKTINFO:
+			ts_pktinfo = (struct scm_ts_pktinfo*)CMSG_DATA(cmsg);
+
+			if(cmsg->cmsg_len < CMSG_LEN(sizeof(*ts_pktinfo))) {
+				ERROR("received short SCM_TIMESTAMPING_PKTINFO (%zu)\n",
+				      cmsg->cmsg_len);
+				return FALSE;
+			}
+			*rxPhysIfindex = ts_pktinfo->if_index;
+			break;
 
 		}
 	}
 
-	DBG("failed to retrieve rx time stamp\n");
+	if( ! timestampValid )
+		DBG("failed to retrieve rx time stamp\n");
+
+	return timestampValid;
+}
+
+
+/* Attempt to use SO_TIMESTAMPING with the provided flags, and try to include
+ * SOF_TIMESTAMPING_OPT_PKTINFO if possible. */
+static Boolean netTryEnableTimestampingPktinfo(PtpInterface *ptpInterface, int flags)
+{
+	int has_pktinfo_flag;
+
+	/* The option SOF_TIMESTAMPING_OPT_PKTINFO was only introduced in the
+	 * linux kernel version 4.13, and is not necessary for sfptpd. Older
+	 * kernels will return `-EINVAL` on setsockopt, so we try both with
+	 * and without this option and let other code deal with the presence/
+	 * absence of pktinfo for timestamping. */
+	flags |= SOF_TIMESTAMPING_OPT_PKTINFO;
+	for (has_pktinfo_flag = 1; has_pktinfo_flag >= 0; has_pktinfo_flag--) {
+		if (setsockopt(ptpInterface->transport.eventSock, SOL_SOCKET,
+			       SO_TIMESTAMPING, &flags, sizeof(flags)) == 0) {
+			return TRUE;
+		}
+		flags &= ~SOF_TIMESTAMPING_OPT_PKTINFO;
+	}
+
 	return FALSE;
 }
 
@@ -1157,8 +1202,7 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 		      | SOF_TIMESTAMPING_RX_SOFTWARE
 		      | SOF_TIMESTAMPING_SOFTWARE;
 
-		if (setsockopt(ptpInterface->transport.eventSock, SOL_SOCKET,
-			       SO_TIMESTAMPING, &flags, sizeof(flags)) == 0) {
+		if (netTryEnableTimestampingPktinfo(ptpInterface, flags)) {
 			ptpInterface->tsMethod = TS_METHOD_SO_TIMESTAMPING;
 			INFO("using SO_TIMESTAMPING software timestamps\n");
 			return TRUE;
@@ -1230,8 +1274,7 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 	else
 		flags |= SOF_TIMESTAMPING_RAW_HARDWARE;
 
-	if (setsockopt(ptpInterface->transport.eventSock, SOL_SOCKET,
-		       SO_TIMESTAMPING, &flags, sizeof(flags)) == 0) {
+	if (netTryEnableTimestampingPktinfo(ptpInterface, flags)) {
 		ptpInterface->tsMethod = TS_METHOD_SO_TIMESTAMPING;
 		INFO("using SO_TIMESTAMPING hardware timestamps\n");
 		return TRUE;
@@ -1569,7 +1612,8 @@ netSelect(struct sfptpd_timespec *timeout, struct ptpd_transport *transport, fd_
  */
 ssize_t
 netRecvEvent(Octet *buf, PtpInterface *ptpInterface, InterfaceOpts *ifOpts,
-	     struct sfptpd_timespec *timestamp, Boolean *timestampValid)
+	     struct sfptpd_timespec *timestamp, Boolean *timestampValid,
+	     UInteger32 *rxPhysIfindex)
 {
 	ssize_t ret;
 	struct msghdr msg;
@@ -1626,7 +1670,7 @@ netRecvEvent(Octet *buf, PtpInterface *ptpInterface, InterfaceOpts *ifOpts,
 	transport->receivedPackets++;
 
 	*timestampValid = getRxTimestamp(ptpInterface, buf, ret, &msg,
-					 ifOpts->timestampType, timestamp);
+					 ifOpts->timestampType, timestamp, rxPhysIfindex);
 
 	return ret;
 }

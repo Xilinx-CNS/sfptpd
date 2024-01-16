@@ -227,7 +227,7 @@ Boolean netInit(struct ptpd_transport*,InterfaceOpts*,PtpInterface*);
 Boolean netInitPort(PtpClock *ptpClock, RunTimeOpts *rtOpts);
 Boolean netShutdown(struct ptpd_transport*);
 int netSelect(struct sfptpd_timespec*,struct ptpd_transport*,fd_set*);
-ssize_t netRecvEvent(Octet*,PtpInterface*,InterfaceOpts*,struct sfptpd_timespec*,Boolean*);
+ssize_t netRecvEvent(Octet*,PtpInterface*,InterfaceOpts*,struct sfptpd_timespec*,Boolean*,UInteger32*);
 ssize_t netRecvGeneral(Octet*,struct ptpd_transport*);
 
 /* These functions all return 0 for success or an errno in the case of failure */

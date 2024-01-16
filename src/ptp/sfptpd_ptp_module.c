@@ -620,6 +620,7 @@ static struct sfptpd_interface *ptp_get_active_intf(sfptpd_ptp_instance_t *insta
 	sfptpd_ptp_bond_info_t *bond_info = &instance->intf->bond_info;
 	struct ptpd_port_context *port = instance->ptpd_port_private;
 	struct sfptpd_ptp_bond_phys_if *best_intf = NULL;
+	bool best_did_recv_last_sync = false;
 	bool best_is_clock_current = false;
 	unsigned int i;
 
@@ -633,7 +634,9 @@ static struct sfptpd_interface *ptp_get_active_intf(sfptpd_ptp_instance_t *insta
 	best_intf = &bond_info->physical_ifs[0];
 	for (i = 0; i < bond_info->num_physical_ifs; i++) {
 		struct sfptpd_ptp_bond_phys_if *intf = &bond_info->physical_ifs[i];
+		int intf_ifindex = sfptpd_interface_get_ifindex(intf->intf);
 		struct sfptpd_clock *intf_clock = sfptpd_interface_get_clock(intf->intf);
+		bool did_recv_last_sync = (intf_ifindex == port->lastSyncIfindex);
 		bool is_clock_current = (intf_clock == port->clock);
 
 		/* Disqualify any DOWN interfaces. */
@@ -641,6 +644,15 @@ static struct sfptpd_interface *ptp_get_active_intf(sfptpd_ptp_instance_t *insta
 			continue;
 		}
 
+		/* Prefer the interface that received the last Sync message,
+		 * as this should give us more accurate time sync. */
+		if (did_recv_last_sync) {
+			best_intf = intf;
+			best_did_recv_last_sync = did_recv_last_sync;
+		}
+		if (best_did_recv_last_sync) {
+			continue;
+		}
 
 		/* If we are an active-backup bond, then use the primary
 		 * interface where possible. */
@@ -2006,6 +2018,12 @@ static bool ptp_update_instance_state(struct sfptpd_ptp_instance *instance,
 	/* If the state has changed, make sure we update the packet timestamp
 	 * filter and notify the sync engine. */
 	if (snapshot.port.state != instance->ptpd_port_snapshot.port.state) {
+		state_changed = true;
+	}
+
+	/* If we received on a different port then report it so we can change LRC */
+	if (snapshot.port.last_sync_ifindex !=
+		instance->ptpd_port_snapshot.port.last_sync_ifindex) {
 		state_changed = true;
 	}
 

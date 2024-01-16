@@ -1678,6 +1678,20 @@ const char *sfptpd_interface_get_fw_version(struct sfptpd_interface *interface)
 }
 
 
+int sfptpd_interface_get_ifindex(struct sfptpd_interface *interface)
+{
+	int ifindex = 0;
+
+	if (interface_get_canonical_with_lock(&interface)) {
+		assert(interface->magic == SFPTPD_INTERFACE_MAGIC);
+		ifindex = interface->if_index;
+		interface_unlock();
+	}
+
+	return ifindex;
+}
+
+
 void sfptpd_interface_set_clock(struct sfptpd_interface *interface,
 				struct sfptpd_clock *clock)
 {

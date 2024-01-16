@@ -104,6 +104,12 @@ void sfptpd_interface_get_mac_addr(struct sfptpd_interface *interface,
  */
 const char *sfptpd_interface_get_fw_version(struct sfptpd_interface *interface);
 
+/** Get the ifindex of a given interface
+ * @param interface Pointer to interface instance
+ * @return The ifindex of the provided interface, or 0 on error.
+ */
+int sfptpd_interface_get_ifindex(struct sfptpd_interface *interface);
+
 /** Set the clock associated with an interface
  * @param interface Pointer to interface instance
  * @param clock Clock to be associated with this interface
