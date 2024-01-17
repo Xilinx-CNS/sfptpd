@@ -1862,30 +1862,16 @@ bool sfptpd_interface_supports_pps(struct sfptpd_interface *interface)
 int sfptpd_interface_is_link_detected(struct sfptpd_interface *interface,
 				      bool *link_detected)
 {
-	struct ifreq ifr;
-	int rc = 0;
-
 	assert(link_detected != NULL);
 	*link_detected = false;
 
 	if (!interface_get_canonical_with_lock(&interface))
-		return rc;
+		return EINVAL;
+
 	assert(interface->magic == SFPTPD_INTERFACE_MAGIC);
-
-	/* Set up the ifrequest structure with the interface name */
-	memset(&ifr, 0, sizeof(ifr));
-	sfptpd_strncpy(ifr.ifr_name, interface->name, sizeof ifr.ifr_name);
-
-	if (ioctl(sfptpd_interface_socket, SIOCGIFFLAGS, &ifr) >= 0) {
-		*link_detected = !!(ifr.ifr_flags & IFF_UP);
-	} else {
-		ERROR("interface %s: SIOCGIFFLAGS error %s\n",
-		      interface->name, strerror(errno));
-		rc = errno;
-	}
-
+	*link_detected = !!(interface->link.if_flags & IFF_UP);
 	interface_unlock();
-	return rc;
+	return 0;
 }
 
 
