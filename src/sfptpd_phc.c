@@ -960,13 +960,7 @@ static int phc_enable_devpps(struct sfptpd_phc *phc, bool on)
 			return rc;
 	}
 
-	assert(phc->devpps_fd >= 0);
-
-	if (ioctl(phc->phc_fd, PTP_ENABLE_PPS, on ? 1 : 0) != 0) {
-		rc = errno;
-		ERROR("phc%d: failed to %s external PPS events, %s\n",
-		      phc->phc_idx, indicative, strerror(rc));
-	}
+	rc = phc->devpps_fd >= 0 ? 0 : ENOENT;
 
 	if (rc != 0)
 		ERROR("phc%d: could not %s PPS via PPS: %s\n",
