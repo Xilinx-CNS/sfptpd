@@ -141,6 +141,8 @@ Issue SWPTP-145
  ~ Use SO_TIMESTAMPING for software timestamps when supported in driver
 Issue SWPTP-855
  ~ Redact NTP key in diagnostic output
+Issue SWPTP-1318
+ ~ Retry synthetic PPS diff method shortly after enabling (in-tree enhancement)
 Issue SWPTP-1353
  ~ Make timestamp enablement failure less noisy on startup
  ~ Retry timestamp enablement on EAGAIN from NIC, not just EBUSY

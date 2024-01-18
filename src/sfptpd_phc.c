@@ -68,6 +68,17 @@ int clock_adjtime(clockid_t clock, struct timex *timex_block)
 /* Number of samples to take when comparing with PTP_SYS_OFFSET (1-25) */
 #define SYS_OFFSET_NUM_SAMPLES             (4)
 
+/* Retry time for synthetic PPS */
+#define SYNTH_PPS_RETRY_TIME               (2.2)
+
+enum pps_state {
+	PPS_NOT_TRIED,
+	PPS_INIT,
+	PPS_NOT_READY,
+	PPS_GOOD,
+	PPS_BAD,
+};
+
 struct phc_diff_method {
 	sfptpd_phc_diff_fn diff_fn;
 	void *context; /* If NULL, phc context is used */
@@ -121,6 +132,9 @@ struct sfptpd_phc {
 
 	/* Last external PPS event */
 	struct pps_kinfo devpps_prev;
+
+	/* Synthetic pps state */
+	enum pps_state synth_pps_state;
 };
 
 
@@ -265,6 +279,7 @@ static int phc_configure_pps(struct sfptpd_phc *phc)
 	if (fts == NULL) {
 		ERROR("phc: failed to open sysfs pps devices directory, %s\n",
 		      strerror(errno));
+		phc->synth_pps_state = PPS_BAD;
 		return errno;
 	}
 
@@ -341,6 +356,7 @@ static int phc_configure_pps(struct sfptpd_phc *phc)
 
 	TRACE_L3("phc%d: successfully configured %s\n",
 		 phc->phc_idx, fts_entry->fts_name);
+	phc->synth_pps_state = PPS_INIT;
 	fts_close(fts);
 	return 0;
 
@@ -348,6 +364,7 @@ fail2:
 	close(phc->pps_fd);
 	phc->pps_fd = -1;
 fail1:
+	phc->synth_pps_state = PPS_BAD;
 	fts_close(fts);
 	return rc;
 }
@@ -565,8 +582,16 @@ static int phc_compare_using_pps(void *context, struct timespec *diff)
 		/* Some adapters (e.g. ixgbe X540) never produce any PPS data.
 		 * In this case we fall back to another diff method. */
 		if (pps.info.assert_tu.sec == 0 && pps.info.assert_tu.nsec == 0) {
-			WARNING("phc%d: no pps data, changing diff method\n",
-				phc->phc_idx);
+			if (phc->synth_pps_state == PPS_INIT) {
+				phc->pps_prev_monotime = mono_now;
+				phc->synth_pps_state = PPS_NOT_READY;
+				NOTICE("phc%d: no pps data yet, changing diff method temporarily\n",
+					phc->phc_idx);
+			} else {
+				phc->synth_pps_state = PPS_BAD;
+				WARNING("phc%d: no pps data, changing diff method\n",
+					phc->phc_idx);
+			}
 
 			rc = phc_set_fallback_diff_method(phc);
 			if (rc != 0)
@@ -584,6 +609,7 @@ static int phc_compare_using_pps(void *context, struct timespec *diff)
 
 	/* Store the last event time */
 	phc->pps_prev_monotime = mono_now;
+	phc->synth_pps_state = PPS_GOOD;
 
 	/* Compare to system time to get seconds offset. */
 	rc = phc_compare_by_reading_time_n(phc, READ_TIME_NUM_SAMPLES, &approx);
@@ -1118,6 +1144,7 @@ int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc)
 	new->phc_idx = phc_index;
 	new->posix_id = PHC_FD_TO_POSIX_ID(new->phc_fd);
 	new->pps_fd = -1;
+	new->synth_pps_state = PPS_NOT_TRIED;
 	new->devpps_fd = -1;
 	new->devpps_prev.assert_sequence = UINT32_MAX;
 	memcpy(new->diff_method_defs, phc_diff_method_defs, sizeof new->diff_method_defs);
@@ -1217,6 +1244,32 @@ int sfptpd_phc_compare_to_sys_clk(struct sfptpd_phc *phc, struct timespec *diff)
 
 	assert(phc != NULL);
 	assert(diff != NULL);
+
+	/* Check if we need to give PPS a second chance */
+	if (phc->synth_pps_state == PPS_NOT_READY) {
+		struct timespec now;
+		struct timespec expiry;
+
+		clock_gettime(CLOCK_MONOTONIC, &now);
+		sfptpd_time_float_s_to_timespec(SYNTH_PPS_RETRY_TIME, &expiry);
+		sfptpd_time_add(&expiry, &phc->pps_prev_monotime, &expiry);
+
+		if (sfptpd_time_is_greater_or_equal(&now, &expiry)) {
+			int method_idx;
+
+			/* Find and activate the PPS method */
+			for (method_idx = 0; method_idx < SFPTPD_DIFF_METHOD_MAX; method_idx++) {
+				if (phc_diff_methods[method_idx] == SFPTPD_DIFF_METHOD_PPS) {
+					phc->diff_method_index = method_idx;
+					phc->diff_method = phc_diff_methods[method_idx];
+					INFO("phc%d: reselecting diff method %s\n",
+					     phc->phc_idx,
+					     sfptpd_phc_diff_method_text[phc->diff_method]);
+					break;
+				}
+			}
+		}
+	}
 
 	if (phc->diff_method == SFPTPD_DIFF_METHOD_MAX)
 		return EOPNOTSUPP;
