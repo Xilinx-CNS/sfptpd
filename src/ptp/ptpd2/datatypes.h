@@ -485,6 +485,9 @@ typedef struct ptpd_port_config {
 	Integer8 delayRespReceiptTimeout;
 	Integer8 minPdelayReqInterval;
 
+	Integer8 delayRespAlarmThreshold;
+	Integer8 delayRespHybridThreshold;
+
 	ClockQuality clockQuality;
 	TimePropertiesDS timeProperties;
 	UInteger8 priority1;

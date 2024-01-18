@@ -94,6 +94,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Command line enhancements to support container usage. (SWPTP-1401)
   - Allow config to be read from stdin with `-f -`
   - Add `--console` option to redirect logs to console
+- Add configurable missing delay response thresholds (SWPTP-897)
+  - `max_missing_delayresps <for-alarm> <for-hybrid-fallback>`
+  - default changed from `3 3` to `5 3`.
 
 ### Changed
 
@@ -117,6 +120,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Use `SO_TIMESTAMPING` for software timestamps when supported in driver
 - Issue SWPTP-855
   - Redact NTP key in diagnostic output
+- Issue SWPTP-1318
+  - Retry synthetic PPS diff method shortly after enabling (in-tree enhancement)
 - Issue SWPTP-1353
   - Make timestamp enablement failure less noisy on startup
   - Retry timestamp enablement on EAGAIN from NIC, not just EBUSY

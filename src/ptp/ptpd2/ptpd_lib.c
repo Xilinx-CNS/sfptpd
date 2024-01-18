@@ -34,6 +34,9 @@ void ptpd_config_port_initialise(struct ptpd_port_config *config,
 	config->syncReceiptTimeout = DEFAULT_SYNC_RECEIPT_TIMEOUT;
 	config->delayRespReceiptTimeout = DEFAULT_DELAY_RESP_RECEIPT_TIMEOUT;
 
+	config->delayRespAlarmThreshold = DEFAULT_DELAY_RESP_ALARM_THRESHOLD;
+	config->delayRespHybridThreshold = DEFAULT_DELAY_RESP_HYBRID_THRESHOLD;
+
 	config->path_delay_filter_size = DEFAULT_MPD_FILTER_SIZE;
 	config->path_delay_filter_ageing = DEFAULT_MPD_FILTER_AGEING;
 	config->outlier_filter_size = DEFAULT_OUTLIER_FILTER_SIZE;

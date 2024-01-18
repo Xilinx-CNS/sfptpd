@@ -809,6 +809,35 @@ static int parse_delayresp_pkt_timeout(struct sfptpd_config_section *section, co
 	return 0;
 }
 
+static int parse_max_missing_delayresps(struct sfptpd_config_section *section, const char *option,
+				        unsigned int num_params, const char * const params[])
+{
+	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
+	int tokens;
+	int value;
+
+	assert(num_params == 2);
+
+	tokens = sscanf(params[0], "%i", &value);
+	if (tokens != 1)
+		return EINVAL;
+
+	if (value < 0 || value > INT8_MAX)
+		return ERANGE;
+
+	ptp->ptpd_port.delayRespAlarmThreshold = value;
+
+	tokens = sscanf(params[0], "%i", &value);
+	if (tokens != 1)
+		return EINVAL;
+
+	if (value < 0 || value > INT8_MAX)
+		return ERANGE;
+
+	ptp->ptpd_port.delayRespHybridThreshold = value;
+	return 0;
+}
+
 static int parse_max_foreign_records(struct sfptpd_config_section *section, const char *option,
 				     unsigned int num_params, const char * const params[])
 {
@@ -1485,6 +1514,13 @@ static const sfptpd_config_option_t ptp_config_options[] =
 		"The PTP Delay Response receipt timeout in 2^NUMBER seconds. Default value -2.",
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_delayresp_pkt_timeout},
+	{"max_missing_delayresps", "A B",
+		"The maximimum number of missing delay responses to alarm (A) "
+		"or fall back from hybrid mode (B). Default "
+		STRINGIFY(DEFAULT_DELAY_RESP_ALARM_THRESHOLD) " "
+		STRINGIFY(DEFAULT_DELAY_RESP_HYBRID_THRESHOLD) ".",
+		2, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_max_missing_delayresps},
 	{"ptp_max_foreign_records", "NUMBER",
 		"The maximum number of PTP foreign master records.",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
