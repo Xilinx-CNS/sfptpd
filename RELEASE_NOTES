@@ -118,6 +118,9 @@ Changelog
 ### v3.7.1.1006
 
 Features:
+ ~ Add configurable missing delay response thresholds (SWPTP-897)
+     - max_missing_delayresps <for-alarm> <for-hybrid-fallback>
+     - default changed from "3 3" to "5 3".
  ~ Command line enhancements to support container usage (SWPTP-1401)
      - Allow config to be read from stdin with '-f -'
      - Add '--console' option to redirect logs to console

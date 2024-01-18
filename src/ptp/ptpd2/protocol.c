@@ -663,9 +663,9 @@ doTimerTick(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 			/* Record the fact that we didn't get a timely response
 			 * and set the alarm if it's happened too many times. */
 			ptpClock->sequentialMissingDelayResps++;
-			if (ptpClock->sequentialMissingDelayResps >= DELAY_RESP_MISSING_ALARM_THRESHOLD) {
+			if (ptpClock->sequentialMissingDelayResps >= rtOpts->delayRespAlarmThreshold) {
 				SYNC_MODULE_ALARM_SET(ptpClock->portAlarms, NO_DELAY_RESPS);
-				ptpClock->sequentialMissingDelayResps = DELAY_RESP_MISSING_ALARM_THRESHOLD;
+				ptpClock->sequentialMissingDelayResps = rtOpts->delayRespAlarmThreshold;
 			}
 			ptpClock->counters.delayRespTimeouts++;
 
@@ -682,12 +682,12 @@ doTimerTick(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 			    (ptpClock->effective_comm_caps.delayRespCapabilities & PTPD_COMM_MULTICAST_CAPABLE) &&
 			    (ptpClock->unicast_delay_resp_failures >= 0)) {
 				ptpClock->unicast_delay_resp_failures++;
-				if (ptpClock->unicast_delay_resp_failures >= PTPD_HYBRID_MODE_DELAY_RESP_MAX_FAILURES) {
+				if (ptpClock->unicast_delay_resp_failures >= rtOpts->delayRespHybridThreshold) {
 					ptpClock->effective_comm_caps.delayRespCapabilities &= ~PTPD_COMM_UNICAST_CAPABLE;
 					WARNING("ptp %s: failed to receive DelayResp %d times in "
 						"hybrid mode. Reverting to multicast mode.\n",
 						rtOpts->name,
-						PTPD_HYBRID_MODE_DELAY_RESP_MAX_FAILURES);
+						rtOpts->delayRespHybridThreshold);
 				}
 			}
 
@@ -708,9 +708,9 @@ doTimerTick(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 				/* Record the fact that we didn't get a timely response,
 				 * and set the alarm if it's happened too many times. */
 				ptpClock->sequentialMissingDelayResps++;
-				if (ptpClock->sequentialMissingDelayResps >= DELAY_RESP_MISSING_ALARM_THRESHOLD) {
+				if (ptpClock->sequentialMissingDelayResps >= rtOpts->delayRespAlarmThreshold) {
 					SYNC_MODULE_ALARM_SET(ptpClock->portAlarms, NO_DELAY_RESPS);
-					ptpClock->sequentialMissingDelayResps = DELAY_RESP_MISSING_ALARM_THRESHOLD;
+					ptpClock->sequentialMissingDelayResps = rtOpts->delayRespAlarmThreshold;
 				}
 				ptpClock->counters.delayRespTimeouts++;
 			}

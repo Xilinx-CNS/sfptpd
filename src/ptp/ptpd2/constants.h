@@ -33,7 +33,9 @@
 /* timeout for receiving DelayResps, expressed in 2^x seconds (e.g. -2 = 250ms) */
 #define DEFAULT_DELAY_RESP_RECEIPT_TIMEOUT -2
 /* how many missing delay responses in a row before we raise an alarm */
-#define DELAY_RESP_MISSING_ALARM_THRESHOLD 3
+#define DEFAULT_DELAY_RESP_ALARM_THRESHOLD 5
+/* Number of hybrid delay response failures before we revert to multicast mode */
+#define DEFAULT_DELAY_RESP_HYBRID_THRESHOLD 3
 
 /* Values for PTP filters */
 #define DEFAULT_MPD_FILTER_SIZE 8
@@ -102,9 +104,6 @@ section 7.6.2.4, page 55:
 
 /* After a fault occurs, seconds to wait before re-initialising */
 #define PTPD_FAULT_RESTART_INTERVAL  5
-
-/* Number of hybrid delay response failures before we revert to multicast mode */
-#define PTPD_HYBRID_MODE_DELAY_RESP_MAX_FAILURES (3)
 
 /* features, only change to refelect changes in implementation */
 #define PTPD_TWO_STEP_FLAG   TRUE
