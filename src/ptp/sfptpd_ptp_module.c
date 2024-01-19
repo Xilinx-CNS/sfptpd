@@ -247,9 +247,6 @@ struct sfptpd_ptp_intf {
 	/* Current set of fds to be polled */
 	struct ptpd_intf_fds ptpd_intf_fds;
 
-	/* Handle of the PTP clock */
-	struct sfptpd_clock *clock;
-
 	/* A representative instance configuration for this
 	 * interface for access to interface-level options. */
 	struct sfptpd_ptp_module_config *representative_config;
@@ -613,10 +610,15 @@ static struct sfptpd_ptp_bond_info *ptp_get_bond_info(sfptpd_ptp_instance_t *ins
 }
 
 
+static struct sfptpd_interface *ptp_get_active_intf(sfptpd_ptp_instance_t *instance)
+{
+	return instance->intf->bond_info.active_if;
+}
+
+
 static int ptp_stats_init(sfptpd_ptp_instance_t *instance)
 {
 	int rc;
-	struct sfptpd_ptp_bond_info *bond_info = ptp_get_bond_info(instance);
 	assert(instance != NULL);
 
 	/* Create the statistics collection */
@@ -626,7 +628,7 @@ static int ptp_stats_init(sfptpd_ptp_instance_t *instance)
 
 	/* If PPS logging is enabled, add PPS offset and period */
 	if ((rc == 0) && instance->config->pps_logging &&
-	    sfptpd_interface_supports_pps(bond_info->active_if)) {
+	    sfptpd_interface_supports_pps(instance->ptpd_port_private->physIface)) {
 		rc = sfptpd_stats_collection_add(&instance->stats,
 						 PTP_STATS_ID_PPS_OFFSET,
 						 SFPTPD_STATS_TYPE_RANGE,
@@ -704,7 +706,6 @@ static void ptp_stats_update(sfptpd_ptp_instance_t *instance)
 	struct ptpd_port_snapshot *ptpd_port_snapshot;
 	struct sfptpd_stats_collection *stats;
 	struct ptpd_counters ptpd_counters;
-	struct sfptpd_ptp_bond_info *bond_info = ptp_get_bond_info(instance);
 	struct sfptpd_timespec sync_time;
 	ptpd_state_e port_state;
 	int rc;
@@ -768,12 +769,12 @@ static void ptp_stats_update(sfptpd_ptp_instance_t *instance)
 	/* If PPS logging enable and we are using a PTP interface, update the
 	 * PPS offset statistic */
 	if (instance->config->pps_logging &&
-	    sfptpd_interface_supports_pps(bond_info->active_if)) {
+	    sfptpd_interface_supports_pps(instance->ptpd_port_private->physIface)) {
 		sfptpd_stats_pps_t pps_stats;
 		long double offset;
 		struct sfptpd_interface *primary_intf;
 
-		primary_intf = sfptpd_clock_get_primary_interface(instance->intf->clock);
+		primary_intf = sfptpd_clock_get_primary_interface(instance->ptpd_port_private->clock);
 		if (primary_intf != NULL) {
 			rc = sfptpd_stats_get_pps_statistics(primary_intf, &pps_stats);
 		} else {
@@ -858,9 +859,8 @@ static long double ptp_get_instance_accuracy(struct sfptpd_ptp_instance *instanc
 {
 	long double rc;
 	sfptpd_interface_ts_caps_t caps;
-	struct sfptpd_ptp_bond_info *bond_info = ptp_get_bond_info(instance);
 
-	caps = sfptpd_interface_ptp_caps(bond_info->active_if);
+	caps = sfptpd_interface_ptp_caps(instance->ptpd_port_private->physIface);
 	if (caps & SFPTPD_INTERFACE_TS_CAPS_HW &&
 	    ptp_is_instance_hw_timestamping(instance)) {
 		rc = SFPTPD_ACCURACY_PTP_HW;
@@ -1051,7 +1051,7 @@ static void ptp_pps_stats_init(sfptpd_ptp_instance_t *instance)
 	assert(instance != NULL);
 
 	/* To reset the PPS stats we need to be using a PTP capable NIC */
-	interface = instance->intf->bond_info.active_if;
+	interface = instance->ptpd_port_private->physIface;
 	if (!sfptpd_interface_supports_pps(interface))
 		return;
 
@@ -1062,7 +1062,7 @@ static void ptp_pps_stats_init(sfptpd_ptp_instance_t *instance)
 
 	/* Reset the statistics using the primary interface for the adapter we
 	 * are using. */
-	primary = sfptpd_clock_get_primary_interface(instance->intf->clock);
+	primary = sfptpd_clock_get_primary_interface(instance->ptpd_port_private->clock);
 	sfptpd_stats_reset_pps_statistics(primary);
 }
 
@@ -1076,10 +1076,10 @@ static void ptp_log_pps_stats(struct sfptpd_engine *engine,
 	struct sfptpd_interface *primary_intf;
 
 	/* To log PPS stats we need to be using a PTP capable NIC */
-	if (!sfptpd_interface_supports_pps(instance->intf->bond_info.active_if))
+	if (!sfptpd_interface_supports_pps(instance->ptpd_port_private->physIface))
 		return;
 
-	primary_intf = sfptpd_clock_get_primary_interface(instance->intf->clock);
+	primary_intf = sfptpd_clock_get_primary_interface(instance->ptpd_port_private->clock);
 	if (primary_intf != NULL) {
 		rc = sfptpd_stats_get_pps_statistics(primary_intf, pps_stats_out);
 	} else {
@@ -1618,13 +1618,15 @@ int ptp_determine_timestamp_type(ptpd_timestamp_type_e *timestamp_type,
 }
 
 
-static int ptp_configure_clock(struct sfptpd_ptp_intf *interface)
+static int ptp_configure_clock(struct sfptpd_ptp_instance *instance)
 {
-	struct sfptpd_clock *system_clock;
 	int rc;
-	struct sfptpd_ptp_instance *instance;
+	struct sfptpd_ptp_intf *interface;
 	struct sfptpd_config_general *general_cfg;
 	sfptpd_ptp_module_config_t *config;
+
+	interface = instance->intf;
+	assert(interface != NULL);
 
 	/* Shared interface configuration is duplicated for each interface.
 	 * We read from one representative configuration but write back to all. */
@@ -1634,14 +1636,6 @@ static int ptp_configure_clock(struct sfptpd_ptp_intf *interface)
 	/* Access global configuration */
 	general_cfg = sfptpd_general_config_get(SFPTPD_CONFIG_TOP_LEVEL(config));
 	assert(general_cfg != NULL);
-
-	/* Determine which clock to use based on the interface */
-	interface->clock = sfptpd_interface_get_clock(interface->bond_info.active_if);
-	assert(interface->clock != NULL);
-
-	system_clock = sfptpd_clock_get_system_clock();
-
-	INFO("ptp: clock is %s\n", sfptpd_clock_get_long_name(interface->clock));
 
 	/* Check the clock discipline flags for each clock that that may be
 	 * disciplined. An error at this point is considered a fatal
@@ -1658,21 +1652,6 @@ static int ptp_configure_clock(struct sfptpd_ptp_intf *interface)
 		}
 	}
 
-	/* Set the logical and physical interfaces in the PTPD configuration for
-	 * each instance sharing this interface. */
-	for (instance = interface->instance_list; instance != NULL; instance = instance->next) {
-		sfptpd_ptp_module_config_t *iconf = instance->config;
-		sfptpd_strncpy(iconf->ptpd_intf.ifaceName, interface->bond_info.logical_if,
-			       sizeof(iconf->ptpd_intf.ifaceName));
-		iconf->ptpd_intf.physIface = interface->bond_info.active_if;
-		sfptpd_clock_get_hw_id(interface->clock, &iconf->ptpd_intf.clock_id);
-		rc = ptp_determine_timestamp_type(&iconf->ptpd_intf.timestampType,
-						  interface,
-						  interface->bond_info.active_if);
-		if (rc != 0)
-			return rc;
-	}
-
 	/* For each physical interface configure timestamping. */
 	rc = ptp_timestamp_filtering_configure_all(interface);
 	if (rc != 0) {
@@ -1681,19 +1660,6 @@ static int ptp_configure_clock(struct sfptpd_ptp_intf *interface)
 				 "interfaces\n");
 		rc = EREPORTED;
 		return rc;
-	}
-
-	/* If using a NIC clock and we are in a PTP master mode then step the
-	 * NIC clock to the current system time. */
-	if ((interface->clock != system_clock) && !config->ptpd_port.slaveOnly) {
-		rc = sfptpd_clock_set_time(interface->clock, system_clock, NULL);
-		if (rc != 0) {
-			TRACE_L4("ptp: failed to compare and set clock %s to system clock, %s\n",
-				 sfptpd_clock_get_short_name(interface->clock),
-				 strerror(rc));
-			if (rc != EAGAIN && rc != EBUSY)
-				return rc;
-		}
 	}
 
 	return 0;
@@ -1709,7 +1675,7 @@ static int ptp_handle_bonding_interface_change(struct sfptpd_ptp_intf *intf,
 	ptpd_timestamp_type_e timestamp_type;
 	int rc;
 	bool set_changed;
-	bool active_changed;
+	bool any_active_changed;
 	bool ts_changed;
 
 	assert(intf != NULL);
@@ -1760,7 +1726,6 @@ static int ptp_handle_bonding_interface_change(struct sfptpd_ptp_intf *intf,
 	set_changed = (new_bond_info.num_physical_ifs != intf->bond_info.num_physical_ifs) ||
 		      (memcmp(new_bond_info.physical_ifs, &intf->bond_info.physical_ifs,
 			      sizeof(new_bond_info.physical_ifs[0]) * new_bond_info.num_physical_ifs) != 0);
-	active_changed = (new_bond_info.active_if != intf->bond_info.active_if);
 	ts_changed = (timestamp_type != intf->ptpd_intf_private->ifOpts.timestampType);
 
 	if (set_changed) {
@@ -1780,51 +1745,59 @@ static int ptp_handle_bonding_interface_change(struct sfptpd_ptp_intf *intf,
 
 	if (ts_changed) {
 		INFO("ptp: interface %s timestamping changed %s -> %s\n",
-		     intf->bond_info.bond_if,
-		     ts_name(intf->ptpd_intf_private->ifOpts.timestampType),
-		     ts_name(timestamp_type));
+			 intf->bond_info.bond_if,
+			 ts_name(intf->ptpd_intf_private->ifOpts.timestampType),
+			 ts_name(timestamp_type));
 	}
 
-	if (set_changed || active_changed || ts_changed) {
+	/* Update the active interface and clock per instance */
+	any_active_changed = false;
+	for (instance = intf->instance_list; instance; instance = instance->next) {
+		struct sfptpd_interface *active_intf;
+		bool active_changed;
+
+		active_intf = ptp_get_active_intf(instance);
+		active_changed = (active_intf != instance->ptpd_port_private->physIface);
+
+		if (active_changed) {
+			INFO("ptp: interface %s changed %s (%s) -> %s (%s)\n",
+				 intf->bond_info.bond_if,
+				 sfptpd_interface_get_name(instance->ptpd_port_private->physIface),
+				 intf->bond_info.logical_if,
+				 sfptpd_interface_get_name(active_intf),
+				 new_bond_info.logical_if);
+		}
+
+		if (active_changed || ts_changed) {
+			/* Reconfigure PTPD to use the new interface */
+			rc = ptpd_change_interface(instance->ptpd_port_private, new_bond_info.logical_if,
+						   active_intf, timestamp_type);
+
+			*bond_changed |= true;
+		} else {
+			rc = 0;
+		}
+
+		if (active_changed && rc != 0 && rc != ENOENT) {
+			CRITICAL("ptp %s: failed to change interface from %s (%s) to %s (%s)\n",
+				 intf->bond_info.bond_if,
+				 sfptpd_interface_get_name(instance->ptpd_port_private->physIface),
+				 intf->bond_info.logical_if,
+				 sfptpd_interface_get_name(active_intf),
+				 new_bond_info.logical_if);
+		} else if (ts_changed && rc != 0 && rc != ENOENT) {
+			CRITICAL("ptp %s: failed to change timesetamping\n",
+				 intf->bond_info.bond_if);
+		}
+
+		any_active_changed |= active_changed;
+	}
+
+	if (set_changed || any_active_changed || ts_changed) {
 		/* Reconfigure timestamping based on any changes to the
 		 * interface set. */
 		ptp_timestamp_filtering_reconfigure_all(intf, &new_bond_info,
 							timestamp_type);
-	}
-
-	if (active_changed) {
-		INFO("ptp: interface %s changed %s (%s) -> %s (%s)\n",
-		     intf->bond_info.bond_if,
-		     sfptpd_interface_get_name(intf->bond_info.active_if),
-		     intf->bond_info.logical_if,
-		     sfptpd_interface_get_name(new_bond_info.active_if),
-		     new_bond_info.logical_if);
-	}
-
-	if (active_changed || ts_changed) {
-		/* Determine and store the new PTP clock */
-		intf->clock = sfptpd_interface_get_clock(new_bond_info.active_if);
-
-		/* Reconfigure PTPD to use the new interface */
-		rc = ptpd_change_interface(intf->ptpd_intf_private, new_bond_info.logical_if,
-					   new_bond_info.active_if, timestamp_type);
-
-		*bond_changed = true;
-	} else {
-		rc = 0;
-		*bond_changed = false;
-	}
-
-	if (active_changed && rc != 0 && rc != ENOENT) {
-		CRITICAL("ptp %s: failed to change interface from %s (%s) to %s (%s)\n",
-			 intf->bond_info.bond_if,
-			 sfptpd_interface_get_name(intf->bond_info.active_if),
-			 intf->bond_info.logical_if,
-			 sfptpd_interface_get_name(new_bond_info.active_if),
-			 new_bond_info.logical_if);
-	} else if (ts_changed && rc != 0 && rc != ENOENT) {
-		CRITICAL("ptp %s: failed to change timesetamping\n",
-			 intf->bond_info.bond_if);
 	}
 
 	/* Store the new interface configuration */
@@ -1986,7 +1959,7 @@ static bool ptp_update_instance_state(struct sfptpd_ptp_instance *instance,
 	int current_clustering_score = instance->ptpd_port_private->rtOpts.clusteringEvaluator.calc_fn(
 	        &instance->ptpd_port_private->rtOpts.clusteringEvaluator,
 		ofm,
-		instance->intf->clock);
+		instance->ptpd_port_private->clock);
 
 	if (current_clustering_score != instance->clustering_score_snapshot) {
 		INFO("%s: clustering score changed %d -> %d\n",
@@ -2033,7 +2006,7 @@ static bool ptp_update_instance_state(struct sfptpd_ptp_instance *instance,
 	    offset_changed) {
 		sfptpd_engine_clustering_input(module->engine,
 					       instance->config->hdr.name,
-					       instance->intf->clock,
+					       instance->ptpd_port_private->clock,
 					       ofm,
 					       finitel(ofm) && ofm != 0.0L);
 	}
@@ -2052,7 +2025,7 @@ static bool ptp_update_instance_state(struct sfptpd_ptp_instance *instance,
 		sfptpd_sync_instance_status_t status = { 0 };
 		status.state = ptp_translate_state(snapshot.port.state);
 		status.alarms = ptp_get_alarms_snapshot(instance);
-		status.clock = instance->intf->clock;
+		status.clock = instance->ptpd_port_private->clock;
 		status.user_priority = instance->config->priority;
 		status.clustering_score = current_clustering_score;
 		sfptpd_time_float_ns_to_timespec(instance->ptpd_port_snapshot.current.offset_from_master,
@@ -2216,7 +2189,7 @@ static void ptp_send_instance_rt_stats_update(struct sfptpd_engine *engine,
 
 			sfptpd_engine_post_rt_stats(engine, &time,
 				SFPTPD_CONFIG_GET_NAME(instance->config),
-				"gm", NULL, instance->intf->clock,
+				"gm", NULL, instance->ptpd_port_private->clock,
 				(instance->ctrl_flags & SYNC_MODULE_SELECTED),
 				false,
 				instance->synchronized,
@@ -2226,7 +2199,7 @@ static void ptp_send_instance_rt_stats_update(struct sfptpd_engine *engine,
 				STATS_KEY_OWD, owd_ns,
 				STATS_KEY_PARENT_ID, parent_id,
 				STATS_KEY_GM_ID, gm_id,
-				STATS_KEY_ACTIVE_INTF, bond_info->active_if,
+				STATS_KEY_ACTIVE_INTF, instance->ptpd_port_private->physIface,
 				STATS_KEY_BOND_NAME, bond_info->bond_mode == SFPTPD_BOND_MODE_NONE ? NULL : bond_info->bond_if,
 				STATS_KEY_PPS_OFFSET, (sfptpd_time_t)pps_stats.offset.last,
 				STATS_KEY_BAD_PERIOD, pps_stats.bad_period_count,
@@ -2238,7 +2211,7 @@ static void ptp_send_instance_rt_stats_update(struct sfptpd_engine *engine,
 		} else {
 			sfptpd_engine_post_rt_stats(engine, &time,
 				SFPTPD_CONFIG_GET_NAME(instance->config),
-				"gm", NULL, instance->intf->clock,
+				"gm", NULL, instance->ptpd_port_private->clock,
 				(instance->ctrl_flags & SYNC_MODULE_SELECTED),
 				false,
 				instance->synchronized,
@@ -2248,7 +2221,7 @@ static void ptp_send_instance_rt_stats_update(struct sfptpd_engine *engine,
 				STATS_KEY_OWD, owd_ns,
 				STATS_KEY_PARENT_ID, parent_id,
 				STATS_KEY_GM_ID, gm_id,
-				STATS_KEY_ACTIVE_INTF, bond_info->active_if,
+				STATS_KEY_ACTIVE_INTF, instance->ptpd_port_private->physIface,
 				STATS_KEY_BOND_NAME, bond_info->bond_mode == SFPTPD_BOND_MODE_NONE ? NULL : bond_info->bond_if,
 				STATS_KEY_P_TERM, instance->ptpd_port_snapshot.current.servo_p_term,
 				STATS_KEY_I_TERM, instance->ptpd_port_snapshot.current.servo_i_term,
@@ -2321,7 +2294,7 @@ static void ptp_on_get_status(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 
 	status->state = ptp_translate_state(instance->ptpd_port_snapshot.port.state);
 	status->alarms = ptp_get_alarms_snapshot(instance);
-	status->clock = instance->intf->clock;
+	status->clock = instance->ptpd_port_private->clock;
 	status->user_priority = instance->config->priority;
 	status->local_accuracy = ptp_get_instance_accuracy(instance);
 
@@ -2571,15 +2544,15 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 				"clustering-score: %d\n"
 				"diff-method: %s\n";
 
-			sfptpd_log_write_state(instance->intf->clock,
+			sfptpd_log_write_state(instance->ptpd_port_private->clock,
 				SFPTPD_CONFIG_GET_NAME(instance->config),
 				format,
 				SFPTPD_CONFIG_GET_NAME(instance->config),
-				sfptpd_clock_get_long_name(instance->intf->clock),
-				sfptpd_clock_get_hw_id_string(instance->intf->clock),
+				sfptpd_clock_get_long_name(instance->ptpd_port_private->clock),
+				sfptpd_clock_get_hw_id_string(instance->ptpd_port_private->clock),
 				ptp_state_text(snapshot->port.state, snapshot_alarms),
 				alarms, flags,
-				sfptpd_interface_get_name(instance->intf->bond_info.active_if),
+				sfptpd_interface_get_name(instance->ptpd_port_private->physIface),
 				instance->intf->bond_info.logical_if,
 				instance->intf->transport_name,
 				profile->id[0], profile->id[1], profile->id[2],
@@ -2612,7 +2585,7 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 				snapshot->time.leap59,
 				snapshot->time.leap61,
 				instance->clustering_score_snapshot,
-				sfptpd_clock_get_diff_method(instance->intf->clock));
+				sfptpd_clock_get_diff_method(instance->ptpd_port_private->clock));
 			break;
 
 		case PTPD_MASTER:
@@ -2643,15 +2616,15 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 				"leap-59: %d\n"
 				"leap-61: %d\n";
 
-			sfptpd_log_write_state(instance->intf->clock,
+			sfptpd_log_write_state(instance->ptpd_port_private->clock,
 				SFPTPD_CONFIG_GET_NAME(instance->config),
 				format,
 				SFPTPD_CONFIG_GET_NAME(instance->config),
-				sfptpd_clock_get_long_name(instance->intf->clock),
-				sfptpd_clock_get_hw_id_string(instance->intf->clock),
+				sfptpd_clock_get_long_name(instance->ptpd_port_private->clock),
+				sfptpd_clock_get_hw_id_string(instance->ptpd_port_private->clock),
 				ptp_state_text(snapshot->port.state, snapshot_alarms),
 				alarms, flags,
-				sfptpd_interface_get_name(instance->intf->bond_info.active_if),
+				sfptpd_interface_get_name(instance->ptpd_port_private->physIface),
 				instance->intf->bond_info.logical_if,
 				instance->intf->transport_name,
 				profile->id[0], profile->id[1], profile->id[2],
@@ -2679,7 +2652,7 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 			break;
 
 		default:
-			sfptpd_log_write_state(instance->intf->clock,
+			sfptpd_log_write_state(instance->ptpd_port_private->clock,
 				SFPTPD_CONFIG_GET_NAME(instance->config),
 				"instance: %s\n"
 				"clock-name: %s\n"
@@ -2693,11 +2666,11 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 				"delay-mechanism: %s\n"
 				"delay-resp:%s%s\n",
 				SFPTPD_CONFIG_GET_NAME(instance->config),
-				sfptpd_clock_get_long_name(instance->intf->clock),
-				sfptpd_clock_get_hw_id_string(instance->intf->clock),
+				sfptpd_clock_get_long_name(instance->ptpd_port_private->clock),
+				sfptpd_clock_get_hw_id_string(instance->ptpd_port_private->clock),
 				ptp_state_text(snapshot->port.state, snapshot_alarms),
 				alarms, flags,
-				sfptpd_interface_get_name(instance->intf->bond_info.active_if),
+				sfptpd_interface_get_name(instance->ptpd_port_private->physIface),
 				instance->intf->bond_info.logical_if,
 				instance->intf->transport_name,
 				hw_ts? "hw": "sw",
@@ -2709,7 +2682,7 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 		/* If we consider the clock to be in sync, save the frequency adjustment */
 		if (instance->synchronized &&
 		    (instance->ctrl_flags & SYNC_MODULE_CLOCK_CTRL)) {
-			(void)sfptpd_clock_save_freq_correction(instance->intf->clock,
+			(void)sfptpd_clock_save_freq_correction(instance->ptpd_port_private->clock,
 								instance->ptpd_port_snapshot.current.frequency_adjustment);
 		}
 	}
@@ -2754,7 +2727,7 @@ static void ptp_on_write_topology(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_m
 	assert(instance);
 	assert(ptp_is_instance_valid(ptp, instance));
 
-	assert(instance->intf->clock != NULL);
+	assert(instance->ptpd_port_private->clock != NULL);
 
 	/* This should only be called on selected instances */
 	assert(instance->ctrl_flags & SYNC_MODULE_SELECTED);
@@ -2805,7 +2778,7 @@ static void ptp_on_write_topology(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_m
 		"interface: %s (%s)\n"
 		"timestamping: %s\n"
 		"====================\n\n",
-		sfptpd_interface_get_name(instance->intf->bond_info.active_if),
+		sfptpd_interface_get_name(instance->ptpd_port_private->physIface),
 		instance->intf->bond_info.logical_if, hw_ts? "hw": "sw");
 
 	switch (state) {
@@ -2856,9 +2829,9 @@ static void ptp_on_write_topology(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_m
 	}
 
 	sfptpd_log_topology_write_field(stream, true,
-					sfptpd_clock_get_long_name(instance->intf->clock));
+					sfptpd_clock_get_long_name(instance->ptpd_port_private->clock));
 	sfptpd_log_topology_write_field(stream, true,
-					sfptpd_clock_get_hw_id_string(instance->intf->clock));
+					sfptpd_clock_get_hw_id_string(instance->ptpd_port_private->clock));
 
 	SFPTPD_MSG_REPLY(msg);
 }
@@ -2872,13 +2845,13 @@ static void ptp_on_stats_end_period(sfptpd_ptp_module_t *ptp, sfptpd_sync_module
 	assert(msg != NULL);
 
 	for (instance = ptp_get_first_instance(ptp); instance; instance = ptp_get_next_instance(instance)) {
-		assert(instance->intf->clock != NULL);
+		assert(instance->ptpd_port_private->clock != NULL);
 
 		sfptpd_stats_collection_end_period(&instance->stats,
 						   &msg->u.stats_end_period_req.time);
 
 		/* Write the historical statistics to file */
-		sfptpd_stats_collection_dump(&instance->stats, instance->intf->clock,
+		sfptpd_stats_collection_dump(&instance->stats, instance->ptpd_port_private->clock,
 									SFPTPD_CONFIG_GET_NAME(instance->config));
 	}
 
@@ -3213,7 +3186,7 @@ static bool ptp_measure_offset_from_discriminator(struct sfptpd_ptp_instance *in
 		if (rc == 0 && sfptpd_time_is_zero(&status.offset_from_master)) {
 			struct sfptpd_timespec discrim_lrc_to_instance_lrc;
 			rc = sfptpd_clock_compare(status.clock,
-						  instance->intf->clock,
+						  instance->ptpd_port_private->clock,
 						  &discrim_lrc_to_instance_lrc);
 			sfptpd_time_subtract(&discrim_to_instance_lrc,
 					     &discrim_lrc_to_instance_lrc,
@@ -3224,7 +3197,7 @@ static bool ptp_measure_offset_from_discriminator(struct sfptpd_ptp_instance *in
 		/* When a local clock is defined as the discriminator,
 		   use its offset from this instance's LRC */
 		rc = sfptpd_clock_compare(instance->discriminator.clock,
-					  instance->intf->clock,
+					  instance->ptpd_port_private->clock,
 					  &discrim_to_instance_lrc);
 		if (rc == 0)
 			discriminator_valid = true;
@@ -3568,14 +3541,6 @@ static int ptp_ensure_interface_started(sfptpd_ptp_module_t *ptp,
 		return rc;
 	}
 
-	/* Determine and configure the PTP clock. */
-	rc = ptp_configure_clock(interface);
-	if (rc != 0) {
-		if (rc != EREPORTED)
-			CRITICAL("ptp: failed to configure clock for interface %s\n",
-				 interface->defined_name);
-		return EREPORTED;
-	}
 
 	interface->start_successful = true;
 	return 0;
@@ -3723,6 +3688,7 @@ static int ptp_on_startup(void *context)
 	struct sfptpd_ptp_instance *instance;
 	struct sfptpd_ptp_intf *interface;
 	sfptpd_ptp_module_config_t *config;
+	sfptpd_ptp_module_config_t *iconf;
 	int rc;
 	/* Due to the way SO_TIMESTAMP is handled through the loopback interface,
 	 * traffic could be received by the wrong instance in some cases.  Because
@@ -3750,7 +3716,10 @@ static int ptp_on_startup(void *context)
 	}
 
 	for (instance = ptp_get_first_instance(ptp); instance; instance = ptp_get_next_instance(instance)) {
+		iconf = instance->config;
 		rc = ptp_start_instance(instance);
+		sfptpd_strncpy(iconf->ptpd_intf.ifaceName, instance->intf->bond_info.logical_if,
+				sizeof(iconf->ptpd_intf.ifaceName));
 		if (rc != 0) goto fail;
 	}
 
@@ -3767,6 +3736,9 @@ static int ptp_on_startup(void *context)
 		if (!interface->start_successful)
 			continue;
 
+		config->ptpd_intf.physIface = interface->bond_info.active_if;
+		config->ptpd_port.physIface = interface->bond_info.active_if;
+
 		ptp_intf_aggregate_instance_requirements(interface);
 
 		/* Create the PTPD interface instance */
@@ -3779,7 +3751,6 @@ static int ptp_on_startup(void *context)
 		}
 
 		for (instance = interface->instance_list; instance; instance = instance->next) {
-
 			/* Create the PTPD port instance */
 			rc = ptpd_create_port(&instance->config->ptpd_port,
 					      interface->ptpd_intf_private,
@@ -3788,6 +3759,21 @@ static int ptp_on_startup(void *context)
 				CRITICAL("ptp: failed to create PTPD instance, %s\n", strerror(rc));
 				goto fail;
 			}
+
+			/* Determine and configure the PTP clock. */
+			rc = ptp_configure_clock(instance);
+			if (rc != 0) {
+				if (rc != EREPORTED)
+					CRITICAL("ptp: failed to configure clock for interface %s\n",
+						 interface->defined_name);
+				return EREPORTED;
+			}
+
+			sfptpd_clock_get_hw_id(instance->ptpd_port_private->clock, &config->ptpd_intf.clock_id);
+			rc = ptp_determine_timestamp_type(&config->ptpd_intf.timestampType,
+							  interface,
+							  instance->ptpd_port_private->physIface);
+
 
 			/* Get an initial snapshot of PTPD's state so that we have something
 			 * valid if queried */

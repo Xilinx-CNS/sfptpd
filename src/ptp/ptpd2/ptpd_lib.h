@@ -157,7 +157,7 @@ void ptpd_pid_adjust(struct ptpd_port_context *ptpd, double kp, double ki, doubl
 ptpd_timestamp_type_e ptpd_get_timestamping(struct ptpd_intf_context *ptpd_if);
 
 /* Change the interface being used for PTP */
-int ptpd_change_interface(struct ptpd_intf_context *ptpd, Octet *logical_iface_name,
+int ptpd_change_interface(struct ptpd_port_context *port, Octet *logical_iface_name,
 			  struct sfptpd_interface *physical_iface,
 			  ptpd_timestamp_type_e timestamp_type);
 

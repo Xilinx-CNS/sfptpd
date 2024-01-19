@@ -1137,13 +1137,6 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 	}
 	ts_caps = sfptpd_interface_ptp_caps(ptpInterface->interface);
 
-	ptpInterface->clock = sfptpd_interface_get_clock(ptpInterface->interface);
-	if (ptpInterface->clock == NULL) {
-		ERROR("failed to get PTP clock for interface %s\n",
-		      sfptpd_interface_get_name(ptpInterface->interface));
-		return FALSE;
-	}
-
 	if (ifOpts->timestampType == PTPD_TIMESTAMP_TYPE_SW &&
 	    ts_caps & SFPTPD_INTERFACE_TS_CAPS_SW) {
 
@@ -1325,6 +1318,7 @@ Boolean
 netInit(struct ptpd_transport * transport, InterfaceOpts * ifOpts, PtpInterface * ptpInterface)
 {
 	Boolean loopback_multicast;
+	struct ptpd_port_context *port;
 
 	DBG("netInit\n");
 
@@ -1427,6 +1421,16 @@ netInit(struct ptpd_transport * transport, InterfaceOpts * ifOpts, PtpInterface 
 	if (!netInitTimestamping(ptpInterface, ifOpts)) {
 		ERROR("failed to enable packet time stamping\n");
 		return FALSE;
+	}
+
+	/* Update the port clocks */
+	for (port = ptpInterface->ports; port; port = port->next) {
+		port->clock = sfptpd_interface_get_clock(port->physIface);
+		if (port->clock == NULL) {
+			ERROR("failed to get PTP clock for port %s\n",
+				  sfptpd_interface_get_name(port->physIface));
+			return FALSE;
+		}
 	}
 
 	if (ptpInterface->tsMethod != TS_METHOD_SYSTEM) {

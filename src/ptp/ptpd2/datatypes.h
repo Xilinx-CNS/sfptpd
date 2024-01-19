@@ -470,6 +470,7 @@ typedef struct ptpd_port_config {
 	InterfaceOpts *ifOpts;
 
 	const char *name;
+	struct sfptpd_interface *physIface;
 
 	PtpCriticalStatsLogger criticalStatsLogger;
 	PtpRemoteStatsLogger remoteStatsLogger;
@@ -680,9 +681,6 @@ struct ptpd_intf_context {
 	TsMethod tsMethod;
 	enum ptpd_ts_fmt ts_fmt;
 
-	// TODO this copy of the clock is no longer really required
-	struct sfptpd_clock *clock;
-
 	/*Foreign node data set*/
 	struct sfptpd_hash_table *nodeSet;
 
@@ -733,6 +731,8 @@ struct ptpd_port_context {
 	Boolean boundaryGrandmasterDefined;
 	ClockIdentity boundaryGrandmasterIdentity;
 	ClockQuality clockQuality;
+	struct sfptpd_interface *physIface;
+	struct sfptpd_clock *clock;
 
 	/* Configurable members */
 	UInteger8 priority1;

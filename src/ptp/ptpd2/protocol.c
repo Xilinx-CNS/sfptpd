@@ -482,6 +482,9 @@ doInitGlobal(void)
 Boolean
 doInitPort(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
+	int rc;
+	struct sfptpd_clock *system_clock;
+
 	/* In case we are re-initializing, first shutdown components that
 	 * require it before initializing.
 	 */
@@ -496,8 +499,30 @@ doInitPort(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	/* Initialize the PTP data sets */
 	initData(rtOpts, ptpClock);
 
+	/* Determine which clock to use based on the interface */
+	assert(ptpClock->physIface != NULL);
+	ptpClock->clock = sfptpd_interface_get_clock(ptpClock->physIface);
+	assert(ptpClock->clock != NULL);
+
+	system_clock = sfptpd_clock_get_system_clock();
+
+	INFO("ptp: clock is %s\n", sfptpd_clock_get_long_name(ptpClock->clock));
+
+	/* If using a NIC clock and we are in a PTP master mode then step the
+	 * NIC clock to the current system time. */
+	if ((ptpClock->clock != system_clock) && !ptpClock->rtOpts.slaveOnly) {
+		rc = sfptpd_clock_set_time(ptpClock->clock, system_clock, NULL);
+		if (rc != 0) {
+			TRACE_L4("ptp: failed to compare and set clock %s to system clock, %s\n",
+				 sfptpd_clock_get_short_name(ptpClock->clock),
+				 strerror(rc));
+			if (rc != EAGAIN && rc != EBUSY)
+				return FALSE;
+		}
+	}
+
 	/* initialize other stuff */
-	if (!servo_init(rtOpts, &ptpClock->servo, ptpClock->interface->clock)) {
+	if (!servo_init(rtOpts, &ptpClock->servo, ptpClock->clock)) {
 		ERROR("ptp %s: failed to initialize servo\n", rtOpts->name);
 		toState(PTPD_FAULTY, rtOpts, ptpClock);
 		return FALSE;
@@ -526,13 +551,8 @@ doInitInterface(InterfaceOpts *ifOpts, PtpInterface *ptpInterface)
 	 */
 	netShutdown(&ptpInterface->transport);
 
-	/* initialize networking */
 	/* Initialize networking */
-	if(ifOpts->physIface == NULL) {
-		WARNING("no physical interface currently available; not starting networking\n");
-		ptpInterface->clock = sfptpd_interface_get_clock(ptpInterface->interface);
-		return TRUE;
-	} else if (!netInit(&ptpInterface->transport, ifOpts, ptpInterface)) {
+	 if (!netInit(&ptpInterface->transport, ifOpts, ptpInterface)) {
 		ERROR("failed to initialize network\n");
 		return FALSE;
 	}

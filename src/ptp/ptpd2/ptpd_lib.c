@@ -147,7 +147,6 @@ void ptpd_config_port_initialise(struct ptpd_port_config *config,
 void ptpd_config_intf_initialise(struct ptpd_intf_config *config)
 {
 	config->ifaceName[0] = '\0';
-	config->physIface = NULL;
 	config->snmp_enabled = FALSE;
 	config->timestampType = PTPD_TIMESTAMP_TYPE_HW_RAW;
 	config->dscpValue = 0;
@@ -272,6 +271,7 @@ int ptpd_create_port(struct ptpd_port_config *config, struct ptpd_intf_context *
 		return ENOMEM;
 	}
 
+	new->physIface = config->physIface;
 	new->interface = ifcontext;
 	rtOpts = &new->rtOpts;
 
@@ -565,23 +565,24 @@ ptpd_timestamp_type_e ptpd_get_timestamping(struct ptpd_intf_context *ptpd_if)
 }
 
 
-int ptpd_change_interface(struct ptpd_intf_context *ptpd_if, Octet *logical_iface_name,
+int ptpd_change_interface(struct ptpd_port_context *ptpd_port, Octet *logical_iface_name,
 			  struct sfptpd_interface *physical_iface,
 			  ptpd_timestamp_type_e timestamp_type)
 {
 	bool new_time_mode = false;
-	struct sfptpd_clock *old_clock;
-	struct ptpd_intf_config *ifOpts = &ptpd_if->ifOpts;
-	struct ptpd_port_context *port;
+	bool new_lrc = false;
+	struct ptpd_intf_context *ptpd_if;
+	struct ptpd_intf_config *ifOpts;
 	int rc = 0;
 
-	if ((ptpd_if == NULL) || (logical_iface_name == NULL)) {
-		ERROR("null ptpd if context (%p) or logical (%p) interface supplied\n",
-		      ptpd_if, logical_iface_name, physical_iface);
+	if ((ptpd_port == NULL) || (logical_iface_name == NULL)) {
+		ERROR("null ptpd port context (%p) or logical (%p) interface supplied\n",
+		      ptpd_port, logical_iface_name, physical_iface);
 		return EINVAL;
 	}
-
-	old_clock = ptpd_if->clock;
+	
+	ptpd_if = ptpd_port->interface;
+	ifOpts = &ptpd_if->ifOpts;
 
 	netShutdown(&ptpd_if->transport);
 
@@ -591,12 +592,16 @@ int ptpd_change_interface(struct ptpd_intf_context *ptpd_if, Octet *logical_ifac
 	if (ifOpts->timestampType != timestamp_type)
 		new_time_mode = true;
 
+	new_lrc = (ptpd_port->physIface != physical_iface);
+
 	sfptpd_strncpy(ifOpts->ifaceName, logical_iface_name, sizeof(ifOpts->ifaceName));
+	ptpd_port->physIface = physical_iface;
+	ptpd_port->clock = sfptpd_interface_get_clock(ptpd_port->physIface);
 	ifOpts->physIface = physical_iface;
 	ifOpts->timestampType = timestamp_type;
 
 	/* Initialize networking */
-	if(ifOpts->physIface == NULL) {
+	if(ptpd_port->physIface == NULL) {
 		NOTICE("no physical interface for logical interface %s\n",
 		       logical_iface_name);
 		rc = ENOENT;
@@ -607,19 +612,13 @@ int ptpd_change_interface(struct ptpd_intf_context *ptpd_if, Octet *logical_ifac
 	/* TODO: Do the servos for ports not 'active' need to be touched? */
 
 	/* In all cases, if the ptp clock changes we need to update the servo. */
-	if (ptpd_if->clock != old_clock) {
-		for (port = ptpd_if->ports; port; port = port->next) {
-			servo_set_slave_clock(&port->servo, ptpd_if->clock);
-		}
+	if (new_lrc) {
+		servo_set_slave_clock(&ptpd_port->servo, ptpd_port->clock);
 	}
 
 	/* If the time mode is changing, reset the servo */
 	if (new_time_mode) {
-		struct ptpd_port_context *port;
-
-		for (port = ptpd_if->ports; port; port = port->next) {
-			servo_reset(&port->servo);
-		}
+		servo_reset(&ptpd_port->servo);
 	}
 
 	if (rc != 0) {
