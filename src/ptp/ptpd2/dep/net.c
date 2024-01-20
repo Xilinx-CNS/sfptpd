@@ -873,9 +873,6 @@ static int parse_timestamp(uint8_t *pdu, size_t pdu_len,
 		case PTPD_TIMESTAMP_TYPE_SW:
 			ts.lnx += 0;
 			break;
-		case PTPD_TIMESTAMP_TYPE_HW_SYS:
-			ts.lnx += 1;
-			break;
 		case PTPD_TIMESTAMP_TYPE_HW_RAW:
 			ts.lnx += 2;
 			break;
@@ -1267,12 +1264,8 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 
 	/* Enable software transmit and receive timestamping */
 	flags = SOF_TIMESTAMPING_TX_HARDWARE
-	      | SOF_TIMESTAMPING_RX_HARDWARE;
-
-	if (ifOpts->timestampType == PTPD_TIMESTAMP_TYPE_HW_SYS)
-		flags |= SOF_TIMESTAMPING_SYS_HARDWARE;
-	else
-		flags |= SOF_TIMESTAMPING_RAW_HARDWARE;
+	      | SOF_TIMESTAMPING_RX_HARDWARE
+	      | SOF_TIMESTAMPING_RAW_HARDWARE;
 
 	if (netTryEnableTimestampingPktinfo(ptpInterface, flags)) {
 		ptpInterface->tsMethod = TS_METHOD_SO_TIMESTAMPING;

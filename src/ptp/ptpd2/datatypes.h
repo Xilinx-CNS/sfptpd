@@ -350,8 +350,6 @@ typedef struct ptp_servo {
 typedef enum {
 	/** Software timestamps */
 	PTPD_TIMESTAMP_TYPE_SW,
-	/** Hardware timestamps translated to system time */
-	PTPD_TIMESTAMP_TYPE_HW_SYS,
 	/** Unmodified hardware timestamps */
 	PTPD_TIMESTAMP_TYPE_HW_RAW,
 	/** Automatically select timestamp type. Only valid at configuration
