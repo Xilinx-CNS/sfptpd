@@ -1122,7 +1122,7 @@ processPortMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
 	 * subtract the inbound latency adjustment if it is not a loop
 	 *  back and the time stamp seems reasonable
 	 */
-	if (!isFromSelf && timestamp->sec > 0)
+	if (!isFromSelf && timestampValid && timestamp->sec > 0)
 		sfptpd_time_subtract(timestamp, timestamp, &rtOpts->inboundLatency);
 
 	unpack_result = unpackPortMessage(ptpClock,
@@ -1498,19 +1498,136 @@ handleMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
 	}
 }
 
+static void
+processTxTimestamp(PtpInterface *interface,
+		   struct sfptpd_ts_user ts_user,
+		   struct sfptpd_ts_ticket ts_ticket,
+		   struct sfptpd_timespec timestamp)
+{
+	struct sfptpd_ts_ticket check_ticket;
+	PtpClock *ptpClock = ts_user.port;
+	uint16_t check_seq;
+	bool match = true;
+	char desc[48];
+
+	assert(ptpClock);
+
+	formatTsPkt(&ts_user, desc);
+
+	switch (ts_user.type) {
+	case TS_SYNC:
+		check_ticket = ptpClock->sync_ticket;
+		/* "sent id" field is actually the next one... */
+		check_seq = ptpClock->sentSyncSequenceId - 1;
+		break;
+	case TS_DELAY_REQ:
+		check_ticket = ptpClock->delayreq_ticket;
+		/* "sent id" field is actually the next one... */
+		check_seq = ptpClock->sentDelayReqSequenceId - 1;
+		break;
+	case TS_PDELAY_REQ:
+		check_ticket = ptpClock->pdelayreq_ticket;
+		/* "sent id" field is actually the next one... */
+		check_seq = ptpClock->sentPDelayReqSequenceId - 1;
+		break;
+	case TS_PDELAY_RESP:
+		check_ticket = ptpClock->pdelayresp_ticket;
+		/* Non-stateful; alway succeed; answer sender */
+		check_seq = ts_user.seq_id;
+		break;
+	case TS_MONITORING_SYNC:
+		check_ticket = ptpClock->monsync_ticket;
+		/* Non-stateful; alway succeed; answer sender */
+		check_seq = ts_user.seq_id;
+		break;
+	default:
+		match = false;
+		check_ticket.slot = TS_CACHE_SIZE;
+		check_ticket.seq = 0;
+		check_seq = 0;
+	}
+
+	if (match)
+		match = (ts_ticket.slot == check_ticket.slot &&
+			 ts_ticket.seq == check_ticket.seq &&
+			 ts_user.seq_id == check_seq);
+
+	if (!match) {
+		WARNING("ptp: discarding non-matching %s timestamp"
+			"(ts %" PRIu32 ", slot %d, seq %" PRIu16 ") != "
+			"(%" PRIu32 ",%d,%" PRIu16 ")\n",
+			desc,
+			ts_ticket.seq, ts_ticket.slot, ts_user.seq_id,
+			check_ticket.seq, check_ticket.slot, check_seq);
+		return;
+	}
+
+	SYNC_MODULE_ALARM_CLEAR(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
+
+	/* Apply UTC offset to convert timestamp to TAI if appropriate. */
+	applyUtcOffset(&timestamp, &ptpClock->rtOpts, ptpClock);
+
+	switch (ts_user.type) {
+	case TS_SYNC:
+		processSyncFromSelf(&timestamp, &ptpClock->rtOpts, ptpClock,
+				    ts_user.seq_id);
+		ptpClock->sync_ticket = TS_NULL_TICKET;
+		break;
+	case TS_DELAY_REQ:
+		processDelayReqFromSelf(&timestamp, &ptpClock->rtOpts,
+					ptpClock);
+		ptpClock->delayreq_ticket = TS_NULL_TICKET;
+		break;
+	case TS_PDELAY_REQ:
+		processPDelayReqFromSelf(&timestamp, &ptpClock->rtOpts,
+					 ptpClock);
+		ptpClock->pdelayreq_ticket = TS_NULL_TICKET;
+		break;
+	case TS_PDELAY_RESP:
+		processPDelayRespFromSelf(&timestamp, &ptpClock->rtOpts,
+					  ptpClock, ts_user.seq_id);
+		ptpClock->pdelayresp_ticket = TS_NULL_TICKET;
+		break;
+	case TS_MONITORING_SYNC:
+		processMonitoringSyncFromSelf(&timestamp, &ptpClock->rtOpts, ptpClock,
+					      ts_user.seq_id);
+		ptpClock->monsync_ticket = TS_NULL_TICKET;
+		break;
+	}
+}
+
 /* Check and handle received messages */
 void
 doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
-		Boolean event, Boolean general)
+		Boolean event, Boolean general, Boolean error)
 {
+	struct sfptpd_ts_ticket ts_ticket = TS_NULL_TICKET;
+	struct sfptpd_ts_info ts_info;
+	struct sfptpd_ts_user ts_user;
 	ssize_t length;
-	Boolean timestampValid = FALSE;
-	struct sfptpd_timespec timestamp = { 0, 0, 0 };
-	UInteger32 rxPhysIfindex = 0;
+
+	while (error) {
+		length = netRecvError(ptpInterface);
+		if (length == -EAGAIN || length == -EINTR) {
+			/* No more messges to read on error queue */
+			error = false;
+		} else if (length < 0) {
+			/* TODO: add stat */
+			ERROR("ptp: error reading socket error queue, %s\n",
+			      strerror(-length));
+			error = false;
+		} else {
+			netProcessError(ptpInterface, length, &ts_user, &ts_ticket, &ts_info);
+			if (is_suitable_timestamp(ptpInterface, &ts_info))
+				processTxTimestamp(ptpInterface, ts_user, ts_ticket,
+					           *get_suitable_timestamp(ptpInterface, &ts_info));
+			else
+				WARNING("ptp: ignoring unsuitable timestamp type\n");
+		}
+	}
 
 	if (event) {
-		length = netRecvEvent(ptpInterface->msgIbuf, ptpInterface, ifOpts,
-				      &timestamp, &timestampValid, &rxPhysIfindex);
+		length = netRecvEvent(ptpInterface->msgIbuf, ptpInterface, &ts_info);
 		if (length < 0) {
 			PERROR("failed to receive on the event socket\n");
 			toStateAllPorts(PTPD_FAULTY, ptpInterface);
@@ -1518,9 +1635,13 @@ doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 			return;
 		}
 
-		if (length > 0)
-			processMessage(ifOpts, ptpInterface, &timestamp, timestampValid,
-						   rxPhysIfindex, length);
+		if (length > 0) {
+			processMessage(ifOpts, ptpInterface,
+				       get_suitable_timestamp(ptpInterface, &ts_info),
+				       is_suitable_timestamp(ptpInterface, &ts_info),
+				       ts_info.if_index,
+				       length);
+		}
 	}
 
 	if (general) {
@@ -1533,8 +1654,7 @@ doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 		}
 
 		if (length > 0)
-			processMessage(ifOpts, ptpInterface, &timestamp, FALSE,
-						   rxPhysIfindex, length);
+			processMessage(ifOpts, ptpInterface, NULL, FALSE, 0, length);
 	}
 }
 
@@ -3270,8 +3390,13 @@ issueAnnounce(RunTimeOpts *rtOpts,PtpClock *ptpClock)
 static void
 issueSync(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
+	struct sfptpd_ts_user ts_user = {
+		.port = ptpClock,
+		.type = TS_SYNC,
+		.seq_id = ptpClock->sentSyncSequenceId,
+	};
+	struct sfptpd_ts_ticket ticket;
 	int rc;
-	struct sfptpd_timespec timestamp;
 
 	/* Test Function: Suppress Sync messsages */
 	if (rtOpts->test.no_sync_pkts)
@@ -3280,40 +3405,39 @@ issueSync(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	msgPackSync(ptpClock->msgObuf, sizeof ptpClock->msgObuf, ptpClock);
 
 	rc = netSendEvent(ptpClock->msgObuf, PTPD_SYNC_LENGTH, ptpClock,
-			  rtOpts, NULL, 0, &timestamp);
-	if (rc == ENOTIMESTAMP) {
-		/* If we failed because we didn't retrieve the transmit
-		 * timestamp this may mean that the packet wasn't timestamped
-		 * or that it wasn't actually transmitted. It will occur, for
-		 * example, if we have lost the network connection. The protocol
-		 * will recover if the network connection is re-established so
-		 * we don't go to the faulty state. Increment the TX failure
-		 * stat and set the alarm. */
-		WARNING("ptp %s: failed to transmit/timestamp Sync msg\n", rtOpts->name);
-		SYNC_MODULE_ALARM_SET(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
-		ptpClock->counters.txPktNoTimestamp++;
+			  rtOpts, NULL, 0);
+	if (rc == 0) {
+		/* We successfully transmitted the packet */
+		ptpClock->counters.syncMessagesSent++;
+		DBGV("Sync MSG sent!\n");
+
+		ticket = netExpectTimestamp(&ptpClock->interface->ts_cache,
+					    &ts_user,
+					    ptpClock->msgObuf,
+					    PTPD_SYNC_LENGTH,
+					    getTrailerLength(ptpClock));
+		if (sfptpd_ts_is_ticket_valid(ticket)) {
+			ptpClock->sync_ticket = ticket;
+		} else {
+			WARNING("ptp %s: did not get tx timestamp ticket for Sync msg\n", rtOpts->name);
+			SYNC_MODULE_ALARM_SET(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
+			ptpClock->counters.txPktNoTimestamp++;
+		}
+
 		ptpClock->sentSyncSequenceId++;
+
+		/* Check error queue immediately before falling back to epoll.
+		 * This optimisation does not seem to succeed in the way
+		 * you might expect: the timestamp is probably _not_ ready
+		 * but warming the code path seems to shave off 10us! */
+		doHandleSockets(&ptpClock->interface->ifOpts,
+				ptpClock->interface,
+				TRUE, FALSE, FALSE);
 	} else if (rc != 0) {
 		/* If we failed for any reason then something is seriously
 		 * wrong with the socket. Go to the faulty state and
 		 * re-initialise. */
 		handleSendFailure(rtOpts, ptpClock, "Sync");
-	} else {
-		/* We successfully transmitted and timestamped the packet */
-		SYNC_MODULE_ALARM_CLEAR(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
-		ptpClock->counters.syncMessagesSent++;
-		DBGV("Sync MSG sent!\n");
-
-		/* If we are collecting timestamping using SO_TIMESTAMPING we
-		 * should have a transmit timestamp. Issue the follow up right
-		 * away */
-		if (ptpClock->interface->tsMethod != TS_METHOD_SYSTEM) {
-			applyUtcOffset(&timestamp, rtOpts, ptpClock);
-			processSyncFromSelf(&timestamp, rtOpts, ptpClock,
-					    ptpClock->sentSyncSequenceId);
-		}
-
-		ptpClock->sentSyncSequenceId++;
 	}
 }
 
@@ -3322,8 +3446,13 @@ issueSync(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 static void
 issueSyncForMonitoring(RunTimeOpts *rtOpts, PtpClock *ptpClock, UInteger16 sequenceId)
 {
+	struct sfptpd_ts_user ts_user= {
+		.port = ptpClock,
+		.type = TS_MONITORING_SYNC,
+		.seq_id = sequenceId,
+	};
+	struct sfptpd_ts_ticket ticket;
 	int rc;
-	struct sfptpd_timespec timestamp;
 
 	msgPackSync(ptpClock->msgObuf, sizeof ptpClock->msgObuf, ptpClock);
 
@@ -3333,38 +3462,30 @@ issueSyncForMonitoring(RunTimeOpts *rtOpts, PtpClock *ptpClock, UInteger16 seque
 
 	rc = netSendEvent(ptpClock->msgObuf, PTPD_SYNC_LENGTH, ptpClock, rtOpts,
 			  &ptpClock->nsmMonitorAddr,
-			  ptpClock->nsmMonitorAddrLen,
-			  &timestamp);
-	if (rc == ENOTIMESTAMP) {
-		/* If we failed because we didn't retrieve the transmit
-		 * timestamp this may mean that the packet wasn't timestamped
-		 * or that it wasn't actually transmitted. It will occur, for
-		 * example, if we have lost the network connection. The protocol
-		 * will recover if the network connection is re-established so
-		 * we don't go to the faulty state. Increment the TX failure
-		 * stat and set the alarm. */
-		WARNING("ptp %s: failed to transmit/timestamp monitoring Sync msg\n", rtOpts->name);
-		SYNC_MODULE_ALARM_SET(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
-		ptpClock->counters.txPktNoTimestamp++;
+			  ptpClock->nsmMonitorAddrLen);
+	if (rc == 0) {
+		/* We successfully transmitted the packet */
+		ptpClock->counters.monitoringTLVsSyncsSent++;
+		DBGV("Monitoring sync MSG sent!\n");
+
+		ticket = netExpectTimestamp(&ptpClock->interface->ts_cache,
+					    &ts_user,
+					    ptpClock->msgObuf,
+					    PTPD_SYNC_LENGTH,
+					    getTrailerLength(ptpClock));
+		if (sfptpd_ts_is_ticket_valid(ticket)) {
+			ptpClock->monsync_ticket = ticket;
+		} else {
+			WARNING("ptp %s: did not get tx timestamp ticket for monitoring Sync msg\n", rtOpts->name);
+			SYNC_MODULE_ALARM_SET(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
+			ptpClock->counters.txPktNoTimestamp++;
+		}
 	} else if (rc != 0) {
 		/* If we failed for any reason then something is seriously
 		 * wrong with the socket but we are not going to take us
 		 * to the faulty state for the monitoring extension. */
 		ptpClock->counters.messageSendErrors++;
 		DBGV("Monitoring sync message can't be sent.\n");
-	} else {
-		/* We successfully transmitted and timestamped the packet */
-		SYNC_MODULE_ALARM_CLEAR(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
-		ptpClock->counters.monitoringTLVsSyncsSent++;
-		DBGV("Monitoring sync MSG sent!\n");
-
-		/* If we are collecting timestamping using SO_TIMESTAMPING we
-		 * should have a transmit timestamp. Issue the follow up right
-		 * away */
-		if (ptpClock->interface->tsMethod != TS_METHOD_SYSTEM) {
-			applyUtcOffset(&timestamp, rtOpts, ptpClock);
-			processMonitoringSyncFromSelf(&timestamp, rtOpts, ptpClock, sequenceId);
-		}
 	}
 }
 
@@ -3420,8 +3541,15 @@ issueFollowupForMonitoring(const struct sfptpd_timespec *time, RunTimeOpts *rtOp
 static void
 issueDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
+	struct sfptpd_ts_user ts_user = {
+		.port = ptpClock,
+		.type = TS_DELAY_REQ,
+		.seq_id = ptpClock->sentDelayReqSequenceId,
+	};
+	struct sfptpd_ts_ticket ticket;
+	struct sockaddr_storage dst;
+	socklen_t dstLen = 0;
 	int rc;
-	struct sfptpd_timespec timestamp;
 
 	ptpClock->waitingForDelayResp = FALSE;
 
@@ -3429,9 +3557,6 @@ issueDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 
 	/* This uses sentDelayReqSequenceId as the sequence number */
 	msgPackDelayReq(ptpClock->msgObuf, sizeof ptpClock->msgObuf, ptpClock);
-
-	struct sockaddr_storage dst;
-	socklen_t dstLen = 0;
 
 	if (ptpClock->effective_comm_caps.delayRespCapabilities & PTPD_COMM_UNICAST_CAPABLE) {
 		copyAddress(&dst, &dstLen, &ptpClock->parentAddress, ptpClock->parentAddressLen);
@@ -3441,42 +3566,28 @@ issueDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	}
 
 	rc = netSendEvent(ptpClock->msgObuf, PTPD_DELAY_REQ_LENGTH, ptpClock,
-			  rtOpts, &dst, dstLen, &timestamp);
-	if ((rc != 0) && (rc != ENOTIMESTAMP)) {
+			  rtOpts, &dst, dstLen);
+	if (rc != 0) {
 		/* If we failed for any reason other than failure to retrieve
 		 * the transmit then something is seriously wrong with the
 		 * socket. Go to the faulty state and re-initialise. */
 		handleSendFailure(rtOpts, ptpClock, "delayReq");
 	} else {
-		/* If we failed because we didn't retrieve the transmit
-		 * timestamp this may mean that the packet wasn't timestamped
-		 * or that it wasn't actually transmitted. It will occur, for
-		 * example, if we have lost the network connection. It will also
-		 * occur if we are in unicast mode and there is no response to
-		 * an ARP request. The protocol will recover if the network
-		 * connection is re-established so we don't go to the faulty
-		 * state. */
-		if (rc == ENOTIMESTAMP) {
-			/* Increment the TX failure stat and set the alarm */
-			WARNING("ptp %s: failed to transmit/timestamp DelayRequest msg\n", rtOpts->name);
+		ticket = netExpectTimestamp(&ptpClock->interface->ts_cache,
+					    &ts_user,
+					    ptpClock->msgObuf,
+					    PTPD_DELAY_REQ_LENGTH,
+					    getTrailerLength(ptpClock));
+		if (sfptpd_ts_is_ticket_valid(ticket)) {
+			ptpClock->delayreq_ticket = ticket;
+		} else {
+			WARNING("ptp %s: did not get tx timestamp ticket for Delay_Request msg\n", rtOpts->name);
 			SYNC_MODULE_ALARM_SET(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
 			ptpClock->counters.txPktNoTimestamp++;
-		} else {
-			/* Clear the alarm */
-			SYNC_MODULE_ALARM_CLEAR(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
-			ptpClock->counters.delayReqMessagesSent++;
-			DBGV("DelayReq MSG sent!\n");
-
-			/* If we are collecting timestamping using
-			 * SO_TIMESTAMPING we should have a transmit timestamp.
-			 * Issue the follow up right away */
-			if (ptpClock->interface->tsMethod != TS_METHOD_SYSTEM) {
-				/* Apply UTC offset to convert timestamp to TAI. */
-				applyUtcOffset(&timestamp, rtOpts, ptpClock);
-				processDelayReqFromSelf(&timestamp, rtOpts,
-							ptpClock);
-			}
 		}
+
+		ptpClock->counters.delayReqMessagesSent++;
+		DBGV("DelayReq MSG sent!\n");
 
 		/* From now on, we will only accept delayreq and delayresp of 
 		 * (sentDelayReqSequenceId - 1) */
@@ -3488,6 +3599,11 @@ issueDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		timerStart(DELAYRESP_RECEIPT_TIMER,
 			   powl(2, ptpClock->logDelayRespReceiptTimeout),
 			   ptpClock->itimer);
+
+		/* Check error queue immediately before falling back to epoll. */
+		doHandleSockets(&ptpClock->interface->ifOpts,
+				ptpClock->interface,
+				TRUE, FALSE, FALSE);
 	}
 }
 
@@ -3495,8 +3611,13 @@ issueDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 static void
 issuePDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
+	struct sfptpd_ts_user ts_user = {
+		.port = ptpClock,
+		.type = TS_PDELAY_REQ,
+		.seq_id = ptpClock->sentPDelayReqSequenceId,
+	};
+	struct sfptpd_ts_ticket ticket;
 	int rc;
-	struct sfptpd_timespec timestamp;
 
 	ptpClock->waitingForPDelayResp = false;
 	ptpClock->waitingForPDelayRespFollow = false;
@@ -3506,41 +3627,28 @@ issuePDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	msgPackPDelayReq(ptpClock->msgObuf, sizeof ptpClock->msgObuf, ptpClock);
 
 	rc = netSendPeerEvent(ptpClock->msgObuf, PTPD_PDELAY_REQ_LENGTH,
-			      ptpClock, rtOpts, &timestamp);
-	if ((rc != 0) && (rc != ENOTIMESTAMP)) {
+			      ptpClock, rtOpts);
+	if (rc != 0) {
 		/* If we failed for any reason other than failure to retrieve
-		 * the transmit then something is seriously wrong with the
+		 * the timestamp then something is seriously wrong with the
 		 * socket. Go to the faulty state and re-initialise. */
 		handleSendFailure(rtOpts, ptpClock, "PdelayReq");
 	} else {
-		/* If we failed because we didn't retrieve the transmit
-		 * timestamp this may mean that the packet wasn't timestamped
-		 * or that it wasn't actually transmitted. It will occur, for
-		 * example, if we have lost the network connection. It will also
-		 * occur if we are in unicast mode and there is no response to
-		 * an ARP request. The protocol will recover if the network
-		 * connection is re-established so we don't go to the faulty
-		 * state. Increment the TX failure stat and set the alarm */
-		if (rc == ENOTIMESTAMP) {
-			WARNING("ptp %s: failed to transmit/timestamp PeerDelayRequest msg\n", rtOpts->name);
+		ticket = netExpectTimestamp(&ptpClock->interface->ts_cache,
+					    &ts_user,
+					    ptpClock->msgObuf,
+					    PTPD_PDELAY_REQ_LENGTH,
+					    getTrailerLength(ptpClock));
+		if (sfptpd_ts_is_ticket_valid(ticket)) {
+			ptpClock->pdelayreq_ticket = ticket;
+		} else {
+			WARNING("ptp %s: did not get tx timestamp ticket for Peer_Delay_Request msg\n", rtOpts->name);
 			SYNC_MODULE_ALARM_SET(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
 			ptpClock->counters.txPktNoTimestamp++;
-			ptpClock->sentPDelayReqSequenceId++;
-		} else {
-			/* We successfully transmitted and timestamped the packet */
-			SYNC_MODULE_ALARM_CLEAR(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
-			ptpClock->counters.pdelayReqMessagesSent++;
-			DBGV("PDelayReq MSG sent!\n");
-
-			/* If we are collecting timestamping using
-			 * SO_TIMESTAMPING we should have a transmit timestamp.
-			 * Issue the follow up right away */
-			if (ptpClock->interface->tsMethod != TS_METHOD_SYSTEM) {
-				/* Apply the UTC offset if appropriate */
-				applyUtcOffset(&timestamp, rtOpts, ptpClock);
-				processPDelayReqFromSelf(&timestamp, rtOpts, ptpClock);
-			}
 		}
+
+		ptpClock->counters.pdelayReqMessagesSent++;
+		DBGV("PDelayReq MSG sent!\n");
 
 		ptpClock->sentPDelayReqSequenceId++;
 
@@ -3550,6 +3658,11 @@ issuePDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		timerStart(PDELAYRESP_RECEIPT_TIMER,
 			   powl(2, ptpClock->logDelayRespReceiptTimeout),
 			   ptpClock->itimer);
+
+		/* Check error queue immediately before falling back to epoll. */
+		doHandleSockets(&ptpClock->interface->ifOpts,
+				ptpClock->interface,
+				TRUE, FALSE, FALSE);
 	}
 }
 
@@ -3558,7 +3671,12 @@ void
 issuePDelayResp(struct sfptpd_timespec *time, MsgHeader *header,
 		RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
-	struct sfptpd_timespec timestamp;
+	struct sfptpd_ts_user ts_user = {
+		.port = ptpClock,
+		.type = TS_PDELAY_RESP,
+		.seq_id = header->sequenceId,
+	};
+	struct sfptpd_ts_ticket ticket;
 	int rc;
 
 	/* Test Function: Suppress Delay Response messsages */
@@ -3580,39 +3698,33 @@ issuePDelayResp(struct sfptpd_timespec *time, MsgHeader *header,
 			  header, time, ptpClock);
 
 	rc = netSendPeerEvent(ptpClock->msgObuf, PTPD_PDELAY_RESP_LENGTH,
-			      ptpClock, rtOpts, &timestamp);
-	if (rc == ENOTIMESTAMP) {
-		/* If we failed because we didn't retrieve the transmit
-		 * timestamp this may mean that the packet wasn't timestamped
-		 * or that it wasn't actually transmitted. It will occur, for
-		 * example, if we have lost the network connection. It will also
-		 * occur if we are in unicast mode and there is no response to
-		 * an ARP request. The protocol will recover if the network
-		 * connection is re-established so we don't go to the faulty
-		 * state. Increment the TX failure stat and set the alarm */
-		WARNING("ptp %s: failed to transmit/timestamp PeerDelayResponse msg\n", rtOpts->name);
-		SYNC_MODULE_ALARM_SET(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
-		ptpClock->counters.txPktNoTimestamp++;
-	} else if (rc != 0) {
+			      ptpClock, rtOpts);
+	if (rc != 0) {
 		/* If we failed for any reason other than failure to retrieve
-		 * the transmit then something is seriously wrong with the
+		 * the timestamp then something is seriously wrong with the
 		 * socket. Go to the faulty state and re-initialise. */
 		handleSendFailure(rtOpts, ptpClock, "PdelayResp");
 	} else {
-		/* We successfully transmitted and timestamped the packet */
-		SYNC_MODULE_ALARM_CLEAR(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
+		ticket = netExpectTimestamp(&ptpClock->interface->ts_cache,
+					    &ts_user,
+					    ptpClock->msgObuf,
+					    PTPD_PDELAY_RESP_LENGTH,
+					    getTrailerLength(ptpClock));
+		if (sfptpd_ts_is_ticket_valid(ticket)) {
+			ptpClock->pdelayresp_ticket = ticket;
+		} else {
+			WARNING("ptp %s: did not get tx timestamp ticket for Peer_Delay_Response msg\n", rtOpts->name);
+			SYNC_MODULE_ALARM_SET(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
+			ptpClock->counters.txPktNoTimestamp++;
+		}
+
 		ptpClock->counters.pdelayRespMessagesSent++;
 		DBGV("PDelayResp MSG sent ! \n");
 
-		/* If we are collecting timestamping using SO_TIMESTAMPING we
-		 * should have a transmit timestamp. Issue the follow up right
-		 * away */
-		if (ptpClock->interface->tsMethod != TS_METHOD_SYSTEM) {
-			/* Apply the UTC offset if appropriate */
-			applyUtcOffset(&timestamp, rtOpts, ptpClock);
-			processPDelayRespFromSelf(&timestamp, rtOpts,
-						  ptpClock, header->sequenceId);
-		}
+		/* Check error queue immediately before falling back to epoll. */
+		doHandleSockets(&ptpClock->interface->ifOpts,
+				ptpClock->interface,
+				TRUE, FALSE, FALSE);
 	}
 }
 

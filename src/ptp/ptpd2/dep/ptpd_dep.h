@@ -222,20 +222,84 @@ void populateTimePropertiesDataSet(MMTimePropertiesDataSet *data, PtpClock *ptpC
  * -Init network stuff, send and receive datas*/
  /**\{*/
 
+static inline bool sfptpd_ts_is_ticket_valid(const struct sfptpd_ts_ticket ticket)
+{
+	return ticket.slot != TS_CACHE_SIZE;
+}
+
+static const struct sfptpd_ts_ticket TS_NULL_TICKET = {
+	.slot = TS_CACHE_SIZE,
+	.seq = 0,
+};
+
+void formatTsPkt(struct sfptpd_ts_user *pkt, char desc[48]);
+
 Boolean testInterface(char* ifaceName);
 Boolean netInit(struct ptpd_transport*,InterfaceOpts*,PtpInterface*);
 Boolean netInitPort(PtpClock *ptpClock, RunTimeOpts *rtOpts);
 Boolean netShutdown(struct ptpd_transport*);
 int netSelect(struct sfptpd_timespec*,struct ptpd_transport*,fd_set*);
-ssize_t netRecvEvent(Octet*,PtpInterface*,InterfaceOpts*,struct sfptpd_timespec*,Boolean*,UInteger32*);
+ssize_t netRecvError(PtpInterface *ptpInterface);
+ssize_t netRecvEvent(Octet*,PtpInterface*,struct sfptpd_ts_info*);
 ssize_t netRecvGeneral(Octet*,struct ptpd_transport*);
 
 /* These functions all return 0 for success or an errno in the case of failure */
-int netSendEvent(Octet*,UInteger16,PtpClock*,RunTimeOpts*,const struct sockaddr_storage*,socklen_t,struct sfptpd_timespec*);
+int netSendEvent(Octet*,UInteger16,PtpClock*,RunTimeOpts*,const struct sockaddr_storage*,socklen_t);
 int netSendGeneral(Octet*,UInteger16,PtpClock*,RunTimeOpts*,const struct sockaddr_storage*,socklen_t);
 int netSendMonitoring(Octet*,UInteger16,PtpClock*,RunTimeOpts*,const struct sockaddr_storage*,socklen_t);
 int netSendPeerGeneral(Octet*,UInteger16,PtpClock*);
-int netSendPeerEvent(Octet*,UInteger16,PtpClock*,RunTimeOpts*,struct sfptpd_timespec*);
+int netSendPeerEvent(Octet*,UInteger16,PtpClock*,RunTimeOpts*);
+
+bool netProcessError(PtpInterface *ptpInterface,
+		     size_t length,
+		     struct sfptpd_ts_user *user,
+		     struct sfptpd_ts_ticket *ticket,
+		     struct sfptpd_ts_info *info);
+
+static inline size_t getTrailerLength(PtpClock *ptpClock)
+{
+	/* IPv6 packets are sent with two extra bytes according
+	 * to Annex E. These are not included in the pdulen
+	 * passed to the timestamp matcher. */
+	return ptpClock->interface->ifOpts.transportAF == AF_INET6 ? 2 : 0;
+}
+
+/* The type of timestamp used for PTP must match the clock type being used
+ * as the local reference clock.
+ *   system clock -> use software timestamps
+ *   NIC clock -> use hardware timestamps
+ */
+static inline bool is_suitable_timestamp(PtpInterface *ptpInterface,
+					 struct sfptpd_ts_info *info)
+{
+	switch (ptpInterface->ifOpts.timestampType) {
+	case PTPD_TIMESTAMP_TYPE_HW_RAW:
+		return info->have_hw;
+	case PTPD_TIMESTAMP_TYPE_SW:
+		return info->have_sw;
+	default:
+		return false;
+	}
+}
+
+static inline struct sfptpd_timespec *get_suitable_timestamp(PtpInterface *ptpInterface,
+				      struct sfptpd_ts_info *info)
+{
+	switch (ptpInterface->ifOpts.timestampType) {
+	case PTPD_TIMESTAMP_TYPE_HW_RAW:
+		return &info->hw;
+	case PTPD_TIMESTAMP_TYPE_SW:
+		return &info->sw;
+	default:
+		return false;
+	}
+}
+
+struct sfptpd_ts_ticket netExpectTimestamp(struct sfptpd_ts_cache *cache,
+					   struct sfptpd_ts_user *user,
+					   Octet *pkt_data,
+					   size_t pkt_len,
+					   size_t trailer);
 
 Boolean netRefreshIGMP(struct ptpd_transport *, InterfaceOpts *, PtpInterface *);
 Boolean hostLookup(const char* hostname, Integer32* addr);

@@ -154,7 +154,7 @@ Boolean doInitGlobal(void);
 Boolean doInitPort(RunTimeOpts*, PtpClock*);
 Boolean doInitInterface(InterfaceOpts*, PtpInterface*);
 void doTimerTick(RunTimeOpts *, PtpClock *);
-void doHandleSockets(InterfaceOpts *, PtpInterface *, Boolean event, Boolean general);
+void doHandleSockets(InterfaceOpts *, PtpInterface *, Boolean event, Boolean general, Boolean error);
 void toState(ptpd_state_e, RunTimeOpts*, PtpClock*);
 void toStateAllPorts(ptpd_state_e state, PtpInterface *ptpInterface);
 void handleSendFailure(RunTimeOpts *rtOpts, PtpClock *ptpClock, const char *message);

@@ -4098,7 +4098,7 @@ static void ptp_on_user_fds(void *context,
 {
 	struct sfptpd_ptp_intf *interface;
 	sfptpd_ptp_module_t *ptp = (sfptpd_ptp_module_t *)context;
-	bool event, general, __attribute__((unused)) error;
+	bool event, general, error;
 	unsigned int i;
 
 	assert(ptp != NULL);
@@ -4118,10 +4118,10 @@ static void ptp_on_user_fds(void *context,
 				general = true;
 		}
 
-		if (event || general) {
+		if (error || event || general) {
 			/* Handle the ready sockets */
 			ptpd_sockets_ready(interface->ptpd_intf_private,
-					   event, general);
+					   event, general, error);
 
 			/* check the state */
 			ptp_update_interface_state(interface);

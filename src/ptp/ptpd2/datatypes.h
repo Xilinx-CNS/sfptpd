@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
-/* (c) Copyright 2012-2019 Xilinx, Inc. */
+/* (c) Copyright 2012-2023 Advanced Micro Devices, Inc. */
 /* (c) Copyright prior contributors */
 
 #ifndef DATATYPES_H_
@@ -663,6 +663,65 @@ typedef struct ptp_intf_counters {
 	uint32_t domainMismatchErrors;	  /* different domain than configured - also increments discarded */
 } ptp_intf_counters_t;
 
+/* Recovered packet timestamp and other associated packet info */
+struct sfptpd_ts_info {
+	struct sfptpd_timespec sw;
+	struct sfptpd_timespec hw;
+	unsigned int if_index; /**< physical intf used in transmission or 0 */
+	bool have_sw:1;
+	bool have_hw:1;
+};
+
+/* Information needed to make use of recovered timestamp */
+struct sfptpd_ts_user {
+	PtpClock *port;
+	enum {
+		TS_SYNC,
+		TS_DELAY_REQ,
+		TS_PDELAY_REQ,
+		TS_PDELAY_RESP,
+		TS_MONITORING_SYNC,
+	} type;
+	UInteger16 seq_id;
+};
+
+/* Ticket for user code to identify timestamp being awaited. */
+struct sfptpd_ts_ticket {
+	uint32_t seq;
+	uint32_t slot;
+};
+
+#define TS_MAX_PDU PTPD_PDELAY_REQ_LENGTH
+
+/* Information required for matching a timestamp to the packet awaiting that
+ * that timestamp */
+struct sfptpd_ts_pkt {
+	union {
+		struct {
+			char data[TS_MAX_PDU];
+			size_t len;
+			size_t trailer;
+		} pdu;
+	} match;
+	struct sfptpd_ts_user user;
+	struct sfptpd_timespec sent_monotime;
+	uint64_t seq;
+};
+
+#define TS_CACHE_SIZE (8 * sizeof(unsigned int) / sizeof(uint8_t))
+
+/* Structure holding packets waiting for a timestamp */
+struct sfptpd_ts_cache {
+	/* Descriptors for packets awaiting timestamp. */
+	struct sfptpd_ts_pkt packet[TS_CACHE_SIZE];
+
+	/* Reverse bitmap indicating which cache slots are filled. */
+	unsigned int free_bitmap;
+
+	/* Sequence number for cached packets */
+	uint64_t seq;
+};
+
 /**
 * \struct PtpInterface
 * \brief State shared between instances on the same interface
@@ -678,6 +737,8 @@ struct ptpd_intf_context {
 
 	TsMethod tsMethod;
 	enum ptpd_ts_fmt ts_fmt;
+	struct sfptpd_ts_cache ts_cache;
+	struct msghdr msgEbuf;
 
 	/*Foreign node data set*/
 	struct sfptpd_hash_table *nodeSet;
@@ -830,6 +891,12 @@ struct ptpd_port_context {
 	Boolean waitingForDelayResp;
 	Boolean waitingForPDelayResp;
 	Boolean waitingForPDelayRespFollow;
+
+	struct sfptpd_ts_ticket sync_ticket;
+	struct sfptpd_ts_ticket delayreq_ticket;
+	struct sfptpd_ts_ticket pdelayreq_ticket;
+	struct sfptpd_ts_ticket pdelayresp_ticket;
+	struct sfptpd_ts_ticket monsync_ticket;
 
 	/* how many DelayResps we've failed to receive in a row */
 	int sequentialMissingDelayResps;

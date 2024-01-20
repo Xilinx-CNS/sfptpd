@@ -82,6 +82,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Issue SWPTP-831
+  - Retrieve transmit timestamps via epoll to avoid blocking PTP thread
 - Issue SWPTP-1386
   - Deliver clock comparisons via shared clock feed, nearly halving the number
     of measurements needed in a multi-NIC system.

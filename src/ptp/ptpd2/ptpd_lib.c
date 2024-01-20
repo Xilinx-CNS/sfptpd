@@ -238,6 +238,19 @@ int ptpd_create_interface(struct ptpd_intf_config *config, struct ptpd_global_co
 	/* Create set for ptp-nodes logging */
 	new->nodeSet = sfptpd_stats_create_set();
 
+	/* Create the error queue message buffer */
+	new->msgEbuf.msg_iovlen = 1;
+	new->msgEbuf.msg_iov = calloc(new->msgEbuf.msg_iovlen, sizeof(struct iovec));
+	if (new->msgEbuf.msg_iov == NULL)
+		goto fail_msg_iov;
+	new->msgEbuf.msg_iov[0].iov_base = calloc(1, PACKET_SIZE);
+	new->msgEbuf.msg_iov[0].iov_len = PACKET_SIZE;
+	if (new->msgEbuf.msg_iov[0].iov_base == NULL)
+		goto fail_msg_pkt;
+	new->msgEbuf.msg_control = calloc(1, CONTROL_MSG_SIZE);
+	if (new->msgEbuf.msg_control == NULL)
+		goto fail_msg_control;
+
 	/* Put PTPD into the initializing state and carry out the initialisation.
 	 * If this fails, then return with an error. */
 	if (!doInitInterface(ifOpts, new)) {
@@ -248,6 +261,15 @@ int ptpd_create_interface(struct ptpd_intf_config *config, struct ptpd_global_co
 
 	*ptpd_if = new;
 	return 0;
+
+fail_msg_control:
+	free(new->msgEbuf.msg_iov->iov_base);
+fail_msg_pkt:
+	free(new->msgEbuf.msg_iov);
+fail_msg_iov:
+	free(new);
+	CRITICAL("failed to allocate error queue message buffer\n");
+	return ENOMEM;
 }
 
 
@@ -342,6 +364,12 @@ void ptpd_interface_destroy(struct ptpd_intf_context *ptpd_if)
 
 	assert(ptpd_if);
 
+	/* Destroy error queue message buffer */
+	if (ptpd_if->msgEbuf.msg_iov)
+		free(ptpd_if->msgEbuf.msg_iov[0].iov_base);
+	free(ptpd_if->msgEbuf.msg_iov);
+	free(ptpd_if->msgEbuf.msg_control);
+
 	/* Destroy ports */
 	for (port = ptpd_if->ports; port; port = next) {
 		next = port->next;
@@ -417,7 +445,7 @@ void ptpd_timer_tick(struct ptpd_port_context *ptpd,
 
 
 void ptpd_sockets_ready(struct ptpd_intf_context *ptpd_if, bool event,
-			bool general)
+			bool general, bool error)
 {
 	struct ptpd_intf_config *ifOpts = &ptpd_if->ifOpts;
 
@@ -426,7 +454,7 @@ void ptpd_sockets_ready(struct ptpd_intf_context *ptpd_if, bool event,
 		return;
 	}
 
-	doHandleSockets(ifOpts, ptpd_if, event, general);
+	doHandleSockets(ifOpts, ptpd_if, event, general, error);
 }
 
 

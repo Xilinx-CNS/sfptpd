@@ -119,7 +119,7 @@ void ptpd_timer_tick(struct ptpd_port_context *ptpd,
 
 /* One or both of the PTP sockets is ready */
 void ptpd_sockets_ready(struct ptpd_intf_context *ptpd_if, bool event,
-			bool general);
+			bool general, bool error);
 
 
 /* Change which parts of PTP are enabled */

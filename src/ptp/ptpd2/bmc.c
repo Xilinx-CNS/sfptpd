@@ -132,6 +132,12 @@ void initData(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	ptpClock->delayMechanism = rtOpts->delayMechanism;
 	ptpClock->logMinPdelayReqInterval = rtOpts->minPdelayReqInterval;
 
+	ptpClock->sync_ticket = TS_NULL_TICKET;
+	ptpClock->delayreq_ticket = TS_NULL_TICKET;
+	ptpClock->pdelayreq_ticket = TS_NULL_TICKET;
+	ptpClock->pdelayresp_ticket = TS_NULL_TICKET;
+	ptpClock->monsync_ticket = TS_NULL_TICKET;
+
 	/*
 	 * Initialize random number generator using same method as ptpv1:
 	 * seed is now initialized from the last bytes of our mac addres

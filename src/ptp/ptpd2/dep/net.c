@@ -1,4 +1,5 @@
 /*-
+ * Copyright (c) 2023      Advanced Micro Devices, Inc.
  * Copyright (c) 2019      Xilinx, Inc.
  * Copyright (c) 2014-2018 Solarflare Communications Inc.
  * Copyright (c) 2013      Harlan Stenn,
@@ -107,6 +108,31 @@
 #include <net-snmp/net-snmp-includes.h>
 #include <net-snmp/agent/net-snmp-agent-includes.h>
 #endif
+
+void formatTsPkt(struct sfptpd_ts_user *pkt, char desc[48])
+{
+	const char *type;
+
+	switch(pkt->type) {
+	case TS_SYNC:
+		type = "Sync";
+		break;
+	case TS_DELAY_REQ:
+		type = "Delay_Req";
+		break;
+	case TS_PDELAY_REQ:
+		type = "PDelay_Req";
+		break;
+	case TS_PDELAY_RESP:
+		type = "PDelay_Resp";
+		break;
+	case TS_MONITORING_SYNC:
+		type = "Monitoring Sync";
+		break;
+	}
+
+	snprintf(desc, 48, "%s, seq %" PRIu16, type, pkt->seq_id);
+}
 
 void copyAddress(struct sockaddr_storage *destAddr,
 			socklen_t *destLen,
@@ -830,15 +856,18 @@ netSetMulticastLoopback(struct ptpd_transport *transport, Boolean value, int add
 	return TRUE;
 }
 
+static void reset_timestamp(struct sfptpd_ts_info *info)
+{
+	assert(info);
+	memset(info, '\0', sizeof *info);
+}
 
 static int parse_timestamp(uint8_t *pdu, size_t pdu_len,
-			   ptpd_timestamp_type_e ts_type,
 			   enum ptpd_ts_fmt ts_fmt,
-			   struct sfptpd_timespec *timestamp,
+			   struct sfptpd_ts_info *info,
 			   bool tx)
 {
 	const char *type = ts_fmt == PTPD_TS_ONLOAD_EXT ? "onload extension timestamp" : "so_timestamping";
-	Boolean haveTs = FALSE;
 	union {
 		void *ptr;
 		struct timespec *lnx;
@@ -847,12 +876,15 @@ static int parse_timestamp(uint8_t *pdu, size_t pdu_len,
 #endif
 	} ts;
 
+	assert(info);
+
 	if (
 #ifdef HAVE_ONLOAD_EXT
 	    (ts_fmt == PTPD_TS_ONLOAD_EXT && pdu_len < CMSG_LEN(sizeof(*ts.onload) * 1)) ||
 #endif
 	    (ts_fmt == PTPD_TS_LINUX && pdu_len < CMSG_LEN(sizeof(*ts.lnx) * 3))) {
 		ERROR("received short %s (%zu)\n", type, pdu_len);
+		memset(info, '\0', sizeof *info);
 		return ENOTIMESTAMP;
 	}
 
@@ -861,208 +893,203 @@ static int parse_timestamp(uint8_t *pdu, size_t pdu_len,
 	if (ts_fmt == PTPD_TS_ONLOAD_EXT) {
 #ifdef HAVE_ONLOAD_EXT
 		if (ts.onload->sec) {
-			timestamp->sec = ts.onload->sec;
-			timestamp->nsec = ts.onload->nsec;
-			timestamp->nsec_frac = (uint32_t) ts.onload->nsec_frac << 8;
-			haveTs = TRUE;
+			info->hw.sec = ts.onload->sec;
+			info->hw.nsec = ts.onload->nsec;
+			info->hw.nsec_frac = (uint32_t) ts.onload->nsec_frac << 8;
+			info->have_hw = true;
+		} else {
+			sfptpd_time_zero(&info->hw);
+			info->have_hw = false;
 		}
+		sfptpd_time_zero(&info->sw);
+		info->have_sw = false;
 #endif
 	} else {
-		/* array of three time stamps: SW, HW, raw HW */
-		switch (ts_type) {
-		case PTPD_TIMESTAMP_TYPE_SW:
-			ts.lnx += 0;
-			break;
-		case PTPD_TIMESTAMP_TYPE_HW_RAW:
-			ts.lnx += 2;
-			break;
-		default:
-			ERROR("invalid timestamp type %d\n",
-			      ts_type);
-			break;
-		}
+		sfptpd_time_from_std_floor(&info->sw, &ts.lnx[0]);
+		sfptpd_time_from_std_floor(&info->hw, &ts.lnx[2]);
+		info->have_sw = info->sw.sec != 0;
+		info->have_hw = info->hw.sec != 0;
+	}
 
-		if (ts.lnx->tv_sec) {
-			timestamp->sec = ts.lnx->tv_sec;
-			timestamp->nsec = ts.lnx->tv_nsec;
-			timestamp->nsec_frac = 0;
-			haveTs = TRUE;
+	if (info->have_sw) {
+		DBG("%s sw timestamp: " SFPTPD_FMT_SFTIMESPEC " (%s)\n",
+		    tx ? "Tx" : "Rx",
+		    SFPTPD_ARGS_SFTIMESPEC(info->sw), type);
+	}
+	if (info->have_hw) {
+		DBG("%s hw timestamp: " SFPTPD_FMT_SFTIMESPEC " (%s)\n",
+		    tx ? "Tx" : "Rx",
+		    SFPTPD_ARGS_SFTIMESPEC(info->hw), type);
+	}
+
+	return info->have_sw || info->have_hw ? 0 : ENOTIMESTAMP;
+}
+
+bool netProcessError(PtpInterface *ptpInterface,
+		     size_t length,
+		     struct sfptpd_ts_user *user,
+		     struct sfptpd_ts_ticket *ticket,
+		     struct sfptpd_ts_info *info)
+{
+	struct sfptpd_timespec now, elapsed;
+	int ipproto = ptpInterface->ifOpts.transportAF == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP;
+	int iptype = ipproto == IPPROTO_IPV6 ? IPV6_RECVERR : IP_RECVERR;
+	unsigned int pending_bitmap;
+	Boolean haveTs = FALSE, havePkt = FALSE, matchedPkt = FALSE;
+	struct msghdr *msg = &ptpInterface->msgEbuf;
+	struct cmsghdr *cmsg;
+	struct sock_extended_err *err;
+	struct sfptpd_ts_pkt *pkt;
+	int slot = TS_CACHE_SIZE;
+	int bit;
+
+	/* Appease impossible -Werror=maybe-unitialised reports */
+	bit = TS_CACHE_SIZE;
+	pkt = NULL;
+
+	assert(user);
+	assert(ticket);
+	assert(info);
+
+	(void)sfclock_gettime(CLOCK_MONOTONIC, &now);
+	reset_timestamp(info);
+
+	if (length != 0) {
+		DUMP("cmsg (pdu on error queue)", msg->msg_iov[0].iov_base, length);
+	}
+
+	if (length == 0) {
+		DBG("ignoring socket error queue message with no payload\n");
+		goto finish;
+	}
+
+	for (cmsg = CMSG_FIRSTHDR(msg); cmsg != NULL;
+	     cmsg = CMSG_NXTHDR(msg, cmsg)) {
+		size_t len;
+		int level, type;
+
+		len = cmsg->cmsg_len;
+		level = cmsg->cmsg_level;
+		type  = cmsg->cmsg_type;
+
+		DBGV("control message len=%zu level=%d type=%d\n",
+		     len, level, type);
+		DUMP("cmsg (header)", cmsg, len);
+
+		if ((SOL_SOCKET == level) &&
+		    (SO_TIMESTAMPING == type)) {
+			haveTs = parse_timestamp(CMSG_DATA(cmsg), len,
+						 ptpInterface->ts_fmt,
+						 info, true) == 0;
+		} else if ((ipproto == level) &&
+			   (iptype == type)) {
+			err = (struct sock_extended_err *)CMSG_DATA(cmsg);
+			if (err->ee_origin != SO_EE_ORIGIN_TIMESTAMPING ||
+			    err->ee_errno != ENOMSG) {
+		                WARNING("unexpected socket error "
+					"queue msg: origin %d, errno %d\n",
+				err->ee_origin, err->ee_errno);
+			} else {
+				havePkt = TRUE;
+			}
+		} else {
+			WARNING("unexpected socket error queue "
+				"msg: level %d, type %d\n",
+				level, type);
 		}
 	}
 
-	if (haveTs) {
-		DBG("%s timestamp: " SFPTPD_FMT_SFTIMESPEC "\n",
-		    tx ? "Tx" : "Rx",
-		    SFPTPD_ARGS_SFTIMESPEC(*timestamp));
+	if (haveTs && !havePkt)
+		WARNING("retrieved transmit timestamp "
+			"but no packet\n");
+	if (!haveTs && havePkt)
+		WARNING("retrieved packet but no "
+			"transmit timestamp\n");
+	if (!haveTs && !havePkt)
+		WARNING("retrieved neither packet nor "
+			"transmit timestamp\n");
+	if (!havePkt)
+		goto finish;
+
+	pending_bitmap = ~ptpInterface->ts_cache.free_bitmap;
+	while (!matchedPkt && pending_bitmap != 0) {
+		slot = __builtin_clz(pending_bitmap);
+		bit = TS_CACHE_SIZE - slot - 1;
+
+		pending_bitmap &= ~(1 << bit);
+		pkt = &ptpInterface->ts_cache.packet[slot];
+
+		if (length < pkt->match.pdu.len + pkt->match.pdu.trailer) {
+			/* Too short to match this packet */
+			continue;
+		}
+
+		/* We have a suitable message */
+		DBGV("Checking PDU slot %d\n", slot);
+		DUMP("PDU to match",
+		     pkt->match.pdu.data, pkt->match.pdu.len);
+
+		if (memcmp(pkt->match.pdu.data,
+			   msg->msg_iov[0].iov_base +
+			   length -
+			   pkt->match.pdu.len -
+			   pkt->match.pdu.trailer,
+			   pkt->match.pdu.len) == 0) {
+				matchedPkt = TRUE;
+		}
+	}
+
+	if (!haveTs && matchedPkt)
+		WARNING("received looped back transmit "
+			"packet but no timestamp\n");
+
+	if (havePkt && !matchedPkt) {
+		WARNING("unexpected pkt received on "
+			"socket error queue. Expected one of:\n");
+		pending_bitmap = ~ptpInterface->ts_cache.free_bitmap;
+		while (!matchedPkt && pending_bitmap != 0) {
+			struct sfptpd_ts_pkt *pkt;
+			int slot = __builtin_clz(pending_bitmap);
+			int bit = TS_CACHE_SIZE - slot - 1;
+
+			pending_bitmap &= ~(1 << bit);
+			pkt = &ptpInterface->ts_cache.packet[slot];
+			dump("expected", pkt->match.pdu.data, pkt->match.pdu.len);
+		}
+		dump("got (with headers)", msg->msg_iov[0].iov_base, length);
+	}
+
+finish:
+	if (matchedPkt) {
+		/* Remove from cache if matching */
+		ptpInterface->ts_cache.free_bitmap |= (1 << bit);
+
+		/* Record time taken to get the result */
+		sfptpd_time_subtract(&elapsed, &now, &pkt->sent_monotime);
+
+		DBGV("Tx timestamp took " SFPTPD_FMT_SFTIMESPEC "s to acquire\n",
+		     SFPTPD_ARGS_SFTIMESPEC(elapsed));
+
+		ticket->slot = slot;
+		ticket->seq = pkt->seq;
+		*user = pkt->user;
+	} else {
+		*ticket = TS_NULL_TICKET;
 	}
 
 	return haveTs;
 }
 
-
-static int getTxTimestamp(PtpClock *ptpClock, char *pdu, int pdulen,
-			  ptpd_timestamp_type_e tsType, struct sfptpd_timespec *timestamp)
-{
-	struct sfptpd_timespec start, elapsed, sleep;
-	struct ptpd_transport *transport = &ptpClock->interface->transport;
-	int ipproto = ptpClock->interface->ifOpts.transportAF == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP;
-	int iptype = ipproto == IPPROTO_IPV6 ? IPV6_RECVERR : IP_RECVERR;
-	int trailer;
-
-	if (ipproto == IPPROTO_IPV6) {
-		/* IPv6 packets are sent with two extra bytes according
-		 * to Annex E. These are not included in the pdulen
-		 * passed to this function. */
-		trailer = 2;
-	} else {
-		trailer = 0;
-	}
-
-	DUMP("PDU", pdu, pdulen);
-
-	/* Wait for timestamp to turn up for up to 0.1 seconds. Note that we
-	 * have to check system time for the total timeout as nanosleep
-	 * typically sleeps much longer than we specify. If we don't get the
-	 * timestamp each time, we backoff progressively. */
-	(void)sfclock_gettime(CLOCK_MONOTONIC, &start);
-	sfptpd_time_from_ns(&sleep, 5000);
-
-	switch (ptpClock->interface->tsMethod) {
-	case TS_METHOD_SYSTEM:
-		/* Time stamp will appear on the multicast loopback. */
-		return 0;
-		break;
-
-	case TS_METHOD_SO_TIMESTAMPING:
-		do {
-			Boolean haveTs = FALSE, havePkt = FALSE, matchedPkt = FALSE;
-
-			struct cmsghdr *cmsg;
-			struct iovec vec[1];
-			struct msghdr msg;
-			struct sock_extended_err *err;
-			int cnt, level, type;
-			size_t len;
-			char control[512];
-			unsigned char buf[PACKET_SIZE];
-
-			vec[0].iov_base = buf;
-			vec[0].iov_len = sizeof(buf);
-			memset(&msg, 0, sizeof(msg));
-			msg.msg_iov = vec;
-			msg.msg_iovlen = 1;
-			msg.msg_control = control;
-			msg.msg_controllen = sizeof(control);
-
-			cnt = recvmsg(transport->eventSock, &msg, MSG_ERRQUEUE);
-			if (cnt >= pdulen + trailer) {
-				/* We have a suitable message */
-				DBGV("recvmsg(ERRQUEUE) returned %d bytes\n", cnt);
-				DUMP("cmsg all", buf, cnt);
-
-				/* Report if we get unexpected control message flags
-				 * but still try parsing the ancillary data */
-				if (msg.msg_flags != MSG_ERRQUEUE) {
-					WARNING("Received %s ancillary data 0x%x\n",
-					        msg.msg_flags | MSG_CTRUNC ? "truncated" : "invalid",
-						msg.msg_flags);
-				}
-
-				for (cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL;
-				     cmsg = CMSG_NXTHDR(&msg, cmsg)) {
-					len = cmsg->cmsg_len;
-					level = cmsg->cmsg_level;
-					type  = cmsg->cmsg_type;
-
-					DBGV("control message len=%zu level=%d type=%d\n",
-					     len, level, type);
-					DUMP("cmsg", cmsg, len);
-
-					if ((SOL_SOCKET == level) &&
-					    (SO_TIMESTAMPING == type)) {
-						haveTs = parse_timestamp(CMSG_DATA(cmsg), len,
-									 tsType,
-									 ptpClock->interface->ts_fmt,
-									 timestamp, TRUE);
-					} else if ((ipproto == level) &&
-						   (iptype == type)) {
-						havePkt = TRUE;
-
-						err = (struct sock_extended_err *)CMSG_DATA(cmsg);
-						if ((err->ee_origin != SO_EE_ORIGIN_TIMESTAMPING) ||
-						    (err->ee_errno != ENOMSG)) {
-					                WARNING("unexpected socket error "
-								"queue msg: origin %d, errno %d\n",
-								err->ee_origin, err->ee_errno);
-						} else if (memcmp(pdu, buf + cnt - pdulen - trailer,
-								  pdulen)) {
-							WARNING("unexpected pkt received on "
-								"socket error queue\n");
-							dump("expected", pdu, pdulen);
-							dump("got", buf + cnt - pdulen - trailer,
-						             pdulen);
-						} else {
-							matchedPkt = TRUE;
-						}
-					} else {
-						WARNING("unexpected socket error queue "
-							"msg: level %d, type %d\n",
-							level, type);
-					}
-				}
-
-				/* If we have found the packet and associated
-				 * timestamp, return with success */
-				if (haveTs && matchedPkt)
-					return 0;
-
-				if (haveTs && !havePkt)
-					WARNING("retrieved transmit timestamp "
-						"but no packet\n");
-				if (matchedPkt)
-					WARNING("received looped back transmit "
-						"packet but no timestamp\n");
-
-			} else if (cnt >= 0) {
-				/* We got some data from the error queue but
-				 * not enough */
-				ERROR("recvmsg(ERRQUEUE) returned only %d of %d bytes\n",
-				      cnt, pdulen + trailer);
-			} else if ((errno == EAGAIN) || (errno == EINTR)) {
-				/* We don't have the timestamp, sleep and
-				 * increment the backoff */
-				(void)sfclock_nanosleep(CLOCK_MONOTONIC, 0, &sleep, NULL);
-				sleep.nsec <<= 1;
-			} else {
-				ERROR("recvmsg failed: %s\n", strerror(errno));
-				return ENOTIMESTAMP;
-			}
-
-			/* Check whether we have timed out - if not, go round
-			 * the loop again */
-			(void)sfclock_gettime(CLOCK_MONOTONIC, &elapsed);
-			sfptpd_time_subtract(&elapsed, &elapsed, &start);
-		} while ((elapsed.sec == 0) && (elapsed.nsec < 100000000));
-		break;
-
-	default:
-		ERROR("getTxTimestamp() Unexpected timestamp type %d\n", tsType);
-		return ENOTIMESTAMP;
-		break;
-	}
-
-	/* We failed to get the timestamp. Return an error */
-	return ENOTIMESTAMP;
-}
-
-
 /* Used to get receive timestamps  */
-static Boolean getRxTimestamp(PtpInterface *ptpInterface, char *pdu, int pduLength,
-			      struct msghdr *msg, ptpd_timestamp_type_e tsType,
-			      struct sfptpd_timespec *timestamp, UInteger32 *rxPhysIfindex)
+static Boolean getRxTimestamp(PtpInterface *ptpInterface,
+			      char *pdu, int pduLength,
+			      struct msghdr *msg,
+			      struct sfptpd_ts_info *info)
 {
 	struct cmsghdr *cmsg;
-	Boolean timestampValid = FALSE;
+
+	assert(info);
+	reset_timestamp(info);
 
 	if (msg->msg_controllen <= 0) {
 		DBG2("received PTP event packet with no timestamp (%zu)\n",
@@ -1089,8 +1116,8 @@ static Boolean getRxTimestamp(PtpInterface *ptpInterface, char *pdu, int pduLeng
 				      cmsg->cmsg_len);
 				return FALSE;
 			}
-			sfptpd_time_init(timestamp, tv->tv_sec, tv->tv_usec * 1000, 0);
-			timestampValid = TRUE;
+			sfptpd_time_init(&info->sw, tv->tv_sec, tv->tv_usec * 1000, 0);
+			info->have_sw = true;
 			break;
 
 		case SCM_TIMESTAMPNS:
@@ -1101,15 +1128,14 @@ static Boolean getRxTimestamp(PtpInterface *ptpInterface, char *pdu, int pduLeng
 				      cmsg->cmsg_len);
 				return FALSE;
 			}
-			sfptpd_time_init(timestamp, ts->tv_sec, ts->tv_nsec, 0);
-			timestampValid = TRUE;
+			sfptpd_time_init(&info->sw, ts->tv_sec, ts->tv_nsec, 0);
+			info->have_sw = true;
 			break;
 
 		case SO_TIMESTAMPING:
-			timestampValid = parse_timestamp(CMSG_DATA(cmsg), cmsg->cmsg_len,
-											 tsType,
-											 ptpInterface->ts_fmt,
-											 timestamp, FALSE);
+			parse_timestamp(CMSG_DATA(cmsg), cmsg->cmsg_len,
+					ptpInterface->ts_fmt,
+					info, FALSE);
 			break;
 
 		case SCM_TIMESTAMPING_PKTINFO:
@@ -1120,16 +1146,15 @@ static Boolean getRxTimestamp(PtpInterface *ptpInterface, char *pdu, int pduLeng
 				      cmsg->cmsg_len);
 				return FALSE;
 			}
-			*rxPhysIfindex = ts_pktinfo->if_index;
+			info->if_index = ts_pktinfo->if_index;
 			break;
-
 		}
 	}
 
-	if( ! timestampValid )
+	if(!info->have_sw && !info->have_hw)
 		DBG("failed to retrieve rx time stamp\n");
 
-	return timestampValid;
+	return info->have_sw || info->have_hw;
 }
 
 
@@ -1341,6 +1366,12 @@ netCreateBindSocket(const char *purpose, int af, const char *service,
 	return fd;
 }
 
+static void sfptpd_ts_cache_init(struct sfptpd_ts_cache *cache)
+{
+	cache->free_bitmap = ~0;
+	cache->seq = 0;
+};
+
 /**
  * Init all network transports
  *
@@ -1356,6 +1387,8 @@ netInit(struct ptpd_transport * transport, InterfaceOpts * ifOpts, PtpInterface 
 	Boolean loopback_multicast;
 
 	DBG("netInit\n");
+
+	sfptpd_ts_cache_init(&ptpInterface->ts_cache);
 
 	transport->generalSock = -1;
 	transport->eventSock = -1;
@@ -1604,9 +1637,9 @@ netSelect(struct sfptpd_timespec *timeout, struct ptpd_transport *transport, fd_
  * @return
  */
 ssize_t
-netRecvEvent(Octet *buf, PtpInterface *ptpInterface, InterfaceOpts *ifOpts,
-	     struct sfptpd_timespec *timestamp, Boolean *timestampValid,
-	     UInteger32 *rxPhysIfindex)
+netRecvEvent(Octet *buf,
+	     PtpInterface *ptpInterface,
+	     struct sfptpd_ts_info *info)
 {
 	ssize_t ret;
 	struct msghdr msg;
@@ -1618,7 +1651,7 @@ netRecvEvent(Octet *buf, PtpInterface *ptpInterface, InterfaceOpts *ifOpts,
 		char control[512];
 	} cmsg_un;
 
-	*timestampValid = FALSE;
+	reset_timestamp(info);
 
 	vec[0].iov_base = buf;
 	vec[0].iov_len = PACKET_SIZE;
@@ -1648,7 +1681,7 @@ netRecvEvent(Octet *buf, PtpInterface *ptpInterface, InterfaceOpts *ifOpts,
 	}
 
 	/* get time stamp of packet */
-	if (!timestamp) {
+	if (!info) {
 		ERROR("null receive time stamp argument\n");
 		return 0;
 	}
@@ -1662,9 +1695,7 @@ netRecvEvent(Octet *buf, PtpInterface *ptpInterface, InterfaceOpts *ifOpts,
 	transport->lastRecvAddrLen = msg.msg_namelen;
 	transport->receivedPackets++;
 
-	*timestampValid = getRxTimestamp(ptpInterface, buf, ret, &msg,
-					 ifOpts->timestampType, timestamp, rxPhysIfindex);
-
+	getRxTimestamp(ptpInterface, buf, ret, &msg, info);
 	return ret;
 }
 
@@ -1720,6 +1751,35 @@ netRecvGeneral(Octet *buf, struct ptpd_transport *transport)
 
 	DBGV("netRecvGeneral: rxed %zu bytes\n", ret);
 	return ret;
+}
+
+/**
+ * Receive error queue message
+ */
+ssize_t
+netRecvError(PtpInterface *ptpInterface)
+{
+	struct msghdr *msg = &ptpInterface->msgEbuf;
+	ssize_t len;
+
+	msg->msg_controllen = CONTROL_MSG_SIZE;
+
+	len = recvmsg(ptpInterface->transport.eventSock, msg, MSG_ERRQUEUE | MSG_DONTWAIT);
+
+	if (len == -1)
+		return -errno;
+
+	/* Report if we get unexpected control message flags
+	 * but still try parsing the ancillary data */
+	if (msg->msg_flags != MSG_ERRQUEUE) {
+		WARNING("Received %s ancillary data 0x%x\n",
+		        msg->msg_flags | MSG_CTRUNC ? "truncated" : "invalid",
+			msg->msg_flags);
+	}
+
+	DBGV("netRecvError: rxed %zd bytes\n", len);
+
+	return len;
 }
 
 /* According to IEEE1588 Annex E.1, add two extra bytes
@@ -1779,6 +1839,56 @@ static int sendMessage(int sockfd, const void *buf, size_t length,
 	return 0;
 }
 
+struct sfptpd_ts_ticket netExpectTimestamp(struct sfptpd_ts_cache *cache,
+					   struct sfptpd_ts_user *user,
+					   Octet *pkt_data,
+					   size_t pkt_len,
+					   size_t trailer)
+{
+	struct sfptpd_ts_pkt *pkt;
+	char buf[48];
+	int slot;
+	int bit;
+
+	if (cache->free_bitmap == 0) {
+
+		/* Cache is full - evict oldest packet */
+		uint64_t oldest = UINT64_MAX;
+		int oldest_slot = 0;
+		for (slot = 0; slot < TS_CACHE_SIZE; slot++) {
+			if (cache->packet->seq < oldest) {
+				oldest = cache->packet->seq;
+				oldest_slot = slot;
+			}
+		}
+		formatTsPkt(&cache->packet[slot].user, buf);
+		DBGV("ptpd: timestamp cache full; evicting %s\n", buf);
+		cache->free_bitmap |= ~((unsigned int) INT_MAX) >> oldest_slot;
+	}
+
+	/* Find first free slot */
+	slot = __builtin_clz(cache->free_bitmap);
+	bit = TS_CACHE_SIZE - slot - 1;
+	pkt = cache->packet + slot;
+
+	/* Save match information */
+	if (pkt_len > TS_MAX_PDU) {
+		pkt->match.pdu.len = TS_MAX_PDU;
+	} else {
+		pkt->match.pdu.len = pkt_len;
+	}
+	memcpy(pkt->match.pdu.data, pkt_data,
+	       pkt->match.pdu.len);
+	pkt->match.pdu.trailer = trailer;
+
+	/* Store packet information in cache */
+	pkt->user = *user;
+	pkt->seq = cache->seq++;
+	sfclock_gettime(CLOCK_MONOTONIC, &pkt->sent_monotime);
+	cache->free_bitmap &= ~(1 << bit);
+
+	return (struct sfptpd_ts_ticket) {.slot = slot, .seq = pkt->seq};
+}
 
 //
 // alt_dst: alternative destination.
@@ -1788,7 +1898,7 @@ static int sendMessage(int sockfd, const void *buf, size_t length,
 int
 netSendEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 	     RunTimeOpts *rtOpts, const struct sockaddr_storage *altDst,
-	     socklen_t altDstLen, struct sfptpd_timespec *timestamp)
+	     socklen_t altDstLen)
 {
 	int ret;
 	struct sockaddr_storage addr;
@@ -1841,11 +1951,8 @@ netSendEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 		ret = EDESTADDRREQ;
 	}
 
-	if (ret == 0) {
+	if (ret == 0)
 		transport->sentPackets++;
-		ret = getTxTimestamp(ptpClock, buf, length,
-				     rtOpts->ifOpts->timestampType, timestamp);
-	}
 
 	return ret;
 }
@@ -1967,7 +2074,7 @@ netSendPeerGeneral(Octet *buf, UInteger16 length, PtpClock *ptpClock)
 
 int
 netSendPeerEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
-		 RunTimeOpts *rtOpts, struct sfptpd_timespec *timestamp)
+		 RunTimeOpts *rtOpts)
 {
 	int ret;
 	struct sockaddr_storage addr;
@@ -2015,11 +2122,8 @@ netSendPeerEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 		ret = EDESTADDRREQ;
 	}
 
-	if (ret == 0) {
+	if (ret == 0)
 		transport->sentPackets++;
-		ret = getTxTimestamp(ptpClock, buf, length,
-				     rtOpts->ifOpts->timestampType, timestamp);
-	}
 
 	return ret;
 }

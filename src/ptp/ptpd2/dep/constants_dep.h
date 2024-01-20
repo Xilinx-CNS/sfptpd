@@ -93,6 +93,7 @@
 #define CLOCK_IDENTITY_LENGTH	  8
 #define FLAG_FIELD_LENGTH		  2
 
+#define CONTROL_MSG_SIZE  512
 #define PACKET_SIZE  500 // allow space for optional TLVs
 #define PACKET_BEGIN_UDP (ETHER_HDR_LEN + sizeof(struct ip) + \
 	    sizeof(struct udphdr))
