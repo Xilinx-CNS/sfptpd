@@ -634,7 +634,8 @@ static void main_on_message(void *not_used, struct sfptpd_msg_hdr *hdr)
 }
 
 
-static void main_on_user_fds(void *not_used, unsigned int num_fds, int fds[])
+static void main_on_user_fds(void *not_used, unsigned int num_fds,
+			     struct sfptpd_thread_event fds[])
 {
 	enum sfptpd_control_action action;
 	union sfptpd_control_action_parameters param;
@@ -645,7 +646,7 @@ static void main_on_user_fds(void *not_used, unsigned int num_fds, int fds[])
 
 	/* We only register a single user file descriptor in this thread. */
 	assert(num_fds == 1);
-	assert(fds[0] == sfptpd_control_socket_get_fd());
+	assert(fds[0].fd == sfptpd_control_socket_get_fd());
 
 	action = sfptpd_control_socket_get_action(&param);
 	switch (action) {

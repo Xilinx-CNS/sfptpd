@@ -4092,23 +4092,29 @@ static void ptp_on_message(void *context, struct sfptpd_msg_hdr *hdr)
 }
 
 
-static void ptp_on_user_fds(void *context, unsigned int num_fds, int fds[])
+static void ptp_on_user_fds(void *context,
+			    unsigned int num_events,
+			    struct sfptpd_thread_event events[])
 {
 	struct sfptpd_ptp_intf *interface;
 	sfptpd_ptp_module_t *ptp = (sfptpd_ptp_module_t *)context;
-	bool event, general;
+	bool event, general, __attribute__((unused)) error;
 	unsigned int i;
 
 	assert(ptp != NULL);
-	assert(fds != NULL);
+	assert(events != NULL);
 
 	for(interface = ptp->intf_list; interface; interface = interface->next) {
 		event = false;
 		general = false;
-		for(i = 0; i < num_fds; i++) {
-			if (fds[i] == interface->ptpd_intf_fds.event_sock)
-				event = true;
-			if (fds[i] == interface->ptpd_intf_fds.general_sock)
+		for(i = 0; i < num_events; i++) {
+			if (events[i].fd == interface->ptpd_intf_fds.event_sock) {
+				if (events[i].flags.rd)
+					event = true;
+				if (events[i].flags.err)
+					error = true;
+			}
+			if (events[i].fd == interface->ptpd_intf_fds.general_sock)
 				general = true;
 		}
 

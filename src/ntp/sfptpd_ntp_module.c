@@ -1451,7 +1451,8 @@ static void ntp_on_message(void *context, struct sfptpd_msg_hdr *hdr)
 }
 
 
-static void ntp_on_user_fds(void *context, unsigned int num_fds, int fds[])
+static void ntp_on_user_fds(void *context, unsigned int num_fds,
+			    struct sfptpd_thread_event events[])
 {
 	/* The NTP module doesn't use user file descriptors */
 }

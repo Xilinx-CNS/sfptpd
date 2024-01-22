@@ -1263,7 +1263,8 @@ static void *thread_entry(void *arg)
 		 * (unlikely) it's possible that certain event sources
 		 * could be starved. */
 		struct epoll_event events[SFPTPD_THREAD_MAX_EPOLL_EVENTS];
-		int num_events, i, user_fds[SFPTPD_THREAD_MAX_EPOLL_EVENTS];
+		int num_events, i;
+		struct sfptpd_thread_event user_evs[SFPTPD_THREAD_MAX_EPOLL_EVENTS];
 		unsigned int num_user_fds;
 
 		num_events = epoll_wait(thread->epoll_fd, events,
@@ -1284,6 +1285,7 @@ static void *thread_entry(void *arg)
 		 * becomes set. */
 		num_user_fds = 0;
 		for (i = 0; (i < num_events) && !exit; i++) {
+			uint32_t evbits = events[i].events;
 			fd = events[i].data.fd;
 
 			/* Is this the exit event? */
@@ -1296,15 +1298,40 @@ static void *thread_entry(void *arg)
 			} else if (fd == queue_get_read_fd(&thread->queue_general)) {
 				thread_on_message_event(thread);
 			} else if (thread_on_possible_timer_event(thread, fd) != 0) {
-				user_fds[num_user_fds] = fd;
-				num_user_fds++;
+				user_evs[num_user_fds++] = (struct sfptpd_thread_event) {
+					.fd = fd,
+					.flags = {
+						.rd = evbits & EPOLLIN,
+						.wr = evbits & EPOLLOUT,
+						.err = evbits & EPOLLERR,
+					},
+				};
+				DBG_L6("thread %s: fd %d: %08x %c%c%c%c%c%c%c%c%c%c%c%c%c%c\n",
+				       thread->name,
+				       fd,
+				       evbits,
+				       evbits & EPOLLRDHUP ? 'H' : '-',
+				       evbits & 0x1000 ? '?' : '-',
+				       evbits & 0x0800 ? '?' : '-',
+				       evbits & EPOLLMSG ? 'm' : '-',
+				       evbits & EPOLLWRBAND ? 'W' : '-',
+				       evbits & EPOLLWRNORM ? 'w' : '-',
+				       evbits & EPOLLRDBAND ? 'R' : '-',
+				       evbits & EPOLLRDNORM ? 'r' : '-',
+				       evbits & 0x0020 ? '?' : '-',
+				       evbits & EPOLLHUP ? 'h': '-',
+				       evbits & EPOLLERR ? 'e': '-',
+				       evbits & EPOLLOUT ? 'o': '-',
+				       evbits & EPOLLPRI ? 'p': '-',
+				       evbits & EPOLLIN ? 'i': '-');
 			}
 		}
 
 		/* If any user fds are ready, call the handler to process them */
 		if (!exit && (num_user_fds > 0)) {
+			DBG_L6("thread %s: %d user_fds ready\n", thread->name, num_user_fds);
 			thread->ops.on_user_fds(thread->user_context, num_user_fds,
-						user_fds);
+						user_evs);
 		}
 	}
 

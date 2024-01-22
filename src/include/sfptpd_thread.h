@@ -30,6 +30,17 @@ enum sfptpd_thread_zombie_policy {
  * Structures and Types
  ****************************************************************************/
 
+/** User I/O event */
+struct sfptpd_thread_event {
+	int fd;
+	struct {
+		bool rd:1;
+		bool wr:1;
+		bool err:1;
+	} flags;
+};
+
+
 /** Forward declaration of structures */
 struct sfptpd_thread;
 struct signalfd_siginfo;
@@ -69,11 +80,12 @@ typedef void (*sfptpd_thread_on_message_fn)(void *user_context,
  * sfptpd_thread_user_fd_add() becomes ready. It is the responsibility of the
  * handler to service the file descriptor appropriately.
  * @param user_context Thread user context supplied when thread was created
- * @param num_fds Number of ready file descriptors
- * @param fds File descriptors
+ * @param num_events Number of ready file descriptors
+ * @param events Array of events for ready file descriptors
  */
 typedef void (*sfptpd_thread_on_user_fds_fn)(void *user_context,
-					     unsigned int num_fds, int fds[]);
+					     unsigned int num_events,
+					     struct sfptpd_thread_event events[]);
 
 /** Thread operations
  * @on_startup: Function to call when thread begins executing

@@ -2409,7 +2409,8 @@ static void crny_do_io(crny_module_t *ntp)
 }
 
 
-static void ntp_on_user_fds(void *context, unsigned int num_fds, int fds[])
+static void ntp_on_user_fds(void *context, unsigned int num_fds,
+			    struct sfptpd_thread_event events[])
 {
 	int i;
 	crny_module_t *ntp = (crny_module_t *) context;
@@ -2417,7 +2418,7 @@ static void ntp_on_user_fds(void *context, unsigned int num_fds, int fds[])
 	assert(ntp != NULL);
 
 	for (i = 0; i < num_fds; i++) {
-		if (ntp->crny_comm.sock == fds[i]) {
+		if (ntp->crny_comm.sock == events[i].fd) {
 			crny_do_io(ntp);
 		}
 	}

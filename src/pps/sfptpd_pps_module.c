@@ -1845,7 +1845,9 @@ static void pps_on_timer(void *user_context, unsigned int id)
 }
 
 
-static void pps_on_user_fds(void *context, unsigned int num_fds, int fds[])
+static void pps_on_user_fds(void *context,
+			    unsigned int num_fds,
+			    struct sfptpd_thread_event fds[])
 {
 	int i;
 	pps_module_t *pps = (pps_module_t *)context;
@@ -1855,7 +1857,7 @@ static void pps_on_user_fds(void *context, unsigned int num_fds, int fds[])
 
 	for(i = 0; i < num_fds; i++) {
 		for(instance = pps->instances; instance != NULL; instance = instance->next) {
-			if (instance->poll_fd == fds[i]) {
+			if (instance->poll_fd == fds[i].fd) {
 				pps_do_poll(pps, instance);
 			}
 		}
