@@ -115,7 +115,7 @@ Advanced notice of possible future changes
 Changelog
 ---------
 
-### v3.7.1.1006
+### v3.7.1.1007
 
 Features:
  ~ Add configurable missing delay response thresholds (SWPTP-897)
