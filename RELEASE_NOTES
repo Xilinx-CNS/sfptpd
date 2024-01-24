@@ -109,7 +109,9 @@ Advanced notice of possible future changes
 
    The built-in receiver for PTP event monitoring messages ('remote_monitor')
    has been replaced by the 'sfptpmon' script in the sfptpd-python3 package.
-   The built-in receiver may be disabled in a future feature release.
+   The built-in receiver may be disabled in a future feature release. (Note
+   that the current version of the script only supports unicast signalling
+   on RHEL7, not multicast. Unicast signalling is recommended.)
 
 
 Changelog
