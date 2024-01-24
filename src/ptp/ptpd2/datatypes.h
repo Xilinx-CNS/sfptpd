@@ -708,6 +708,21 @@ struct sfptpd_ts_pkt {
 	uint64_t seq;
 };
 
+#define TS_QUANTILE_E10_MIN -4
+#define TS_QUANTILE_E10_MAX 1
+#define TS_QUANTILES (TS_QUANTILE_E10_MAX) - (TS_QUANTILE_E10_MIN) + 2
+#define TS_TIME_TO_ALARM_E10 0
+
+/* Structure defining short term stats for timestamp cache */
+struct sfptpd_ts_stats {
+	struct sfptpd_timespec start;
+	struct sfptpd_timespec quantile_bounds[TS_QUANTILES];
+	unsigned int resolved_quantile[TS_QUANTILES];
+	unsigned int pending_quantile[TS_QUANTILES];
+	unsigned int evicted;
+	unsigned int total;
+};
+
 #define TS_CACHE_SIZE (8 * sizeof(unsigned int) / sizeof(uint8_t))
 
 /* Structure holding packets waiting for a timestamp */
@@ -720,6 +735,9 @@ struct sfptpd_ts_cache {
 
 	/* Sequence number for cached packets */
 	uint64_t seq;
+
+	/* Short term statistics */
+	struct sfptpd_ts_stats stats;
 };
 
 /**

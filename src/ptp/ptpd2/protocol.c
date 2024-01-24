@@ -240,11 +240,13 @@ toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	case PTPD_INITIALIZING:
 		timerStop(PDELAYREQ_INTERVAL_TIMER, ptpClock->itimer);
 		timerStop(PDELAYRESP_RECEIPT_TIMER, ptpClock->itimer);
+		timerStop(TIMESTAMP_CHECK_TIMER, ptpClock->itimer);
 		break;
 
 	case PTPD_FAULTY:
 		timerStop(PDELAYREQ_INTERVAL_TIMER, ptpClock->itimer);
 		timerStop(PDELAYRESP_RECEIPT_TIMER, ptpClock->itimer);
+		timerStop(TIMESTAMP_CHECK_TIMER, ptpClock->itimer);
 		timerStart(FAULT_RESTART_TIMER, PTPD_FAULT_RESTART_INTERVAL,
 			   ptpClock->itimer);
 		break;
@@ -252,6 +254,7 @@ toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	case PTPD_DISABLED:
 		timerStop(PDELAYREQ_INTERVAL_TIMER, ptpClock->itimer);
 		timerStop(PDELAYRESP_RECEIPT_TIMER, ptpClock->itimer);
+		timerStop(TIMESTAMP_CHECK_TIMER, ptpClock->itimer);
 		break;
 
 	case PTPD_LISTENING:
@@ -303,6 +306,7 @@ toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 				   powl(2,ptpClock->logMinPdelayReqInterval),
 				   ptpClock->itimer);
 		}
+		timerStop(TIMESTAMP_CHECK_TIMER, ptpClock->itimer);
 		break;
 
 	case PTPD_MASTER:
@@ -326,6 +330,10 @@ toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 
 		timerStart(FOREIGN_MASTER_TIMER,
 			   (FOREIGN_MASTER_TIME_CHECK * powl(2,ptpClock->logAnnounceInterval)),
+			   ptpClock->itimer);
+
+		timerStart(TIMESTAMP_CHECK_TIMER,
+			   TIMESTAMP_HEALTH_CHECK_INTERVAL,
 			   ptpClock->itimer);
 
 		if ((ptpClock->delayMechanism == PTPD_DELAY_MECHANISM_P2P) &&
@@ -354,6 +362,10 @@ toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 
 		timerStart(FOREIGN_MASTER_TIMER,
 			   (FOREIGN_MASTER_TIME_CHECK * powl(2,ptpClock->logAnnounceInterval)),
+			   ptpClock->itimer);
+
+		timerStart(TIMESTAMP_CHECK_TIMER,
+			   TIMESTAMP_HEALTH_CHECK_INTERVAL,
 			   ptpClock->itimer);
 
 		if ((ptpClock->delayMechanism == PTPD_DELAY_MECHANISM_P2P) &&
@@ -409,6 +421,10 @@ toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 
 		timerStart(FOREIGN_MASTER_TIMER,
 			   (FOREIGN_MASTER_TIME_CHECK * powl(2,ptpClock->logAnnounceInterval)),
+			   ptpClock->itimer);
+
+		timerStart(TIMESTAMP_CHECK_TIMER,
+			   TIMESTAMP_HEALTH_CHECK_INTERVAL,
 			   ptpClock->itimer);
 
 		ptpClock->sync_missing_interval = 0.0;
@@ -595,6 +611,23 @@ doTimerTick(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 
 	default:
 		break;
+	}
+
+	/* Timers valid in multiple states */
+	if (timerExpired(TIMESTAMP_CHECK_TIMER, ptpClock->itimer)) {
+		bool alarm;
+
+		DBGV("event TIMESTAMP_CHECK_TIMER expires\n");
+		timerStart(TIMESTAMP_CHECK_TIMER,
+			   TIMESTAMP_HEALTH_CHECK_INTERVAL,
+			   ptpClock->itimer);
+
+		alarm = netCheckTimestampAlarms(ptpClock);
+
+		if (alarm)
+			SYNC_MODULE_ALARM_SET(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
+		else
+			SYNC_MODULE_ALARM_CLEAR(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
 	}
 
 	switch(ptpClock->portState) {
@@ -1511,6 +1544,11 @@ processTxTimestamp(PtpInterface *interface,
 	char desc[48];
 
 	assert(ptpClock);
+
+	if (ts_ticket.slot == TS_NULL_TICKET.slot) {
+		WARNING("ptpd: tx timestamp received without matching packet\n");
+		return;
+	}
 
 	formatTsPkt(&ts_user, desc);
 

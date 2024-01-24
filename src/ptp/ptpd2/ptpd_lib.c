@@ -1093,5 +1093,9 @@ int ptpd_test_pkt_suppression(struct ptpd_port_context *ptpd,
 	return 0;
 }
 
+void ptpd_process_intf_stats(struct ptpd_intf_context *intf)
+{
+	netCheckTimestampStats(&intf->ts_cache);
+}
 
 /* fin */

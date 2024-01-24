@@ -130,6 +130,5 @@
 /* limit operator messages to once every X seconds */
 #define OPERATOR_MESSAGES_INTERVAL 300.0
 
-
 #define MAXTIMESTR 32
 #endif /*CONSTANTS_DEP_H_*/

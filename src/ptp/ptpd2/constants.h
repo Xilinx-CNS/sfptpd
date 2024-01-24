@@ -38,6 +38,8 @@
 /* Number of hybrid delay response failures before we revert to multicast mode */
 #define DEFAULT_DELAY_RESP_HYBRID_THRESHOLD 3
 
+#define TIMESTAMP_HEALTH_CHECK_INTERVAL 10
+
 /* Values for PTP filters */
 #define DEFAULT_MPD_FILTER_SIZE 8
 #define DEFAULT_MPD_FILTER_AGEING 2.0
@@ -221,6 +223,7 @@ typedef enum {
 	MASTER_IGMP_REFRESH_TIMER, /**<\brief Timer to refresh IGMP membership in master mode */
 	FAULT_RESTART_TIMER, /**<\brief Timer used to control restart after fault */
 	FOREIGN_MASTER_TIMER, /**<\brief Timer used to foreign master data set */
+	TIMESTAMP_CHECK_TIMER, /**<\brief Timer used to check timestamp health */
 	TIMER_ARRAY_SIZE
 } ptpd_timer_id_e;
 

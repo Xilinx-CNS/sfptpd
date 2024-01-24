@@ -2942,6 +2942,7 @@ static void ptp_on_write_topology(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_m
 static void ptp_on_stats_end_period(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t *msg)
 {
 	struct sfptpd_ptp_instance *instance;
+	struct sfptpd_ptp_intf *interface;
 
 	assert(ptp != NULL);
 	assert(msg != NULL);
@@ -2961,6 +2962,9 @@ static void ptp_on_stats_end_period(sfptpd_ptp_module_t *ptp, sfptpd_sync_module
 	if (ptp->remote_monitor != NULL) {
 		sfptpd_ptp_monitor_flush(ptp->remote_monitor);
 	}
+
+	for (interface = ptp->intf_list; interface; interface = interface->next)
+		ptpd_process_intf_stats(interface->ptpd_intf_private);
 
 	SFPTPD_MSG_FREE(msg);
 }

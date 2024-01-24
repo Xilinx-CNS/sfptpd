@@ -109,6 +109,64 @@
 #include <net-snmp/agent/net-snmp-agent-includes.h>
 #endif
 
+
+/****************************************************************************
+ * Inline helper functions to iterate over pending timestamp requests
+ ****************************************************************************/
+
+typedef unsigned int ts_cache_iterator_t;
+
+/* Create iterator over pending timestamping requests, or free slots in the
+ * cache if free_slots true */
+static inline ts_cache_iterator_t ts_cache_iterator(struct sfptpd_ts_cache *cache,
+						    bool free_slots)
+{
+	return free_slots ? cache->free_bitmap : ~cache->free_bitmap;
+}
+
+/* Check for iteration complete */
+static inline bool ts_cache_iterator_done(const ts_cache_iterator_t iterator)
+{
+	return iterator == 0;
+}
+
+/* Get the slot index for the next pending request slot */
+static inline int ts_cache_iterator_slot(const ts_cache_iterator_t iterator)
+{
+	return __builtin_clz(iterator);
+}
+
+/* Get the bit number of the given cache slot */
+static inline int ts_cache_bit(int slot)
+{
+	return TS_CACHE_SIZE - slot - 1;
+}
+
+/* Move the iterator to the next pending slot */
+static inline void ts_cache_iterator_next(ts_cache_iterator_t *iterator)
+{
+	*iterator &= ~(1 << ts_cache_bit(ts_cache_iterator_slot(*iterator)));
+}
+
+/* Convenience macro for iterating over the cache. 'slot' is an lvalue. */
+#define TS_CACHE_FOREACH(cache, slot) \
+	for (ts_cache_iterator_t iterator = ts_cache_iterator((cache), false), slot = ts_cache_iterator_slot(iterator); \
+	     !ts_cache_iterator_done(iterator); \
+	     ts_cache_iterator_next(&iterator), slot = ts_cache_iterator_slot(iterator))
+
+
+/****************************************************************************
+ * Constants
+ ****************************************************************************/
+
+const char *ts_quantile_units[] = { "1us", "10us", "100us", "1ms", "10ms", "100ms", "1s", "10s", "100s" };
+#define TS_QUANTILE_MIN_UNIT_E10 -6
+
+
+/****************************************************************************
+ * Global ptpd net module functions
+ ****************************************************************************/
+
 void formatTsPkt(struct sfptpd_ts_user *pkt, char desc[48])
 {
 	const char *type;
@@ -934,17 +992,13 @@ bool netProcessError(PtpInterface *ptpInterface,
 	struct sfptpd_timespec now, elapsed;
 	int ipproto = ptpInterface->ifOpts.transportAF == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP;
 	int iptype = ipproto == IPPROTO_IPV6 ? IPV6_RECVERR : IP_RECVERR;
-	unsigned int pending_bitmap;
 	Boolean haveTs = FALSE, havePkt = FALSE, matchedPkt = FALSE;
 	struct msghdr *msg = &ptpInterface->msgEbuf;
 	struct cmsghdr *cmsg;
 	struct sock_extended_err *err;
 	struct sfptpd_ts_pkt *pkt;
-	int slot = TS_CACHE_SIZE;
-	int bit;
 
 	/* Appease impossible -Werror=maybe-unitialised reports */
-	bit = TS_CACHE_SIZE;
 	pkt = NULL;
 
 	assert(user);
@@ -1011,12 +1065,7 @@ bool netProcessError(PtpInterface *ptpInterface,
 	if (!havePkt)
 		goto finish;
 
-	pending_bitmap = ~ptpInterface->ts_cache.free_bitmap;
-	while (!matchedPkt && pending_bitmap != 0) {
-		slot = __builtin_clz(pending_bitmap);
-		bit = TS_CACHE_SIZE - slot - 1;
-
-		pending_bitmap &= ~(1 << bit);
+	TS_CACHE_FOREACH(&ptpInterface->ts_cache, slot) {
 		pkt = &ptpInterface->ts_cache.packet[slot];
 
 		if (length < pkt->match.pdu.len + pkt->match.pdu.trailer) {
@@ -1035,7 +1084,17 @@ bool netProcessError(PtpInterface *ptpInterface,
 			   pkt->match.pdu.len -
 			   pkt->match.pdu.trailer,
 			   pkt->match.pdu.len) == 0) {
+
+				/* Record the match */
 				matchedPkt = TRUE;
+				ticket->slot = slot;
+				ticket->seq = pkt->seq;
+				*user = pkt->user;
+
+				/* Remove from cache if matching */
+				ptpInterface->ts_cache.free_bitmap |= (1 << ts_cache_bit(slot));
+
+				break;
 		}
 	}
 
@@ -1046,14 +1105,8 @@ bool netProcessError(PtpInterface *ptpInterface,
 	if (havePkt && !matchedPkt) {
 		WARNING("unexpected pkt received on "
 			"socket error queue. Expected one of:\n");
-		pending_bitmap = ~ptpInterface->ts_cache.free_bitmap;
-		while (!matchedPkt && pending_bitmap != 0) {
-			struct sfptpd_ts_pkt *pkt;
-			int slot = __builtin_clz(pending_bitmap);
-			int bit = TS_CACHE_SIZE - slot - 1;
-
-			pending_bitmap &= ~(1 << bit);
-			pkt = &ptpInterface->ts_cache.packet[slot];
+		TS_CACHE_FOREACH(&ptpInterface->ts_cache, slot) {
+			struct sfptpd_ts_pkt *pkt = &ptpInterface->ts_cache.packet[slot];
 			dump("expected", pkt->match.pdu.data, pkt->match.pdu.len);
 		}
 		dump("got (with headers)", msg->msg_iov[0].iov_base, length);
@@ -1061,24 +1114,136 @@ bool netProcessError(PtpInterface *ptpInterface,
 
 finish:
 	if (matchedPkt) {
-		/* Remove from cache if matching */
-		ptpInterface->ts_cache.free_bitmap |= (1 << bit);
+		struct sfptpd_ts_cache *cache = &ptpInterface->ts_cache;
+		int quantile;
 
 		/* Record time taken to get the result */
 		sfptpd_time_subtract(&elapsed, &now, &pkt->sent_monotime);
 
+		for (quantile = 0; quantile < TS_QUANTILES; quantile++) {
+			if (!sfptpd_time_is_greater_or_equal(&elapsed, &cache->stats.quantile_bounds[quantile])) {
+				cache->stats.resolved_quantile[quantile]++;
+				break;
+			}
+		}
+
 		DBGV("Tx timestamp took " SFPTPD_FMT_SFTIMESPEC "s to acquire\n",
 		     SFPTPD_ARGS_SFTIMESPEC(elapsed));
-
-		ticket->slot = slot;
-		ticket->seq = pkt->seq;
-		*user = pkt->user;
 	} else {
 		*ticket = TS_NULL_TICKET;
 	}
 
 	return haveTs;
 }
+
+void netCheckTimestampStats(struct sfptpd_ts_cache *cache)
+{
+	struct sfptpd_timespec now;
+	struct sfptpd_timespec elapsed;
+	char buf[120];
+	int quantile;
+	int ptr;
+	int ret;
+	int q;
+	struct sfptpd_timespec period;
+	sfptpd_time_t period_f;
+
+	sfclock_gettime(CLOCK_MONOTONIC, &now);
+	sfptpd_time_subtract(&period, &now, &cache->stats.start);
+	period_f = sfptpd_time_timespec_to_float_s(&period);
+
+	for (quantile = 0; quantile < TS_QUANTILES; quantile++)
+		cache->stats.pending_quantile[quantile] = 0;
+
+	TS_CACHE_FOREACH(cache, slot) {
+		int quantile;
+		sfptpd_time_subtract(&elapsed, &now, &cache->packet[slot].sent_monotime);
+		for (quantile = 0; quantile < TS_QUANTILES; quantile++) {
+			if (!sfptpd_time_is_greater_or_equal(&elapsed, &cache->stats.quantile_bounds[quantile])) {
+				cache->stats.pending_quantile[quantile]++;
+				break;
+			}
+		}
+	}
+
+	ptr = 0;
+	for (q = 0; q < TS_QUANTILES; q++) {
+		int q_e10 = q + TS_QUANTILE_E10_MIN;
+
+		assert(q_e10 >= TS_QUANTILE_MIN_UNIT_E10);
+		assert(q < (sizeof ts_quantile_units) / (sizeof *ts_quantile_units));
+
+		ret = snprintf(buf + ptr, sizeof buf - ptr, " <%5s |",
+			       q == TS_QUANTILES - 1 ? "T_MAX" :
+			       ts_quantile_units[q_e10 - TS_QUANTILE_MIN_UNIT_E10]);
+		if (ret >= sizeof buf)
+			goto truncated;
+		else
+			ptr += ret;
+	}
+	DBGV(" over %-02.1Lfs period |%s\n", period_f, buf);
+
+	ptr = 0;
+	for (q = 0; q < TS_QUANTILES; q++) {
+		ret = snprintf(buf + ptr, sizeof buf - ptr, " %6d |",
+			       cache->stats.resolved_quantile[q]);
+		if (ret >= sizeof buf)
+			goto truncated;
+		else
+			ptr += ret;
+	}
+	DBGV("num resolved tx ts |%s\n", buf);
+
+	ptr = 0;
+	for (q = 0; q < TS_QUANTILES; q++) {
+		ret = snprintf(buf + ptr, sizeof buf - ptr, " %6d |",
+			       cache->stats.pending_quantile[q]);
+		if (ret >= sizeof buf)
+			goto truncated;
+		else
+			ptr += ret;
+	}
+	DBGV("num pending tx ts  |%s (%d evicted)\n", buf, cache->stats.evicted);
+
+truncated:
+	/* Failure of the diagnostic output is (a) unlikely, (b) not serious. */
+	cache->stats.evicted = 0;
+	cache->stats.total = 0;
+	cache->stats.start = now;
+
+	for (quantile = 0; quantile < TS_QUANTILES; quantile++)
+		cache->stats.resolved_quantile[quantile] = 0;
+}
+
+bool netCheckTimestampAlarms(PtpClock *ptpClock)
+{
+	struct sfptpd_ts_cache *cache = &ptpClock->interface->ts_cache;
+	struct sfptpd_timespec elapsed;
+	struct sfptpd_timespec period;
+	struct sfptpd_timespec now;
+	int alarm_quantile = TS_TIME_TO_ALARM_E10 - TS_QUANTILE_E10_MIN;
+
+	/* Do not set alarm because of evicted timestamping requests because
+	 * we no longer know which port they were associated with and the
+	 * given ports should already have alarmed based on the timestamps they
+	 * wanted being late.
+	 */
+
+	assert(alarm_quantile < TS_QUANTILES);
+	sfclock_gettime(CLOCK_MONOTONIC, &now);
+	sfptpd_time_subtract(&period, &now, &cache->stats.start);
+
+	TS_CACHE_FOREACH(cache, slot) {
+		if (cache->packet[slot].user.port == ptpClock) {
+			sfptpd_time_subtract(&elapsed, &now, &cache->packet[slot].sent_monotime);
+			if (sfptpd_time_is_greater_or_equal(&elapsed, &cache->stats.quantile_bounds[alarm_quantile]))
+				return true;
+		}
+	}
+
+	return false;
+}
+
 
 /* Used to get receive timestamps  */
 static Boolean getRxTimestamp(PtpInterface *ptpInterface,
@@ -1368,8 +1533,20 @@ netCreateBindSocket(const char *purpose, int af, const char *service,
 
 static void sfptpd_ts_cache_init(struct sfptpd_ts_cache *cache)
 {
+	int quantile;
+
+	/* Initialise cache proper */
 	cache->free_bitmap = ~0;
 	cache->seq = 0;
+
+	/* Initialise short term stats */
+	memset(&cache->stats, '\0', sizeof cache->stats);
+	for (quantile = 0; quantile < TS_QUANTILES - 1; quantile++) {
+		sfptpd_time_t bound = powl(10.0L, TS_QUANTILE_E10_MIN + quantile);
+		sfptpd_time_float_s_to_timespec(bound, &cache->stats.quantile_bounds[quantile]);
+	}
+	cache->stats.quantile_bounds[TS_QUANTILES - 1] = sfptpd_time_max();
+	sfclock_gettime(CLOCK_MONOTONIC, &cache->stats.start);
 };
 
 /**
@@ -1864,6 +2041,7 @@ struct sfptpd_ts_ticket netExpectTimestamp(struct sfptpd_ts_cache *cache,
 		formatTsPkt(&cache->packet[slot].user, buf);
 		DBGV("ptpd: timestamp cache full; evicting %s\n", buf);
 		cache->free_bitmap |= ~((unsigned int) INT_MAX) >> oldest_slot;
+		cache->stats.evicted++;
 	}
 
 	/* Find first free slot */
@@ -1886,6 +2064,9 @@ struct sfptpd_ts_ticket netExpectTimestamp(struct sfptpd_ts_cache *cache,
 	pkt->seq = cache->seq++;
 	sfclock_gettime(CLOCK_MONOTONIC, &pkt->sent_monotime);
 	cache->free_bitmap &= ~(1 << bit);
+	cache->stats.total++;
+
+	DBGV("ptpd: timestamp %" PRIu64 " request in slot %d\n", pkt->seq, slot);
 
 	return (struct sfptpd_ts_ticket) {.slot = slot, .seq = pkt->seq};
 }

@@ -242,6 +242,8 @@ int netSelect(struct sfptpd_timespec*,struct ptpd_transport*,fd_set*);
 ssize_t netRecvError(PtpInterface *ptpInterface);
 ssize_t netRecvEvent(Octet*,PtpInterface*,struct sfptpd_ts_info*);
 ssize_t netRecvGeneral(Octet*,struct ptpd_transport*);
+void netCheckTimestampStats(struct sfptpd_ts_cache *cache);
+bool netCheckTimestampAlarms(PtpClock *ptpClock);
 
 /* These functions all return 0 for success or an errno in the case of failure */
 int netSendEvent(Octet*,UInteger16,PtpClock*,RunTimeOpts*,const struct sockaddr_storage*,socklen_t);

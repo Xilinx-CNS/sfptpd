@@ -328,4 +328,15 @@ static inline struct sfptpd_timespec sfptpd_time_null(void)
 	return (struct sfptpd_timespec) { .sec = 0, .nsec = 0, .nsec_frac = 0 };
 }
 
+/** Return max timespec.
+ * @return max timespec.
+ */
+static inline struct sfptpd_timespec sfptpd_time_max(void)
+{
+	return (struct sfptpd_timespec) { .sec = INT64_MAX,
+					  .nsec = ONE_BILLION -1,
+					  .nsec_frac = UINT32_MAX };
+}
+
+
 #endif /* _SFPTPD_TIME_H */
