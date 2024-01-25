@@ -87,7 +87,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Provide correct clock timestamps in real time stats corresponding to the
     reported offsets rather than time of logging message.
 
-## [3.7.1.x] - [Unreleased]
+## [3.7.1.1007] - 2024-01-25
 
 ### Added
 
