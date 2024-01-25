@@ -1318,7 +1318,6 @@ Boolean
 netInit(struct ptpd_transport * transport, InterfaceOpts * ifOpts, PtpInterface * ptpInterface)
 {
 	Boolean loopback_multicast;
-	struct ptpd_port_context *port;
 
 	DBG("netInit\n");
 
@@ -1421,16 +1420,6 @@ netInit(struct ptpd_transport * transport, InterfaceOpts * ifOpts, PtpInterface 
 	if (!netInitTimestamping(ptpInterface, ifOpts)) {
 		ERROR("failed to enable packet time stamping\n");
 		return FALSE;
-	}
-
-	/* Update the port clocks */
-	for (port = ptpInterface->ports; port; port = port->next) {
-		port->clock = sfptpd_interface_get_clock(port->physIface);
-		if (port->clock == NULL) {
-			ERROR("failed to get PTP clock for port %s\n",
-				  sfptpd_interface_get_name(port->physIface));
-			return FALSE;
-		}
 	}
 
 	if (ptpInterface->tsMethod != TS_METHOD_SYSTEM) {

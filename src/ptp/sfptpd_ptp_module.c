@@ -209,7 +209,12 @@ struct sfptpd_ptp_bond_info {
 	unsigned int num_physical_ifs;
 
 	/* Set of physical interfaces */
-	struct sfptpd_interface *physical_ifs[PTP_MAX_PHYSICAL_IFS];
+	struct sfptpd_ptp_bond_phys_if {
+		struct sfptpd_interface *intf;
+		bool is_up:1;
+		bool is_primary:1;
+		bool has_hwts:1;
+	} physical_ifs[PTP_MAX_PHYSICAL_IFS];
 
 	/* Active physical interface */
 	struct sfptpd_interface *active_if;
@@ -612,7 +617,54 @@ static struct sfptpd_ptp_bond_info *ptp_get_bond_info(sfptpd_ptp_instance_t *ins
 
 static struct sfptpd_interface *ptp_get_active_intf(sfptpd_ptp_instance_t *instance)
 {
-	return instance->intf->bond_info.active_if;
+	sfptpd_ptp_bond_info_t *bond_info = &instance->intf->bond_info;
+	struct ptpd_port_context *port = instance->ptpd_port_private;
+	struct sfptpd_ptp_bond_phys_if *best_intf = NULL;
+	bool best_is_clock_current = false;
+	unsigned int i;
+
+	if (bond_info->num_physical_ifs < 1) {
+		return NULL;
+	}
+
+	/* In the first iteration, we will compare the first interface with
+	 * itself, to allow for strict preferences to be introduced into the
+	 * decision making process. */
+	best_intf = &bond_info->physical_ifs[0];
+	for (i = 0; i < bond_info->num_physical_ifs; i++) {
+		struct sfptpd_ptp_bond_phys_if *intf = &bond_info->physical_ifs[i];
+		struct sfptpd_clock *intf_clock = sfptpd_interface_get_clock(intf->intf);
+		bool is_clock_current = (intf_clock == port->clock);
+
+		/* Disqualify any DOWN interfaces. */
+		if (!intf->is_up) {
+			continue;
+		}
+
+
+		/* If we are an active-backup bond, then use the primary
+		 * interface where possible. */
+		if (intf->is_primary) {
+			best_intf = intf;
+		}
+		if (best_intf->is_primary) {
+			continue;
+		}
+
+		/* We would like HW timestamping when available. */
+		if (intf->has_hwts || !best_intf->has_hwts) {
+			/* If there are many choices (either all SW timestamps
+			 * or >1 HW timestamps) then try to use the same clock
+			 * we are currently using. */
+			if (!best_intf->has_hwts ||
+			    (is_clock_current && !best_is_clock_current)) {
+				best_intf = intf;
+				best_is_clock_current = is_clock_current;
+			}
+		}
+	}
+
+	return best_intf->intf;
 }
 
 
@@ -940,7 +992,7 @@ static void ptp_timestamp_filtering_deconfigure_all(struct sfptpd_ptp_intf *intf
 		 intf->defined_name);
 
 	for (i = 0; i < bond_info->num_physical_ifs; i++) {
-		ptp_timestamp_filtering_deconfigure_one(bond_info->physical_ifs[i]);
+		ptp_timestamp_filtering_deconfigure_one(bond_info->physical_ifs[i].intf);
 	}
 }
 
@@ -959,7 +1011,7 @@ static int ptp_timestamp_filtering_configure_all(struct sfptpd_ptp_intf *intf)
 
 	error = 0;
 	for (i = 0; i < bond_info->num_physical_ifs; i++) {
-		rc = ptp_timestamp_filtering_configure_one(intf, bond_info->physical_ifs[i],
+		rc = ptp_timestamp_filtering_configure_one(intf, bond_info->physical_ifs[i].intf,
 							   false);
 		if (rc != 0)
 			error = rc;
@@ -988,10 +1040,10 @@ static void ptp_timestamp_filtering_reconfigure_all(struct sfptpd_ptp_intf *intf
 	/* Disable timestamping on any interfaces that have been removed from
 	 * the bond. */
 	for (i = 0; i < old_bond_info->num_physical_ifs; i++) {
-		candidate = old_bond_info->physical_ifs[i];
+		candidate = old_bond_info->physical_ifs[i].intf;
 
 		for (j = 0; j < new_bond_info->num_physical_ifs; j++) {
-			if (candidate == new_bond_info->physical_ifs[j])
+			if (candidate == new_bond_info->physical_ifs[j].intf)
 				break;
 		}
 
@@ -1014,10 +1066,10 @@ static void ptp_timestamp_filtering_reconfigure_all(struct sfptpd_ptp_intf *intf
 	/* Enable timestamping on any interfaces that have been added to the
 	 * bond. */
 	for (i = 0; i < new_bond_info->num_physical_ifs; i++) {
-		candidate = new_bond_info->physical_ifs[i];
+		candidate = new_bond_info->physical_ifs[i].intf;
 
 		for (j = 0; j < old_bond_info->num_physical_ifs; j++) {
-			if (candidate == old_bond_info->physical_ifs[j])
+			if (candidate == old_bond_info->physical_ifs[j].intf)
 				break;
 		}
 		/* If the interface from the new config is not in the existing
@@ -1201,7 +1253,14 @@ static int parse_nested_bond(struct sfptpd_ptp_bond_info *bond_info, bool verbos
 				      "nested slave %s\n", link->if_name);
 				/* Not fatal unless we find none overall! */
 			} else {
-				bond_info->physical_ifs[bond_info->num_physical_ifs] = interface;
+				bond_info->physical_ifs[bond_info->num_physical_ifs] =
+					(struct sfptpd_ptp_bond_phys_if) {
+						.intf = interface,
+						.is_up = !!(link->if_flags & IFF_UP),
+						.is_primary = (link->bond.active_slave == link->if_index),
+						.has_hwts = !!(sfptpd_interface_ptp_caps(interface) &
+									   SFPTPD_INTERFACE_TS_CAPS_HW)
+					};
 				bond_info->num_physical_ifs++;
 			}
 		}
@@ -1260,7 +1319,14 @@ static int parse_bond(struct sfptpd_ptp_bond_info *bond_info, bool verbose,
 					/* Not fatal unless we find none! */
 				}
 			} else {
-				bond_info->physical_ifs[bond_info->num_physical_ifs] = interface;
+				bond_info->physical_ifs[bond_info->num_physical_ifs] =
+					(struct sfptpd_ptp_bond_phys_if) {
+						.intf = interface,
+						.is_up = !!(link->if_flags & IFF_UP),
+						.is_primary = (link->bond.active_slave == link->if_index),
+						.has_hwts = !!(sfptpd_interface_ptp_caps(interface) &
+									   SFPTPD_INTERFACE_TS_CAPS_HW)
+					};
 				bond_info->num_physical_ifs++;
 			}
 		}
@@ -1381,7 +1447,7 @@ static int ptp_probe_bonding(const struct sfptpd_link *logical_link,
 			rc = ENOENT;
 		} else {
 			for (i = 0; i < bond_info->num_physical_ifs; i++) {
-				if (bond_info->active_if == bond_info->physical_ifs[i]) {
+				if (bond_info->active_if == bond_info->physical_ifs[i].intf) {
 					break;
 				}
 			}
@@ -1401,10 +1467,10 @@ static int ptp_probe_bonding(const struct sfptpd_link *logical_link,
 		 * one, so pick the first with link up.
 		 * Bridges have the same problem so treat as LACP */
 		for (i = 0; i < bond_info->num_physical_ifs; i++) {
-			rc = sfptpd_interface_is_link_detected(bond_info->physical_ifs[i],
+			rc = sfptpd_interface_is_link_detected(bond_info->physical_ifs[i].intf,
 							       &link_detected);
 			if ((rc == 0) && link_detected) {
-				bond_info->active_if = bond_info->physical_ifs[i];
+				bond_info->active_if = bond_info->physical_ifs[i].intf;
 				if (verbose) {
 					TRACE_L3("ptp %s: selected active slave %s\n",
 						 bond_info->bond_if,
@@ -1417,7 +1483,7 @@ static int ptp_probe_bonding(const struct sfptpd_link *logical_link,
 		/* If we can't find a slave interface with link up, warn and
 		 * just pick the first slave for now. */
 		if (i >= bond_info->num_physical_ifs) {
-			bond_info->active_if = bond_info->physical_ifs[0];
+			bond_info->active_if = bond_info->physical_ifs[0].intf;
 			if (verbose) {
 				WARNING("ptp %s: no slave interfaces have link up. "
 					"Selecting slave interface %s\n",
@@ -1443,7 +1509,7 @@ static int ptp_probe_bonding(const struct sfptpd_link *logical_link,
 				 logical_if,
 				 sfptpd_interface_get_name(interface));
 			bond_info->num_physical_ifs = 1;
-			bond_info->active_if = bond_info->physical_ifs[0] = interface;
+			bond_info->active_if = bond_info->physical_ifs[0].intf = interface;
 		}
 	} else {
 		assert(bond_info->bond_mode == SFPTPD_BOND_MODE_NONE);
@@ -1458,7 +1524,7 @@ static int ptp_probe_bonding(const struct sfptpd_link *logical_link,
 			/* There is no bond. Set up a set of 1 physical interface to
 			 * make parsing later less painful */
 			bond_info->num_physical_ifs = 1;
-			bond_info->active_if = bond_info->physical_ifs[0] = interface;
+			bond_info->active_if = bond_info->physical_ifs[0].intf = interface;
 		}
 	}
 
@@ -1533,7 +1599,7 @@ static int ptp_check_clock_discipline_flags(struct sfptpd_ptp_intf *intf,
 
 	rc = 0;
 	for (i = 0; i < bond_info->num_physical_ifs; i++) {
-		interface = bond_info->physical_ifs[i];
+		interface = bond_info->physical_ifs[i].intf;
 		clock = sfptpd_interface_get_clock(interface);
 
 		if (!sfptpd_clock_get_discipline(clock)) {
@@ -1989,6 +2055,24 @@ static bool ptp_update_instance_state(struct sfptpd_ptp_instance *instance,
 	instance->ptpd_port_snapshot = snapshot;
 	instance->local_alarms_snapshot = instance->local_alarms;
 	instance->clustering_score_snapshot = current_clustering_score;
+
+	/* Choose which interface to use as our LRC, notably we only have to do
+	 * do this if the state has changed as a bond change will have already done
+	 * this for us already. */
+	if (state_changed) {
+		ptpd_timestamp_type_e timestamp_type;
+		struct sfptpd_interface *active_intf = ptp_get_active_intf(instance);
+
+		if (active_intf != instance->ptpd_port_private->physIface) {
+			rc = ptp_determine_timestamp_type(&timestamp_type, instance->intf,
+							  active_intf);
+			if (rc == 0) {
+				ptpd_change_interface(instance->ptpd_port_private,
+						      instance->intf->bond_info.logical_if,
+						      active_intf, timestamp_type);
+			}
+		}
+	}
 
 	/* Set the convergence threshold */
 	if (bond_changed) {
