@@ -169,7 +169,7 @@ const char *ts_quantile_units[] = { "1us", "10us", "100us", "1ms", "10ms", "100m
 
 void formatTsPkt(struct sfptpd_ts_user *pkt, char desc[48])
 {
-	const char *type;
+	const char *type = "Unknown";
 
 	switch(pkt->type) {
 	case TS_SYNC:
