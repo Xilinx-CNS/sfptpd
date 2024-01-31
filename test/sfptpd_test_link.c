@@ -91,21 +91,13 @@ static int test_link(void)
 	sfptpd_netlink_scan(nl_state);
 
 	do {
-		int active_fds[MAX_EVENTS];
-
 		nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
 		if (nfds == -1) {
 			ERROR("link: epoll_wait(), %s\n", strerror(errno));
 			return 1;
 		}
 
-		for (i = 0; i < nfds; ++i) {
-			int fd = events[i].data.fd;
-
-			active_fds[i] = fd;
-		}
-
-		rc = sfptpd_netlink_service_fds(nl_state, active_fds, nfds, consumers, false);
+		rc = sfptpd_netlink_service_fds(nl_state, consumers, false);
 		while (rc != 0) {
 			int ver;
 

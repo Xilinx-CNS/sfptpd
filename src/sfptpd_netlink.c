@@ -1570,8 +1570,11 @@ int sfptpd_netlink_get_fd(struct sfptpd_nl_state *state,
 	}
 }
 
+/* Service ready file descriptors for netlink.
+ * Does not need to know which file descriptors are ready, will
+ * service all the netlink connections regardless.
+ */
 int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
-			       int *fds, int num_fds,
 			       int consumers,
 			       bool coalescing)
 {
@@ -1886,7 +1889,7 @@ int sfptpd_netlink_release_table(struct sfptpd_nl_state *state, int version, int
 
 	if (state->need_service) {
 		state->need_service = false;
-		return sfptpd_netlink_service_fds(state, NULL, 0, consumers, false);
+		return sfptpd_netlink_service_fds(state, consumers, false);
 	} else {
 		return 0;
 	}
@@ -1983,7 +1986,7 @@ const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state
 
 		assert(nfds > 0);
 
-		rc = sfptpd_netlink_service_fds(state, NULL, 0, consumers, false);
+		rc = sfptpd_netlink_service_fds(state, consumers, false);
 		if (rc > 0) {
 			int rows;
 

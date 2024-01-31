@@ -1609,8 +1609,8 @@ static void engine_on_user_fds(void *context, unsigned int num_fds, int fd[])
 		engine->netlink_xoff &= ~NL_XOFF_COALESCE;
 	}
 
-	rc = sfptpd_netlink_service_fds(engine->netlink_state, fd, num_fds,
-				        engine->link_subscribers + 1,
+	rc = sfptpd_netlink_service_fds(engine->netlink_state,
+					engine->link_subscribers + 1,
 					engine->netlink_xoff != 0);
 	if (rc > 0) {
 		engine_handle_new_link_table(engine, rc);
