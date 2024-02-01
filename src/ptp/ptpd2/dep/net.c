@@ -334,7 +334,8 @@ void writeProtocolAddress(PortAddress *protocolAddress,
 
 static int sendMessage(int sockfd, const void *buf, size_t length,
                        const struct sockaddr *addr, socklen_t addrLen,
-                       const char *messageType);
+                       const char *messageType, void *control,
+                       socklen_t controllen);
 
 
 /**
@@ -1445,9 +1446,18 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 	/* Try Onload extensions API if available */
 #ifdef HAVE_ONLOAD_EXT
 	if (onload_is_present() && ptpInterface->ifOpts.use_onload_ext) {
+		int flags = ONLOAD_TIMESTAMPING_FLAG_TX_NIC |
+			    ONLOAD_TIMESTAMPING_FLAG_RX_NIC |
+			    SOF_TIMESTAMPING_OPT_PKTINFO;
 		int rc = onload_timestamping_request(ptpInterface->transport.eventSock,
-						     ONLOAD_TIMESTAMPING_FLAG_TX_NIC |
-						     ONLOAD_TIMESTAMPING_FLAG_RX_NIC);
+						     flags);
+
+		if (rc != 0) {
+			flags &= ~SOF_TIMESTAMPING_OPT_PKTINFO;
+			rc = onload_timestamping_request(ptpInterface->transport.eventSock,
+							 flags);
+		}
+
 		if (rc == 0) {
 			INFO("using Onload Extensions API NIC timestamps\n");
 			ptpInterface->tsMethod = TS_METHOD_SO_TIMESTAMPING;
@@ -1911,13 +1921,59 @@ netRecvError(PtpInterface *ptpInterface)
 	return len;
 }
 
-/* According to IEEE1588 Annex E.1, add two extra bytes
-   to the payload to help UDP checksum tweaking by
-   transparent clocks. */
-static int sendToAnnexEPadding(int sockfd, const void *buf, size_t length,
-			       int flags,
-			       const struct sockaddr *addr, socklen_t addrLen)
+
+static int generateSendMessageControl(void **control, socklen_t *controllen,
+				      int sockfd,
+				      int request_tx_ifindex,
+				      bool use_onload_ext)
 {
+	if (!controllen)
+		return -EINVAL;
+
+	*controllen = 0;
+
+	if (request_tx_ifindex > 0) {
+#ifdef HAVE_ONLOAD_EXT
+		/* Onload includes functionality to try and send down a given
+		 * ifindex, much like IP_PKTINFO, but allowing for physical
+		 * interfaces rather than only logical. */
+#define ONLOAD_FD_FEAT_TX_SCM_TS_PKTINFO 2
+		int feat = ONLOAD_FD_FEAT_TX_SCM_TS_PKTINFO;
+		if( onload_fd_check_feature(sockfd, feat) == 1 &&
+		    use_onload_ext ) {
+			struct scm_ts_pktinfo send_info = { 0 };
+			struct cmsghdr *cmsg;
+
+			if (!control || !*control)
+				return -EINVAL;
+
+			cmsg = (struct cmsghdr*)*control;
+			send_info.if_index = request_tx_ifindex;
+			cmsg->cmsg_level = SOL_SOCKET;
+			cmsg->cmsg_type = SCM_TIMESTAMPING_PKTINFO;
+			*(struct scm_ts_pktinfo*)(CMSG_DATA(cmsg)) = send_info;
+			cmsg->cmsg_len = CMSG_LEN(sizeof(send_info));
+
+			*controllen = cmsg->cmsg_len;
+		}
+#endif
+	}
+
+	/* We don't really need a NULL control, but it might help, particularly
+	 * if running with onload, to skip some unnecessary logic. */
+	if (*controllen == 0)
+		*control = NULL;
+
+	return 0;
+}
+
+/* Function that wraps up call to send message */
+static int sendMessage(int sockfd, const void *buf, size_t length,
+                       const struct sockaddr *addr, socklen_t addrLen,
+                       const char *messageType, void *control,
+                       socklen_t controllen)
+{
+	int rc;
 	const static uint16_t zero = 0;
 	struct iovec iov[2] = {
 		{
@@ -1933,26 +1989,19 @@ static int sendToAnnexEPadding(int sockfd, const void *buf, size_t length,
 		.msg_name = (struct sockaddr *) addr,
 		.msg_namelen = addrLen,
 		.msg_iov = iov,
-		.msg_iovlen = 2,
-		.msg_control = NULL,
-		.msg_controllen = 0
+		.msg_iovlen = 1,
+		.msg_control = control,
+		.msg_controllen = controllen
 	};
-	return sendmsg(sockfd, &msg, flags);
-}
 
-/* Function that wraps up call to send message */
-static int sendMessage(int sockfd, const void *buf, size_t length,
-                       const struct sockaddr *addr, socklen_t addrLen,
-                       const char *messageType)
-{
-	int rc;
-
+	/* According to IEEE1588 Annex E.1, add two extra bytes
+	   to the payload to help UDP checksum tweaking by
+	   transparent clocks. */
 	if (addr->sa_family == AF_INET6) {
-		rc = sendToAnnexEPadding(sockfd, buf, length, 0, addr, addrLen);
+		msg.msg_iovlen = 2;
 		length += 2;
-	} else {
-		rc = sendto(sockfd, buf, length, 0, addr, addrLen);
 	}
+	rc = sendmsg(sockfd, &msg, 0);
 
 	if (rc < 0) {
 		DBG("error sending %s message, %s\n", messageType, strerror(errno));
@@ -2025,6 +2074,10 @@ struct sfptpd_ts_ticket netExpectTimestamp(struct sfptpd_ts_cache *cache,
 	return (struct sfptpd_ts_ticket) {.slot = slot, .seq = pkt->seq};
 }
 
+// The function `netSendEvent` may use the SCM_TIMESTAMPING_PKTINFO control
+// message, so we assert that we actually have enough space for this.
+STATIC_ASSERT(sizeof(((PtpInterface*)NULL)->msgCbuf) >= CMSG_SPACE(sizeof(struct scm_ts_pktinfo)));
+
 //
 // alt_dst: alternative destination.
 //   if filled, send to this unicast dest;
@@ -2033,12 +2086,17 @@ struct sfptpd_ts_ticket netExpectTimestamp(struct sfptpd_ts_cache *cache,
 int
 netSendEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 	     RunTimeOpts *rtOpts, const struct sockaddr_storage *altDst,
-	     socklen_t altDstLen)
+	     socklen_t altDstLen, Integer32 request_tx_ifindex)
 {
 	int ret;
 	struct sockaddr_storage addr;
 	socklen_t addrLen;
 	struct ptpd_transport *transport = &ptpClock->interface->transport;
+	bool use_onload_ext = rtOpts->ifOpts->use_onload_ext;
+	// This must be big enough to contain the SCM_TIMESTAMPING_PKTINFO cmsg
+	// which we assert above this function.
+	void *control = (void*)&ptpClock->interface->msgCbuf[0];
+	socklen_t controllen = 0;
 
 	if (ptpClock->unicastAddrLen != 0 || altDstLen != 0) {
 		if (ptpClock->unicastAddrLen != 0) {
@@ -2051,9 +2109,16 @@ netSendEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 		/* If we're sending to a unicast address, set the UNICAST flag */
 		*(char *)(buf + 6) |= PTPD_FLAG_UNICAST;
 
+		ret = generateSendMessageControl(&control, &controllen,
+						 transport->eventSock,
+						 request_tx_ifindex,
+						 use_onload_ext);
+		if (ret != 0)
+			return ret;
+
 		ret = sendMessage(transport->eventSock, buf, length,
 				  (struct sockaddr *)&addr, addrLen,
-				  "unicast event");
+				  "unicast event", control, controllen);
 		if (ret != 0)
 			return ret;
 
@@ -2064,7 +2129,7 @@ netSendEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 			setLoopback(&addr, addrLen);
 			ret = sendMessage(transport->eventSock, buf, length,
 					  (struct sockaddr *)&addr, addrLen,
-					  "loopback unicast event");
+					  "loopback unicast event", NULL, 0);
 		}
 	} else if (transport->multicastAddrLen != 0) {
 		copyAddress(&addr, &addrLen, &transport->multicastAddr, transport->multicastAddrLen);
@@ -2079,9 +2144,16 @@ netSendEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 			}
 		}
 
+		ret = generateSendMessageControl(&control, &controllen,
+						 transport->eventSock,
+						 request_tx_ifindex,
+						 use_onload_ext);
+		if (ret != 0)
+			return ret;
+
 		ret = sendMessage(transport->eventSock, buf, length,
 				  (struct sockaddr *)&addr, addrLen,
-				  "multicast event");
+				  "multicast event", control, controllen);
 	} else {
 		ret = EDESTADDRREQ;
 	}
@@ -2119,7 +2191,7 @@ netSendGeneralImpl(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 		ret = sendMessage(unbound ? transport->monitoringSock : transport->generalSock,
 				  buf, length,
 				  (struct sockaddr *)&addr, addrLen,
-				  "unicast general");
+				  "unicast general", NULL, 0);
 	} else if (transport->multicastAddrLen != 0) {
 		copyAddress(&addr, &addrLen, &transport->multicastAddr, transport->multicastAddrLen);
 		copyPort(&addr, &transport->generalAddr);
@@ -2135,7 +2207,7 @@ netSendGeneralImpl(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 
 		ret = sendMessage(transport->generalSock, buf, length,
 				  (struct sockaddr *)&addr, addrLen,
-				  "multicast general");
+				  "multicast general", NULL, 0);
 	} else {
 		ret = EDESTADDRREQ;
 	}
@@ -2181,7 +2253,7 @@ netSendPeerGeneral(Octet *buf, UInteger16 length, PtpClock *ptpClock)
 
 		ret = sendMessage(transport->generalSock, buf, length,
 				  (struct sockaddr *)&addr, addrLen,
-				  "unicast general");
+				  "unicast general", NULL, 0);
 	} else if (transport->multicastAddrLen != 0) {
 		copyAddress(&addr, &addrLen, &transport->multicastAddr, transport->multicastAddrLen);
 		copyPort(&addr, &transport->generalAddr);
@@ -2196,7 +2268,7 @@ netSendPeerGeneral(Octet *buf, UInteger16 length, PtpClock *ptpClock)
 
 		ret = sendMessage(transport->generalSock, buf, length,
 				  (struct sockaddr *)&addr, addrLen,
-				  "multicast general");
+				  "multicast general", NULL, 0);
 	} else {
 		ret = EDESTADDRREQ;
 	}
@@ -2225,7 +2297,7 @@ netSendPeerEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 
 		ret = sendMessage(transport->eventSock, buf, length,
 				  (struct sockaddr *)&addr, addrLen,
-				  "unicast event");
+				  "unicast event", NULL, 0);
 		if (ret != 0)
 			return ret;
 
@@ -2236,7 +2308,7 @@ netSendPeerEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 			setLoopback(&addr, addrLen);
 			ret = sendMessage(transport->eventSock, buf, length,
 					  (struct sockaddr *)&addr, addrLen,
-					  "loopback unicast event");
+					  "loopback unicast event", NULL, 0);
 		}
 	} else if (transport->peerMulticastAddrLen != 0) {
 		copyAddress(&addr, &addrLen, &transport->peerMulticastAddr, transport->peerMulticastAddrLen);
@@ -2252,7 +2324,7 @@ netSendPeerEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 
 		ret = sendMessage(transport->eventSock, buf, length,
 				  (struct sockaddr *)&addr, addrLen,
-				  "multicast event");
+				  "multicast event", NULL, 0);
 	} else {
 		ret = EDESTADDRREQ;
 	}

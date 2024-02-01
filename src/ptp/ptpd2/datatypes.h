@@ -761,6 +761,8 @@ struct ptpd_intf_context {
 	/*Foreign node data set*/
 	struct sfptpd_hash_table *nodeSet;
 
+	Octet msgCbuf[CONTROL_MSG_SIZE];
+
 	Octet msgIbuf[PACKET_SIZE];
 	MsgHeader msgTmpHeader;
 	union {

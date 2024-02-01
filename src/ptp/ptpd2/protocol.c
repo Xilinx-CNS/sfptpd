@@ -1855,7 +1855,7 @@ handleSync(const MsgHeader *header, ssize_t length,
 
 			/* If the ifindex is valid, then store it to be used later */
 			if (rxPhysIfindex != 0 &&
-				rxPhysIfindex != ptpClock->lastSyncIfindex) {
+			    rxPhysIfindex != ptpClock->lastSyncIfindex) {
 				ptpClock->lastSyncIfindex = rxPhysIfindex;
 			}
 
@@ -3421,7 +3421,7 @@ issueSync(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	msgPackSync(ptpClock->msgObuf, sizeof ptpClock->msgObuf, ptpClock);
 
 	rc = netSendEvent(ptpClock->msgObuf, PTPD_SYNC_LENGTH, ptpClock,
-			  rtOpts, NULL, 0);
+			  rtOpts, NULL, 0, 0);
 	if (rc == 0) {
 		/* We successfully transmitted the packet */
 		ptpClock->counters.syncMessagesSent++;
@@ -3478,7 +3478,7 @@ issueSyncForMonitoring(RunTimeOpts *rtOpts, PtpClock *ptpClock, UInteger16 seque
 
 	rc = netSendEvent(ptpClock->msgObuf, PTPD_SYNC_LENGTH, ptpClock, rtOpts,
 			  &ptpClock->nsmMonitorAddr,
-			  ptpClock->nsmMonitorAddrLen);
+			  ptpClock->nsmMonitorAddrLen, 0);
 	if (rc == 0) {
 		/* We successfully transmitted the packet */
 		ptpClock->counters.monitoringTLVsSyncsSent++;
@@ -3582,7 +3582,7 @@ issueDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	}
 
 	rc = netSendEvent(ptpClock->msgObuf, PTPD_DELAY_REQ_LENGTH, ptpClock,
-			  rtOpts, &dst, dstLen);
+			  rtOpts, &dst, dstLen, ptpClock->lastSyncIfindex);
 	if (rc != 0) {
 		/* If we failed for any reason other than failure to retrieve
 		 * the transmit then something is seriously wrong with the

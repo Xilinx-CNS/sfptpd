@@ -248,7 +248,7 @@ void netCheckTimestampStats(struct sfptpd_ts_cache *cache, struct sfptpd_ts_stat
 bool netCheckTimestampAlarms(PtpClock *ptpClock);
 
 /* These functions all return 0 for success or an errno in the case of failure */
-int netSendEvent(Octet*,UInteger16,PtpClock*,RunTimeOpts*,const struct sockaddr_storage*,socklen_t);
+int netSendEvent(Octet*,UInteger16,PtpClock*,RunTimeOpts*,const struct sockaddr_storage*,socklen_t,Integer32);
 int netSendGeneral(Octet*,UInteger16,PtpClock*,RunTimeOpts*,const struct sockaddr_storage*,socklen_t);
 int netSendMonitoring(Octet*,UInteger16,PtpClock*,RunTimeOpts*,const struct sockaddr_storage*,socklen_t);
 int netSendPeerGeneral(Octet*,UInteger16,PtpClock*);
