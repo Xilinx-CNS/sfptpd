@@ -1145,7 +1145,8 @@ processPortMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
 	     ptpClock->timePropertiesDS.currentUtcOffset);
 
 	/* Apply UTC offset if appropriate */
-	applyUtcOffset(timestamp, rtOpts, ptpClock);
+	if (timestampValid)
+		applyUtcOffset(timestamp, rtOpts, ptpClock);
 
 	/*Spec 9.5.2.2*/
 	isFromSelf = (ptpClock->portIdentity.portNumber == ptpInterface->msgTmpHeader.sourcePortIdentity.portNumber
