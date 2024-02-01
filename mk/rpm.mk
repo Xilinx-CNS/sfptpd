@@ -11,8 +11,8 @@
 # The rules also output some information in ENV:name=value format
 # for the convenience of any further wrapper scripts.
 
-HOST_DISTTAG := $(shell rpm --eval '%{?dist}' | cut -c2-)
-RPM_TOPDIR ?= $(shell rpm --eval '%{?_topdir}')
+HOST_DISTTAG := $(shell rpm --eval '%{?dist}' 2>/dev/null | cut -c2- || true)
+RPM_TOPDIR ?= $(shell rpm --eval '%{?_topdir}' 2>/dev/null || true)
 
 RPM_OSVER ?= $(HOST_DISTTAG)
 RPM_DISTTAG ?= .$(RPM_OSVER)
