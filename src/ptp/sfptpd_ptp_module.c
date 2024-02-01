@@ -1220,8 +1220,11 @@ static int ptp_is_interface_vlan(const struct sfptpd_link *logical_if, bool *is_
 /* Wrapper for strcmp so that it can be used with qsort */
 int qsort_intfnamecmp(const void *p1, const void *p2)
 {
-	return strcmp(sfptpd_interface_get_name(*(struct sfptpd_interface * const *) p1),
-		      sfptpd_interface_get_name(*(struct sfptpd_interface * const *) p2));
+	struct sfptpd_ptp_bond_phys_if *pi1 = (struct sfptpd_ptp_bond_phys_if *) p1;
+	struct sfptpd_ptp_bond_phys_if *pi2 = (struct sfptpd_ptp_bond_phys_if *) p2;
+
+	return strcmp(sfptpd_interface_get_name(pi1->intf),
+		      sfptpd_interface_get_name(pi2->intf));
 }
 
 
@@ -1281,7 +1284,8 @@ static int parse_nested_bond(struct sfptpd_ptp_bond_info *bond_info, bool verbos
 	if (logical_link->type == SFPTPD_LINK_TEAM)
 		qsort(bond_info->physical_ifs + first_phy,
 		      bond_info->num_physical_ifs - first_phy,
-		      sizeof(struct sfptpd_interface *), qsort_intfnamecmp);
+		      sizeof bond_info->physical_ifs[first_phy],
+		      qsort_intfnamecmp);
 
 	return rc;
 }
@@ -1378,7 +1382,10 @@ static int parse_team(struct sfptpd_ptp_bond_info *bond_info, bool verbose,
 	/* Teamdctl reorders the interfaces it finds so need to sort them
 	 * to make sure they're always stored in the same order */
 	if (rc == 0)
-		qsort(bond_info->physical_ifs, bond_info->num_physical_ifs, sizeof(struct sfptpd_interface *), qsort_intfnamecmp);
+		qsort(bond_info->physical_ifs,
+		      bond_info->num_physical_ifs,
+		      sizeof bond_info->physical_ifs[0],
+		      qsort_intfnamecmp);
 
 	return rc;
 }
