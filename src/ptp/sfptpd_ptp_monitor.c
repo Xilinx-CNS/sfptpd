@@ -789,7 +789,7 @@ static void monitor_write_json_rx_event(void *record, void *context)
 		"\"sync-seq\": %d, "
 		"\"offset-from-master\": %Lf, "
 		"\"mean-path-delay\": %Lf, "
-		"\"sync-ingress-timestamp\": %ld.%09d } }\n",
+		"\"sync-ingress-timestamp\": " SFPTPD_FMT_SSFTIMESPEC_NS " } }\n",
 		rx_event->common.monitor_seq_id,
 		monitor_time,
 		rx_event->common.monitor_timestamp.nsec / 1000,
@@ -798,7 +798,7 @@ static void monitor_write_json_rx_event(void *record, void *context)
 		rx_event->common.event_seq_id,
 		isnormal(offset) ? offset : 0.0L,
 		isnormal(mpd) ? mpd : 0.0L,
-		ts.sec, ts.nsec);
+		SFPTPD_ARGS_SSFTIMESPEC_NS(ts));
 }
 
 
@@ -824,7 +824,7 @@ static void monitor_write_json_tx_event(void *record, void *context)
 		"\"source-port\": \"" PORT_ID_FORMAT_VAR_WIDTH "\", "
 		"\"message-type\": \"%s\", "
 		"\"event-seq-id\": %d, "
-		"\"egress-timestamp\": %ld.%09d } }\n",
+		"\"egress-timestamp\": " SFPTPD_FMT_SSFTIMESPEC_NS " } }\n",
 		tx_event->common.monitor_seq_id,
 		monitor_time,
 		tx_event->common.monitor_timestamp.nsec / 1000,
@@ -832,7 +832,7 @@ static void monitor_write_json_tx_event(void *record, void *context)
 		PORT_ID_CONTENT(tx_event->common.ref_port_id),
 		mtype,
 		tx_event->common.event_seq_id,
-		ts.sec, ts.nsec);
+		SFPTPD_ARGS_SSFTIMESPEC_NS(ts));
 }
 
 

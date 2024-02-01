@@ -69,6 +69,9 @@ typedef enum sfptpd_component_id {
 #define SFPTPD_FMT_SFTIMESPEC             "%" PRIu64 ".%09" PRIu32 "%03" PRIu32
 #define SFPTPD_FMT_SSFTIMESPEC            "%s%" PRId64 ".%012" PRIu64
 #define SFPTPD_FMT_SFTIMESPEC_FIXED       "%22" PRIu64 ".%09" PRIu32 "%03" PRIu32
+#define SFPTPD_FMT_SSFTIMESPEC_NS         "%s%" PRId64 ".%09" PRIu32
+
+/** Macros defining arguments for compound time formats */
 #define SFPTPD_ARGS_TIMESPEC(ts) \
 	(ts).tv_sec, \
 	(ts).tv_nsec
@@ -82,13 +85,17 @@ typedef enum sfptpd_component_id {
 	(ts).sec, \
 	(ts).nsec, \
 	_SFPTPD_NSEC_FRAC_TO_DEC((ts))
-#define SFPTPD_ARGS_SSFTIMESPEC(ts) \
+#define SFPTPD_ARGS_SSFTIMESPEC_S(ts) \
 	((ts).sec == -1 && ((ts).nsec != 0) ? "-" : ""), \
-	((ts).sec >= 0 || (ts).nsec == 0 ? ((ts).sec) : (ts).sec + 1), \
+	((ts).sec >= 0 || (ts).nsec == 0 ? ((ts).sec) : (ts).sec + 1)
+#define SFPTPD_ARGS_SSFTIMESPEC_NS(ts) \
+	SFPTPD_ARGS_SSFTIMESPEC_S(ts), \
+	((ts).sec >= 0 || (ts).nsec == 0 ? (ts).nsec : 1000000000 - (ts).nsec)
+#define SFPTPD_ARGS_SSFTIMESPEC(ts) \
+	SFPTPD_ARGS_SSFTIMESPEC_S(ts), \
 	((ts).sec >= 0 || (ts).nsec == 0 ? \
 		1000 * ((uint64_t)((ts).nsec)) + _SFPTPD_NSEC_FRAC_TO_DEC((ts)) : \
 		1000000000000 - 1000 * ((uint64_t)((ts).nsec)) - _SFPTPD_NSEC_FRAC_TO_DEC((ts)))
-
 
 /** Forward structure declarations */
 struct sfptpd_config;

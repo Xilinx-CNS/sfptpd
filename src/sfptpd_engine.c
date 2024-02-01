@@ -1025,7 +1025,7 @@ static void write_rt_stats_json(FILE* json_stats_fp,
 	/* Add clock time */
 	if (entry->clock_master != NULL) {
 		if (entry->has_m_time) {
-			time_t secs = entry->time_master.sec;
+			sfptpd_secs_t secs = entry->time_master.sec;
 			sfptpd_local_strftime(ftime, (sizeof ftime) - 1, "%Y-%m-%d %H:%M:%S", &secs);
 			LPRINTF(json_stats_fp, ",\"time\":\"%s.%09" PRIu32 "\"",
 				ftime, entry->time_master.nsec);
@@ -1042,7 +1042,7 @@ static void write_rt_stats_json(FILE* json_stats_fp,
 	LPRINTF(json_stats_fp, "},\"clock-slave\":{\"name\":\"%s\"",
 		sfptpd_clock_get_long_name(entry->clock_slave));
 	if (entry->has_s_time) {
-		time_t secs = entry->time_slave.sec;
+		sfptpd_secs_t secs = entry->time_slave.sec;
 		sfptpd_local_strftime(ftime, (sizeof ftime) - 1, "%Y-%m-%d %H:%M:%S", &secs);
 		LPRINTF(json_stats_fp, ",\"time\":\"%s.%09" PRIu32 "\"",
 			ftime, entry->time_slave.nsec);
@@ -1238,7 +1238,7 @@ static void on_schedule_leap_second(struct sfptpd_engine *engine,
 		/* Go to the scheduled state */
 		engine->leap_second.state = LEAP_SECOND_STATE_SCHEDULED;
 		char ftime[8];
-		time_t leap_second_time = (time_t)sfptpd_time_timespec_to_float_s(&engine->leap_second.time);
+		sfptpd_secs_t leap_second_time = (sfptpd_secs_t)sfptpd_time_timespec_to_float_s(&engine->leap_second.time);
 		sfptpd_local_strftime(ftime, sizeof(ftime), "%H:%M", &leap_second_time);
 		NOTICE("leap second %s scheduled for UTC midnight (local time: %s)\n",
 		       (type == SFPTPD_LEAP_SECOND_61)? "61": "59", ftime);
@@ -1326,7 +1326,7 @@ static void on_test_leap_second(struct sfptpd_engine *engine,
 		update_leap_second_status(engine, type);
 
 		char ftime[8];
-		time_t leap_second_time = (time_t)sfptpd_time_timespec_to_float_s(&engine->leap_second.time);
+		sfptpd_secs_t leap_second_time = (sfptpd_secs_t)sfptpd_time_timespec_to_float_s(&engine->leap_second.time);
 		sfptpd_local_strftime(ftime, sizeof(ftime), "%H:%M", &leap_second_time);
 		INFO("leap second %s test at UTC midnight (local time: %s)\n",
 		     (type == SFPTPD_LEAP_SECOND_61)? "61": "59", ftime);

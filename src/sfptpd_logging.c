@@ -1068,12 +1068,14 @@ void sfptpd_log_get_time(struct sfptpd_log_time *time)
 {
 	struct timeval now;
 	char temp[SFPTPD_LOG_TIME_STR_MAX];
+	sfptpd_secs_t s;
 	int rc;
 	
 	assert(time != NULL);
 	
 	gettimeofday(&now, 0);
-	sfptpd_local_strftime(temp, sizeof(temp), "%Y-%m-%d %X", &now.tv_sec);
+	s = (sfptpd_secs_t) now.tv_sec;
+	sfptpd_local_strftime(temp, sizeof(temp), "%Y-%m-%d %X", &s);
 
 	rc = snprintf(time->time, sizeof(time->time), "%s.%06ld", temp, now.tv_usec);
 	assert(rc < sizeof(time->time));

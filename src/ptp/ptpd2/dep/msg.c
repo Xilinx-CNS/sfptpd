@@ -3029,9 +3029,11 @@ void msgDump(PtpInterface *ptpInterface)
 {
 	char temp[MAXTIMESTR], time[MAXTIMESTR + 8];
 	struct timeval now;
+	sfptpd_secs_t s;
 
 	gettimeofday(&now, 0);
-	sfptpd_local_strftime(temp, sizeof(temp), "%Y-%m-%d %X", &now.tv_sec);
+	s = (sfptpd_secs_t) now.tv_sec;
+	sfptpd_local_strftime(temp, sizeof(temp), "%Y-%m-%d %X", &s);
 	snprintf(time, sizeof(time), "%s.%06ld", temp, now.tv_usec);
 	time[sizeof(time) - 1] = '\0';
 

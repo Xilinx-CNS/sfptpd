@@ -20,12 +20,12 @@ typedef long double sfptpd_time_t;
 #define ONE_BILLION (1.0e9)
 #define ONE_MILLION (1.0e6)
 
-
 typedef int64_t sfptpd_time_fp16_t;
+typedef int64_t sfptpd_secs_t;
 
 /* sfptpd high precision time struct */
 struct sfptpd_timespec {
-	int64_t sec;
+	sfptpd_secs_t sec;
 	uint32_t nsec;
 	uint32_t nsec_frac;
 };

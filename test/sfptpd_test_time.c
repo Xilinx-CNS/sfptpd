@@ -524,7 +524,7 @@ static void print_stack(const struct test_val *stack, int sp)
 		const struct test_val *sv = &stack[i];
 		switch(stack[i].type) {
 		case TYPE_I:
-			printf(" %ld", sv->i);
+			printf(" %" PRId64, sv->i);
 			break;
 		case TYPE_F:
 			printf(" " SFPTPD_FORMAT_FLOAT "L", sv->f);
@@ -568,7 +568,7 @@ static bool check_var(uint64_t key) {
 		if (isprint(key) && !isspace(key))
 			printf("invalid variable '%c'\n", (char) key);
 		else
-			printf("invalid variable 0x%lx\n", key);
+			printf("invalid variable 0x%" PRIx64 "\n", key);
 		return true;
 	}
 	return false;
@@ -1061,7 +1061,7 @@ static enum result run_test(const struct test_details *test, mem_t *mem,
 				printf("   B(%s)\n", s1->b ? "true" : "false");
 				break;
 			case TYPE_I:
-				printf("   I(%ld)\n", s1->i);
+				printf("   I(%" PRId64 ")\n", s1->i);
 				break;
 			case TYPE_F:
 				printf("   F(" SFPTPD_FORMAT_FLOAT ")\n", s1->f);
@@ -1077,7 +1077,7 @@ static enum result run_test(const struct test_details *test, mem_t *mem,
 		case OP_PRINTX:
 			switch (s1->type) {
 			case TYPE_I:
-				printf("   I(%lx)\n", s1->i);
+				printf("   I(%" PRIx64 ")\n", s1->i);
 				break;
 			case TYPE_T:
 				printf("   T(%016" PRIX64 ".%08X%08X\n",

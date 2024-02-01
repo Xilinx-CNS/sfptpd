@@ -10,6 +10,8 @@
 #include <pthread.h>
 #include <linux/taskstats.h>
 
+#include "sfptpd_time.h"
+
 #define SFPTPD_HT_MAX_TABLE_SIZE 	(0x100)
 #define SFPTPD_HT_MAX_TABLE_ENTRIES 	(0x10000)
 
@@ -141,7 +143,7 @@ bool sfptpd_is_program_running(const char *program_name);
  * @param format Format string as per strftime(3)
  * @param time_p The UTC time to format
  */
-void sfptpd_local_strftime(char *s, size_t max, const char *format, const time_t *timep);
+void sfptpd_local_strftime(char *s, size_t max, const char *format, const sfptpd_secs_t *timep);
 
 
 /** Create a hash table

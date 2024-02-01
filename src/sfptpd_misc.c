@@ -177,10 +177,11 @@ int sfptpd_find_running_programs(struct sfptpd_prog *others)
 }
 
 
-void sfptpd_local_strftime(char *s, size_t max, const char *format, const time_t *timep)
+void sfptpd_local_strftime(char *s, size_t max, const char *format, const sfptpd_secs_t *timep)
 {
 	struct tm tm;
-	struct tm *ltime = localtime_r(timep, &tm);
+	time_t tt = (time_t) *timep;
+	struct tm *ltime = localtime_r(&tt, &tm);
 
 	if (ltime != NULL) {
 		strftime(s, max, format, ltime);
