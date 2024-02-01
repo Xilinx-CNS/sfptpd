@@ -692,7 +692,7 @@ static int ptp_stats_init(sfptpd_ptp_instance_t *instance)
 
 	/* If PPS logging is enabled, add PPS offset and period */
 	if ((rc == 0) && instance->config->pps_logging &&
-	    sfptpd_interface_supports_pps(instance->ptpd_port_private->physIface)) {
+	    sfptpd_interface_supports_pps(instance->config->ptpd_port.physIface)) {
 		rc = sfptpd_stats_collection_add(&instance->stats,
 						 PTP_STATS_ID_PPS_OFFSET,
 						 SFPTPD_STATS_TYPE_RANGE,
@@ -3714,6 +3714,11 @@ static int ptp_start_instance(struct sfptpd_ptp_instance *instance) {
 	if (instance->intf->bond_info.num_physical_ifs == 0)
 		SYNC_MODULE_ALARM_SET(instance->local_alarms, NO_INTERFACE);
 
+	/* Update the physical interface to use initially.
+	 * May be NULL if the above alarm is set. */
+	config->ptpd_intf.physIface = instance->intf->bond_info.active_if;
+	config->ptpd_port.physIface = instance->intf->bond_info.active_if;
+
 	rc = ptp_stats_init(instance);
 	if (rc != 0) {
 		CRITICAL("ptp %s: failed to create PTP stats\n",
@@ -3848,9 +3853,6 @@ static int ptp_on_startup(void *context)
 
 		if (!interface->start_successful)
 			continue;
-
-		config->ptpd_intf.physIface = interface->bond_info.active_if;
-		config->ptpd_port.physIface = interface->bond_info.active_if;
 
 		ptp_intf_aggregate_instance_requirements(interface);
 
