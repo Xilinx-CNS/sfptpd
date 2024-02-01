@@ -255,7 +255,7 @@ static int parse_timestamping(struct sfptpd_config_section *section, const char 
 	if (strcmp(params[0], "sw") == 0) {
 		ptp->ptpd_port.timestamp_pref = PTPD_TIMESTAMP_TYPE_SW;
 	} else if (strcmp(params[0], "hw") == 0) {
-		ptp->ptpd_port.timestamp_pref = PTPD_TIMESTAMP_TYPE_HW_RAW;
+		ptp->ptpd_port.timestamp_pref = PTPD_TIMESTAMP_TYPE_HW;
 	} else if (strcmp(params[0], "auto") == 0) {
 		ptp->ptpd_port.timestamp_pref = PTPD_TIMESTAMP_TYPE_AUTO;
 	} else {

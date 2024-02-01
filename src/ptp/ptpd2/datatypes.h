@@ -351,7 +351,7 @@ typedef enum {
 	/** Software timestamps */
 	PTPD_TIMESTAMP_TYPE_SW,
 	/** Unmodified hardware timestamps */
-	PTPD_TIMESTAMP_TYPE_HW_RAW,
+	PTPD_TIMESTAMP_TYPE_HW,
 	/** Automatically select timestamp type. Only valid at configuration
 	    stage; should be resolved to one of the others. */
 	PTPD_TIMESTAMP_TYPE_AUTO,

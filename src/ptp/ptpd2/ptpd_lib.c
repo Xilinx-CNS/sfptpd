@@ -148,7 +148,7 @@ void ptpd_config_intf_initialise(struct ptpd_intf_config *config)
 {
 	config->ifaceName[0] = '\0';
 	config->snmp_enabled = FALSE;
-	config->timestampType = PTPD_TIMESTAMP_TYPE_HW_RAW;
+	config->timestampType = PTPD_TIMESTAMP_TYPE_HW;
 	config->dscpValue = 0;
 	config->ttl = PTPD_DEFAULT_TTL;
 	config->masterRefreshIgmp = FALSE;

@@ -275,7 +275,7 @@ static inline bool is_suitable_timestamp(PtpInterface *ptpInterface,
 					 struct sfptpd_ts_info *info)
 {
 	switch (ptpInterface->ifOpts.timestampType) {
-	case PTPD_TIMESTAMP_TYPE_HW_RAW:
+	case PTPD_TIMESTAMP_TYPE_HW:
 		return info->have_hw;
 	case PTPD_TIMESTAMP_TYPE_SW:
 		return info->have_sw;
@@ -288,7 +288,7 @@ static inline struct sfptpd_timespec *get_suitable_timestamp(PtpInterface *ptpIn
 				      struct sfptpd_ts_info *info)
 {
 	switch (ptpInterface->ifOpts.timestampType) {
-	case PTPD_TIMESTAMP_TYPE_HW_RAW:
+	case PTPD_TIMESTAMP_TYPE_HW:
 		return &info->hw;
 	case PTPD_TIMESTAMP_TYPE_SW:
 		return &info->sw;

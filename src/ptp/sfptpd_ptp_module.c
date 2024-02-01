@@ -375,7 +375,7 @@ static const char *ts_name(ptpd_timestamp_type_e type)
 		return "auto";
 	case PTPD_TIMESTAMP_TYPE_SW:
 		return "sw";
-	case PTPD_TIMESTAMP_TYPE_HW_RAW:
+	case PTPD_TIMESTAMP_TYPE_HW:
 		return "hw";
 	default:
 		return "invalid";
@@ -1649,7 +1649,7 @@ int ptp_determine_timestamp_type(ptpd_timestamp_type_e *timestamp_type,
 			 sfptpd_interface_get_name(physical_intf),
 			 logical_intf->bond_info.logical_if);
 	} else {
-		*timestamp_type = PTPD_TIMESTAMP_TYPE_HW_RAW;
+		*timestamp_type = PTPD_TIMESTAMP_TYPE_HW;
 		TRACE_L3("ptp: using interface %s (%s) as PTP clock\n",
 			 sfptpd_interface_get_name(physical_intf),
 			 logical_intf->bond_info.logical_if);
@@ -1663,7 +1663,7 @@ int ptp_determine_timestamp_type(ptpd_timestamp_type_e *timestamp_type,
 			sw_instance = SFPTPD_CONFIG_GET_NAME(instance->config);
 		}
 
-		if (iconf->timestamp_pref == PTPD_TIMESTAMP_TYPE_HW_RAW) {
+		if (iconf->timestamp_pref == PTPD_TIMESTAMP_TYPE_HW) {
 			must_be_hw = true;
 			hw_instance = SFPTPD_CONFIG_GET_NAME(instance->config);
 		}
@@ -1683,7 +1683,7 @@ int ptp_determine_timestamp_type(ptpd_timestamp_type_e *timestamp_type,
 			 sfptpd_interface_get_name(physical_intf),
 			 logical_intf->bond_info.logical_if);
 		return ENOTSUP;
-	} else if (must_be_sw && *timestamp_type == PTPD_TIMESTAMP_TYPE_HW_RAW) {
+	} else if (must_be_sw && *timestamp_type == PTPD_TIMESTAMP_TYPE_HW) {
 		*timestamp_type = PTPD_TIMESTAMP_TYPE_SW;
 		NOTICE("ptp %s: downgrading to configured software timestamping "
 		       "on interface %s (%s)\n",
