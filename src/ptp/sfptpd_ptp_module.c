@@ -2971,7 +2971,7 @@ static void ptp_on_stats_end_period(sfptpd_ptp_module_t *ptp, sfptpd_sync_module
 	}
 
 	for (interface = ptp->intf_list; interface; interface = interface->next)
-		ptpd_process_intf_stats(interface->ptpd_intf_private);
+		ptpd_process_intf_stats(interface->ptpd_intf_private, false);
 
 	SFPTPD_MSG_FREE(msg);
 }
@@ -3822,8 +3822,10 @@ static int ptp_on_startup(void *context)
 	config = instance->config;
 
 	rc = sfptpd_multicast_subscribe(SFPTPD_SERVO_MSG_PID_ADJUST);
+	if (rc == 0)
+		rc = sfptpd_multicast_subscribe(SFPTPD_APP_MSG_DUMP_TABLES);
 	if (rc != 0) {
-		CRITICAL("failed to subscribe to servo message multicasts, %s\n",
+		CRITICAL("failed to subscribe to desired multicasts, %s\n",
 			 strerror(rc));
 		return rc;
 	}
@@ -4009,11 +4011,24 @@ static void on_servo_pid_adjust(struct sfptpd_ptp_module *ptp,
 }
 
 
+static void on_dump_tables(struct sfptpd_ptp_module *ptp,
+			   sfptpd_app_msg_t *msg)
+{
+	struct sfptpd_ptp_intf *interface;
+
+	for (interface = ptp->intf_list; interface; interface = interface->next)
+		ptpd_process_intf_stats(interface->ptpd_intf_private, true);
+
+	SFPTPD_MSG_FREE(msg);
+}
+
+
 static void ptp_on_shutdown(void *context)
 {
 	sfptpd_ptp_module_t *ptp = (sfptpd_ptp_module_t *)context;
 	assert(ptp != NULL);
 
+	sfptpd_multicast_unsubscribe(SFPTPD_APP_MSG_DUMP_TABLES);
 	sfptpd_multicast_unsubscribe(SFPTPD_SERVO_MSG_PID_ADJUST);
 
 	ptp_destroy_instances(ptp);
@@ -4095,6 +4110,10 @@ static void ptp_on_message(void *context, struct sfptpd_msg_hdr *hdr)
 
 	case SFPTPD_SERVO_MSG_PID_ADJUST:
 		on_servo_pid_adjust(ptp, (sfptpd_servo_msg_t *) msg);
+		break;
+
+	case SFPTPD_APP_MSG_DUMP_TABLES:
+		on_dump_tables(ptp, (sfptpd_app_msg_t *) msg);
 		break;
 
 	default:

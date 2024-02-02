@@ -1093,9 +1093,14 @@ int ptpd_test_pkt_suppression(struct ptpd_port_context *ptpd,
 	return 0;
 }
 
-void ptpd_process_intf_stats(struct ptpd_intf_context *intf)
+void ptpd_process_intf_stats(struct ptpd_intf_context *intf, bool ad_hoc)
 {
-	netCheckTimestampStats(&intf->ts_cache);
+	if (ad_hoc)
+		netCheckTimestampStats(&intf->ts_cache,
+				       &intf->ts_cache.stats_adhoc, 0);
+	else
+		netCheckTimestampStats(&intf->ts_cache,
+				       &intf->ts_cache.stats_periodic, 2);
 }
 
 /* fin */

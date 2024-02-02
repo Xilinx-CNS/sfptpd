@@ -1121,8 +1121,9 @@ finish:
 		sfptpd_time_subtract(&elapsed, &now, &pkt->sent_monotime);
 
 		for (quantile = 0; quantile < TS_QUANTILES; quantile++) {
-			if (!sfptpd_time_is_greater_or_equal(&elapsed, &cache->stats.quantile_bounds[quantile])) {
-				cache->stats.resolved_quantile[quantile]++;
+			if (!sfptpd_time_is_greater_or_equal(&elapsed, &cache->stats_periodic.quantile_bounds[quantile])) {
+				cache->stats_periodic.resolved_quantile[quantile]++;
+				cache->stats_adhoc.resolved_quantile[quantile]++;
 				break;
 			}
 		}
@@ -1136,7 +1137,8 @@ finish:
 	return haveTs;
 }
 
-void netCheckTimestampStats(struct sfptpd_ts_cache *cache)
+void netCheckTimestampStats(struct sfptpd_ts_cache *cache,
+			    struct sfptpd_ts_stats *stats, int severity)
 {
 	struct sfptpd_timespec now;
 	struct sfptpd_timespec elapsed;
@@ -1149,18 +1151,18 @@ void netCheckTimestampStats(struct sfptpd_ts_cache *cache)
 	sfptpd_time_t period_f;
 
 	sfclock_gettime(CLOCK_MONOTONIC, &now);
-	sfptpd_time_subtract(&period, &now, &cache->stats.start);
+	sfptpd_time_subtract(&period, &now, &stats->start);
 	period_f = sfptpd_time_timespec_to_float_s(&period);
 
 	for (quantile = 0; quantile < TS_QUANTILES; quantile++)
-		cache->stats.pending_quantile[quantile] = 0;
+		stats->pending_quantile[quantile] = 0;
 
 	TS_CACHE_FOREACH(cache, slot) {
 		int quantile;
 		sfptpd_time_subtract(&elapsed, &now, &cache->packet[slot].sent_monotime);
 		for (quantile = 0; quantile < TS_QUANTILES; quantile++) {
-			if (!sfptpd_time_is_greater_or_equal(&elapsed, &cache->stats.quantile_bounds[quantile])) {
-				cache->stats.pending_quantile[quantile]++;
+			if (!sfptpd_time_is_greater_or_equal(&elapsed, &stats->quantile_bounds[quantile])) {
+				stats->pending_quantile[quantile]++;
 				break;
 			}
 		}
@@ -1181,38 +1183,38 @@ void netCheckTimestampStats(struct sfptpd_ts_cache *cache)
 		else
 			ptr += ret;
 	}
-	DBGV(" over %-02.1Lfs period |%s\n", period_f, buf);
+	DBGX(severity, " over %-02.1Lfs period |%s\n", period_f, buf);
 
 	ptr = 0;
 	for (q = 0; q < TS_QUANTILES; q++) {
 		ret = snprintf(buf + ptr, sizeof buf - ptr, " %6d |",
-			       cache->stats.resolved_quantile[q]);
+			       stats->resolved_quantile[q]);
 		if (ret >= sizeof buf)
 			goto truncated;
 		else
 			ptr += ret;
 	}
-	DBGV("num resolved tx ts |%s\n", buf);
+	DBGX(severity, "num resolved tx ts |%s\n", buf);
 
 	ptr = 0;
 	for (q = 0; q < TS_QUANTILES; q++) {
 		ret = snprintf(buf + ptr, sizeof buf - ptr, " %6d |",
-			       cache->stats.pending_quantile[q]);
+			       stats->pending_quantile[q]);
 		if (ret >= sizeof buf)
 			goto truncated;
 		else
 			ptr += ret;
 	}
-	DBGV("num pending tx ts  |%s (%d evicted)\n", buf, cache->stats.evicted);
+	DBGX(severity, "num pending tx ts  |%s (%d evicted)\n", buf, stats->evicted);
 
 truncated:
 	/* Failure of the diagnostic output is (a) unlikely, (b) not serious. */
-	cache->stats.evicted = 0;
-	cache->stats.total = 0;
-	cache->stats.start = now;
+	stats->evicted = 0;
+	stats->total = 0;
+	stats->start = now;
 
 	for (quantile = 0; quantile < TS_QUANTILES; quantile++)
-		cache->stats.resolved_quantile[quantile] = 0;
+		stats->resolved_quantile[quantile] = 0;
 }
 
 bool netCheckTimestampAlarms(PtpClock *ptpClock)
@@ -1231,12 +1233,12 @@ bool netCheckTimestampAlarms(PtpClock *ptpClock)
 
 	assert(alarm_quantile < TS_QUANTILES);
 	sfclock_gettime(CLOCK_MONOTONIC, &now);
-	sfptpd_time_subtract(&period, &now, &cache->stats.start);
+	sfptpd_time_subtract(&period, &now, &cache->stats_periodic.start);
 
 	TS_CACHE_FOREACH(cache, slot) {
 		if (cache->packet[slot].user.port == ptpClock) {
 			sfptpd_time_subtract(&elapsed, &now, &cache->packet[slot].sent_monotime);
-			if (sfptpd_time_is_greater_or_equal(&elapsed, &cache->stats.quantile_bounds[alarm_quantile]))
+			if (sfptpd_time_is_greater_or_equal(&elapsed, &cache->stats_periodic.quantile_bounds[alarm_quantile]))
 				return true;
 		}
 	}
@@ -1531,22 +1533,29 @@ netCreateBindSocket(const char *purpose, int af, const char *service,
 	return fd;
 }
 
-static void sfptpd_ts_cache_init(struct sfptpd_ts_cache *cache)
+static void sfptpd_ts_stats_init(struct sfptpd_ts_stats *stats)
 {
 	int quantile;
 
+	/* Initialise stats */
+	memset(stats, '\0', sizeof *stats);
+	for (quantile = 0; quantile < TS_QUANTILES - 1; quantile++) {
+		sfptpd_time_t bound = powl(10.0L, TS_QUANTILE_E10_MIN + quantile);
+		sfptpd_time_float_s_to_timespec(bound, &stats->quantile_bounds[quantile]);
+	}
+	stats->quantile_bounds[TS_QUANTILES - 1] = sfptpd_time_max();
+	sfclock_gettime(CLOCK_MONOTONIC, &stats->start);
+};
+
+static void sfptpd_ts_cache_init(struct sfptpd_ts_cache *cache)
+{
 	/* Initialise cache proper */
 	cache->free_bitmap = ~0;
 	cache->seq = 0;
 
 	/* Initialise short term stats */
-	memset(&cache->stats, '\0', sizeof cache->stats);
-	for (quantile = 0; quantile < TS_QUANTILES - 1; quantile++) {
-		sfptpd_time_t bound = powl(10.0L, TS_QUANTILE_E10_MIN + quantile);
-		sfptpd_time_float_s_to_timespec(bound, &cache->stats.quantile_bounds[quantile]);
-	}
-	cache->stats.quantile_bounds[TS_QUANTILES - 1] = sfptpd_time_max();
-	sfclock_gettime(CLOCK_MONOTONIC, &cache->stats.start);
+	sfptpd_ts_stats_init(&cache->stats_periodic);
+	sfptpd_ts_stats_init(&cache->stats_adhoc);
 };
 
 /**
@@ -2041,7 +2050,8 @@ struct sfptpd_ts_ticket netExpectTimestamp(struct sfptpd_ts_cache *cache,
 		formatTsPkt(&cache->packet[slot].user, buf);
 		DBGV("ptpd: timestamp cache full; evicting %s\n", buf);
 		cache->free_bitmap |= ~((unsigned int) INT_MAX) >> oldest_slot;
-		cache->stats.evicted++;
+		cache->stats_periodic.evicted++;
+		cache->stats_adhoc.evicted++;
 	}
 
 	/* Find first free slot */
@@ -2064,7 +2074,8 @@ struct sfptpd_ts_ticket netExpectTimestamp(struct sfptpd_ts_cache *cache,
 	pkt->seq = cache->seq++;
 	sfclock_gettime(CLOCK_MONOTONIC, &pkt->sent_monotime);
 	cache->free_bitmap &= ~(1 << bit);
-	cache->stats.total++;
+	cache->stats_periodic.total++;
+	cache->stats_adhoc.total++;
 
 	DBGV("ptpd: timestamp %" PRIu64 " request in slot %d\n", pkt->seq, slot);
 

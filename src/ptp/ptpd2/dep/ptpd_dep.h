@@ -18,9 +18,11 @@
 
 #define PERROR(x, ...) ERROR(x " (strerror: %m)\n", ##__VA_ARGS__)
 
+#define PREFIX "ptp: "
 #define DBG(x, ...)  TRACE(SFPTPD_COMPONENT_ID_PTPD2, 1, x, ##__VA_ARGS__)
 #define DBG2(x, ...) TRACE(SFPTPD_COMPONENT_ID_PTPD2, 2, x, ##__VA_ARGS__)
 #define DBGV(x, ...) TRACE(SFPTPD_COMPONENT_ID_PTPD2, 3, x, ##__VA_ARGS__)
+#define DBGX(sev, x, ...)  TRACE(SFPTPD_COMPONENT_ID_PTPD2, sev, PREFIX x, ##__VA_ARGS__)
 
 #ifdef PTPD_DUMP
 #define DUMP(text, addr, len) dump(text, addr, len)
@@ -242,7 +244,7 @@ int netSelect(struct sfptpd_timespec*,struct ptpd_transport*,fd_set*);
 ssize_t netRecvError(PtpInterface *ptpInterface);
 ssize_t netRecvEvent(Octet*,PtpInterface*,struct sfptpd_ts_info*);
 ssize_t netRecvGeneral(Octet*,struct ptpd_transport*);
-void netCheckTimestampStats(struct sfptpd_ts_cache *cache);
+void netCheckTimestampStats(struct sfptpd_ts_cache *cache, struct sfptpd_ts_stats *stats, int severity);
 bool netCheckTimestampAlarms(PtpClock *ptpClock);
 
 /* These functions all return 0 for success or an errno in the case of failure */

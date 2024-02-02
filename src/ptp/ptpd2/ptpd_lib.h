@@ -122,7 +122,7 @@ void ptpd_sockets_ready(struct ptpd_intf_context *ptpd_if, bool event,
 			bool general, bool error);
 
 /* Process interface statistics */
-void ptpd_process_intf_stats(struct ptpd_intf_context *);
+void ptpd_process_intf_stats(struct ptpd_intf_context *, bool ad_hoc);
 
 /* Change which parts of PTP are enabled */
 void ptpd_control(struct ptpd_port_context *ptpd,

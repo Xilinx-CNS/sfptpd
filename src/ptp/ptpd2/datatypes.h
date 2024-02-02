@@ -736,8 +736,11 @@ struct sfptpd_ts_cache {
 	/* Sequence number for cached packets */
 	uint64_t seq;
 
-	/* Short term statistics */
-	struct sfptpd_ts_stats stats;
+	/* Periodic statistics */
+	struct sfptpd_ts_stats stats_periodic;
+
+	/* On-demand statistics */
+	struct sfptpd_ts_stats stats_adhoc;
 };
 
 /**
