@@ -151,8 +151,6 @@ void ptpd_config_intf_initialise(struct ptpd_intf_config *config)
 	config->timestampType = PTPD_TIMESTAMP_TYPE_HW;
 	config->dscpValue = 0;
 	config->ttl = PTPD_DEFAULT_TTL;
-	config->masterRefreshIgmp = FALSE;
-	config->masterIgmpRefreshInterval = 0;
 
 	config->timingAclEnabled = FALSE;
 	config->managementAclEnabled = FALSE;

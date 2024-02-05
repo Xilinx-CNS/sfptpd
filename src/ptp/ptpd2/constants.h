@@ -220,7 +220,6 @@ typedef enum {
 	ANNOUNCE_RECEIPT_TIMER, /**<\brief Timer handling announce receipt timeout */
 	ANNOUNCE_INTERVAL_TIMER, /**<\brief Timer handling interval before master sends two announce messages */
 	OPERATOR_MESSAGES_TIMER, /**<\brief Timer used to limit the operator messages */
-	MASTER_IGMP_REFRESH_TIMER, /**<\brief Timer to refresh IGMP membership in master mode */
 	FAULT_RESTART_TIMER, /**<\brief Timer used to control restart after fault */
 	FOREIGN_MASTER_TIMER, /**<\brief Timer used to foreign master data set */
 	TIMESTAMP_CHECK_TIMER, /**<\brief Timer used to check timestamp health */

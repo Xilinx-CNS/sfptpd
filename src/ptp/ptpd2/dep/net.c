@@ -2330,26 +2330,3 @@ netSendPeerEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 
 	return ret;
 }
-
-
-/*
-* refresh IGMP on a timeout
-*
-* @return TRUE if successful
-*/
-Boolean
-netRefreshIGMP(struct ptpd_transport *transport, InterfaceOpts *ifOpts, PtpInterface *ptpInterface)
-{
-	DBG("netRefreshIGMP\n");
-
-	netShutdownMulticast(transport);
-
-	/* suspend process 100 milliseconds, to make sure the kernel sends the IGMP_leave properly */
-	usleep(100*1000);
-
-	if (!netInitMulticast(transport, ifOpts)) {
-		return FALSE;
-	}
-
-	return TRUE;
-}

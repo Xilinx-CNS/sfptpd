@@ -410,9 +410,6 @@ typedef struct ptpd_intf_config {
 	int dscpValue;
 	int ttl;
 
-	Boolean masterRefreshIgmp;
-	unsigned int masterIgmpRefreshInterval;
-
 	Boolean use_onload_ext;
 	Boolean multicast_needed;
 	Boolean snmp_enabled; /* SNMP subsystem enabled / disabled even if compiled in */

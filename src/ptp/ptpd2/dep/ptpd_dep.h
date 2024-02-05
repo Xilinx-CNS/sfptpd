@@ -305,7 +305,6 @@ struct sfptpd_ts_ticket netExpectTimestamp(struct sfptpd_ts_cache *cache,
 					   size_t pkt_len,
 					   size_t trailer);
 
-Boolean netRefreshIGMP(struct ptpd_transport *, InterfaceOpts *, PtpInterface *);
 Boolean hostLookup(const char* hostname, Integer32* addr);
 
 

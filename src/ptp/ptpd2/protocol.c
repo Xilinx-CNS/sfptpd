@@ -214,7 +214,6 @@ toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	timerStop(SYNC_RECEIPT_TIMER, ptpClock->itimer);
 	timerStop(DELAYREQ_INTERVAL_TIMER, ptpClock->itimer);
 	timerStop(DELAYRESP_RECEIPT_TIMER, ptpClock->itimer);
-	timerStop(MASTER_IGMP_REFRESH_TIMER, ptpClock->interface->itimer);
 	timerStop(FAULT_RESTART_TIMER, ptpClock->itimer);
 	timerStop(FOREIGN_MASTER_TIMER, ptpClock->itimer);
 
@@ -277,12 +276,6 @@ toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		servo_set_interval(&ptpClock->servo,
 				   powl(2, ptpClock->logSyncInterval));
 
-		/* force a IGMP refresh per reset */
-		if (rtOpts->comm_caps.syncCapabilities & PTPD_COMM_MULTICAST_CAPABLE ||
-		    rtOpts->comm_caps.delayRespCapabilities & PTPD_COMM_MULTICAST_CAPABLE) {
-			netRefreshIGMP(&ptpClock->interface->transport, rtOpts->ifOpts, ptpClock->interface);
-		}
-
 		timerStart(ANNOUNCE_RECEIPT_TIMER,
 			   (ptpClock->announceReceiptTimeout *
 			    powl(2,ptpClock->logAnnounceInterval)),
@@ -341,16 +334,6 @@ toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 			timerStart(PDELAYREQ_INTERVAL_TIMER,
 				   powl(2,ptpClock->logMinPdelayReqInterval),
 				   ptpClock->itimer);
-		}
-
-		/* If IGMP refresh is configured, start the refresh timer */
-		if (rtOpts->ifOpts->masterRefreshIgmp &&
-		    (rtOpts->ifOpts->masterIgmpRefreshInterval > 0) &&
-		    (rtOpts->comm_caps.syncCapabilities & PTPD_COMM_MULTICAST_CAPABLE ||
-		     rtOpts->comm_caps.delayRespCapabilities & PTPD_COMM_MULTICAST_CAPABLE)) {
-			timerStart(MASTER_IGMP_REFRESH_TIMER,
-				   rtOpts->ifOpts->masterIgmpRefreshInterval,
-				   ptpClock->interface->itimer);
 		}
 		break;
 
@@ -834,15 +817,6 @@ doTimerTick(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		    timerExpired(PDELAYREQ_INTERVAL_TIMER, ptpClock->itimer)) {
 			DBGV("event PDELAYREQ_INTERVAL_TIMEOUT_EXPIRES\n");
 			issuePDelayReq(rtOpts,ptpClock);
-		}
-
-		if (rtOpts->ifOpts->masterRefreshIgmp &&
-		    (rtOpts->comm_caps.syncCapabilities & PTPD_COMM_MULTICAST_CAPABLE ||
-		     rtOpts->comm_caps.delayRespCapabilities & PTPD_COMM_MULTICAST_CAPABLE) &&
-		    timerExpired(MASTER_IGMP_REFRESH_TIMER, ptpClock->interface->itimer)) {
-			DBGV("Periodic IGMP refresh - next in %d seconds...\n",
-			     rtOpts->ifOpts->masterIgmpRefreshInterval);
-			netRefreshIGMP(&ptpClock->interface->transport, rtOpts->ifOpts, ptpClock->interface);
 		}
 
 		if (ptpClock->slaveOnly ||
