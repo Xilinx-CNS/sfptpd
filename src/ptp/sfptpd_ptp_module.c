@@ -3836,10 +3836,20 @@ static int ptp_on_startup(void *context)
 	}
 
 	for (instance = ptp_get_first_instance(ptp); instance; instance = ptp_get_next_instance(instance)) {
+		struct sfptpd_ptp_intf *interface;
 		iconf = instance->config;
 		rc = ptp_start_instance(instance);
+		if (rc != 0) goto fail;
+
 		sfptpd_strncpy(iconf->ptpd_intf.ifaceName, instance->intf->bond_info.logical_if,
 				sizeof(iconf->ptpd_intf.ifaceName));
+		interface = ptp_find_interface_by_name_transport(instance->intf->module,
+								 config->interface_name,
+								 iconf->ptpd_intf.transportAF);
+		assert(interface);
+		rc = ptp_determine_timestamp_type(&iconf->ptpd_intf.timestampType,
+						  interface,
+						  instance->intf->bond_info.active_if);
 		if (rc != 0) goto fail;
 	}
 
@@ -3887,10 +3897,6 @@ static int ptp_on_startup(void *context)
 			}
 
 			sfptpd_clock_get_hw_id(instance->ptpd_port_private->clock, &config->ptpd_intf.clock_id);
-			rc = ptp_determine_timestamp_type(&config->ptpd_intf.timestampType,
-							  interface,
-							  instance->ptpd_port_private->physIface);
-
 
 			/* Get an initial snapshot of PTPD's state so that we have something
 			 * valid if queried */
