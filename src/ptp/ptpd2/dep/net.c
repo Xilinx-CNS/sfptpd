@@ -61,6 +61,7 @@
 
 #ifdef linux
 #include <asm/types.h>
+#include <sys/socket.h>
 #include <time.h>
 #include <linux/errqueue.h>
 #include <linux/net_tstamp.h>
@@ -93,9 +94,19 @@
 #define SO_TIMESTAMPING  37
 #endif
 
-#ifndef SOF_TIMESTAMPING_OPT_PKTINFO
-#define SOF_TIMESTAMPING_OPT_PKTINFO (1<<13)
+/* SCM_TIMESTAMPING_PKTINFO was introduced in Linux 4.13.
+ * Define it for compatibility with older kernels.
+ */
+#ifndef SCM_TIMESTAMPING_PKTINFO
 #define SCM_TIMESTAMPING_PKTINFO     58
+enum {
+	SOF_TIMESTAMPING_OPT_PKTINFO = (1<<13),
+};
+struct scm_ts_pktinfo {
+	__u32 if_index;
+	__u32 pkt_length;
+	__u32 reserved[2];
+};
 #endif
 
 #endif /*linux*/
