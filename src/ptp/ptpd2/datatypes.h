@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
 /* (c) Copyright 2012-2023 Advanced Micro Devices, Inc. */
-/* (c) Copyright prior contributors */
+/* (c) Copyright ptpd2 contributors (see PTPD_COPYRIGHT) */
 
 #ifndef DATATYPES_H_
 #define DATATYPES_H_

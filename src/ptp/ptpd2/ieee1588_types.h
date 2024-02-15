@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
-/* (c) Copyright 2017-2019 Xilinx, Inc. */
+/* (c) Copyright 2012-2023 Advanced Micro Devices, Inc. */
+/* (c) Copyright ptpd2 contributors (see PTPD_COPYRIGHT) */
+/* Definitions split out from ptpd2/datatypes.h */
 
 #ifndef IEEE1588_TYPES_H_
 #define IEEE1588_TYPES_H_
