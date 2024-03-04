@@ -137,7 +137,7 @@ distributed under a BSD 2-clause [license](PTPD2_COPYRIGHT). The version
 sourced is ptpd v2.3.
 
 The program includes part of ntpd to implement NTP query and control
-protocols; this is distributed under the [NTP license](NTP_COPYRIGHT.html).
+protocols; this is distributed under the [NTP license](NTP_COPYRIGHT).
 The version sourced is ntp-4.2.6p5 and the following files in the source code
 are affected:
 

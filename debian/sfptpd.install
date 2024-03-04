@@ -7,7 +7,7 @@
 /usr/share/doc/sfptpd/CHANGELOG.md
 /usr/share/doc/sfptpd/LICENSE
 /usr/share/doc/sfptpd/PTPD2_COPYRIGHT
-/usr/share/doc/sfptpd/NTP_COPYRIGHT.html
+/usr/share/doc/sfptpd/NTP_COPYRIGHT
 /usr/share/doc/sfptpd/config/*
 /usr/share/doc/sfptpd/examples/README.sfptpdctl
 /usr/share/doc/sfptpd/examples/sfptpd_json_parse.html

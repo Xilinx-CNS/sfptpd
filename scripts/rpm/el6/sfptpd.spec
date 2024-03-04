@@ -72,7 +72,7 @@ touch %{buildroot}%{_localstatedir}/lib/%{name}/{config,interfaces,sync-instance
 %attr(644, root, root) %config(noreplace) %{_sysconfdir}/sysconfig/sfptpd
 %doc %{_pkgdocdir}/LICENSE
 %doc %{_pkgdocdir}/PTPD2_COPYRIGHT
-%doc %{_pkgdocdir}/NTP_COPYRIGHT.html
+%doc %{_pkgdocdir}/NTP_COPYRIGHT
 %doc %{_pkgdocdir}/CHANGELOG.md
 %doc %{_pkgdocdir}/config
 %doc %{_pkgdocdir}/examples/init.d

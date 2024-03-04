@@ -91,7 +91,7 @@ make fast_test
 %config(noreplace) %{_sysconfdir}/sysconfig/sfptpd
 %{_sysusersdir}/%{name}.conf
 %{_udevrulesdir}/55-sfptpd.rules
-%license LICENSE PTPD2_COPYRIGHT NTP_COPYRIGHT.html
+%license LICENSE PTPD2_COPYRIGHT NTP_COPYRIGHT
 %doc %{_pkgdocdir}/CHANGELOG.md
 %doc %{_pkgdocdir}/config
 %doc %{_pkgdocdir}/examples/init.d

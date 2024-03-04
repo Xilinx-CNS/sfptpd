@@ -134,7 +134,7 @@ install: sfptpd sfptpdctl
 	install -m 644 -p -D scripts/sfptpd.env $(INST_DEFAULTSDIR)/sfptpd
 	[ -z "$(filter systemd,$(INST_INITS))" ] || install -m 644 -p -D scripts/systemd/sfptpd.service $(INST_UNITDIR)/sfptpd.service
 	[ -z "$(filter sysv,   $(INST_INITS))" ] || install -m 755 -p -D scripts/init.d/sfptpd $(INST_CONFDIR)/init.d/sfptpd
-	[ -n "$(filter license,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGLICENSEDIR) LICENSE PTPD2_COPYRIGHT NTP_COPYRIGHT.html
+	[ -n "$(filter license,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGLICENSEDIR) LICENSE PTPD2_COPYRIGHT NTP_COPYRIGHT
 	[ -e $(INST_CONFDIR)/sfptpd.conf ] || install -m 644 -p -D config/default.cfg $(INST_CONFDIR)/sfptpd.conf
 	install -m 644 -p -t $(INST_PKGDOCDIR)/config config/*.cfg
 	[ -n "$(filter init-examples,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGDOCDIR)/examples/init.d scripts/init.d/*

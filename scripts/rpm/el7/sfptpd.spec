@@ -77,7 +77,7 @@ make fast_test
 %attr(644, root, root) %{_unitdir}/sfptpd.service
 %attr(644, root, root) %config(noreplace) %{_sysconfdir}/sfptpd.conf
 %attr(644, root, root) %config(noreplace) %{_sysconfdir}/sysconfig/sfptpd
-%license LICENSE PTPD2_COPYRIGHT NTP_COPYRIGHT.html
+%license LICENSE PTPD2_COPYRIGHT NTP_COPYRIGHT
 %doc %{_pkgdocdir}/CHANGELOG.md
 %doc %{_pkgdocdir}/config
 %doc %{_pkgdocdir}/examples/init.d
