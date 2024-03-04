@@ -94,3 +94,34 @@ jobs:
           name: sfptpd-${{ env.SFPTPD_VERSION }}-bin
           path: TGZ
           if-no-files-found: error
+
+  deb:
+    name: debian packages
+    runs-on: ubuntu-20.04
+    steps:
+      - name: sfptpd_checkout
+        uses: actions/checkout@v4
+        with:
+          path: sfptpd-src
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libmnl-dev libcap-dev devscripts debhelper
+
+      - name: build
+        run: |
+          cd $GITHUB_WORKSPACE/sfptpd-src
+          debuild -i -us -uc -b
+          SFPTPD_VERSION=$(scripts/sfptpd_versioning read)
+          SFPTPD_STAGING=sfptpd-${SFPTPD_VERSION}-ubu20.04
+          cd ..
+          mkdir DEB
+          cp *{.deb,*.ddeb} DEB
+          printf "SFPTPD_VERSION=$SFPTPD_VERSION" >> "$GITHUB_ENV"
+      - name: publish debian packages
+        uses: actions/upload-artifact@v3
+        with:
+          name: sfptpd-${{ env.SFPTPD_VERSION }}-deb
+          path: DEB
+          if-no-files-found: error

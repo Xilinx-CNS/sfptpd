@@ -19,7 +19,7 @@ Description: System time sync daemon supporting PTP, NTP and 1PPS
 
 Package: sfptpd-python3
 Architecture: all
-Depends: ${python3:Depends}
+Depends: ${python3:Depends}, python3
 Description: System time sync daemon supporting PTP, NTP and 1PPS
  Use multiple PTP an PPS sources and sync local clocks together in one
  integrated application with high quality timestamp filtering supporting
