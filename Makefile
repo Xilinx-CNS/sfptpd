@@ -137,15 +137,16 @@ install: sfptpd sfptpdctl
 	[ -n "$(filter license,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGLICENSEDIR) LICENSE PTPD2_COPYRIGHT NTP_COPYRIGHT.html
 	[ -e $(INST_CONFDIR)/sfptpd.conf ] || install -m 644 -p -D config/default.cfg $(INST_CONFDIR)/sfptpd.conf
 	install -m 644 -p -t $(INST_PKGDOCDIR)/config config/*.cfg
-	install -m 644 -p -t $(INST_PKGDOCDIR)/examples/init.d scripts/init.d/*
-	install -m 644 -p -t $(INST_PKGDOCDIR)/examples/systemd scripts/systemd/*
-	install -m 644 -p -t $(INST_PKGDOCDIR)/examples scripts/sfptpd.env
-	install -m 644 -p -t $(INST_PKGDOCDIR)/examples $(wildcard examples/*.sfptpdctl)
+	[ -n "$(filter init-examples,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGDOCDIR)/examples/init.d scripts/init.d/*
+	[ -n "$(filter init-examples,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGDOCDIR)/examples/systemd scripts/systemd/*
+	[ -n "$(filter init-examples,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGDOCDIR)/examples scripts/sfptpd.env
+	install -m 644 -p -t $(INST_PKGDOCDIR)/examples examples/README.sfptpdctl
+	[ -n "$(filter c-examples,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGDOCDIR)/examples examples/Makefile.sfptpdctl
 	install -m 644 -p -t $(INST_PKGDOCDIR)/examples examples/monitoring_console.py
 	install -m 644 -p -t $(INST_PKGDOCDIR)/examples examples/sfptpdctl.py
 	install -m 644 -p -t $(INST_PKGDOCDIR)/examples examples/sfptpd_stats_collectd.py
 	install -m 644 -p -t $(INST_PKGDOCDIR)/examples $(wildcard examples/*.html)
-	install -m 644 -p -t $(INST_PKGDOCDIR)/examples src/sfptpdctl/sfptpdctl.c
+	[ -n "$(filter c-examples,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGDOCDIR)/examples src/sfptpdctl/sfptpdctl.c
 	install -m 644 -p -t $(INST_PKGDOCDIR) CHANGELOG.md
 	install -m 755 -p -t $(INST_PKGLIBEXECDIR) examples/chrony_clockcontrol.py
 	install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/sfptpd.8)

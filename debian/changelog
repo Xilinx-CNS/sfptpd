@@ -1,0 +1,5 @@
+sfptpd (3.8.0.1000) UNRELEASED; urgency=medium
+
+  * Debian package for sfptpd
+
+ -- Andrew Bower <andrew.bower@amd.com>  Mon,  4 Mar 2024 11:00:00 +0000

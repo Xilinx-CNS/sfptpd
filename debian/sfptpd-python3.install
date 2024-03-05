@@ -1,0 +1,6 @@
+/usr/sbin/sfptpmon
+/usr/libexec/sfptpd/chrony_clockcontrol.py
+/usr/share/doc/sfptpd/examples/monitoring_console.py
+/usr/share/doc/sfptpd/examples/sfptpdctl.py
+/usr/share/doc/sfptpd/examples/sfptpd_stats_collectd.py
+/usr/share/man/man8/sfptpmon.8

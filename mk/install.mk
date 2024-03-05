@@ -24,12 +24,12 @@ SBINDIR ?= sbin
 
 # Defaults from OS detection
 
-#DEFAULT_DEFAULTSDIR := $(shell grep -q '^\s*ID_LIKE\s*=.*debian' /etc/os-release 2>/dev/null && echo default || echo sysconfig)
-DEFAULT_DEFAULTSDIR := sysconfig
+DEFAULT_DEFAULTSDIR := $(shell grep -Eq '^\s*ID(_LIKE)?\s*=.*debian' /etc/os-release 2>/dev/null && echo default || echo sysconfig)
+DEFAULT_UNITPREFIX := $(shell grep -Eq '^\s*ID(_LIKE)?\s*=.*debian' /etc/os-release 2>/dev/null && echo -n "" || echo -n "$(prefix)")
 
 # Installation variables
 INST_SBINDIR ?= $(DESTDIR)$(prefix)/$(SBINDIR)
-INST_UNITDIR ?= $(DESTDIR)$(prefix)/lib/systemd/system
+INST_UNITDIR ?= $(DESTDIR)$(DEFAULT_UNITPREFIX)/lib/systemd/system
 INST_CONFDIR ?= $(DESTDIR)$(prefix)/etc
 INST_DOCDIR ?= $(DESTDIR)$(prefix)/share/doc
 INST_MANDIR ?= $(DESTDIR)$(prefix)/share/man

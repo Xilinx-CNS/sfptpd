@@ -101,18 +101,15 @@ Ordinary Clocks, each performing the role of a PTP Slave or PTP Master
 and participating in PTP Networks on different or the same network links
 or bonds and in different or the same PTP Domains, subject to
 constraints.
-
 .Ss The PPS sync module
 The PPS sync module synchonises the time on a local NIC clock to an
 external PPS source connected to the PPS input on that NIC.
-
 PPS provides sub-second synchronisation but requires an additional time source
 to define the time of day.
 This is typically provided by the NTP sync module but can also be source from
 a PTP sync instance using the
 .Sq time_of_day
 option.
-
 .Ss The Freerun sync module
 The Freerun sync module allows the system or a local NIC clock to be defined
 as an explicit time source.
@@ -128,14 +125,11 @@ and
 options to benefit from additional sfptpd functionality when another daemon is
 handling synchronisation to a remote clock.
 .El
-
 .Ss The NTP sync module
 The NTP sync module monitors and potentially controls an external NTP daemon
 either as a time-of-day source for PPS or, typically, a fallback time source
 should preferred PTP or PPS sources fail.
-
 .Sh CONSIDERATIONS
-
 .Ss Running multiple instances
 .Nm
 is designed to use a single process to control multiple sources and sinks
@@ -143,7 +137,6 @@ across different PTP domains and synchronisation technologies. However, in
 some circumstances, such as for debugging, diagnostics, monitoring or to
 partition the time domains within a host, it may be required to run multiple
 instances.
-
 The lock file
 .Ql kernel_clock
 is used by default to ensure only one instance of
@@ -152,10 +145,8 @@ or ptpd is running simultaneously.
 The
 .Ql lock off
 option can be used to disable this lock.
-
 If multiple instances are in operation in the same host then the following
 additional options should be considered:
-
 .Bl -bullet -compact
 .It
 .Ql state_path
@@ -164,14 +155,12 @@ additional options should be considered:
 .It
 .Ql unique_clockid_bits
 .El
-
 The list of clocks that are controlled by the different instances should also
 be partitioned using
 .Ql clock_list
 or
 .Ql clock_readonly
 .
-
 .Sh FILES
 .Bl -tag -width /etc/sfptpd.conF
 .It Pa /etc/sfptpd.conf
@@ -270,7 +259,6 @@ priority 20
 .Ed
 .Sh AUTHORS
 Xilinx, Inc.
-
 .Nm
 is built around
 .Nm ptpd2
@@ -289,9 +277,7 @@ A comprehensive summary of available
 .Nm
 configuration stanzas can be generated with:
 .D1 $ sfptpd -h
-
 Full documentation is available at:
 .Aq https://docs.xilinx.com/r/en-US/ug1602-ptp-user
 .Sh COPYRIGHT
 Copyright (c) 2022 Xilinx, Inc.
-
