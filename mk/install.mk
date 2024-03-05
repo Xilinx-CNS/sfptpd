@@ -24,8 +24,15 @@ SBINDIR ?= sbin
 
 # Defaults from OS detection
 
-DEFAULT_DEFAULTSDIR := $(shell grep -Eq '^\s*ID(_LIKE)?\s*=.*debian' /etc/os-release 2>/dev/null && echo default || echo sysconfig)
-DEFAULT_UNITPREFIX := $(shell grep -Eq '^\s*ID(_LIKE)?\s*=.*debian' /etc/os-release 2>/dev/null && echo -n "" || echo -n "$(prefix)")
+OS_FLAVOUR = $(shell grep -Eq '^\s*ID(_LIKE)?\s*=.*debian' /etc/os-release 2>/dev/null && echo debian || echo fedora)
+
+ifeq ("$(OS_FLAVOUR)","debian")
+DEFAULT_DEFAULTSDIR := default
+DEFAULT_UNITPREFIX :=
+else
+DEFAULT_DEFAULTSDIR := sysconfig
+DEFAULT_UNITPREFIX := $(prefix)
+endif
 
 # Installation variables
 INST_SBINDIR ?= $(DESTDIR)$(prefix)/$(SBINDIR)

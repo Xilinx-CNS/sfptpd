@@ -11,7 +11,7 @@ After=network-online.target
 Type=notify
 Restart=on-failure
 RestartSec=5s
-EnvironmentFile=-/etc/sysconfig/sfptpd
+EnvironmentFile=-%DEFAULTSDIR%/sfptpd
 
 # Override any 'daemon' setting in configuration file as it is systemd's
 # responsibility to fork the daemon.

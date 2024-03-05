@@ -118,8 +118,18 @@ fast_test: build/sfptpd_test
 patch_version:
 	scripts/sfptpd_versioning patch
 
+$(BUILD_DIR):
+	mkdir -p $@
+
+# Patch init paths
+$(BUILD_DIR)/%.service: scripts/systemd/%.service $(BUILD_DIR)
+	sed s,%DEFAULTSDIR%,$(patsubst $(DESTDIR)%,%,$(INST_DEFAULTSDIR)),g < $< > $@
+
+$(BUILD_DIR)/%.init: scripts/init.d/% $(BUILD_DIR)
+	sed s,%DEFAULTSDIR%,$(patsubst $(DESTDIR)%,%,$(INST_DEFAULTSDIR)),g < $< > $@
+
 .PHONY: install
-install: sfptpd sfptpdctl
+install: sfptpd sfptpdctl $(addprefix $(BUILD_DIR)/,sfptpd.service sfptpd.init)
 	install -d $(INST_PKGDOCDIR)/config
 	install -d $(INST_PKGDOCDIR)/examples
 	install -d $(INST_PKGDOCDIR)/examples/init.d
@@ -132,8 +142,8 @@ install: sfptpd sfptpdctl
 	install -m 755 -p -D $(BUILD_DIR)/sfptpdctl $(INST_SBINDIR)/sfptpdctl
 	[ -n "$(filter sfptpmon,$(INST_OMIT))" ] || install -m 755 -p -D scripts/sfptpmon $(INST_SBINDIR)/sfptpmon
 	install -m 644 -p -D scripts/sfptpd.env $(INST_DEFAULTSDIR)/sfptpd
-	[ -z "$(filter systemd,$(INST_INITS))" ] || install -m 644 -p -D scripts/systemd/sfptpd.service $(INST_UNITDIR)/sfptpd.service
-	[ -z "$(filter sysv,   $(INST_INITS))" ] || install -m 755 -p -D scripts/init.d/sfptpd $(INST_CONFDIR)/init.d/sfptpd
+	[ -z "$(filter systemd,$(INST_INITS))" ] || install -m 644 -p -D $(BUILD_DIR)/sfptpd.service $(INST_UNITDIR)/sfptpd.service
+	[ -z "$(filter sysv,   $(INST_INITS))" ] || install -m 755 -p -D $(BUILD_DIR)/sfptpd.init $(INST_CONFDIR)/init.d/sfptpd
 	[ -n "$(filter license,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGLICENSEDIR) LICENSE PTPD2_COPYRIGHT NTP_COPYRIGHT
 	[ -e $(INST_CONFDIR)/sfptpd.conf ] || install -m 644 -p -D config/default.cfg $(INST_CONFDIR)/sfptpd.conf
 	install -m 644 -p -t $(INST_PKGDOCDIR)/config config/*.cfg
