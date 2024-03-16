@@ -341,7 +341,7 @@ static int phc_configure_pps(struct sfptpd_phc *phc)
 
 	if (ioctl(phc->phc_fd, PTP_ENABLE_PPS, 1) != 0) {
 		ERROR("phc%d: failed to enable PPS events, %s\n",
-		      phc->phc_fd, strerror(errno));
+		      phc->phc_idx, strerror(errno));
 		rc = errno;
 		goto fail2;
 	}

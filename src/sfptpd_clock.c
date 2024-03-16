@@ -1621,7 +1621,8 @@ int sfptpd_clock_adjust_time(struct sfptpd_clock *clock, struct timespec *offset
 	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
 	assert(offset != NULL);
 
-	if (clock->u.nic.phc == NULL) {
+	if (clock->type != SFPTPD_CLOCK_TYPE_SYSTEM &&
+	    clock->u.nic.phc == NULL) {
 		ERROR("clock %s: unable to step clock - no phc device\n",
 		      clock->long_name);
 		rc = ENODEV;
@@ -1683,7 +1684,8 @@ int sfptpd_clock_adjust_frequency(struct sfptpd_clock *clock, long double freq_a
 	assert(clock != NULL);
 	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
 
-	if (clock->u.nic.phc == NULL) {
+	if (clock->type != SFPTPD_CLOCK_TYPE_SYSTEM &&
+	    clock->u.nic.phc == NULL) {
 		ERROR("clock %s: unable to adjust frequency - no phc device\n",
 		      clock->long_name);
 		rc = ENODEV;
@@ -1877,7 +1879,8 @@ int sfptpd_clock_get_time(const struct sfptpd_clock *clock, struct timespec *tim
 	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
 	assert(time != NULL);
 
-	if (clock->u.nic.phc == NULL) {
+	if (clock->type != SFPTPD_CLOCK_TYPE_SYSTEM &&
+	    clock->u.nic.phc == NULL) {
 		ERROR("clock %s: unable to get time - no phc device\n",
 		      clock->long_name);
 		rc = ENODEV;
