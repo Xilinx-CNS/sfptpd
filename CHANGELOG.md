@@ -82,6 +82,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Issue #9
+  - Fix issue that manifests as not being able to control the system clock
+    on some systems, such as Raspberry Pi 5 with Debian 12
 - Issue SWPTP-831
   - Retrieve transmit timestamps via epoll to avoid blocking PTP thread
 - Issue SWPTP-1386
