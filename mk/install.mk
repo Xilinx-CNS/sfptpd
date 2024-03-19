@@ -24,9 +24,7 @@ SBINDIR ?= sbin
 
 # Defaults from OS detection
 
-OS_FLAVOUR = $(shell grep -Eq '^\s*ID(_LIKE)?\s*=.*debian' /etc/os-release 2>/dev/null && echo debian || echo fedora)
-
-ifeq ("$(OS_FLAVOUR)","debian")
+ifneq (,$(wildcard /etc/debian_version))
 DEFAULT_DEFAULTSDIR := default
 DEFAULT_UNITPREFIX :=
 else

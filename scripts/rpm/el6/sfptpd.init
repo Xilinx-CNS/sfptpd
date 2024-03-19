@@ -17,7 +17,7 @@
 prog=sfptpd
 
 # Source command line options
-. %DEFAULTSDIR%/$prog
+. /etc/sysconfig/$prog
 
 checkpid() {
 	local i

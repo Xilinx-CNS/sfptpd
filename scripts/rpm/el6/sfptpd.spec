@@ -58,9 +58,10 @@ export INST_PKGDOCDIR=%{buildroot}%{_pkgdocdir}
 export INST_PKGLICENSEDIR=$INST_PKGDOCDIR
 export INST_PKGLIBEXECDIR=%{buildroot}%{_libexecdir}/%{name}
 export INST_OMIT=""
-export INST_INITS="sysv"
+export INST_INITS=""
 rm -rf $RPM_BUILD_ROOT
 %make_install
+install -m 755 -p -D scripts/rpm/el6/sfptpd.init %{buildroot}/etc/init.d/sfptpd
 mkdir -p %{buildroot}%{_localstatedir}/lib/%{name}
 touch %{buildroot}%{_localstatedir}/lib/%{name}/{config,interfaces,sync-instances,topology,version,ptp-nodes}
 

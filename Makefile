@@ -125,11 +125,8 @@ $(BUILD_DIR):
 $(BUILD_DIR)/%.service: scripts/systemd/%.service $(BUILD_DIR)
 	sed s,%DEFAULTSDIR%,$(patsubst $(DESTDIR)%,%,$(INST_DEFAULTSDIR)),g < $< > $@
 
-$(BUILD_DIR)/%.init: scripts/init.d/% $(BUILD_DIR)
-	sed s,%DEFAULTSDIR%,$(patsubst $(DESTDIR)%,%,$(INST_DEFAULTSDIR)),g < $< > $@
-
 .PHONY: install
-install: sfptpd sfptpdctl $(addprefix $(BUILD_DIR)/,sfptpd.service sfptpd.init)
+install: sfptpd sfptpdctl $(addprefix $(BUILD_DIR)/,sfptpd.service)
 	install -d $(INST_PKGDOCDIR)/config
 	install -d $(INST_PKGDOCDIR)/examples
 	install -d $(INST_PKGDOCDIR)/examples/init.d
@@ -143,11 +140,11 @@ install: sfptpd sfptpdctl $(addprefix $(BUILD_DIR)/,sfptpd.service sfptpd.init)
 	[ -n "$(filter sfptpmon,$(INST_OMIT))" ] || install -m 755 -p -D scripts/sfptpmon $(INST_SBINDIR)/sfptpmon
 	install -m 644 -p -D scripts/sfptpd.env $(INST_DEFAULTSDIR)/sfptpd
 	[ -z "$(filter systemd,$(INST_INITS))" ] || install -m 644 -p -D $(BUILD_DIR)/sfptpd.service $(INST_UNITDIR)/sfptpd.service
-	[ -z "$(filter sysv,   $(INST_INITS))" ] || install -m 755 -p -D $(BUILD_DIR)/sfptpd.init $(INST_CONFDIR)/init.d/sfptpd
+	[ -z "$(filter sysv,   $(INST_INITS))" ] || install -m 755 -p -D debian/sfptpd.init $(INST_CONFDIR)/init.d/sfptpd
 	[ -n "$(filter license,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGLICENSEDIR) LICENSE PTPD2_COPYRIGHT NTP_COPYRIGHT
 	[ -e $(INST_CONFDIR)/sfptpd.conf ] || install -m 644 -p -D config/default.cfg $(INST_CONFDIR)/sfptpd.conf
 	install -m 644 -p -t $(INST_PKGDOCDIR)/config config/*.cfg
-	[ -n "$(filter init-examples,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGDOCDIR)/examples/init.d scripts/init.d/*
+	[ -n "$(filter init-examples,$(INST_OMIT))" ] || install -m 644 -p -D debian/sfptpd.init $(INST_PKGDOCDIR)/examples/init.d/sfptpd
 	[ -n "$(filter init-examples,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGDOCDIR)/examples/systemd scripts/systemd/*
 	[ -n "$(filter init-examples,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGDOCDIR)/examples scripts/sfptpd.env
 	install -m 644 -p -t $(INST_PKGDOCDIR)/examples examples/README.sfptpdctl

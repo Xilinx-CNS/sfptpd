@@ -1,17 +1,7 @@
 /usr/sbin/sfptpd
 /usr/sbin/sfptpdctl
-/etc/init.d/sfptpd
 /lib/systemd/system/sfptpd.service
 /etc/sfptpd.conf
 /etc/default/sfptpd
-/usr/share/doc/sfptpd/CHANGELOG.md
-/usr/share/doc/sfptpd/LICENSE
-/usr/share/doc/sfptpd/PTPD2_COPYRIGHT
-/usr/share/doc/sfptpd/NTP_COPYRIGHT
-/usr/share/doc/sfptpd/config/*
-/usr/share/doc/sfptpd/examples/README.sfptpdctl
-/usr/share/doc/sfptpd/examples/sfptpd_json_parse.html
-/usr/share/man/man8/sfptpd.8*
-/usr/share/man/man8/sfptpdctl.8*
 scripts/rpm/el9/sfptpd.sysusers /usr/lib/sysusers.d/sfptpd.conf
 scripts/udev/55-sfptpd.rules /usr/lib/udev/rules.d/55-sfptpd.rules

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # (c) Copyright 2024 Advanced Micro Devices, Inc.
+
 name: "Create test packages"
 
 on:
@@ -101,26 +102,23 @@ jobs:
     steps:
       - name: sfptpd_checkout
         uses: actions/checkout@v4
-        with:
-          path: sfptpd-src
 
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libmnl-dev libcap-dev devscripts debhelper
+          sudo apt-get install -y devscripts debhelper dh-python equivs
+          sudo mk-build-deps -t "apt -y" -i
 
       - name: build
         run: |
-          cd $GITHUB_WORKSPACE/sfptpd-src
           debuild -i -us -uc -b
           SFPTPD_VERSION=$(scripts/sfptpd_versioning read)
           SFPTPD_STAGING=sfptpd-${SFPTPD_VERSION}-ubu20.04
-          cd ..
           mkdir DEB
-          cp *{.deb,*.ddeb} DEB
+          cp ../*deb DEB
           printf "SFPTPD_VERSION=$SFPTPD_VERSION" >> "$GITHUB_ENV"
       - name: publish debian packages
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: sfptpd-${{ env.SFPTPD_VERSION }}-deb
           path: DEB
