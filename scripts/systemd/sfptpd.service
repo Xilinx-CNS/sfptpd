@@ -7,6 +7,11 @@ Documentation=man:sfptpd(8)
 Documentation=https://docs.xilinx.com/r/en-US/ug1602-ptp-user
 After=network-online.target
 
+# systemd-timesyncd is incompatible with sfptpd because it offers no
+# integration interface.
+After=systemd-timesyncd.service
+Conflicts=systemd-timesyncd.service
+
 [Service]
 Type=notify
 Restart=on-failure
