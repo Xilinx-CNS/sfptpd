@@ -7,7 +7,7 @@ These release notes relate to official supported binary releases of sfptpd.
 Please see [the changelog](CHANGELOG.md) for a list of changes since earlier
 releases.
 
-(c) Copyright 2012-2023 Advanced Micro Devices, Inc.
+(c) Copyright 2012-2024 Advanced Micro Devices, Inc.
 
 
 Overview
@@ -53,16 +53,18 @@ Linux distribution support
 
 This package is supported on:
 
-- Red Hat Enterprise Linux 7.5 - 7.9
+- Red Hat Enterprise Linux 7.9
 - Red Hat Enterprise Linux 8.1 - 8.9
 - Red Hat Enterprise Linux 9.0 - 9.3
-- SuSE Linux Enterprise Server 12 sp4 and sp5
-- SuSE Linux Enterprise Server 15 sp1 - sp5
-- Canonical Ubuntu Server LTS 18.04, 20.04, 22.04
+- Canonical Ubuntu Server LTS 20.04, 22.04
 - Debian 10 "Buster"
 - Debian 11 "Bullseye"
 - Debian 12 "Bookworm"
-- Linux kernels 3.0 - 6.4
+- Linux kernels 3.0 - 6.7
+
+Other and older platforms and non-amd64 architectures may be compatibile with
+sfptpd. Please raise issues and patches for unsupported OSs on the
+community-supported repository at <https://github.com/Xilinx-CNS/sfptpd>.
 
 
 Documentation
