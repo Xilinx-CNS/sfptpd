@@ -6,4 +6,3 @@
 /lib/systemd/system/sfptpd.service
 /etc/sfptpd.conf
 /etc/default/sfptpd
-scripts/udev/55-sfptpd.rules /usr/lib/udev/rules.d/55-sfptpd.rules
