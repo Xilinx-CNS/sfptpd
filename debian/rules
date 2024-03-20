@@ -1,4 +1,7 @@
 #!/usr/bin/make -f
+# SPDX-License-Identifier: BSD-3-Clause
+# (c) Copyright 2024 Advanced Micro Devices, Inc.
+
 #export DH_VERBOSE = 1
 
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all

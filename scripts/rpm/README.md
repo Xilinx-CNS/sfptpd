@@ -89,3 +89,10 @@ diff -- ../el8/sfptpd.spec | patch -u --merge
 
 Use the `--dry-run` option with `patch` to check what will be changed in
 advance.
+
+## Footnotes
+
+```
+SPDX-License-Identifier: BSD-3-Clause
+SPDX-FileCopyrightText: (c) Copyright 2024 Advanced Micro Devices, Inc.
+```

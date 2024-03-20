@@ -1,2 +1,5 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# (c) Copyright 2024 Advanced Micro Devices, Inc.
+
 /usr/sbin/sfptpmon
 /usr/libexec/sfptpd/chrony_clockcontrol.py

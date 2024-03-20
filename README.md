@@ -101,8 +101,9 @@ listed anyway.
 ## Footnotes
 
 ```
-SPDX-License-Identifier: BSD-3-Clause AND BSD-2-Clause AND NTP AND ISC
+SPDX-License-Identifier: BSD-3-Clause
 SPDX-FileCopyrightText: (c) Copyright 2013-2024 Advanced Micro Devices, Inc.
 ```
 
+This software is licensed as BSD-3-Clause AND BSD-2-Clause AND NTP AND ISC.
 See [LICENSE](LICENSE) file for details.
