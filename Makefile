@@ -129,8 +129,6 @@ $(BUILD_DIR)/%.service: scripts/systemd/%.service $(BUILD_DIR)
 install: sfptpd sfptpdctl $(addprefix $(BUILD_DIR)/,sfptpd.service)
 	install -d $(INST_PKGDOCDIR)/config
 	install -d $(INST_PKGDOCDIR)/examples
-	install -d $(INST_PKGDOCDIR)/examples/init.d
-	install -d $(INST_PKGDOCDIR)/examples/systemd
 	install -d $(INST_PKGLICENSEDIR)
 	install -d $(INST_PKGLIBEXECDIR)
 	install -d $(INST_DEFAULTSDIR)
@@ -140,13 +138,9 @@ install: sfptpd sfptpdctl $(addprefix $(BUILD_DIR)/,sfptpd.service)
 	[ -n "$(filter sfptpmon,$(INST_OMIT))" ] || install -m 755 -p -D scripts/sfptpmon $(INST_SBINDIR)/sfptpmon
 	install -m 644 -p -D scripts/sfptpd.env $(INST_DEFAULTSDIR)/sfptpd
 	[ -z "$(filter systemd,$(INST_INITS))" ] || install -m 644 -p -D $(BUILD_DIR)/sfptpd.service $(INST_UNITDIR)/sfptpd.service
-	[ -z "$(filter sysv,   $(INST_INITS))" ] || install -m 755 -p -D debian/sfptpd.init $(INST_CONFDIR)/init.d/sfptpd
 	[ -n "$(filter license,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGLICENSEDIR) LICENSE PTPD2_COPYRIGHT NTP_COPYRIGHT
 	[ -e $(INST_CONFDIR)/sfptpd.conf ] || install -m 644 -p -D config/default.cfg $(INST_CONFDIR)/sfptpd.conf
 	install -m 644 -p -t $(INST_PKGDOCDIR)/config config/*.cfg
-	[ -n "$(filter init-examples,$(INST_OMIT))" ] || install -m 644 -p -D debian/sfptpd.init $(INST_PKGDOCDIR)/examples/init.d/sfptpd
-	[ -n "$(filter init-examples,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGDOCDIR)/examples/systemd scripts/systemd/*
-	[ -n "$(filter init-examples,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGDOCDIR)/examples scripts/sfptpd.env
 	install -m 644 -p -t $(INST_PKGDOCDIR)/examples examples/README.sfptpdctl
 	[ -n "$(filter c-examples,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGDOCDIR)/examples examples/Makefile.sfptpdctl
 	install -m 644 -p -t $(INST_PKGDOCDIR)/examples examples/monitoring_console.py

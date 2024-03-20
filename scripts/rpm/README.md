@@ -84,7 +84,7 @@ e.g.:
 
 ```sh
 cd scripts/rpm/el7
-diff -- ../el8/sfptpd.spec | patch -u --merge
+git diff -- ../el8/sfptpd.spec sfptpd.spec | patch -u --merge
 ```
 
 Use the `--dry-run` option with `patch` to check what will be changed in

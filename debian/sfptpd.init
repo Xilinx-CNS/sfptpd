@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # SPDX-License-Identifier: BSD-3-Clause
 # (c) Copyright 2012-2024 Xilinx, Inc.
 
@@ -14,71 +14,62 @@
 #  integrated application.
 ### END INIT INFO
 
-prog=sfptpd
+# Default defaults
+NAME=sfptpd
+DESCRIPTION="Solarflare Enhanced PTP Daemon"
+DAEMON=/usr/sbin/$NAME
+OPTIONS="-f /etc/${NAME}.conf"
+TASKSET=""
+SFPTPD_USER=""
 
-# Source command line options
-. /etc/default/$prog
+# Defaults
+[ -r /etc/default/$NAME ] && . /etc/default/$NAME
 
-checkpid() {
-	local i
-	for i in $* ; do
-		[ -d "/proc/$i" ] && return 0
-	done
-	return 1
-}
+# Check if intermediate launcher involved
+if [ -n "$TASKSET" ]
+then
+	LAUNCHER="${TASKSET%% *}"
+	LAUNCHER_ARGS="${TASKSET#* } ${DAEMON}"
+else
+	LAUNCHER="${DAEMON}"
+	LAUNCHER_ARGS=""
+fi
+
+test -f $DAEMON || exit 0
+
+. /lib/lsb/init-functions
 
 start() {
-	# Only allow root to start sfptpd
-	[ "$EUID" != "0" ] && exit 4
-	[ -x /usr/sbin/$prog ] || exit 5
-
-	# Start daemon.
-	echo -n $"Starting $prog: "
-	sfptpd --daemon $OPTIONS $SFPTPD_USER
+	log_daemon_msg "Starting $DESCRIPTION" "$NAME"
+	start-stop-daemon --start --quiet --oknodo \
+		--notify-await \
+		--exec $DAEMON --startas $LAUNCHER \
+		-- $LAUNCHER_ARGS --daemon $OPTIONS $SFPTPD_USER
 	retval=$?
-	if [ $retval -eq 0 ]; then
-		echo "OK"
-	else
-		echo "Fail"
-	fi
+	log_end_msg $retval
 	return $retval
 }
 
 stop() {
-	# Only allow root to stop sfptpd
-	[ "$EUID" != "0" ] && exit 4
-	echo -n $"Shutting down $prog: "
-	pid=`pidof $prog`
-	if [ -n $pid ]; then
-		# Use TERM first, then KILL if not dead
-		kill -TERM $pid >/dev/null 2>&1
-		sleep 0.1
-		if checkpid $pid && sleep 1 &&
-		   checkpid $pid && sleep 1 &&
-		   checkpid $pid ; then
-			kill -KILL $pid >/dev/null 2>&1
-			usleep 100000
-		fi
-		retval=$?
-		if [ $retval -eq 0 ]; then
-			echo "OK"
-		else
-			echo "Fail"
-		fi
-	fi
+	log_daemon_msg "Stopping $DESCRIPTION" "$NAME"
+	start-stop-daemon --stop --quiet --oknodo \
+		--retry TERM/10/KILL/5 \
+		--exec $DAEMON
+	retval=$?
+	log_end_msg $retval
 	return $retval
 }
 
 status() {
-	echo -n $"Checking $prog... "
-	pid=`pidof $prog`
-	if [ -n "$pid" ]; then
-	    echo "Running"
-	    return 0
+	start-stop-daemon --status --exec $DAEMON
+	retval=$?
+	if [ "$retval" = 0 ]
+	then
+		log_success_msg "$NAME is running"
 	else
-	    echo "Service not running"
-	    return 3
+		log_failure_msg "$NAME is not running"
 	fi
+	return $retval
 }
 
 # See how we were called.
@@ -97,6 +88,6 @@ case "$1" in
 		start
 		;;
 	*)
-		echo $"Usage: $0 {start|stop|status|restart}"
+		log_action_msg "Usage: $0 {start|stop|status|restart|force-reload}"
 		exit 2
 esac

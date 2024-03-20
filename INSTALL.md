@@ -12,11 +12,26 @@ can be installed or packaged in various scenarios.
 sudo make prefix=/usr install
 ```
 
-## With sysv init and no Python 3
+## With no Python 3
 
 ```sh
-sudo make prefix=/usr INST_INITS=sysv INST_OMIT=sfptpmon install
+sudo make prefix=/usr INST_OMIT=sfptpmon install
 ```
+
+## With sysv or compatible init systems
+
+Init scripts are no longer installed by the `make install` target or shipped
+as examples. However, the following options are available.
+
+1. A modern init script is provided to Debian standards as
+   `debian/sfptpd.init` and this is included in packages for Debian and
+   derivatives.
+2. A legacy generic init script suitable for any init-based distribution is
+   available as `scripts/rpm/el6/sfptpd.init` but this is not maintained.
+
+Users of other distributions are encouraged to define and contribute up-to-date
+startup scripts and packaging definitions suitable for their preferred init
+system.
 
 ## Default operation
 
@@ -24,6 +39,12 @@ Installs to /usr/local
 
 ```sh
 sudo make install
+```
+
+## Build a debian package
+
+```sh
+debuild -i -us -uc -b
 ```
 
 ## Into a container image

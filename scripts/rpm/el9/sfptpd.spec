@@ -94,9 +94,6 @@ make fast_test
 %license LICENSE PTPD2_COPYRIGHT NTP_COPYRIGHT
 %doc %{_pkgdocdir}/CHANGELOG.md
 %doc %{_pkgdocdir}/config
-%doc %{_pkgdocdir}/examples/init.d
-%doc %{_pkgdocdir}/examples/systemd
-%doc %{_pkgdocdir}/examples/sfptpd.env
 %doc %{_pkgdocdir}/examples/sfptpdctl.c
 %doc %{_pkgdocdir}/examples/Makefile.sfptpdctl
 %doc %{_pkgdocdir}/examples/README.sfptpdctl
