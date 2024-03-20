@@ -39,6 +39,7 @@ and customisable Python equivalent of the sfptpdctl client.
 %prep
 %autosetup
 scripts/sfptpd_versioning write %{version}
+sed -i 's,.*\(SFPTPD_USER=\).*",#\1"",g' scripts/sfptpd.env
 
 %build
 %make_build

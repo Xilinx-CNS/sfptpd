@@ -35,9 +35,25 @@ else
 	LAUNCHER_ARGS=""
 fi
 
+# Derived variables
+USER_SPEC=${SFPTPD_USER##-u }
+RUNAS_U=${USER_SPEC%%:*}
+
 test -f $DAEMON || exit 0
 
 . /lib/lsb/init-functions
+
+[ -z "$RUNAS_U" ] || getent passwd "$RUNAS_U" > /dev/null || {
+	log_failure_msg "User $RUNAS_U required for $NAME does not exist"
+	exit 1
+}
+
+if [ -n "$RUNAS_U" ]
+then
+	CONDITIONAL_USER_ARG="--user $RUNAS_U"
+else
+	CONDITIONAL_USER_ARG=""
+fi
 
 start() {
 	log_daemon_msg "Starting $DESCRIPTION" "$NAME"
@@ -54,6 +70,7 @@ stop() {
 	log_daemon_msg "Stopping $DESCRIPTION" "$NAME"
 	start-stop-daemon --stop --quiet --oknodo \
 		--retry TERM/10/KILL/5 \
+		$CONDITIONAL_USER_ARG \
 		--exec $DAEMON
 	retval=$?
 	log_end_msg $retval

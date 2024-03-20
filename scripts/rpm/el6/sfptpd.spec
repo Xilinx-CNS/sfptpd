@@ -42,6 +42,7 @@ and customisable Python equivalent of the sfptpdctl client.
 %autosetup
 scripts/sfptpd_versioning write %{version}
 find -iregex '.*\.py' | xargs sed -i -r -e '1s,^(#!).*python3,\1/usr/bin/python,'
+sed -i 's,.*\(SFPTPD_USER=\).*",#\1"",g' scripts/sfptpd.env
 
 %build
 make %{?_smp_mflags} sfptpd sfptpdctl GLIBC_COMPAT=1

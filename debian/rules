@@ -11,7 +11,7 @@ export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 # Rely on dh_installinit to install the init script rather than installing via Makefile
 
 %:
-	prefix=/usr INST_INITS="systemd" INST_OMIT="c-examples" dh $@ --with python3
+	prefix=/usr INST_INITS="systemd" INST_OMIT="c-examples" dh $@ --with python3,sysuser
 
 override_dh_auto_test:
 	make fast_test
