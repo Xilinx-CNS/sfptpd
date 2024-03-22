@@ -16,6 +16,8 @@ Conflicts=systemd-timesyncd.service
 Type=notify
 Restart=on-failure
 RestartSec=5s
+
+# Source configuration shared with other init systems
 EnvironmentFile=-%DEFAULTSDIR%/sfptpd
 
 # Override any 'daemon' setting in configuration file as it is systemd's

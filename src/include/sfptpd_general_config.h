@@ -161,6 +161,7 @@ typedef struct sfptpd_config_timestamping {
 /** struct sfptpd_config_general - sfptpd general configuration
  * @hdr: Configuration section common header
  * @config_filename: Path of configuration file
+ * @priv_helper_path: Path to privileged helper
  * @message_log: Target for logged messages
  * @message_log_filename: Path of log file for message logging
  * @stats_log: Target for logged statistics
@@ -189,6 +190,7 @@ typedef struct sfptpd_config_timestamping {
 typedef struct sfptpd_config_general {
 	sfptpd_config_section_t hdr;
 	char config_filename[PATH_MAX];
+	char priv_helper_path[PATH_MAX];
 	enum sfptpd_msg_log_config message_log;
 	char message_log_filename[PATH_MAX];
 	enum sfptpd_stats_log_config stats_log;
@@ -276,6 +278,12 @@ struct sfptpd_config_general *sfptpd_general_config_get(struct sfptpd_config *co
 void sfptpd_config_set_config_file(struct sfptpd_config *config,
 				   char *filename);
 
+/** Set the path to the privileged helper
+ * @param config  Pointer to configuration
+ * @param path  Path
+ */
+void sfptpd_config_set_priv_helper(struct sfptpd_config *config,
+				   char *path);
 
 /** Direct all output to the console.
  * @param config  Pointer to configuration

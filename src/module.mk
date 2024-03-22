@@ -19,6 +19,8 @@ dir := $(d)/crny
 include $(dir)/module.mk
 dir := $(d)/sfptpdctl
 include $(dir)/module.mk
+dir := $(d)/priv_helper
+include $(dir)/module.mk
 ifndef NO_GPS
 dir := $(d)/gps
 include $(dir)/module.mk
@@ -36,6 +38,7 @@ LIB_SRCS_$(d) := sfptpd_logging.c sfptpd_config.c sfptpd_engine.c \
 	sfptpd_netlink.c sfptpd_phc.c sfptpd_db.c \
 	sfptpd_app.c sfptpd_link.c \
 	sfptpd_clockfeed.c \
+	sfptpd_priv.c \
 	sfptpd_multicast.c
 
 LIB_$(d) := common

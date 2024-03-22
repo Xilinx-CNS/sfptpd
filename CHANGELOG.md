@@ -56,6 +56,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   arguments to see syntax. (SWPTP-1411)
 - Add `-D` command line option to specify default PTP domain. (SWPTP-1454)
 - Add master-only PTP option. (SWPTP-1459)
+- Add a privileged helper to connect to chrony control socket when running
+  as a non-root user. (SWPTP-1479)
 - Add `gps` sync module to use `gpsd` for PPS time of day.
   - This is an **unsupported feature** neither compiled into supported releases
     nor compiled by default from source.

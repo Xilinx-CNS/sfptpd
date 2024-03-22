@@ -6,7 +6,8 @@
 include mk/pushd.mk
 
 
-LIB_SRCS_$(d) := sfptpd_crny_module.c
+LIB_SRCS_$(d) := sfptpd_crny_module.c \
+	sfptpd_crny_helper.c
 
 LIB_$(d) := crny
 

@@ -22,6 +22,10 @@
 #include <sys/stat.h>
 #include <sys/prctl.h>
 #include <sys/utsname.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <linux/wait.h>
+#include <sys/syscall.h>
 #include <pthread.h>
 #include <unistd.h>
 
@@ -40,6 +44,7 @@
 #include "sfptpd_netlink.h"
 #include "sfptpd_statistics.h"
 #include "sfptpd_multicast.h"
+#include "sfptpd_priv.h"
 
 #ifdef HAVE_CAPS
 #include <sys/capability.h>
@@ -51,6 +56,22 @@
  ****************************************************************************/
 
 #define  ARRAY_SIZE(a)   (sizeof (a) / sizeof (a [0]))
+
+
+/****************************************************************************
+ * Kernel compat
+ ****************************************************************************/
+
+#ifndef __NR_pidfd_open
+#define __NR_pidfd_open 434
+#endif
+
+/* Compat function for pidfd_open(2) where present in kernels but not libc. */
+#pragma weak pidfd_open
+static int pidfd_open(pid_t pid, unsigned int flags)
+{
+	return syscall(__NR_pidfd_open, pid, flags);
+}
 
 
 /****************************************************************************
@@ -81,6 +102,8 @@ static struct sfptpd_config *config = NULL;
 static struct sfptpd_engine *engine = NULL;
 static struct sfptpd_nl_state *netlink = NULL;
 const static struct sfptpd_link_table *initial_link_table = NULL;
+static int priv_helper_pidfd = -1;
+static int priv_helper_pid = -1;
 
 /* The hardware state lock protects data structures that shadow
    the state of the hardware so that they are internally consistent.
@@ -296,6 +319,32 @@ static int runtime_checks(struct sfptpd_config *config)
 	}
 
 	return rc;
+}
+
+
+static int track_priv_helper(void)
+{
+	int rc;
+
+	if (priv_helper_pid == -1)
+		return 0;
+
+	priv_helper_pidfd = pidfd_open(priv_helper_pid, 0);
+	if (priv_helper_pidfd == -1) {
+	    rc = errno;
+		if (rc != EOPNOTSUPP &&
+		    rc != ENOSYS &&
+		    rc != ENODEV) {
+			sfptpd_priv_stop_helper();
+			CRITICAL("could not track privileged helper, %s\n",
+				 strerror(rc));
+			return ESHUTDOWN;
+		} else {
+			return ENOSYS;
+		}
+	} else {
+		return 0;
+	}
 }
 
 
@@ -518,6 +567,15 @@ static int main_on_startup(void *not_used)
 	int ret;
 	int control_fd;
 
+	if (priv_helper_pidfd != -1) {
+		rc = sfptpd_thread_user_fd_add(priv_helper_pidfd, true, false);
+		if (rc != 0) {
+			CRITICAL("control: failed to add priv helper pidfd to thread epoll set, %s\n",
+				 strerror(rc));
+			return rc;
+		}
+	}
+
 	rc = sfptpd_multicast_init();
 	if (rc != 0) {
 		CRITICAL("failed to initialise multicast messaging\n");
@@ -633,9 +691,7 @@ static void main_on_message(void *not_used, struct sfptpd_msg_hdr *hdr)
 	}
 }
 
-
-static void main_on_user_fds(void *not_used, unsigned int num_fds,
-			     struct sfptpd_thread_event fds[])
+static void on_control_socket_fd(int fd)
 {
 	enum sfptpd_control_action action;
 	union sfptpd_control_action_parameters param;
@@ -643,10 +699,6 @@ static void main_on_user_fds(void *not_used, unsigned int num_fds,
 		sfptpd_app_msg_t app;
 		sfptpd_servo_msg_t servo;
 	} msg;
-
-	/* We only register a single user file descriptor in this thread. */
-	assert(num_fds == 1);
-	assert(fds[0].fd == sfptpd_control_socket_get_fd());
 
 	action = sfptpd_control_socket_get_action(&param);
 	switch (action) {
@@ -716,6 +768,42 @@ static void main_on_user_fds(void *not_used, unsigned int num_fds,
 }
 
 
+static void main_on_user_fds(void *not_used, unsigned int num_fds,
+			     struct sfptpd_thread_event fds[])
+{
+	int i;
+	int rc;
+	siginfo_t siginf;
+
+	for (i = 0; i < num_fds; i++) {
+		int fd = fds[0].fd;
+
+		if (fd == sfptpd_control_socket_get_fd()) {
+			on_control_socket_fd(fd);
+		} else if (fd == priv_helper_pidfd) {
+			rc = waitid(P_PIDFD,
+				    priv_helper_pidfd,
+				    &siginf,
+				    WEXITED | WNOHANG);
+			if (rc == -1)
+				ERROR("waitid on priv helper failed, %s\n",
+				      strerror(errno));
+			CRITICAL("priv: privileged helper terminated unexpectedly.\n");
+			if (rc == 0) {
+				if (siginf.si_code == CLD_EXITED) {
+					rc = siginf.si_status;
+				} else {
+					rc = ECHILD;
+				}
+			} else {
+				rc = errno;
+			}
+			sfptpd_thread_exit(rc);
+		}
+	}
+}
+
+
 static const struct sfptpd_thread_ops main_thread_ops = 
 {
 	main_on_startup,
@@ -757,6 +845,14 @@ int main(int argc, char **argv)
 	/* Parse the command line options to get the configuration file */
 	rc = sfptpd_config_parse_command_line_pass1(config, argc, argv);
 	if (rc != 0)
+		goto fail;
+
+	/* Start privileged helper */
+	rc = -sfptpd_priv_start_helper(config, &priv_helper_pid);
+	if (rc != 0)
+		goto fail;
+	rc = track_priv_helper();
+	if (rc != 0 && rc != ENOSYS)
 		goto fail;
 
 	/* Parse the configuration file */
@@ -861,6 +957,7 @@ fail:
 	if (rc == ESHUTDOWN)
 		rc = 0;
 	sfptpd_log_config_abandon();
+	sfptpd_priv_stop_helper();
 	sfptpd_config_destroy(config);
 
 	return rc;

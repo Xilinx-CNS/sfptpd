@@ -1783,6 +1783,19 @@ void sfptpd_config_set_config_file(struct sfptpd_config *config,
 }
 
 
+void sfptpd_config_set_priv_helper(struct sfptpd_config *config,
+				   char *path)
+{
+	struct sfptpd_config_general *general = sfptpd_general_config_get(config);
+
+	/* Take a copy of the priv helper path */
+	sfptpd_strncpy(general->priv_helper_path,
+		       path ? path : SFPTPD_DEFAULT_PRIV_HELPER_PATH,
+		       sizeof(general->priv_helper_path));
+	TRACE_L4("using privileged helper %s\n", general->priv_helper_path);
+}
+
+
 void sfptpd_config_general_set_console_logging(struct sfptpd_config *config)
 {
 	struct sfptpd_config_general *general = sfptpd_general_config_get(config);

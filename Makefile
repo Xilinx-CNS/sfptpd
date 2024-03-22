@@ -47,13 +47,18 @@ endif
 FAST_TESTS = bic hash stats config link time
 TEST_CMD = valgrind --track-origins=yes --error-exitcode=1 build/sfptpd_test
 
+# Include installation and packaging helper
+#
+include mk/install.mk
+
 ### Build flags for all targets
 #
 CFLAGS += -MMD -MP -Wall -Werror -Wundef -Wstrict-prototypes \
-	 -Wnested-externs -g -pthread -fPIC -std=gnu99 \
-	 -D_ISOC99_SOURCE -D_BSD_SOURCE -D_DEFAULT_SOURCE -D_GNU_SOURCE \
-	 $(CONDITIONAL_DEFS) \
-	 -fstack-protector-all -Wstack-protector
+	-Wnested-externs -g -pthread -fPIC -std=gnu99 \
+	-D_ISOC99_SOURCE -D_BSD_SOURCE -D_DEFAULT_SOURCE -D_GNU_SOURCE \
+	$(CONDITIONAL_DEFS) \
+	-DINST_PREFIX=$(prefix) \
+	-fstack-protector-all -Wstack-protector
 
 # Build flag to enable extra build-time checks e.g. formatting strings
 #	 -DSFPTPD_BUILDTIME_CHECKS
@@ -67,10 +72,6 @@ MKDIR = mkdir -p
 
 # Build directory
 BUILD_DIR = build
-
-# Include installation and packaging helper
-#
-include mk/install.mk
 
 ### Build tools
 #
@@ -126,7 +127,7 @@ $(BUILD_DIR)/%.service: scripts/systemd/%.service $(BUILD_DIR)
 	sed s,%DEFAULTSDIR%,$(patsubst $(DESTDIR)%,%,$(INST_DEFAULTSDIR)),g < $< > $@
 
 .PHONY: install
-install: sfptpd sfptpdctl $(addprefix $(BUILD_DIR)/,sfptpd.service)
+install: sfptpd sfptpdctl sfptpd_priv_helper $(addprefix $(BUILD_DIR)/,sfptpd.service)
 	install -d $(INST_PKGDOCDIR)/config
 	install -d $(INST_PKGDOCDIR)/examples
 	install -d $(INST_PKGLICENSEDIR)
@@ -150,6 +151,7 @@ install: sfptpd sfptpdctl $(addprefix $(BUILD_DIR)/,sfptpd.service)
 	[ -n "$(filter c-examples,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGDOCDIR)/examples src/sfptpdctl/sfptpdctl.c
 	[ -n "$(filter changelog,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGDOCDIR) CHANGELOG.md
 	install -m 755 -p -t $(INST_PKGLIBEXECDIR) examples/chrony_clockcontrol.py
+	install -m 755 -p -t $(INST_PKGLIBEXECDIR) $(BUILD_DIR)/sfptpd_priv_helper
 	install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/sfptpd.8)
 	install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/sfptpdctl.8)
 	[ -n "$(filter sfptpmon,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/sfptpmon.8)

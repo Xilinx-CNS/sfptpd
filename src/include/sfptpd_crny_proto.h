@@ -4,6 +4,9 @@
 #ifndef _SFPTPD_CRNY_PROTO_H
 #define _SFPTPD_CRNY_PROTO_H
 
+#include <stdint.h>
+
+#include "sfptpd_misc.h"
 
 
 /****************************************************************************
@@ -74,7 +77,9 @@ STATIC_ASSERT(sizeof(struct crny_addr) == 20);
  * Constants
  ****************************************************************************/
 
-#define CRNY_CONTROL_SOCKET_PATH "/var/run/chrony/chronyd.sock"
+#define CRNY_RUN_PATH "/var/run/chrony"
+#define CRNY_CONTROL_SOCKET_PATH CRNY_RUN_PATH "/" "chronyd.sock"
+#define CRNY_CONTROL_CLIENT_FMT CRNY_RUN_PATH "/" "chronyc.%d.sock"
 
 
 /****************************************************************************

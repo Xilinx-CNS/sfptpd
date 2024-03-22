@@ -40,8 +40,10 @@
 #include "sfptpd_ntpd_client.h"
 #include "sfptpd_engine.h"
 
+#include "sfptpd_crny_helper.h"
 #include "sfptpd_crny_module.h"
 #include "sfptpd_crny_proto.h"
+#include "sfptpd_priv.h"
 
 
 /****************************************************************************
@@ -913,7 +915,7 @@ int crny_configure_ntpd(crny_module_t *ntp)
 		}
 	}
 
-	snprintf(ntp->crny_comm.unix_sock_path, 100, "/var/run/chrony/chronyc.%d.sock",
+	snprintf(ntp->crny_comm.unix_sock_path, 100, CRNY_CONTROL_CLIENT_FMT,
 		 (int)getpid());
 
 	/* Assume that the NTP daemon is controlling the system clock until the
@@ -1228,12 +1230,10 @@ static int crny_resolve(crny_module_t *ntp)
 {
 	assert(ntp);
 
-	strcpy(ntp->crny_comm.remote.sun_path, CRNY_CONTROL_SOCKET_PATH);
-
 	/* check if chronyd is running */
-	if (access(ntp->crny_comm.remote.sun_path, F_OK) != 0) {
+	if (access(CRNY_RUN_PATH, F_OK) != 0) {
 		DBG_L4("crny: nonexistent path %s, %s. Is chronyd running?\n",
-		       ntp->crny_comm.remote.sun_path, strerror(errno));
+		       CRNY_RUN_PATH, strerror(errno));
 		return errno;
 	} else {
 		return 0;
@@ -1242,87 +1242,23 @@ static int crny_resolve(crny_module_t *ntp)
 
 static int crny_connect(crny_module_t *ntp)
 {
+	sfptpd_short_text_t failing_step;
+	int rc;
+
 	assert(ntp);
 	assert(ntp->crny_comm.sock == -1);
 
-	int rc;
-	struct crny_comm *comm = &ntp->crny_comm;
-	struct sockaddr_un local_sockaddr;
-
-	comm->remote.sun_family = AF_UNIX;
-	local_sockaddr.sun_family = AF_UNIX;
-	if (snprintf(local_sockaddr.sun_path, sizeof (local_sockaddr.sun_path),
-	    "%s", ntp->crny_comm.unix_sock_path) >=
-		sizeof (local_sockaddr.sun_path)) {
-		ERROR("crny: Unix socket path %s too long\n",
-		      comm->unix_sock_path);
-		return errno;
-	}
-
-	comm->sock = socket(AF_UNIX, SOCK_DGRAM, 0);
-	if (comm->sock < 0) {
-		ERROR("crny: could not create Unix socket, %s\n",
-			strerror(rc = errno));
-		return rc;
-	}
-
-	int flags = fcntl(comm->sock, F_GETFD);
-	if (flags == -1) {
-		ERROR("crny: fcntl(F_GETFD) failed : %s\n",
-		      strerror(rc = errno));
-		goto cleanup;
-	}
-
-	flags |= FD_CLOEXEC;
-
-	if (fcntl(comm->sock, F_SETFD, flags) < 0) {
-		ERROR("crny: fcntl(F_SETFD) failed : %s\n",
-		      strerror(rc = errno));
-		goto cleanup;
-	}
-
-	if (fcntl(comm->sock, F_SETFL, O_NONBLOCK)) {
-		ERROR("crny: fcntl() could not set O_NONBLOCK: %s\n",
-		      strerror(rc = errno));
-		goto cleanup;
-	}
-
-	/* Bind the local socket to the path we just specified */
-	/* Note: we need to unlink before bind, in case the socket wasn't cleaned up last time */
-	unlink(ntp->crny_comm.unix_sock_path);
-	if (bind(comm->sock, &local_sockaddr, sizeof (local_sockaddr)) < 0) {
-		ERROR("crny: Could not bind Unix socket to %s : %s\n",
-		      ntp->crny_comm.unix_sock_path, strerror(rc = errno));
-		goto cleanup2;
-	}
-
-	/* You need to chmod 0666 the socket otherwise pselect will time out. */
-	if (chmod(comm->unix_sock_path, 0666) < 0) {
-		ERROR("crny: Could not chmod %s : %s\n",
-		      ntp->crny_comm.unix_sock_path, strerror(rc = errno));
-		goto cleanup2;
-	}
-
-	/* Connect the socket */
-	if (connect(comm->sock, &comm->remote, sizeof (comm->remote)) < 0) {
-		rc = errno;
-		if (rc != EINPROGRESS) {
-			ERROR("crny: could not connect socket to address %s, %s\n",
-			      comm->unix_sock_path, strerror(rc));
-			goto cleanup2;
-		}
-	} else {
+	rc = sfptpd_priv_open_chrony(failing_step, ntp->crny_comm.unix_sock_path);
+	if (rc >= 0) {
+		ntp->crny_comm.sock = rc;
 		rc = 0;
+	} else if (rc != 0 && rc != -EINPROGRESS && rc != -ENOENT) {
+		ERROR("crny: connect(%s), %s\n", failing_step, strerror(rc));
 	}
-	sfptpd_thread_user_fd_add(comm->sock, true, false);
 
-	return rc;
+	if (rc == 0)
+		sfptpd_thread_user_fd_add(ntp->crny_comm.sock, true, false);
 
-cleanup2:
-	unlink(ntp->crny_comm.unix_sock_path);
-cleanup:
-	close(comm->sock);
-	comm->sock = -1;
 	return rc;
 }
 
@@ -2596,4 +2532,4 @@ int sfptpd_crny_module_create(struct sfptpd_config *config,
 }
 
 
-/* fin */
+	/* fin */

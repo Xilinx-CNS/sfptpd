@@ -35,8 +35,18 @@ else
 	LAUNCHER_ARGS=""
 fi
 
+get_user() {
+	OPTIND=1
+	while getopts pu: opt
+	do
+		case $opt in
+		u)	echo $OPTARG;;
+		esac
+	done
+}
+
 # Derived variables
-USER_SPEC=${SFPTPD_USER##-u }
+USER_SPEC=$(get_user ${SFPTPD_USER})
 RUNAS_U=${USER_SPEC%%:*}
 
 test -f $DAEMON || exit 0

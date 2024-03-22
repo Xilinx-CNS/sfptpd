@@ -28,14 +28,14 @@
  ****************************************************************************/
 
 /* Long-only options need pseudo identifier */
-#define OPT_VERSION   0x10000
-#define OPT_NO_DAEMON 0x10001
-#define OPT_DAEMON    0x10002
-#define OPT_CONSOLE   0x10003
+#define OPT_VERSION     0x10000
+#define OPT_NO_DAEMON   0x10001
+#define OPT_DAEMON      0x10002
+#define OPT_CONSOLE     0x10003
 
 #define CONFIG_REDACTION_STRING "********"
 
-static const char *command_line_options_short = "hf:i:D:tvu:";
+static const char *command_line_options_short = "hf:i:D:tvu:p::";
 static const struct option command_line_options_long[] = 
 {
 	{"help", 0, NULL, (int)'h'},
@@ -49,6 +49,7 @@ static const struct option command_line_options_long[] =
 	{"no-daemon", 0, NULL, OPT_NO_DAEMON},
 	{"daemon", 0, NULL, OPT_DAEMON},
 	{"console", 0, NULL, OPT_CONSOLE},
+	{"priv-helper", 2, NULL, (int)'p'},
 	{NULL, 0, NULL, 0}
 };
 
@@ -97,6 +98,7 @@ static void config_display_help(void)
 		"-f, --config-file=FILE       Configure from FILE, or stdin if '-'\n"
 		"-t, --test-config            Test configuration\n"
 		"-u, --user=USER[:GROUP]      Run as user USER (and group GROUP)\n"
+		"-p, --priv-helper[=PATH]     Use privileged helper (default path: %s)\n"
 		"    --no-daemon              Do not run as a daemon, overriding config file\n"
 		"    --daemon                 Run as a daemon, overriding config file\n"
 		"-v, --verbose                Verbose: enable stats, trace and send output to stdout/stderr\n"
@@ -107,7 +109,8 @@ static void config_display_help(void)
 		"SIGHUP              Rotate message and statistics log (if logging to file)\n"
 		"SIGUSR1             Step the clocks by the current offset from the master clock\n"
 		"\n",
-		SFPTPD_VERSION_TEXT
+		SFPTPD_VERSION_TEXT,
+		SFPTPD_DEFAULT_PRIV_HELPER_PATH
 	);
 
 	for (i = 0; i < sizeof(config_options)/sizeof(config_options[0]); i++) {
@@ -644,6 +647,10 @@ int sfptpd_config_parse_command_line_pass1(struct sfptpd_config *config,
 			sfptpd_config_set_config_file(config, optarg);
 			break;
 
+		case 'p':
+			sfptpd_config_set_priv_helper(config, optarg);
+			break;
+
 		case 'v':
 			sfptpd_config_general_set_verbose(config);
 			break;
@@ -712,6 +719,7 @@ int sfptpd_config_parse_command_line_pass2(struct sfptpd_config *config,
 		case 'D':
 		case 'u':
 		case OPT_VERSION:
+		case 'p':
 			/* We've already handled these- ignore them */
 			break;
 

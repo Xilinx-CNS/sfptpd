@@ -16,6 +16,18 @@
 /** Default user description */
 #define SFPTPD_USER_DESCRIPTION "Solarflare Enhanced PTP Daemon"
 
+/** Default path prefix */
+#ifndef INST_PREFIX
+#define INST_PREFIX "/usr/local"
+#endif
+
+/** Default privileged helper path */
+#ifdef PRIV_HELPER
+#define SFPTPD_DEFAULT_PRIV_HELPER_PATH PRIV_HELPER
+#else
+#define SFPTPD_DEFAULT_PRIV_HELPER_PATH STRINGIFY(INST_PREFIX) "/libexec/" SFPTPD_MODEL "/" SFPTPD_MODEL "_priv_helper"
+#endif
+
 /** Solarflare OUI */
 #define SFPTPD_OUI0 (0x00U)
 #define SFPTPD_OUI1 (0x0FU)
