@@ -827,7 +827,7 @@ static int parse_max_missing_delayresps(struct sfptpd_config_section *section, c
 
 	ptp->ptpd_port.delayRespAlarmThreshold = value;
 
-	tokens = sscanf(params[0], "%i", &value);
+	tokens = sscanf(params[1], "%i", &value);
 	if (tokens != 1)
 		return EINVAL;
 
