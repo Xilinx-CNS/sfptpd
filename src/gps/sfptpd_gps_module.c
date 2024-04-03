@@ -1190,7 +1190,7 @@ static void gps_do_io(struct gps_instance *gps)
 		update_state(gps);
 }
 
-static void gps_on_user_fds(void *context, unsigned int num_fds, int fds[])
+static void gps_on_user_fds(void *context, unsigned int num_fds, struct sfptpd_thread_event fds[])
 {
 	struct gps_module *module = (struct gps_module *) context;
 	struct gps_instance *gps;
@@ -1200,7 +1200,7 @@ static void gps_on_user_fds(void *context, unsigned int num_fds, int fds[])
 
 	for (i = 0; i < num_fds; i++) {
 		for (gps = module->instances; gps; gps = gps->next) {
-			if (gps->gpsd_fd == fds[i]) {
+			if (gps->gpsd_fd == fds[i].fd) {
 				gps_do_io(gps);
 			}
 		}
