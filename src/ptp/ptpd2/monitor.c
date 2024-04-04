@@ -64,7 +64,7 @@
 
 enum ptpd_tlv_result
 slave_rx_sync_timing_data_handler(const MsgHeader *header, ssize_t length,
-				  struct sfptpd_timespec *time, Boolean timestampValid, Boolean isFromSelf,
+				  struct sfptpd_timespec *time, Boolean timestampValid,
 				  RunTimeOpts *rtOpts, PtpClock *ptpClock,
 				  TLV *tlv, size_t tlv_offset)
 {
@@ -111,7 +111,7 @@ slave_rx_sync_timing_data_handler(const MsgHeader *header, ssize_t length,
 
 enum ptpd_tlv_result
 slave_rx_sync_computed_data_handler(const MsgHeader *header, ssize_t length,
-				    struct sfptpd_timespec *time, Boolean timestampValid, Boolean isFromSelf,
+				    struct sfptpd_timespec *time, Boolean timestampValid,
 				    RunTimeOpts *rtOpts, PtpClock *ptpClock,
 				    TLV *tlv, size_t tlv_offset)
 {
@@ -158,7 +158,7 @@ slave_rx_sync_computed_data_handler(const MsgHeader *header, ssize_t length,
 
 enum ptpd_tlv_result
 slave_tx_event_timestamps_handler(const MsgHeader *header, ssize_t length,
-				  struct sfptpd_timespec *time, Boolean timestampValid, Boolean isFromSelf,
+				  struct sfptpd_timespec *time, Boolean timestampValid,
 				  RunTimeOpts *rtOpts, PtpClock *ptpClock,
 				  TLV *tlv, size_t tlv_offset)
 {
@@ -205,7 +205,7 @@ slave_tx_event_timestamps_handler(const MsgHeader *header, ssize_t length,
 
 enum ptpd_tlv_result
 slave_status_handler(const MsgHeader *header, ssize_t length,
-		     struct sfptpd_timespec *time, Boolean timestampValid, Boolean isFromSelf,
+		     struct sfptpd_timespec *time, Boolean timestampValid,
 		     RunTimeOpts *rtOpts, PtpClock *ptpClock,
 		     TLV *tlv, size_t tlv_offset)
 {
