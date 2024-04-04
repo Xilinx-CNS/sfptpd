@@ -3805,8 +3805,6 @@ static int ptp_on_startup(void *context)
 	sfptpd_ptp_module_t *ptp = (sfptpd_ptp_module_t *)context;
 	struct sfptpd_ptp_instance *instance;
 	struct sfptpd_ptp_intf *interface;
-	sfptpd_ptp_module_config_t *config;
-	sfptpd_ptp_module_config_t *iconf;
 	int rc;
 	/* Due to the way SO_TIMESTAMP is handled through the loopback interface,
 	 * traffic could be received by the wrong instance in some cases.  Because
@@ -3819,7 +3817,6 @@ static int ptp_on_startup(void *context)
 	/* Find any instance to get the global configuration */
 	instance = ptp_get_first_instance(ptp);
 	assert(instance);
-	config = instance->config;
 
 	rc = sfptpd_multicast_subscribe(SFPTPD_SERVO_MSG_PID_ADJUST);
 	if (rc == 0)
@@ -3831,20 +3828,20 @@ static int ptp_on_startup(void *context)
 	}
 
 	/* Start the remote monitor */
-	if (config->remote_monitor) {
+	if (instance->config->remote_monitor) {
 		ptp->remote_monitor = sfptpd_ptp_monitor_create();
 	}
 
 	for (instance = ptp_get_first_instance(ptp); instance; instance = ptp_get_next_instance(instance)) {
 		struct sfptpd_ptp_intf *interface;
-		iconf = instance->config;
+		sfptpd_ptp_module_config_t *iconf = instance->config;
 		rc = ptp_start_instance(instance);
 		if (rc != 0) goto fail;
 
 		sfptpd_strncpy(iconf->ptpd_intf.ifaceName, instance->intf->bond_info.logical_if,
 				sizeof(iconf->ptpd_intf.ifaceName));
 		interface = ptp_find_interface_by_name_transport(instance->intf->module,
-								 config->interface_name,
+								 iconf->interface_name,
 								 iconf->ptpd_intf.transportAF);
 		assert(interface);
 		rc = ptp_determine_timestamp_type(&iconf->ptpd_intf.timestampType,
