@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2023      Advanced Micro Devices, Inc.
+ * Copyright (c) 2023-2024 Advanced Micro Devices, Inc.
  * Copyright (c) 2019      Xilinx, Inc.
  * Copyright (c) 2014-2018 Solarflare Communications Inc.
  * Copyright (c) 2013      Harlan Stenn,
@@ -995,29 +995,81 @@ static int parse_timestamp(uint8_t *pdu, size_t pdu_len,
 	return info->have_sw || info->have_hw ? 0 : ENOTIMESTAMP;
 }
 
+static struct sfptpd_ts_ticket matchPacketToTsCache(struct sfptpd_ts_cache *ts_cache,
+						    struct sfptpd_ts_user *user,
+						    const char *data, size_t length)
+{
+	struct sfptpd_timespec now, elapsed;
+	struct sfptpd_ts_pkt *pkt;
+	int quantile;
+
+	assert(ts_cache);
+	assert(data);
+
+	sfclock_gettime(CLOCK_MONOTONIC, &now);
+
+	TS_CACHE_FOREACH(ts_cache, slot) {
+		pkt = &ts_cache->packet[slot];
+
+		/* Skip where packet too short to match */
+		if (length < pkt->match.pdu.len + pkt->match.pdu.trailer)
+			continue;
+
+		DBGV("Checking PDU slot %d\n", slot);
+		DUMP("PDU to match",
+		     pkt->match.pdu.data, pkt->match.pdu.len);
+
+		if (memcmp(pkt->match.pdu.data,
+			   data +
+			   length -
+			   pkt->match.pdu.len -
+			   pkt->match.pdu.trailer,
+			   pkt->match.pdu.len) == 0) {
+
+			/* Record the match details for user */
+			if (user)
+				*user = pkt->user;
+
+			/* Remove from cache */
+			ts_cache->free_bitmap |= (1 << ts_cache_bit(slot));
+
+			/* Record time take to get the result */
+			sfptpd_time_subtract(&elapsed, &now, &pkt->sent_monotime);
+			for (quantile = 0; quantile < TS_QUANTILES; quantile++) {
+				if (!sfptpd_time_is_greater_or_equal(&elapsed, &ts_cache->stats_periodic.quantile_bounds[quantile])) {
+					ts_cache->stats_periodic.resolved_quantile[quantile]++;
+					ts_cache->stats_adhoc.resolved_quantile[quantile]++;
+					break;
+				}
+			}
+			DBGV("Tx timestamp took " SFPTPD_FMT_SFTIMESPEC "s to acquire\n",
+			     SFPTPD_ARGS_SFTIMESPEC(elapsed));
+
+			/* Return ticket for match to user */
+			return (struct sfptpd_ts_ticket) { .slot = slot, .seq = pkt->seq };
+		}
+	}
+
+	return TS_NULL_TICKET;
+}
+
 bool netProcessError(PtpInterface *ptpInterface,
 		     size_t length,
 		     struct sfptpd_ts_user *user,
 		     struct sfptpd_ts_ticket *ticket,
 		     struct sfptpd_ts_info *info)
 {
-	struct sfptpd_timespec now, elapsed;
 	int ipproto = ptpInterface->ifOpts.transportAF == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP;
 	int iptype = ipproto == IPPROTO_IPV6 ? IPV6_RECVERR : IP_RECVERR;
-	Boolean haveTs = FALSE, havePkt = FALSE, matchedPkt = FALSE;
+	Boolean haveTs = FALSE, havePkt = FALSE;
 	struct msghdr *msg = &ptpInterface->msgEbuf;
 	struct cmsghdr *cmsg;
 	struct sock_extended_err *err;
-	struct sfptpd_ts_pkt *pkt;
-
-	/* Appease impossible -Werror=maybe-unitialised reports */
-	pkt = NULL;
 
 	assert(user);
 	assert(ticket);
 	assert(info);
 
-	(void)sfclock_gettime(CLOCK_MONOTONIC, &now);
 	reset_timestamp(info);
 
 	if (length != 0) {
@@ -1077,75 +1129,29 @@ bool netProcessError(PtpInterface *ptpInterface,
 	if (!havePkt)
 		goto finish;
 
-	TS_CACHE_FOREACH(&ptpInterface->ts_cache, slot) {
-		pkt = &ptpInterface->ts_cache.packet[slot];
+	*ticket = matchPacketToTsCache(&ptpInterface->ts_cache,
+				       user,
+				       msg->msg_iov[0].iov_base,
+				       length);
 
-		if (length < pkt->match.pdu.len + pkt->match.pdu.trailer) {
-			/* Too short to match this packet */
-			continue;
+	if (sfptpd_ts_is_ticket_valid(*ticket)) {
+		if (!haveTs) {
+			WARNING("received looped back transmit "
+				"packet but no timestamp\n");
 		}
-
-		/* We have a suitable message */
-		DBGV("Checking PDU slot %d\n", slot);
-		DUMP("PDU to match",
-		     pkt->match.pdu.data, pkt->match.pdu.len);
-
-		if (memcmp(pkt->match.pdu.data,
-			   msg->msg_iov[0].iov_base +
-			   length -
-			   pkt->match.pdu.len -
-			   pkt->match.pdu.trailer,
-			   pkt->match.pdu.len) == 0) {
-
-				/* Record the match */
-				matchedPkt = TRUE;
-				ticket->slot = slot;
-				ticket->seq = pkt->seq;
-				*user = pkt->user;
-
-				/* Remove from cache if matching */
-				ptpInterface->ts_cache.free_bitmap |= (1 << ts_cache_bit(slot));
-
-				break;
+	} else {
+		if (havePkt) {
+			WARNING("unexpected pkt received on "
+				"socket error queue. Expected one of:\n");
+			TS_CACHE_FOREACH(&ptpInterface->ts_cache, slot) {
+				struct sfptpd_ts_pkt *pkt = &ptpInterface->ts_cache.packet[slot];
+				dump("expected", pkt->match.pdu.data, pkt->match.pdu.len);
+			}
+			dump("got (with headers)", msg->msg_iov[0].iov_base, length);
 		}
-	}
-
-	if (!haveTs && matchedPkt)
-		WARNING("received looped back transmit "
-			"packet but no timestamp\n");
-
-	if (havePkt && !matchedPkt) {
-		WARNING("unexpected pkt received on "
-			"socket error queue. Expected one of:\n");
-		TS_CACHE_FOREACH(&ptpInterface->ts_cache, slot) {
-			struct sfptpd_ts_pkt *pkt = &ptpInterface->ts_cache.packet[slot];
-			dump("expected", pkt->match.pdu.data, pkt->match.pdu.len);
-		}
-		dump("got (with headers)", msg->msg_iov[0].iov_base, length);
 	}
 
 finish:
-	if (matchedPkt) {
-		struct sfptpd_ts_cache *cache = &ptpInterface->ts_cache;
-		int quantile;
-
-		/* Record time taken to get the result */
-		sfptpd_time_subtract(&elapsed, &now, &pkt->sent_monotime);
-
-		for (quantile = 0; quantile < TS_QUANTILES; quantile++) {
-			if (!sfptpd_time_is_greater_or_equal(&elapsed, &cache->stats_periodic.quantile_bounds[quantile])) {
-				cache->stats_periodic.resolved_quantile[quantile]++;
-				cache->stats_adhoc.resolved_quantile[quantile]++;
-				break;
-			}
-		}
-
-		DBGV("Tx timestamp took " SFPTPD_FMT_SFTIMESPEC "s to acquire\n",
-		     SFPTPD_ARGS_SFTIMESPEC(elapsed));
-	} else {
-		*ticket = TS_NULL_TICKET;
-	}
-
 	return haveTs;
 }
 
