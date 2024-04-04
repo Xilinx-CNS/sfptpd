@@ -246,6 +246,9 @@ ssize_t netRecvEvent(Octet*,PtpInterface*,struct sfptpd_ts_info*);
 ssize_t netRecvGeneral(Octet*,struct ptpd_transport*);
 void netCheckTimestampStats(struct sfptpd_ts_cache *cache, struct sfptpd_ts_stats *stats, int severity);
 bool netCheckTimestampAlarms(PtpClock *ptpClock);
+struct sfptpd_ts_ticket netMatchPacketToTsCache(struct sfptpd_ts_cache *ts_cache,
+						struct sfptpd_ts_user *user,
+						const char *data, size_t length);
 
 /* These functions all return 0 for success or an errno in the case of failure */
 int netSendEvent(Octet*,UInteger16,PtpClock*,RunTimeOpts*,const struct sockaddr_storage*,socklen_t,Integer32);

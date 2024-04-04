@@ -995,9 +995,9 @@ static int parse_timestamp(uint8_t *pdu, size_t pdu_len,
 	return info->have_sw || info->have_hw ? 0 : ENOTIMESTAMP;
 }
 
-static struct sfptpd_ts_ticket matchPacketToTsCache(struct sfptpd_ts_cache *ts_cache,
-						    struct sfptpd_ts_user *user,
-						    const char *data, size_t length)
+struct sfptpd_ts_ticket netMatchPacketToTsCache(struct sfptpd_ts_cache *ts_cache,
+						struct sfptpd_ts_user *user,
+						const char *data, size_t length)
 {
 	struct sfptpd_timespec now, elapsed;
 	struct sfptpd_ts_pkt *pkt;
@@ -1129,10 +1129,10 @@ bool netProcessError(PtpInterface *ptpInterface,
 	if (!havePkt)
 		goto finish;
 
-	*ticket = matchPacketToTsCache(&ptpInterface->ts_cache,
-				       user,
-				       msg->msg_iov[0].iov_base,
-				       length);
+	*ticket = netMatchPacketToTsCache(&ptpInterface->ts_cache,
+					  user,
+					  msg->msg_iov[0].iov_base,
+					  length);
 
 	if (sfptpd_ts_is_ticket_valid(*ticket)) {
 		if (!haveTs) {
