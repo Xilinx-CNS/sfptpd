@@ -496,13 +496,16 @@ doInitPort(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		return FALSE;
 	}
 
-	/* Initialize the PTP data sets */
-	initData(rtOpts, ptpClock);
-
 	/* Determine which clock to use based on the interface */
 	assert(ptpClock->physIface != NULL);
 	ptpClock->clock = sfptpd_interface_get_clock(ptpClock->physIface);
 	assert(ptpClock->clock != NULL);
+
+	/* Get clock id */
+	sfptpd_clock_get_hw_id(ptpClock->clock, &rtOpts->ifOpts->clock_id);
+
+	/* Initialize the PTP data sets */
+	initData(rtOpts, ptpClock);
 
 	system_clock = sfptpd_clock_get_system_clock();
 

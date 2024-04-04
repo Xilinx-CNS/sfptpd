@@ -3896,8 +3896,6 @@ static int ptp_on_startup(void *context)
 				return EREPORTED;
 			}
 
-			sfptpd_clock_get_hw_id(instance->ptpd_port_private->clock, &config->ptpd_intf.clock_id);
-
 			/* Get an initial snapshot of PTPD's state so that we have something
 			 * valid if queried */
 			rc = ptpd_get_snapshot(instance->ptpd_port_private, &instance->ptpd_port_snapshot);
