@@ -252,9 +252,10 @@ static int drop_user(struct sfptpd_config *config)
 
 static int runtime_checks(struct sfptpd_config *config)
 {
-	FILE *clock_src;
+	struct sfptpd_config_general *gconf = sfptpd_general_config_get(config);
 	char source[10] = "";
 	struct utsname name;
+	FILE *clock_src;
 	int rc = 0;
 
 	assert(config != NULL);
@@ -262,13 +263,11 @@ static int runtime_checks(struct sfptpd_config *config)
 	rc = uname(&name);
 #if defined(__i386__)
 	/* If this is a 32bit binary, check that we are running on a 32bit kernel */
-	if (rc == -1) {
-		CRITICAL("could not determine system characteristics with uname: %s\n",
-			 strerror(errno));
-		return ENOEXEC;
-	} else if (strcmp(name.machine, "i686") != 0) {
-		CRITICAL("32-bit sfptpd not compatible with 64-bit kernel\n");
-		return ENOEXEC;
+	if (rc == 0 &&
+	    strcmp(name.machine, "i686") != 0 &&
+	    !gconf->avoid_efx) {
+		gconf->avoid_efx = true;
+		NOTICE("disabling private sfc clock ioctls with 32-bit userspace on 64-bit kernel\n");
 	}
 #endif
 
@@ -284,7 +283,7 @@ static int runtime_checks(struct sfptpd_config *config)
 #endif
 	}
 
-	if (sfptpd_general_config_get(config)->lock) {
+	if (gconf->lock) {
 		struct sfptpd_prog competitors[] = {
 			{ "ptpd*" },
 			{ "sfptpd" },
