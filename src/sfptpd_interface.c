@@ -519,7 +519,7 @@ static bool interface_check_suitability(const struct sfptpd_link *link,
 	 * infiniband etc and ignore all non-ethernet types.
 	 *
 	 * Even if the interface is ethernet type but we want to exclude
-	 * devices that are wireless, bridges, vlan interfaces, bonds,
+	 * devices that are bridges, vlan interfaces, bonds,
 	 * tap devices and virtual interfaces */
 
 	switch(link->type) {
@@ -548,8 +548,7 @@ static bool interface_check_suitability(const struct sfptpd_link *link,
 	case SFPTPD_LINK_PHYSICAL:
 		if (sysfs_file_exists(sysfs_dir, name, "wireless") ||
 		    sysfs_file_exists(sysfs_dir, name, "phy80211")) {
-			TRACE_L2("interface %s: is wireless - ignoring\n", name);
-			return false;
+			TRACE_L2("interface %s: is wireless - this isn't going to work well!\n", name);
 		}
 		if (link->type != SFPTPD_LINK_MACVLAN &&
 		    sysfs_file_exists(SFPTPD_SYSFS_VIRTUAL_NET_PATH, "", name)) {
