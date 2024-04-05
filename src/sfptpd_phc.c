@@ -33,18 +33,24 @@
 #include "sfptpd_priv.h"
 
 
+#ifdef SFPTPD_GLIBC_COMPAT
 /****************************************************************************
  * Missing kernel API bits and pieces
  ****************************************************************************/
 
 /* The oldest distribution we support has kernel support for PHC but the
  * syscall is missing in that glibc version. In this case we need to create our
- * own version of clock_adjtime() and invoke the syscall. */
+ * own version of clock_adjtime() and invoke the syscall.
+ *
+ * Avoid including this where not needed as it overrides glibc's smarts for
+ * handling 64-bit time on 32-bit architectures.
+ */
 #pragma weak clock_adjtime
 int clock_adjtime(clockid_t clock, struct timex *timex_block)
 {
 	return syscall(__NR_clock_adjtime, clock, timex_block);
 }
+#endif
 
 
 /****************************************************************************
