@@ -4,7 +4,10 @@
 #ifndef _SFPTPD_TIME_H
 #define _SFPTPD_TIME_H
 
-#include <time.h>
+#ifdef HAVE_TIME_TYPES
+#include <linux/time_types.h>
+#endif
+#include <sys/time.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <math.h>
@@ -302,6 +305,19 @@ static inline void sfptpd_time_from_std_floor(struct sfptpd_timespec *sfts, cons
 	sfts->nsec = ts->tv_nsec;
 	sfts->nsec_frac = 0;
 }
+
+#ifdef HAVE_TIME_TYPES
+/** Convert a kernel timestamp to struct sfptpd_timespec.
+ * @param sfts  The structure to fill.
+ * @param ts The structure to copy.
+ */
+static inline void sfptpd_time_from_kernel_floor(struct sfptpd_timespec *sfts, const struct __kernel_timespec *ts)
+{
+	sfts->sec = ts->tv_sec;
+	sfts->nsec = ts->tv_nsec;
+	sfts->nsec_frac = 0;
+}
+#endif
 
 /** Initialise a struct sfptpd_timespec to zero.
  * @param ts  The structure to clear.

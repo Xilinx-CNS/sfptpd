@@ -70,6 +70,8 @@
 #include <onload/extensions.h>
 #endif
 
+#include "sfptpd_time.h"
+
 /* SO_EE_ORIGIN_TIMESTAMPING is defined in linux/errqueue.h in recent kernels.
  * Define it for compilation with older kernels.
  */
@@ -90,8 +92,22 @@
 /* SO_TIMESTAMPING is defined in asm/socket.h in recent kernels.
  * Define it for compilation with older kernels.
  */
-#ifndef SO_TIMESTAMPING
-#define SO_TIMESTAMPING  37
+#ifndef SO_TIMESTAMPING_OLD
+#define SO_TIMESTAMPING_OLD  37
+#endif
+#ifndef SO_TIMESTAMPING_NEW
+#ifdef HAVE_TIME_TYPES
+struct scm_timestamping64 {
+        struct __kernel_timespec ts[3];
+};
+#endif
+#define SO_TIMESTAMPING_NEW  65
+#endif
+#ifndef SCM_TIMESTAMPING_OLD
+#define SCM_TIMESTAMPING_OLD SO_TIMESTAMPING_OLD
+#endif
+#ifndef SCM_TIMESTAMPING_NEW
+#define SCM_TIMESTAMPING_NEW SO_TIMESTAMPING_NEW
 #endif
 
 /* SCM_TIMESTAMPING_PKTINFO was introduced in Linux 4.13.
@@ -955,12 +971,15 @@ static void reset_timestamp(struct sfptpd_ts_info *info)
 static int parse_timestamp(uint8_t *pdu, size_t pdu_len,
 			   enum ptpd_ts_fmt ts_fmt,
 			   struct sfptpd_ts_info *info,
-			   bool tx)
+			   bool tx, int scm_type)
 {
 	const char *type = ts_fmt == PTPD_TS_ONLOAD_EXT ? "onload extension timestamp" : "so_timestamping";
 	union {
 		void *ptr;
-		struct timespec *lnx;
+		struct scm_timestamping *lnx;
+#ifdef HAVE_TIME_TYPES
+		struct scm_timestamping64 *lnx64;
+#endif
 #ifdef HAVE_ONLOAD_EXT
 		struct onload_timestamp *onload;
 #endif
@@ -972,7 +991,7 @@ static int parse_timestamp(uint8_t *pdu, size_t pdu_len,
 #ifdef HAVE_ONLOAD_EXT
 	    (ts_fmt == PTPD_TS_ONLOAD_EXT && pdu_len < CMSG_LEN(sizeof(*ts.onload) * 1)) ||
 #endif
-	    (ts_fmt == PTPD_TS_LINUX && pdu_len < CMSG_LEN(sizeof(*ts.lnx) * 3))) {
+	    (ts_fmt == PTPD_TS_LINUX && pdu_len < CMSG_LEN(sizeof(*ts.lnx)))) {
 		ERROR("received short %s (%zu)\n", type, pdu_len);
 		memset(info, '\0', sizeof *info);
 		return ENOTIMESTAMP;
@@ -994,9 +1013,16 @@ static int parse_timestamp(uint8_t *pdu, size_t pdu_len,
 		sfptpd_time_zero(&info->sw);
 		info->have_sw = false;
 #endif
+#ifdef HAVE_TIME_TYPES
+	} else if (scm_type == SCM_TIMESTAMPING_NEW) {
+		sfptpd_time_from_kernel_floor(&info->sw, &ts.lnx64->ts[0]);
+		sfptpd_time_from_kernel_floor(&info->hw, &ts.lnx64->ts[2]);
+		info->have_sw = info->sw.sec != 0;
+		info->have_hw = info->hw.sec != 0;
+#endif
 	} else {
-		sfptpd_time_from_std_floor(&info->sw, &ts.lnx[0]);
-		sfptpd_time_from_std_floor(&info->hw, &ts.lnx[2]);
+		sfptpd_time_from_std_floor(&info->sw, &ts.lnx->ts[0]);
+		sfptpd_time_from_std_floor(&info->hw, &ts.lnx->ts[2]);
 		info->have_sw = info->sw.sec != 0;
 		info->have_hw = info->hw.sec != 0;
 	}
@@ -1121,10 +1147,11 @@ bool netProcessError(PtpInterface *ptpInterface,
 		DUMP("cmsg (header)", cmsg, len);
 
 		if ((SOL_SOCKET == level) &&
-		    (SO_TIMESTAMPING == type)) {
+		    (SO_TIMESTAMPING_OLD == type ||
+		     SO_TIMESTAMPING_NEW == type)) {
 			haveTs = parse_timestamp(CMSG_DATA(cmsg), len,
 						 ptpInterface->ts_fmt,
-						 info, true) == 0;
+						 info, true, type) == 0;
 		} else if ((ipproto == level) &&
 			   (iptype == type)) {
 			err = (struct sock_extended_err *)CMSG_DATA(cmsg);
@@ -1369,10 +1396,11 @@ static Boolean getRxTimestamp(PtpInterface *ptpInterface,
 			info->have_sw = true;
 			break;
 
-		case SO_TIMESTAMPING:
+		case SCM_TIMESTAMPING_NEW:
+		case SCM_TIMESTAMPING_OLD:
 			parse_timestamp(CMSG_DATA(cmsg), cmsg->cmsg_len,
 					ptpInterface->ts_fmt,
-					info, FALSE);
+					info, FALSE, cmsg->cmsg_type);
 			break;
 
 		case SCM_TIMESTAMPING_PKTINFO:
@@ -1397,7 +1425,8 @@ static Boolean getRxTimestamp(PtpInterface *ptpInterface,
 
 /* Attempt to use SO_TIMESTAMPING with the provided flags, and try to include
  * SOF_TIMESTAMPING_OPT_PKTINFO if possible. */
-static Boolean netTryEnableTimestampingPktinfo(PtpInterface *ptpInterface, int flags)
+static Boolean netTryEnableTimestampingPktinfo(PtpInterface *ptpInterface,
+					       int flags, int type)
 {
 	int has_pktinfo_flag;
 
@@ -1418,6 +1447,22 @@ static Boolean netTryEnableTimestampingPktinfo(PtpInterface *ptpInterface, int f
 	return FALSE;
 }
 
+/* y2038: attempt SO_TIMESTAMPING_NEW, falling back to SO_TIMESTAMPING_OLD,
+ * allowing 32-bit systems to access 64-bit seconds on recent kernels. */
+static bool netTryEnableTimestamping(PtpInterface *ptpInterface, int flags)
+{
+	const int option[] = {
+		SO_TIMESTAMPING_NEW,
+		SO_TIMESTAMPING_OLD,
+	};
+	enum { FIRST, LAST } iter;
+	bool done = false;
+
+	for (iter = FIRST; !done && iter <= LAST; iter++)
+		done = netTryEnableTimestampingPktinfo(ptpInterface, flags, option[iter]);
+
+	return done;
+}
 
 /**
  * Initialize timestamping of packets
@@ -1461,7 +1506,7 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 		      | SOF_TIMESTAMPING_RX_SOFTWARE
 		      | SOF_TIMESTAMPING_SOFTWARE;
 
-		if (netTryEnableTimestampingPktinfo(ptpInterface, flags)) {
+		if (netTryEnableTimestamping(ptpInterface, flags)) {
 			ptpInterface->tsMethod = TS_METHOD_SO_TIMESTAMPING;
 			INFO("using SO_TIMESTAMPING software timestamps\n");
 			return TRUE;
@@ -1538,7 +1583,7 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 	      | SOF_TIMESTAMPING_RX_HARDWARE
 	      | SOF_TIMESTAMPING_RAW_HARDWARE;
 
-	if (netTryEnableTimestampingPktinfo(ptpInterface, flags)) {
+	if (netTryEnableTimestamping(ptpInterface, flags)) {
 		ptpInterface->tsMethod = TS_METHOD_SO_TIMESTAMPING;
 		INFO("using SO_TIMESTAMPING hardware timestamps\n");
 		return TRUE;

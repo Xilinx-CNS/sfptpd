@@ -28,6 +28,7 @@ CONDITIONAL_DEFS := \
  $(if $(value GLIBC_COMPAT),-DSFPTPD_GLIBC_COMPAT) \
  $(shell $(call if_header_then,sys/capability.h,-DHAVE_CAPS)) \
  $(shell $(call if_header_then,linux/ethtool_netlink.h,-DHAVE_ETHTOOL_NETLINK)) \
+ $(shell $(call if_header_then,linux/time_types.h,-DHAVE_TIME_TYPES)) \
  $(shell $(call if_defn_then,linux/if_link.h,IFLA_PERM_ADDRESS)) \
  $(shell $(call if_defn_then,linux/if_link.h,IFLA_PARENT_DEV_NAME))
 CONDITIONAL_LIBS := \
