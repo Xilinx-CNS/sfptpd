@@ -1066,18 +1066,17 @@ struct sfptpd_log *sfptpd_log_open_remote_monitor(void)
 
 void sfptpd_log_get_time(struct sfptpd_log_time *time)
 {
-	struct timeval now;
 	char temp[SFPTPD_LOG_TIME_STR_MAX];
-	sfptpd_secs_t s;
+	struct sfptpd_timespec now;
 	int rc;
 	
 	assert(time != NULL);
 	
-	gettimeofday(&now, 0);
-	s = (sfptpd_secs_t) now.tv_sec;
-	sfptpd_local_strftime(temp, sizeof(temp), "%Y-%m-%d %X", &s);
+	sfclock_gettime(CLOCK_REALTIME, &now);
+	sfptpd_local_strftime(temp, sizeof(temp), "%Y-%m-%d %X", &now.sec);
 
-	rc = snprintf(time->time, sizeof(time->time), "%s.%06ld", temp, now.tv_usec);
+	rc = snprintf(time->time, sizeof(time->time), "%s.%06" PRId32,
+		      temp, now.nsec / 1000);
 	assert(rc < sizeof(time->time));
 }
 
