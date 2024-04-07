@@ -144,7 +144,7 @@ static int server(int unix_fd)
 		struct sfptpd_priv_req_msg req_msg;
 		struct sfptpd_priv_resp_msg resp_msg = { .resp = SFPTPD_PRIV_RESP_OK };
 		struct msghdr send_hdr = { 0 };
-		struct iovec send_iov[1] = { 0 };
+		struct iovec send_iov[1] = {{ 0 }};
 		int fds[1];
 		int num_fds = 0;
 		union {

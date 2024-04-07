@@ -45,7 +45,7 @@ find -iregex '.*\.py' | xargs sed -i -r -e '1s,^(#!).*python3,\1/usr/bin/python,
 sed -i 's,.*\(SFPTPD_USER=\).*",#\1"",g' scripts/sfptpd.env
 
 %build
-make %{?_smp_mflags} sfptpd sfptpdctl GLIBC_COMPAT=1
+make %{?_smp_mflags} sfptpd sfptpdctl sfptpd_priv_helper GLIBC_COMPAT=1
 
 %install
 export CC='false # no compilation at installation stage #'

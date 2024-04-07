@@ -782,8 +782,8 @@ static void main_on_user_fds(void *not_used, unsigned int num_fds,
 		if (fd == sfptpd_control_socket_get_fd()) {
 			on_control_socket_fd(fd);
 		} else if (fd == priv_helper_pidfd) {
-			rc = waitid(P_PIDFD,
-				    priv_helper_pidfd,
+			rc = waitid(P_PID,
+				    priv_helper_pid,
 				    &siginf,
 				    WEXITED | WNOHANG);
 			if (rc == -1)
