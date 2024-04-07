@@ -69,6 +69,7 @@ touch %{buildroot}%{_localstatedir}/lib/%{name}/{config,interfaces,sync-instance
 %files
 %attr(755, root, root) %{_sbindir}/sfptpd
 %attr(755, root, root) %{_sbindir}/sfptpdctl
+%attr(755, root, root) %{_libexecdir}/%{name}/sfptpd_priv_helper
 %attr(755, root, root) %{_sysconfdir}/init.d/sfptpd
 %attr(644, root, root) %config(noreplace) %{_sysconfdir}/sfptpd.conf
 %attr(644, root, root) %config(noreplace) %{_sysconfdir}/sysconfig/sfptpd
