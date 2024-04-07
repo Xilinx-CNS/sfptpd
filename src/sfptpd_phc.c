@@ -30,6 +30,7 @@
 #include "sfptpd_time.h"
 #include "sfptpd_phc.h"
 #include "sfptpd_thread.h"
+#include "sfptpd_priv.h"
 
 
 /****************************************************************************
@@ -341,11 +342,12 @@ static int phc_configure_pps(struct sfptpd_phc *phc)
 	 * events on the PHC device */
 	snprintf(path, sizeof(path), "/dev/%s", fts_entry->fts_name);
 
-	phc->pps_fd = open(path, O_RDWR);
+	phc->pps_fd = sfptpd_priv_open_dev(path);
 	if (phc->pps_fd < 0) {
+		rc = -phc->pps_fd;
+		phc->pps_fd = -1;
 		ERROR("phc%d: failed to open PPS device %s, %s\n",
 		      phc->phc_idx, path, strerror(errno));
-		rc = errno;
 		goto fail1;
 	}
 
@@ -497,11 +499,13 @@ static int phc_open_devpps(struct sfptpd_phc *phc)
 	}
 
 	/* Open the PPS device */
-	phc->devpps_fd = open(phc->devpps_path, O_RDWR);
+	phc->devpps_fd = sfptpd_priv_open_dev(phc->devpps_path);
 	if (phc->devpps_fd < 0) {
+		int rc = -phc->devpps_fd;
+		phc->devpps_fd = -1;
 		ERROR("phc%d: failed to open external PPS device %s, %s\n",
-		      phc->phc_idx, phc->devpps_path, strerror(errno));
-		return errno;
+		      phc->phc_idx, phc->devpps_path, strerror(rc));
+		return rc;
 	}
 
 	return 0;
@@ -1135,11 +1139,12 @@ int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc)
 
 	/* Open the PHC device */
 	snprintf(path, sizeof(path), SFPTPD_PHC_DEVICE_FORMAT, phc_index);
-	new->phc_fd = open(path, O_RDWR);
+	new->phc_fd = sfptpd_priv_open_dev(path);
 	if (new->phc_fd < 0) {
+		rc = -new->phc_fd;
+		new->phc_fd = -1;
 		ERROR("phc%d: failed to open device %s, %s\n",
-		      phc_index, path, strerror(errno));
-		rc = errno;
+		      phc_index, path, strerror(rc));
 		goto fail1;
 	}
 

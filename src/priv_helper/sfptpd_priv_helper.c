@@ -5,13 +5,17 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <regex.h>
 #include <unistd.h>
 #include <getopt.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <fcntl.h>
 
 #include "sfptpd_priv_ops.h"
 #include "sfptpd_crny_proto.h"
@@ -27,6 +31,7 @@ static const struct option opts_long[] = {
 	{ "help", 0, NULL, (int) 'h' },
 	{ NULL, 0, NULL, 0 }
 };
+static const char *permitted_devices = "^/dev/(pps|ptp)[[:digit:]]+$";
 
 
 /****************************************************************************
@@ -39,11 +44,32 @@ static const struct option opts_long[] = {
  ****************************************************************************/
 
 static bool verbose = false;
+static regex_t permitted_devices_re;
 
 
 /****************************************************************************
  * Local functions
  ****************************************************************************/
+
+static int do_init(void)
+{
+	char errbuf[256];
+	int rc;
+
+	rc = regcomp(&permitted_devices_re, permitted_devices, REG_EXTENDED | REG_NOSUB);
+	if (rc != 0) {
+		regerror(rc, &permitted_devices_re, errbuf, sizeof errbuf);
+		fprintf(stderr, "priv: regcomp: %s\n", errbuf);
+		return EINVAL;
+	}
+
+	return 0;
+}
+
+static void do_finit(void)
+{
+	regfree(&permitted_devices_re);
+}
 
 static void usage(FILE *stream)
 {
@@ -80,6 +106,33 @@ static int op_open_chrony(struct sfptpd_priv_resp_msg *resp_msg)
 		 sizeof resp_msg->open_chrony.failing_step, "%s", failing_step);
 
 	return rc == 0 ? sock : -1;
+}
+
+static int op_open_dev(struct sfptpd_priv_resp_msg *resp_msg,
+		       const struct sfptpd_priv_req_msg *req_msg)
+{
+	const size_t max_path = sizeof req_msg->open_dev.path;
+	int fd;
+
+	assert(resp_msg);
+	assert(req_msg);
+
+	resp_msg->resp = SFPTPD_PRIV_RESP_OPEN_DEV;
+
+	if (strnlen(req_msg->open_dev.path, max_path) == max_path) {
+		resp_msg->open_dev.rc = ENAMETOOLONG;
+		return -1;
+	}
+
+	if (regexec(&permitted_devices_re, req_msg->open_dev.path,
+		    0, NULL, 0) != 0) {
+		resp_msg->open_dev.rc = EPERM;
+		return -1;
+	}
+
+	fd = open(req_msg->open_dev.path, O_RDWR);
+	resp_msg->open_dev.rc = fd == -1 ? errno : 0;
+	return fd;
 }
 
 static int server(int unix_fd)
@@ -127,6 +180,9 @@ static int server(int unix_fd)
 			break;
 		case SFPTPD_PRIV_REQ_OPEN_CHRONY:
 			fd = op_open_chrony(&resp_msg);
+			break;
+		case SFPTPD_PRIV_REQ_OPEN_DEV:
+			fd = op_open_dev(&resp_msg, &req_msg);
 			break;
 		}
 
@@ -177,6 +233,9 @@ int main(int argc, char *argv[])
 	int index;
 	int opt;
 
+	if (do_init() != 0)
+		return EXIT_FAILURE;
+
 	/* Handle command line arguments */
 	while ((opt = getopt_long(argc, argv, opts_short, opts_long, &index)) != -1) {
 		switch (opt) {
@@ -209,6 +268,8 @@ int main(int argc, char *argv[])
 
 	if (verbose)
 		fprintf(stderr, "%s: stopped\n", prog);
+
+	do_finit();
 
 	return EXIT_SUCCESS;
 }

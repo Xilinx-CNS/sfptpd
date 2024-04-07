@@ -64,7 +64,6 @@ export INST_OMIT="license"
 export INST_INITS="systemd"
 %make_install
 install -m 644 -p -D %{SOURCE1} %{buildroot}%{_sysusersdir}/%{name}.conf
-install -m 644 -p -D scripts/udev/55-sfptpd.rules %{buildroot}%{_udevrulesdir}/55-sfptpd.rules
 mkdir -p %{buildroot}%{_localstatedir}/lib/%{name}
 touch %{buildroot}%{_localstatedir}/lib/%{name}/{config,interfaces,sync-instances,topology,version,ptp-nodes}
 
@@ -90,7 +89,6 @@ make fast_test
 %config(noreplace) %{_sysconfdir}/sfptpd.conf
 %config(noreplace) %{_sysconfdir}/sysconfig/sfptpd
 %{_sysusersdir}/%{name}.conf
-%{_udevrulesdir}/55-sfptpd.rules
 %license LICENSE PTPD2_COPYRIGHT NTP_COPYRIGHT
 %doc %{_pkgdocdir}/CHANGELOG.md
 %doc %{_pkgdocdir}/config

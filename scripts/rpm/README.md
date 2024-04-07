@@ -26,7 +26,6 @@ clicking on the commit log summary line in the following index:
 
 * Creates an `sfptpd` user
    - uses `sysusers.d`
-   - includes `udev.d` rules
    - state files to be owned by `sfptpd` user
    - comments out `SFPTPD_USER` setting in `/etc/sysconfig/sfptpd` because
      chronyd integration cannot work as a non-root user, unless that user

@@ -23,10 +23,15 @@ extern int sfptpd_priv_start_helper(struct sfptpd_config *config,
 /* Stop the privileged helper, if started. */
 extern void sfptpd_priv_stop_helper(void);
 
-/* Connect to the chronyd control channel, first attempting the the
+/* Connect to the chronyd control channel, first attempting with the
  * privileged helper, falling back to a direct attempt if not present.
  * Returns fd or -errno on error. */
 extern int sfptpd_priv_open_chrony(sfptpd_short_text_t failing_step,
 				   const char *client_path);
+
+/* Open a device, first attempting with the privileged helper, falling
+ * back to a direct attempt if not present.
+ * Returns fd or -errno on error. */
+int sfptpd_priv_open_dev(const char *path);
 
 #endif /* _SFPTPD_PRIV_H */

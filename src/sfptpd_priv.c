@@ -8,6 +8,8 @@
 #include <errno.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <fcntl.h>
+#include <sys/types.h>
 
 #include "sfptpd_logging.h"
 #include "sfptpd_priv.h"
@@ -34,7 +36,7 @@
  *    |  +-----------------------------+  |      |                      |
  *    |  | sfptpd_priv_rpc()           |  |      |                      |
  *    |  |                             |  |      |                      |
- *    |  |   sendmsg() ----PRIV_REQ_OPEN_CHRONY----> recvmsg()          |
+ *    |  |   send() -------PRIV_REQ_OPEN_CHRONY----> recvmsg()          |
  *    |  |                             |  |      |   op_open_chrony()   |
  *    |  |   recvmsg() {<--[rc=0|errno],failtext---} sendmsg()          |
  *    |  |             {<============*fd*==========}                    |
@@ -157,7 +159,7 @@ static int sfptpd_priv_rpc(struct sfptpd_priv_state *state,
 
 	pthread_mutex_lock(&state->lock);
 	do {
-		rc = send(state->helper_fd, req, sizeof req, 0);
+		rc = send(state->helper_fd, req, sizeof *req, 0);
 	} while (rc == -1 && errno == EINTR);
 
 	if (rc < 0)
@@ -196,7 +198,11 @@ static int sfptpd_priv_rpc(struct sfptpd_priv_state *state,
 		return -EINVAL;
 	}
 
-	memcpy(returned_fds, CMSG_DATA(recv_cmsg), num_fds * sizeof(int));
+	if (recv_cmsg)
+		memcpy(returned_fds, CMSG_DATA(recv_cmsg), num_fds * sizeof(int));
+	else
+		num_fds = 0;
+
 	return num_fds;
 }
 
@@ -341,4 +347,32 @@ int sfptpd_priv_open_chrony(sfptpd_short_text_t failing_step,
 		ERROR("priv: open_chrony: error calling helper, %s\n", strerror(rc));
 	}
 	return -rc;
+}
+
+int sfptpd_priv_open_dev(const char *path)
+{
+	struct sfptpd_priv_req_msg req = { .req = SFPTPD_PRIV_REQ_OPEN_DEV };
+	struct sfptpd_priv_resp_msg resp = { 0 };
+	const size_t max_path = sizeof req.open_dev.path;
+	int rc;
+	int fds[1];
+
+	if (strnlen(path, max_path) == max_path)
+		return -ENAMETOOLONG;
+	sfptpd_strncpy(req.open_dev.path, path, max_path);
+
+	rc = sfptpd_priv_rpc(&priv_state, &req, &resp, fds);
+	if (rc > 0) {
+		TRACE_L5("priv: open-dev: got fd %d from helper\n", fds[0]);
+		rc = fds[0];
+	} else if (rc == 0) {
+		rc = -resp.open_dev.rc;
+	} else if (rc == -ENOTCONN) {
+		rc = open(path, O_RDWR);
+		if (rc == -1)
+			rc = -errno;
+	} else {
+		ERROR("priv: open_chrony: error calling helper, %s\n", strerror(rc));
+	}
+	return rc;
 }

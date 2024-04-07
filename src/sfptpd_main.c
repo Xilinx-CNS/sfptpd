@@ -232,9 +232,10 @@ static int drop_user(struct sfptpd_config *config)
 
 	if (gconf->uid != 0) {
 		INFO("dropping to user %d\n", gconf->uid);
-		NOTICE("for hotplugged network interfaces, udev rules must "
-		       "give access to corresponding /dev/{ptp*,pps*} devices "
-		       "for the user or group running sfptpd\n");
+		if (priv_helper_pid == -1)
+			NOTICE("for hotplugged network interfaces, udev rules must "
+			       "give access to corresponding /dev/{ptp*,pps*} devices "
+			       "for the user or group running sfptpd\n");
 		rc = setresuid(gconf->uid, gconf->uid, gconf->uid);
 		if (rc == -1) {
 			rc = errno;
