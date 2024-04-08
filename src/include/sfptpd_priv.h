@@ -34,4 +34,9 @@ extern int sfptpd_priv_open_chrony(sfptpd_short_text_t failing_step,
  * Returns fd or -errno on error. */
 int sfptpd_priv_open_dev(const char *path);
 
+/* Perform chrony clock control operation with the privileged helper,
+ * falling back to a direct attempt if not present.
+ * Returns 0 on success, -errno on error. */
+int sfptpd_priv_chrony_control(enum chrony_clock_control_op op);
+
 #endif /* _SFPTPD_PRIV_H */

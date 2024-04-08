@@ -88,17 +88,6 @@ enum ntp_stats_ids {
 	NTP_STATS_ID_SYNCHRONIZED
 };
 
-
-/* operation for clock control script */
-enum chrony_clock_control_op {
-	CRNY_CTRL_OP_NOP,
-	CRNY_CTRL_OP_ENABLE,
-	CRNY_CTRL_OP_DISABLE,
-	CRNY_CTRL_OP_SAVE,
-	CRNY_CTRL_OP_RESTORE,
-	CRNY_CTRL_OP_RESTORENORESTART,
-};
-
 struct ntp_state {
 	/* NTP module state */
 	sfptpd_sync_module_state_t state;
@@ -419,6 +408,7 @@ static int crny_validate_config(struct sfptpd_config_section *section)
 	assert(ntp != NULL);
 
 	if (ntp->clock_control &&
+	    ntp->chronyd_script[0] != '\0' &&
 	    access(ntp->chronyd_script, X_OK) != 0) {
 		rc = errno;
 		CFG_ERROR(section, "chronyd clock control requested but "
@@ -1646,16 +1636,6 @@ static int do_clock_control(crny_module_t *ntp,
 		}
 	}
 
-	len = strlen(ntp->config->chronyd_script);
-	total = len + strlen(action) + 1;
-	command = calloc(1, total);
-	if (!command)
-		return ENOMEM;
-	strcpy(command, ntp->config->chronyd_script);
-	strcpy(command + len, action);
-
-	INFO("crny: invoking clock control script '%s'\n", command);
-
 	/* If we have a valid socket close it */
 	if (op_do == CRNY_CTRL_OP_ENABLE ||
 	    op_do == CRNY_CTRL_OP_DISABLE ||
@@ -1663,19 +1643,35 @@ static int do_clock_control(crny_module_t *ntp,
 		crny_close_socket(ntp);
 	}
 
-	/* run the command */
-	status = system(command);
-	if (status == -1 || !WIFEXITED(status))
-		rc = ECHILD;
-	else
-		rc = WEXITSTATUS(status);
-	if (rc != 0)
-		ERROR("crny: clock control script failed, %s\n",
-			strerror(rc));
+	if (ntp->config->chronyd_script[0]) {
+		len = strlen(ntp->config->chronyd_script);
+		total = len + strlen(action) + 1;
+		command = calloc(1, total);
+		if (!command)
+			return ENOMEM;
+		strcpy(command, ntp->config->chronyd_script);
+		strcpy(command + len, action);
+
+		INFO("crny: invoking clock control script '%s'\n", command);
+
+			/* run the command */
+		status = system(command);
+		if (status == -1 || !WIFEXITED(status))
+			rc = ECHILD;
+		else
+			rc = WEXITSTATUS(status);
+		if (rc != 0)
+			ERROR("crny: clock control script failed, %s\n",
+				strerror(rc));
+
+		free(command);
+	} else {
+		rc = sfptpd_priv_chrony_control(op_do);
+	}
 
 	if (op_do != CRNY_CTRL_OP_SAVE)
 		sfclock_gettime(CLOCK_MONOTONIC_RAW, &last_changed);
-	free(command);
+
 	return rc;
 }
 
@@ -2406,9 +2402,6 @@ static struct sfptpd_config_section *ntp_config_create(const char *name,
 		new->convergence_threshold = 0.0;
 		new->poll_interval = 1;
 		new->clock_control = false;
-		sfptpd_strncpy(new->chronyd_script,
-			       SFPTPD_CRNY_DEFAULT_CONTROL_SCRIPT,
-			       sizeof new->chronyd_script);
 	}
 
 	/* If this is an implicitly created sync instance, give it the lowest

@@ -135,6 +135,16 @@ static int op_open_dev(struct sfptpd_priv_resp_msg *resp_msg,
 	return fd;
 }
 
+static void op_chrony_control(struct sfptpd_priv_resp_msg *resp_msg,
+			      const struct sfptpd_priv_req_msg *req_msg)
+{
+	assert(resp_msg);
+	assert(req_msg);
+
+	resp_msg->resp = SFPTPD_PRIV_RESP_CHRONY_CONTROL;
+	resp_msg->chrony_control.rc = sfptpd_crny_helper_control(req_msg->chrony_control.op);
+}
+
 static int server(int unix_fd)
 {
 	bool running = true;
@@ -183,6 +193,9 @@ static int server(int unix_fd)
 			break;
 		case SFPTPD_PRIV_REQ_OPEN_DEV:
 			fd = op_open_dev(&resp_msg, &req_msg);
+			break;
+		case SFPTPD_PRIV_REQ_CHRONY_CONTROL:
+			op_chrony_control(&resp_msg, &req_msg);
 			break;
 		}
 

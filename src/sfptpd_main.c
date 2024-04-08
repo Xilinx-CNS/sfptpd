@@ -777,29 +777,37 @@ static void main_on_user_fds(void *not_used, unsigned int num_fds,
 	siginfo_t siginf;
 
 	for (i = 0; i < num_fds; i++) {
-		int fd = fds[0].fd;
+		int fd = fds[i].fd;
 
 		if (fd == sfptpd_control_socket_get_fd()) {
 			on_control_socket_fd(fd);
 		} else if (fd == priv_helper_pidfd) {
+
+			/* Zero out this field to ensure we can tell if
+			 * there was no event portably. See waitid(2). */
+			siginf.si_pid = 0;
+
 			rc = waitid(P_PID,
 				    priv_helper_pid,
 				    &siginf,
 				    WEXITED | WNOHANG);
-			if (rc == -1)
-				ERROR("waitid on priv helper failed, %s\n",
-				      strerror(errno));
-			CRITICAL("priv: privileged helper terminated unexpectedly.\n");
-			if (rc == 0) {
-				if (siginf.si_code == CLD_EXITED) {
-					rc = siginf.si_status;
+			if (rc != 0 || siginf.si_pid != 0) {
+				if (rc == -1) {
+					rc = errno;
+					CRITICAL("waitid on priv helper failed, %s\n",
+					      strerror(rc));
+					/* ... but we should only be here if the helper
+					 * died any, so assume the worst. */
 				} else {
-					rc = ECHILD;
+					if (siginf.si_code == CLD_EXITED) {
+						rc = siginf.si_status;
+					} else {
+						rc = ECHILD;
+					}
+					CRITICAL("priv: privileged helper terminated unexpectedly.\n");
 				}
-			} else {
-				rc = errno;
+				sfptpd_thread_exit(rc);
 			}
-			sfptpd_thread_exit(rc);
 		}
 	}
 }

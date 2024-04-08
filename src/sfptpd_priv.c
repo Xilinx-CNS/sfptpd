@@ -376,3 +376,22 @@ int sfptpd_priv_open_dev(const char *path)
 	}
 	return rc;
 }
+
+int sfptpd_priv_chrony_control(enum chrony_clock_control_op op)
+{
+	struct sfptpd_priv_req_msg req = { .req = SFPTPD_PRIV_REQ_CHRONY_CONTROL };
+	struct sfptpd_priv_resp_msg resp = { 0 };
+	int fds[1];
+	int rc;
+
+	req.chrony_control.op = op;
+	rc = sfptpd_priv_rpc(&priv_state, &req, &resp, fds);
+	if (rc >= 0) {
+		rc = -resp.open_dev.rc;
+	} else if (rc == -ENOTCONN) {
+		rc = -sfptpd_crny_helper_control(op);
+	} else {
+		ERROR("priv: chrony_control: error calling helper, %s\n", strerror(rc));
+	}
+	return rc;
+}
