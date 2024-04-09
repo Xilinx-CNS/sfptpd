@@ -162,6 +162,8 @@ static int test_smallest_filter(void)
 
 		sfptpd_smallest_filter_reset(filter);
 
+		prev_min_samp = NULL; /* Appease -Werror=maybe-unitialized */
+
 		// Put NUM_TEST_SAMPLES samples into filter
 		for (j = 0; j < NUM_TEST_SAMPLES; j++) {
 			data = rand_path_delay(time);
