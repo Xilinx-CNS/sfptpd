@@ -79,19 +79,34 @@
 #define SO_EE_ORIGIN_TIMESTAMPING 4
 #endif
 
-/* SO_TIMESTAMP is defined in asm/socket.h in recent kernels.
- * Define it here for compilation with older kernels.
- */
-#ifndef SO_TIMESTAMPNS
-#define SO_TIMESTAMPNS 35
-#ifndef SCM_TIMESTAMPNS
-#define SCM_TIMESTAMPNS SO_TIMESTAMPNS
+/* The _NEW and _OLD versions of SO_TIMESTAMP* options are only defined in
+ * quite recent kernels. Define them here for compatibility.
+ *
+ * The _NEW variants are for 64-bit timestamps on 32-bit systems. The _OLD
+ * variant uses the architecture-native type. */
+
+#define SCM(option) SO_ ## option
+
+/* The SO_TIMESTAMP* microsecond sw timestamping options */
+
+#ifndef SO_TIMESTAMP_OLD
+#define SO_TIMESTAMP_OLD 29
 #endif
+#ifndef SO_TIMESTAMP_NEW
+#define SO_TIMESTAMP_NEW 63
 #endif
 
-/* SO_TIMESTAMPING is defined in asm/socket.h in recent kernels.
- * Define it for compilation with older kernels.
- */
+/* The SO_TIMESTAMPNS* nanosecond sw timestamping options */
+
+#ifndef SO_TIMESTAMPNS_OLD
+#define SO_TIMESTAMPNS_OLD 35
+#endif
+#ifndef SO_TIMESTAMPNS_NEW
+#define SO_TIMESTAMPNS_NEW 64
+#endif
+
+/* The SO_TIMESTAMPING* nanosecond hw/sw timestamping options */
+
 #ifndef SO_TIMESTAMPING_OLD
 #define SO_TIMESTAMPING_OLD  37
 #endif
@@ -102,12 +117,6 @@ struct scm_timestamping64 {
 };
 #endif
 #define SO_TIMESTAMPING_NEW  65
-#endif
-#ifndef SCM_TIMESTAMPING_OLD
-#define SCM_TIMESTAMPING_OLD SO_TIMESTAMPING_OLD
-#endif
-#ifndef SCM_TIMESTAMPING_NEW
-#define SCM_TIMESTAMPING_NEW SO_TIMESTAMPING_NEW
 #endif
 
 /* SCM_TIMESTAMPING_PKTINFO was introduced in Linux 4.13.
@@ -135,6 +144,76 @@ struct scm_ts_pktinfo {
 #include <net-snmp/net-snmp-includes.h>
 #include <net-snmp/agent/net-snmp-agent-includes.h>
 #endif
+
+union scm_ts_payload_ptr {
+	void *ptr;
+	struct timeval *usec;
+	struct timespec *singleton;
+	struct scm_timestamping *triplet;
+#ifdef HAVE_TIME_TYPES
+	struct __kernel_sock_timeval *usec64;
+	struct __kernel_timespec *singleton64;
+	struct scm_timestamping64 *triplet64;
+#endif
+#ifdef HAVE_ONLOAD_EXT
+	struct onload_timestamp *onload;
+#endif
+};
+
+static const char *get_timestamp_name(enum ptpd_ts_fmt ts_fmt,
+				      int so_option)
+{
+	if (ts_fmt == PTPD_TS_ONLOAD_EXT) {
+		return "onload extension";
+	}
+	switch (so_option) {
+	case SO_TIMESTAMP_OLD:
+		return "SO_TIMESTAMP_OLD";
+	case SO_TIMESTAMP_NEW:
+		return "SO_TIMESTAMP_NEW";
+	case SO_TIMESTAMPNS_OLD:
+		return "SO_TIMESTAMPNS_OLD";
+	case SO_TIMESTAMPNS_NEW:
+		return "SO_TIMESTAMPNS_NEW";
+	case SO_TIMESTAMPING_OLD:
+		return "SO_TIMESTAMPING_OLD";
+	case SO_TIMESTAMPING_NEW:
+		return "SO_TIMESTAMPING_NEW";
+	default:
+		return "SO_?";
+	}
+}
+
+size_t get_timestamp_size(enum ptpd_ts_fmt ts_fmt,
+			  int scm_type)
+{
+	union scm_ts_payload_ptr ts;
+	if (ts_fmt == PTPD_TS_ONLOAD_EXT) {
+#ifdef HAVE_ONLOAD_EXT
+		return sizeof *ts.onload;
+#else
+		return SIZE_MAX;
+#endif
+	}
+	switch (scm_type) {
+	case SCM(TIMESTAMPING_OLD):
+		return sizeof *ts.triplet;
+	case SCM(TIMESTAMPNS_OLD):
+		return sizeof *ts.singleton;
+	case SCM(TIMESTAMP_OLD):
+		return sizeof *ts.usec;
+#ifdef HAVE_TIME_TYPES
+	case SCM(TIMESTAMPNS_NEW):
+		return sizeof *ts.singleton64;
+	case SCM(TIMESTAMPING_NEW):
+		return sizeof *ts.triplet64;
+	case SCM(TIMESTAMP_NEW):
+		return sizeof *ts.usec64;
+#endif
+	default:
+		return SIZE_MAX;
+	}
+}
 
 
 /****************************************************************************
@@ -973,31 +1052,21 @@ static int parse_timestamp(uint8_t *pdu, size_t pdu_len,
 			   struct sfptpd_ts_info *info,
 			   bool tx, int scm_type)
 {
-	const char *type = ts_fmt == PTPD_TS_ONLOAD_EXT ? "onload extension timestamp" : "so_timestamping";
-	union {
-		void *ptr;
-		struct scm_timestamping *lnx;
-#ifdef HAVE_TIME_TYPES
-		struct scm_timestamping64 *lnx64;
-#endif
-#ifdef HAVE_ONLOAD_EXT
-		struct onload_timestamp *onload;
-#endif
-	} ts;
+	union scm_ts_payload_ptr ts;
+	const char *type;
 
 	assert(info);
 
-	if (
-#ifdef HAVE_ONLOAD_EXT
-	    (ts_fmt == PTPD_TS_ONLOAD_EXT && pdu_len < CMSG_LEN(sizeof(*ts.onload) * 1)) ||
-#endif
-	    (ts_fmt == PTPD_TS_LINUX && pdu_len < CMSG_LEN(sizeof(*ts.lnx)))) {
+	type = get_timestamp_name(ts_fmt, scm_type);
+	if (pdu_len < CMSG_LEN(get_timestamp_size(ts_fmt, scm_type))) {
 		ERROR("received short %s (%zu)\n", type, pdu_len);
 		memset(info, '\0', sizeof *info);
 		return ENOTIMESTAMP;
 	}
-
 	ts.ptr = pdu;
+
+	sfptpd_time_zero(&info->sw);
+	sfptpd_time_zero(&info->hw);
 
 	if (ts_fmt == PTPD_TS_ONLOAD_EXT) {
 #ifdef HAVE_ONLOAD_EXT
@@ -1005,27 +1074,28 @@ static int parse_timestamp(uint8_t *pdu, size_t pdu_len,
 			info->hw.sec = ts.onload->sec;
 			info->hw.nsec = ts.onload->nsec;
 			info->hw.nsec_frac = (uint32_t) ts.onload->nsec_frac << 8;
-			info->have_hw = true;
-		} else {
-			sfptpd_time_zero(&info->hw);
-			info->have_hw = false;
 		}
-		sfptpd_time_zero(&info->sw);
-		info->have_sw = false;
 #endif
 #ifdef HAVE_TIME_TYPES
-	} else if (scm_type == SCM_TIMESTAMPING_NEW) {
-		sfptpd_time_from_kernel_floor(&info->sw, &ts.lnx64->ts[0]);
-		sfptpd_time_from_kernel_floor(&info->hw, &ts.lnx64->ts[2]);
-		info->have_sw = info->sw.sec != 0;
-		info->have_hw = info->hw.sec != 0;
+	} else if (scm_type == SCM(TIMESTAMPING_NEW)) {
+		sfptpd_time_from_kernel_floor(&info->sw, &ts.triplet64->ts[0]);
+		sfptpd_time_from_kernel_floor(&info->hw, &ts.triplet64->ts[2]);
+	} else if (scm_type == SCM(TIMESTAMPNS_NEW)) {
+		sfptpd_time_from_kernel_floor(&info->sw, ts.singleton64);
+	} else if (scm_type == SCM(TIMESTAMP_NEW)) {
+		sfptpd_time_init(&info->sw, ts.usec64->tv_sec, ts.usec64->tv_usec * 1000, 0);
 #endif
-	} else {
-		sfptpd_time_from_std_floor(&info->sw, &ts.lnx->ts[0]);
-		sfptpd_time_from_std_floor(&info->hw, &ts.lnx->ts[2]);
-		info->have_sw = info->sw.sec != 0;
-		info->have_hw = info->hw.sec != 0;
+	} else if (scm_type == SCM(TIMESTAMPING_OLD)) {
+		sfptpd_time_from_std_floor(&info->sw, &ts.triplet->ts[0]);
+		sfptpd_time_from_std_floor(&info->hw, &ts.triplet->ts[2]);
+	} else if (scm_type == SCM(TIMESTAMPNS_OLD)) {
+		sfptpd_time_from_std_floor(&info->sw, ts.singleton);
+	} else if (scm_type == SCM(TIMESTAMP_OLD)) {
+		sfptpd_time_init(&info->sw, ts.usec->tv_sec, ts.usec->tv_usec * 1000, 0);
 	}
+
+	info->have_sw = info->sw.sec != 0;
+	info->have_hw = info->hw.sec != 0;
 
 	if (info->have_sw) {
 		DBG("%s sw timestamp: " SFPTPD_FMT_SFTIMESPEC " (%s)\n",
@@ -1362,8 +1432,6 @@ static Boolean getRxTimestamp(PtpInterface *ptpInterface,
 	}
 
 	for (cmsg = CMSG_FIRSTHDR(msg); cmsg != NULL; cmsg = CMSG_NXTHDR(msg, cmsg)) {
-		struct timeval *tv;
-		struct timespec *ts;
 		struct scm_ts_pktinfo *ts_pktinfo;
 
 		DUMP("CM", cmsg, cmsg->cmsg_len);
@@ -1372,32 +1440,12 @@ static Boolean getRxTimestamp(PtpInterface *ptpInterface,
 			continue;
 
 		switch (cmsg->cmsg_type) {
-		case SCM_TIMESTAMP:
-			tv = (struct timeval *)CMSG_DATA(cmsg);
-
-			if(cmsg->cmsg_len < CMSG_LEN(sizeof(*tv))) {
-				ERROR("received short SCM_TIMESTAMP (%zu)\n",
-				      cmsg->cmsg_len);
-				return FALSE;
-			}
-			sfptpd_time_init(&info->sw, tv->tv_sec, tv->tv_usec * 1000, 0);
-			info->have_sw = true;
-			break;
-
-		case SCM_TIMESTAMPNS:
-			ts = (struct timespec *)CMSG_DATA(cmsg);
-
-			if(cmsg->cmsg_len < CMSG_LEN(sizeof(*ts))) {
-				ERROR("received short SCM_TIMESTAMPNS (%zu)\n",
-				      cmsg->cmsg_len);
-				return FALSE;
-			}
-			sfptpd_time_init(&info->sw, ts->tv_sec, ts->tv_nsec, 0);
-			info->have_sw = true;
-			break;
-
-		case SCM_TIMESTAMPING_NEW:
-		case SCM_TIMESTAMPING_OLD:
+		case SCM(TIMESTAMP_NEW):
+		case SCM(TIMESTAMP_OLD):
+		case SCM(TIMESTAMPNS_NEW):
+		case SCM(TIMESTAMPNS_OLD):
+		case SCM(TIMESTAMPING_NEW):
+		case SCM(TIMESTAMPING_OLD):
 			parse_timestamp(CMSG_DATA(cmsg), cmsg->cmsg_len,
 					ptpInterface->ts_fmt,
 					info, FALSE, cmsg->cmsg_type);
@@ -1464,6 +1512,34 @@ static bool netTryEnableTimestamping(PtpInterface *ptpInterface, int flags)
 	return done;
 }
 
+/* y2038: attempt SO_TIMESTAMP* family of options in pref order. */
+static bool netTryEnableTimestamp(PtpInterface *ptpInterface)
+{
+	const int prefs[] = {
+		SO_TIMESTAMPNS_NEW,
+		SO_TIMESTAMPNS_OLD,
+		SO_TIMESTAMP_NEW,
+		SO_TIMESTAMP_OLD,
+	};
+	const int num_options = sizeof prefs / sizeof prefs[0];
+	int iter;
+
+	for (iter = 0; iter < num_options; iter++) {
+		int option = prefs[iter];
+		int flags = 1;
+		DBG("trying %s software timestamping...\n",
+		    get_timestamp_name(PTPD_TS_LINUX, option));
+		if (setsockopt(ptpInterface->transport.eventSock, SOL_SOCKET,
+			       option, &flags, sizeof(flags)) == 0) {
+			ptpInterface->tsMethod = TS_METHOD_SYSTEM;
+			INFO("using %s software timestamps\n",
+			     get_timestamp_name(PTPD_TS_LINUX, option));
+			break;
+		}
+	}
+	return iter != num_options;
+}
+
 /**
  * Initialize timestamping of packets
  *
@@ -1514,30 +1590,8 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 	}
 
 	if (ifOpts->timestampType == PTPD_TIMESTAMP_TYPE_SW) {
-
-		/* Try SO_TIMESTAMPNS software timestamps */
-		DBG("trying SO_TIMESTAMPNS software timestamping...\n");
-
-		/* Enable software timestamps */
-		flags = 1;
-
-		if (setsockopt(ptpInterface->transport.eventSock, SOL_SOCKET,
-			       SO_TIMESTAMPNS, &flags, sizeof(flags)) == 0) {
+		if (netTryEnableTimestamp(ptpInterface)) {
 			ptpInterface->tsMethod = TS_METHOD_SYSTEM;
-			INFO("using SO_TIMESTAMPNS software timestamps\n");
-			return TRUE;
-		}
-
-		/* Try SO_TIMESTAMP software timestamps */
-		DBG("trying SO_TIMESTAMP software timestamping...\n");
-
-		/* Enable software timestamps */
-		flags = 1;
-
-		if (setsockopt(ptpInterface->transport.eventSock, SOL_SOCKET,
-			       SO_TIMESTAMP, &flags, sizeof(flags)) == 0) {
-			ptpInterface->tsMethod = TS_METHOD_SYSTEM;
-			INFO("using SO_TIMESTAMP software timestamps\n");
 			return TRUE;
 		}
 
