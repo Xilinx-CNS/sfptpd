@@ -148,7 +148,7 @@ install: sfptpd sfptpdctl $(addprefix $(BUILD_DIR)/,sfptpd.service)
 	install -m 644 -p -t $(INST_PKGDOCDIR)/examples examples/sfptpd_stats_collectd.py
 	install -m 644 -p -t $(INST_PKGDOCDIR)/examples $(wildcard examples/*.html)
 	[ -n "$(filter c-examples,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGDOCDIR)/examples src/sfptpdctl/sfptpdctl.c
-	install -m 644 -p -t $(INST_PKGDOCDIR) CHANGELOG.md
+	[ -n "$(filter changelog,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGDOCDIR) CHANGELOG.md
 	install -m 755 -p -t $(INST_PKGLIBEXECDIR) examples/chrony_clockcontrol.py
 	install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/sfptpd.8)
 	install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/sfptpdctl.8)
