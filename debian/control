@@ -5,7 +5,7 @@ Source: sfptpd
 Section: net
 Priority: optional
 Maintainer: AMD NIC Support <support-nic@amd.com>
-Build-Depends: debhelper-compat (= 12), libmnl-dev, libcap-dev, dh-python, python3, dh-sysuser
+Build-Depends: debhelper-compat (= 12), libmnl-dev, libcap-dev, python3, dh-python, dh-sysuser, dh-runit
 Standards-Version: 4.6.0
 Homepage: https://github.com/Xilinx-CNS/sfptpd
 Rules-Requires-Root: no
@@ -16,7 +16,8 @@ Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Recommends: sfptpd-python3
 Suggests: ntpsec | ntp
-Conflicts: systemd-timesyncd, openntpd
+Conflicts: ${runit:Conflicts}, systemd-timesyncd, openntpd
+Breaks: ${runit:Breaks}
 Description: System time sync daemon supporting PTP, NTP and 1PPS
  Use multiple PTP an PPS sources and sync local clocks together in one
  integrated application with high quality timestamp filtering supporting

@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# (c) Copyright 2024 Advanced Micro Devices, Inc.
+
+scripts/runit/run name=sfptpd,logscript

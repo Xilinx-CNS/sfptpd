@@ -12,7 +12,7 @@ export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 # Rely on dh_installchangelog to install the upstream changelog from source tree
 
 %:
-	prefix=/usr INST_INITS="systemd" INST_OMIT="c-examples changelog" dh $@ --with python3,sysuser
+	prefix=/usr INST_INITS="systemd" INST_OMIT="c-examples changelog" dh $@ --with python3,sysuser,runit
 
 override_dh_auto_test:
 	make fast_test
