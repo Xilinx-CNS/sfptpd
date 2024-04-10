@@ -1134,7 +1134,7 @@ processPortMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
 	isFromSelf = (ptpClock->portIdentity.portNumber == ptpInterface->msgTmpHeader.sourcePortIdentity.portNumber
 		      && !memcmp(ptpInterface->msgTmpHeader.sourcePortIdentity.clockIdentity, ptpClock->portIdentity.clockIdentity, CLOCK_IDENTITY_LENGTH));
 
-	if (isFromSelf) {
+	if (isFromSelf && timestampValid) {
 		struct sfptpd_ts_ticket ticket;
 		struct sfptpd_ts_user user;
 
@@ -1142,7 +1142,9 @@ processPortMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
 						 &user,
 						 ptpInterface->msgIbuf, length);
 		processTxTimestamp(ptpInterface, user, ticket, *timestamp);
+	}
 
+	if (isFromSelf) {
 		/* Looped-back packets need no further processing */
 		return;
 	}
