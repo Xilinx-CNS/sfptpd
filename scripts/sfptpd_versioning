@@ -67,7 +67,7 @@ derive_version () {
   workflow_id=${GITHUB_SHA:-}
   if [ -n "${workflow_id:-}" ]
   then
-    workflow_date=$(date -u +%Y%M%d)
+    workflow_date=$(date -u +%Y%m%d)
     workflow_id=$(echo $workflow_id | cut -c1-7)
   fi
   if [ "${GITHUB_REF_TYPE:-}" = "tag" -a -n "${GITHUB_REF_NAME:-}" ]
