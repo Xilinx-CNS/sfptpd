@@ -32,21 +32,24 @@ jobs:
             extra_build_deps:
     runs-on: ubuntu-latest
     env:
-      BUILD_DEPS: rpm-build gcc make libmnl-devel libcap-devel python3-devel
+      BUILD_DEPS: rpm-build git gcc make libmnl-devel libcap-devel python3-devel
     container:
       image: quay.io/centos/centos:${{ matrix.build_os }}
     steps:
-      - name: checkout sfptpd
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
       - name: enable extra repositories
         if: ${{ matrix.build_os == 'stream9' }}
         run: yum install -y 'dnf-command(config-manager)' && yum config-manager --set-enabled crb
       - name: install build prerequisites
         run: yum --setopt install_weak_deps=0 install -y ${BUILD_DEPS} ${{ matrix.extra_build_deps }}
+      - name: checkout sfptpd
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       - name: build srpm
-        run: set -o pipefail; make RPM_OSVER=${{ matrix.dist }} build_srpm | tee transcript && sed -n s,^ENV:,,p transcript >> "$GITHUB_ENV"
+        run: |
+          set -o pipefail
+          git config --global --add safe.directory $(pwd)
+          make RPM_OSVER=${{ matrix.dist }} build_srpm | tee transcript && sed -n s,^ENV:,,p transcript >> "$GITHUB_ENV"
       - name: publish srpm
         uses: actions/upload-artifact@v3
         with:
@@ -66,18 +69,19 @@ jobs:
     name: binary tarball
     runs-on: ubuntu-latest
     env:
-      BUILD_DEPS: gcc make libmnl-devel libcap-devel
+      BUILD_DEPS: gcc git make libmnl-devel libcap-devel
     container:
       image: quay.io/centos/centos:centos7
     steps:
+      - name: install build prerequisites
+        run: yum install -y ${BUILD_DEPS}
       - name: checkout sfptpd
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - name: install build prerequisites
-        run: yum install -y ${BUILD_DEPS}
       - name: build binary
         run: |
+          git config --global --add safe.directory $(pwd)
           make patch_version
           SFPTPD_ARCH=$(uname -i)
           SFPTPD_VERSION=$(scripts/sfptpd_versioning read)

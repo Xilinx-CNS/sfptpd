@@ -5,11 +5,13 @@
 
 src/include/sfptpd_version.h merge=ours
 
-# Exclude irrelevant ancillary files from official source archives
+# It would be nice to exclude these from a notional 'pure' application
+# source archive but there's no real benefit and it annoys the Debian
+# git-buildpackage method, so don't.
+#
+#.git* export-ignore
+#ci export-ignore
 
-.git* export-ignore
-ci export-ignore
-
-# Substitutions
-
-scripts/vcs-vars export-subst
+# Substitutions - but we don't need this with git checkout or github action.
+#
+#scripts/vcs-vars export-subst

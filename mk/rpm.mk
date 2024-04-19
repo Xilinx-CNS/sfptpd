@@ -55,19 +55,18 @@ rpm_build_tree: $(RPM_ALLDIRS)
 .PHONY: rpm_prep
 
 ifdef RPM_VER
-rpm_prep: SFPTPD_RPM_VER := $(RPM_VER)
+ver_gen_cmd := echo $(RPM_VER)
 else
-rpm_prep: SFPTPD_RPM_VER := $(shell scripts/sfptpd_versioning $(VERSION_QUIRKS) derive)
+ver_gen_cmd := scripts/sfptpd_versioning $(VERSION_QUIRKS) derive
 endif
 rpm_prep: rpm_build_tree
-	cp -a $(RPM_SPEC_INDIR)/* $(RPM_SOURCES)/
-	mv $(RPM_SOURCES)/$(RPM_SPECFILE) $(RPM_SPECS)/
-	tar cz --exclude=$(BUILD_DIR) --exclude=$(RPM_TOPDIR) -f $(RPM_SOURCES)/sfptpd-$(SFPTPD_RPM_VER).tgz --transform=s,^\.,sfptpd-$(SFPTPD_RPM_VER),g .
-	sed -i "s/^\(Version: \).*/\1 $(SFPTPD_RPM_VER)/g" $(RPM_SPECPATH)
-ifdef FORCE_DISTTAG
-	sed -i "s/^\(Release: .*\)%{.*dist}/\1$(FORCE_DISTTAG_TO)/g" $(RPM_SPECPATH)
-endif
-	echo ENV:SFPTPD_VERSION=$(SFPTPD_RPM_VER)
+	ver="$(shell $(ver_gen_cmd))"; disttag="$(FORCE_DISTTAG)"; \
+	cp -a $(RPM_SPEC_INDIR)/* $(RPM_SOURCES)/ && \
+	mv $(RPM_SOURCES)/$(RPM_SPECFILE) $(RPM_SPECS)/ && \
+	tar cz --exclude=$(BUILD_DIR) --exclude=$(RPM_TOPDIR) -f $(RPM_SOURCES)/sfptpd-$$ver.tgz --transform=s,^\.,sfptpd-$$ver,g . && \
+	sed -i "s/^\(Version: \).*/\1 $$ver/g" $(RPM_SPECPATH) && \
+	[ -z "$$disttag" ] || sed -i "s/^\(Release: .*\)%{.*dist}/\1$(FORCE_DISTTAG_TO)/g" $(RPM_SPECPATH); \
+	echo ENV:SFPTPD_VERSION="$$ver"
 
 .PHONY: build_srpm
 build_srpm: rpm_prep

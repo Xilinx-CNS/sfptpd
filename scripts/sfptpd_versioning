@@ -64,36 +64,50 @@ derive_version () {
   base_version=$(base_of $src_version)
   version=$src_version
 
-  if grep -q '$Format:' $1
+  workflow_id=${GITHUB_SHA:-}
+  if [ -n "${workflow_id:-}" ]
   then
-    if ! { vcs_date=$(git log -1 --pretty=format:%cs) && \
-           vcs_id=$(git log -1 --pretty=format:%h); }
-    then
-      log "No VCS substitutions or clone, using encoded version: $src_version" >&2
-      echo $src_version
-      return 0
-    fi
-    vcs_tag=$(git describe --tags || echo -n '')
-  else
-    vcs_tag=$(field vcs-tag < $1)
-    vcs_date=$(field vcs-date < $1)
-    vcs_id=$(field vcs-id < $1)
+    workflow_date=$(date -u +%Y%M%d)
+    workflow_id=$(echo $workflow_id | cut -c1-7)
+  fi
+  if [ "${GITHUB_REF_TYPE:-}" = "tag" -a -n "${GITHUB_REF_NAME:-}" ]
+  then
+    workflow_tag=${GITHUB_REF_NAME}
   fi
 
-  if [ "v$src_version" = "$vcs_tag" ]
+  if ! grep -q '$Format:' $1
+  then
+    vars_tag=$(field vcs-tag < $1)
+    vars_date=$(field vcs-date < $1)
+    vars_id=$(field vcs-id < $1)
+  fi
+  false                  || vcs_date=$(git log -1 --pretty=format:%cs || echo -n '')
+  [ -z "${vcs_date:-}" ] || vcs_id=$(git log -1 --pretty=format:%h || echo -n '')
+  [ -z "${vcs_date:-}" ] || vcs_tag=$(git describe --tags || echo -n '')
+  [ -n "${vars_date:-}${vcs_date:-}${workflow_date:-}" ] || {
+    log "No VCS substitutions or clone, using encoded version: $src_version" >&2
+    echo $src_version
+    return 0
+  }
+
+  use_tag=${vcs_tag:-${vars_tag:-${workflow_tag:-}}}
+  use_id=${vcs_id:-${vars_id:-${workflow_id:-}}}
+  use_date=${vcs_date:-${vars_date:-${workflow_date:-}}}
+
+  if [ "v$src_version" = "$use_tag" ]
   then
     echo -n "Encoded version is tagged: " >&2
-  elif echo $vcs_tag | grep -q "^v[^-]*$"
+  elif echo $use_tag | grep -q "^v[^-]*$"
   then
     echo -n "Commit is tagged with viable version: " >&2
-    version="${vcs_tag#v}"
-  elif $use_post_revision_modifier && echo $vcs_tag | grep -q "^v$base_version-"
+    version="${use_tag#v}"
+  elif $use_post_revision_modifier && echo $use_tag | grep -q "^v$base_version-"
   then
     echo -n "Post-release version: " >&2
-    version="$base_version^$(echo $vcs_date | sed s,-,,g).git$vcs_id"
+    version="$base_version^$(echo $use_date | sed s,-,,g).git$use_id"
   else
     echo -n "Pre-release version: " >&2
-    version="$base_version~$(echo $vcs_date | sed s,-,,g).git$vcs_id"
+    version="$base_version~$(echo $use_date | sed s,-,,g).git$use_id"
   fi
 
   echo $version >&2
