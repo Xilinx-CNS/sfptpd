@@ -1805,20 +1805,39 @@ void sfptpd_config_general_set_console_logging(struct sfptpd_config *config)
 }
 
 
-void sfptpd_config_general_set_verbose(struct sfptpd_config *config)
+void sfptpd_config_general_set_verbose(struct sfptpd_config *config,
+				       int verbosity)
 {
 	struct sfptpd_config_general *general = sfptpd_general_config_get(config);
 
 	sfptpd_config_general_set_console_logging(config);
 
-	if (general->trace_level < 3)
-		general->trace_level = 3;
-	if (general->netlink_trace_level < 1)
-		general->netlink_trace_level = 1;
-	if (general->ntp_trace_level < 1)
-		general->ntp_trace_level = 1;
-	if (general->clocks_trace_level < 2)
-		general->clocks_trace_level = 2;
+	if (verbosity >= 1) {
+		if (general->trace_level < 3)
+			general->trace_level = 3;
+		if (general->netlink_trace_level < 1)
+			general->netlink_trace_level = 1;
+		if (general->ntp_trace_level < 1)
+			general->ntp_trace_level = 1;
+		if (general->clocks_trace_level < 2)
+			general->clocks_trace_level = 2;
+	}
+
+	if (verbosity >= 2) {
+		general->trace_level = 6;
+		general->netlink_trace_level = 6;
+		general->ntp_trace_level = 6;
+		general->clocks_trace_level = 6;
+		general->servo_trace_level = 6;
+		general->bic_trace_level = 6;
+		if (general->threading_trace_level < 1)
+			general->servo_trace_level = 1;
+	}
+
+	if (verbosity >= 3) {
+		general->threading_trace_level = 6;
+	}
+
 	sfptpd_log_set_trace_level(SFPTPD_COMPONENT_ID_SFPTPD,
 				   general->trace_level);
 }

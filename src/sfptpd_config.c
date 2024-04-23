@@ -628,6 +628,8 @@ int sfptpd_config_parse_command_line_pass1(struct sfptpd_config *config,
 {
 	int chr, index, rc = 0;
 	char *group;
+	int verbosity = 0;
+
 	assert(config != NULL);
 	assert(argv != NULL);
 
@@ -652,7 +654,7 @@ int sfptpd_config_parse_command_line_pass1(struct sfptpd_config *config,
 			break;
 
 		case 'v':
-			sfptpd_config_general_set_verbose(config);
+			sfptpd_config_general_set_verbose(config, ++verbosity);
 			break;
 
 		case OPT_CONSOLE:
@@ -705,6 +707,8 @@ int sfptpd_config_parse_command_line_pass2(struct sfptpd_config *config,
 					   int argc, char **argv)
 {
 	int chr, index;
+	int verbosity = 0;
+
 	assert(config != NULL);
 	assert(argv != NULL);
 
@@ -732,7 +736,7 @@ int sfptpd_config_parse_command_line_pass2(struct sfptpd_config *config,
 			break;
 
 		case 'v':
-			sfptpd_config_general_set_verbose(config);
+			sfptpd_config_general_set_verbose(config, ++verbosity);
 			break;
 
 		case OPT_CONSOLE:

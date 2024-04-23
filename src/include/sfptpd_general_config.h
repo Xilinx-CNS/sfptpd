@@ -291,9 +291,11 @@ void sfptpd_config_set_priv_helper(struct sfptpd_config *config,
 void sfptpd_config_general_set_console_logging(struct sfptpd_config *config);
 
 /** Enable verbose logging and direct all output to the console.
+ * @param verbosity Amount of general verbosity to add.
  * @param config  Pointer to configuration
  */
-void sfptpd_config_general_set_verbose(struct sfptpd_config *config);
+void sfptpd_config_general_set_verbose(struct sfptpd_config *config,
+				       int verbosity);
 
 /** Specify a user and group to run sfptpd as.
  * @param user  User to run as
