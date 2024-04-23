@@ -1422,12 +1422,13 @@ static int netlink_service_fds(struct sfptpd_nl_state *state)
 				rc = 0;
 				break;
 			} else if (rc < 0) {
-				if (errno == ENOSPC) {
+				if (errno == ENOSPC || errno == ENOBUFS) {
 					/* Likely the string set is too big. This is not critical */
-					DBG_L4("netlink: %s: netlink reply too big; continue anyway\n");
+					DBG_L4("netlink: %s: netlink reply too big; continue anyway\n",
+					       conn->name);
 				} else {
-					ERROR("netlink: %s: error receiving netlink packet\n",
-					      conn->name);
+					ERROR("netlink: %s: error receiving netlink packet, %s\n",
+					      conn->name, strerror(errno));
 					return -errno;
 				}
 			} else if (rc > 0)
