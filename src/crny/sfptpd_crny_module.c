@@ -159,6 +159,9 @@ struct crny_comm {
 
 	/* Chrony command socket path */
 	char unix_sock_path[112];
+
+	/* Failure reported */
+	bool failure_reported;
 };
 
 
@@ -688,7 +691,7 @@ void crny_parse_state(struct ntp_state *state, int rc, bool offset_unsafe)
 		else
 			state->state = SYNC_MODULE_STATE_FAULTY;
 		state->sys_info.peer_address_len = 0;
-		state->sys_info.clock_control_enabled = false;
+		/* state->sys_info.clock_control_enabled is set by static check. */
 		state->selected_peer_idx = -1;
 		state->peer_info.num_peers = 0;
 		reset_offset_id(state);
@@ -1242,12 +1245,21 @@ static int crny_connect(crny_module_t *ntp)
 	if (rc >= 0) {
 		ntp->crny_comm.sock = rc;
 		rc = 0;
-	} else if (rc != 0 && rc != -EINPROGRESS && rc != -ENOENT) {
-		ERROR("crny: connect(%s), %s\n", failing_step, strerror(rc));
+	} else {
+		rc = -rc;
 	}
 
-	if (rc == 0)
+	if (rc != 0 && rc != EINPROGRESS && rc != ENOENT) {
+		if (!ntp->crny_comm.failure_reported) {
+			ERROR("crny: connect(%s), %s\n", failing_step, strerror(rc));
+			ntp->crny_comm.failure_reported = true;
+		}
+	}
+
+	if (rc == 0) {
 		sfptpd_thread_user_fd_add(ntp->crny_comm.sock, true, false);
+		ntp->crny_comm.failure_reported = false;
+	}
 
 	return rc;
 }
@@ -1298,7 +1310,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 		} else if (rc == EINPROGRESS) {
 			next_query_state = NTP_QUERY_STATE_CONNECT_WAIT;
 		} else {
-			crny_parse_state(next_state, ENOPROTOOPT, next_state->offset_unsafe);
+			crny_parse_state(next_state, rc, next_state->offset_unsafe);
 			next_query_state = NTP_QUERY_STATE_SLEEP_DISCONNECTED;
 		}
 		break;
