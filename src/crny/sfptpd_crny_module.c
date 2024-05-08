@@ -1075,12 +1075,18 @@ static int handle_get_sys_info(crny_module_t *ntp)
 		       rc == 0 ? host : gai_strerror(rc));
 	}
 
-	bool clock_control = clock_control_at_launch(ntp);
-	sys_info.clock_control_enabled = clock_control;
-
 	next_state->sys_info = sys_info;
 
 	return 0;
+}
+
+static void chrony_next_clock_control_state(crny_module_t *ntp, bool *update)
+{
+	bool clock_control = clock_control_at_launch(ntp);
+	if (ntp->state.sys_info.clock_control_enabled != clock_control) {
+		*update = true;
+		ntp->next_state.sys_info.clock_control_enabled = clock_control;
+	}
 }
 
 int issue_get_source_count(crny_module_t *ntp)
@@ -1310,6 +1316,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 		} else if (rc == EINPROGRESS) {
 			next_query_state = NTP_QUERY_STATE_CONNECT_WAIT;
 		} else {
+			chrony_next_clock_control_state(ntp, &update);
 			crny_parse_state(next_state, rc, next_state->offset_unsafe);
 			next_query_state = NTP_QUERY_STATE_SLEEP_DISCONNECTED;
 		}
@@ -1333,6 +1340,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 	case NTP_QUERY_STATE_SYS_INFO:
 		if (event == NTP_QUERY_EVENT_TRAFFIC) {
 			rc = handle_get_sys_info(ntp);
+			chrony_next_clock_control_state(ntp, &update);
 			if (issue_get_source_count(ntp) != 0)
 				disconnect = true;
 			else
