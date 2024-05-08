@@ -218,10 +218,10 @@ typedef struct sfptpd_crny_module {
 
 #define MODULE SFPTPD_CRNY_MODULE_NAME
 
-#define NTP_POLL_INTERVAL (250000000)
+#define NTP_POLL_INTERVAL (500000000)
 #define NTP_POLL_TIMER_ID (0)
 
-#define REPLY_TIMEOUT (1000000000)
+#define REPLY_TIMEOUT (2000000000)
 
 static const struct sfptpd_stats_collection_defn ntp_stats_defns[] =
 {
@@ -384,7 +384,7 @@ static const sfptpd_config_option_t ntp_config_options[] =
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_sync_threshold},
 	{"ntp_poll_interval", "NUMBER",
-		"Specifies the NTP daemon poll interval in seconds. Default value 1",
+		"Specifies the NTP daemon poll interval in seconds. Default value 2",
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_ntp_poll_interval},
 	{"clock_control", "<off | on>",
@@ -2400,7 +2400,7 @@ static struct sfptpd_config_section *ntp_config_create(const char *name,
 	} else {
 		new->priority = SFPTPD_DEFAULT_PRIORITY;
 		new->convergence_threshold = 0.0;
-		new->poll_interval = 1;
+		new->poll_interval = 2;
 		new->clock_control = false;
 	}
 
