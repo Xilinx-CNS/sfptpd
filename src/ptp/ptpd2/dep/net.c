@@ -1241,7 +1241,10 @@ bool netCheckTimestampAlarms(PtpClock *ptpClock)
 	struct sfptpd_timespec elapsed;
 	struct sfptpd_timespec period;
 	struct sfptpd_timespec now;
-	int alarm_quantile = TS_TIME_TO_ALARM_E10 - TS_QUANTILE_E10_MIN;
+	const int alarm_quantile = TS_TIME_TO_ALARM_E10 - TS_QUANTILE_E10_MIN;
+	const int evict_quantile = TS_TIME_TO_EVICT_E10 - TS_QUANTILE_E10_MIN;
+	bool alarm = false;
+	char buf[48];
 
 	/* Do not set alarm because of evicted timestamping requests because
 	 * we no longer know which port they were associated with and the
@@ -1256,12 +1259,25 @@ bool netCheckTimestampAlarms(PtpClock *ptpClock)
 	TS_CACHE_FOREACH(cache, slot) {
 		if (cache->packet[slot].user.port == ptpClock) {
 			sfptpd_time_subtract(&elapsed, &now, &cache->packet[slot].sent_monotime);
+
+			/* Raise an alarm if there are timestamp requests waiting longer then the alarm threshold */
 			if (sfptpd_time_is_greater_or_equal(&elapsed, &cache->stats_periodic.quantile_bounds[alarm_quantile]))
-				return true;
+				alarm = true;
+
+			/* Evict timestamp requests taking longer than the eviction threshold.
+			 * These will not show up as alarmed next time round. */
+			if (sfptpd_time_is_greater_or_equal(&elapsed, &cache->stats_periodic.quantile_bounds[evict_quantile])) {
+				formatTsPkt(&cache->packet[slot].user, buf);
+				DBGV("ptpd: timestamp taking longer than %s; evicting %s\n",
+				     ts_quantile_units[evict_quantile], buf);
+				cache->free_bitmap |= ~((unsigned int) INT_MAX) >> slot;
+				cache->stats_periodic.evicted++;
+				cache->stats_adhoc.evicted++;
+			}
 		}
 	}
 
-	return false;
+	return alarm;
 }
 
 

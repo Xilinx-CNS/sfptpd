@@ -709,6 +709,7 @@ struct sfptpd_ts_pkt {
 #define TS_QUANTILE_E10_MAX 1
 #define TS_QUANTILES (TS_QUANTILE_E10_MAX) - (TS_QUANTILE_E10_MIN) + 2
 #define TS_TIME_TO_ALARM_E10 0
+#define TS_TIME_TO_EVICT_E10 1
 
 /* Structure defining short term stats for timestamp cache */
 struct sfptpd_ts_stats {
