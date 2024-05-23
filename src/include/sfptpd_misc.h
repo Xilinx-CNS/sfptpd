@@ -22,10 +22,7 @@
  ****************************************************************************/
 
 #ifndef STATIC_ASSERT
-#define __STATIC_ASSERT_NAME(_x) __STATIC_ASSERT_ILOATHECPP(_x)
-#define __STATIC_ASSERT_ILOATHECPP(_x)  __STATIC_ASSERT_AT_LINE_ ## _x
-#define STATIC_ASSERT(e)\
- typedef char  __STATIC_ASSERT_NAME(__LINE__)[(e)?1:-1]
+#define STATIC_ASSERT(e) _Static_assert(e, #e)
 #endif
 
 
