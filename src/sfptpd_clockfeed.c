@@ -148,7 +148,8 @@ typedef struct clockfeed_msg {
 	} u;
 } sfptpd_clockfeed_msg_t;
 
-STATIC_ASSERT(sizeof(struct clockfeed_msg) < SFPTPD_SIZE_GLOBAL_MSGS);
+static_assert(sizeof(sfptpd_clockfeed_msg_t) < SFPTPD_SIZE_GLOBAL_MSGS,
+	      "message fits into global pool entry");
 
 
 /****************************************************************************

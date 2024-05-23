@@ -250,7 +250,8 @@ typedef struct sfptpd_config_general {
 	bool legacy_clockids;
 } sfptpd_config_general_t;
 
-STATIC_ASSERT(sizeof ((sfptpd_config_general_t *) 0)->declared_sync_modules * 8 >= SFPTPD_CONFIG_CATEGORY_MAX);
+static_assert(sizeof ((sfptpd_config_general_t *) 0)->declared_sync_modules * 8 >= SFPTPD_CONFIG_CATEGORY_MAX,
+	      "bitfield supports number of sync modules");
 
 
 /****************************************************************************

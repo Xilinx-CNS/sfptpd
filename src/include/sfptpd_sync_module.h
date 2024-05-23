@@ -593,8 +593,8 @@ typedef struct sfptpd_sync_module_msg {
 	} u;
 } sfptpd_sync_module_msg_t;
 
-/* Make sure that the messages are smaller than global pool size */
-STATIC_ASSERT(sizeof(sfptpd_sync_module_msg_t) < SFPTPD_SIZE_GLOBAL_MSGS);
+static_assert(sizeof(sfptpd_sync_module_msg_t) < SFPTPD_SIZE_GLOBAL_MSGS,
+	      "message fits into global pool entry");
 
 
 #endif /* _SFPTPD_SYNC_MODULE_H */

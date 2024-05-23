@@ -404,9 +404,8 @@ struct association {
 	uint16_t assid;
 	uint16_t status;
 };
-/* Struct assoc must be 4 bytes long (two 16bit fields), or addressing
- * won't work correctly */
-STATIC_ASSERT(sizeof(struct association) == 4);
+static_assert(sizeof(struct association) == 4,
+	       "structure is 4 bytes long to let addressing work correctly");
 
 /* End fo NTP defitions borrowed/modified from NTPD source code */
 

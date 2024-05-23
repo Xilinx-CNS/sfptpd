@@ -146,7 +146,8 @@ typedef struct engine_msg {
 	} u;
 } engine_msg_t;
 
-STATIC_ASSERT(sizeof(engine_msg_t) < SFPTPD_SIZE_GLOBAL_MSGS);
+static_assert(sizeof(engine_msg_t) < SFPTPD_SIZE_GLOBAL_MSGS,
+	      "message fits into global pool entry");
 
 
 /* Message to carry realtime stats entry.
@@ -158,9 +159,11 @@ struct rt_stats_msg {
 	sfptpd_msg_hdr_t hdr;
 	struct sfptpd_sync_instance_rt_stats_entry stats;
 };
-/* This assert has to be here because sfptpd_instance.h
+
+/* This assertion has to be _here_ because sfptpd_instance.h
  * and sfptpd_engine.h don't reference each other. */
-STATIC_ASSERT(STATS_KEY_END < 8 * sizeof(((struct sfptpd_sync_instance_rt_stats_entry*)0)->stat_present));
+static_assert(STATS_KEY_END < 8 * sizeof(((struct sfptpd_sync_instance_rt_stats_entry*)0)->stat_present),
+	      "bitfield supports number of stat types");
 
 
 /****************************************************************************
@@ -276,7 +279,9 @@ const char *RT_STATS_KEY_NAMES[] = {
 	[STATS_KEY_S_TIME] = "s-time",
 };
 
-STATIC_ASSERT(sizeof(RT_STATS_KEY_NAMES)/sizeof(*RT_STATS_KEY_NAMES) == STATS_KEY_END);
+static_assert(sizeof(RT_STATS_KEY_NAMES)/sizeof(*RT_STATS_KEY_NAMES) == STATS_KEY_END,
+	      "exactly one name defined for each stat");
+
 
 /****************************************************************************
  * Function prototypes

@@ -92,8 +92,8 @@ const struct sync_module_bitmask_to_text_map alarm_texts[] = {
 	{SYNC_MODULE_ALARM_SUSTAINED_SYNC_FAILURE   , "sustained-sync-failure"},
 };
 
-STATIC_ASSERT(1 << (sizeof(alarm_texts) / sizeof(*alarm_texts)) == SYNC_MODULE_ALARM_MAX);
-
+static_assert(1 << (sizeof(alarm_texts) / sizeof(*alarm_texts)) == SYNC_MODULE_ALARM_MAX,
+	      "exactly one name defined per alarm");
 
 const struct sync_module_bitmask_to_text_map constraint_texts[] = {
 	{SYNC_MODULE_CONSTRAINT_MUST_BE_SELECTED,     "must-be-selected"},
@@ -101,8 +101,8 @@ const struct sync_module_bitmask_to_text_map constraint_texts[] = {
 
 };
 
-STATIC_ASSERT(1 << (sizeof(constraint_texts) / sizeof(*constraint_texts)) == SYNC_MODULE_CONSTRAINT_MAX);
-
+static_assert(1 << (sizeof(constraint_texts) / sizeof(*constraint_texts)) == SYNC_MODULE_CONSTRAINT_MAX,
+	      "exactly one name defined per external constraint");
 
 const char *sync_module_state_text[] = {
     "listening",        /* SYNC_MODULE_STATE_LISTENING */
@@ -114,7 +114,8 @@ const char *sync_module_state_text[] = {
     "selection",        /* SYNC_MODULE_STATE_SELECTION */
 };
 
-STATIC_ASSERT(sizeof(sync_module_state_text) / sizeof(*sync_module_state_text) == SYNC_MODULE_STATE_MAX);
+static_assert(sizeof(sync_module_state_text) / sizeof(*sync_module_state_text) == SYNC_MODULE_STATE_MAX,
+	       "exactly one name defined by sync instance state");
 
 
 /****************************************************************************

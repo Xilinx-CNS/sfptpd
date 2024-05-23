@@ -45,6 +45,8 @@ struct crny_addr {
 	char padding[2];
 };
 
+static_assert(sizeof(struct crny_addr) == 20, "structure matches protocol");
+
 struct crny_source {
 	struct crny_addr ip_addr; /* we need this to pass to the ntpdata query */
 	uint32_t ignore;
@@ -69,8 +71,6 @@ struct crny_ntpdata {
 	uint32_t total_received;
 	char ignore5[24];
 };
-
-STATIC_ASSERT(sizeof(struct crny_addr) == 20);
 
 
 /****************************************************************************

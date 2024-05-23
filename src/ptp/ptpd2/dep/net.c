@@ -2134,9 +2134,9 @@ struct sfptpd_ts_ticket netExpectTimestamp(struct sfptpd_ts_cache *cache,
 	return (struct sfptpd_ts_ticket) {.slot = slot, .seq = pkt->seq};
 }
 
-// The function `netSendEvent` may use the SCM_TIMESTAMPING_PKTINFO control
-// message, so we assert that we actually have enough space for this.
-STATIC_ASSERT(sizeof(((PtpInterface*)NULL)->msgCbuf) >= CMSG_SPACE(sizeof(struct scm_ts_pktinfo)));
+/* netSendEvent() may require cmsg capacity. */
+static_assert(sizeof(((PtpInterface*)NULL)->msgCbuf) >= CMSG_SPACE(sizeof(struct scm_ts_pktinfo)),
+	      "there is space for SCM_TIMESTAMPING_PKTINFO control message");
 
 //
 // alt_dst: alternative destination.

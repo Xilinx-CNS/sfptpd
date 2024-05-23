@@ -81,8 +81,8 @@ typedef struct sfptpd_servo_msg {
 	} u;
 } sfptpd_servo_msg_t;
 
-/* Make sure that the messages are smaller than global pool size */
-STATIC_ASSERT(sizeof(sfptpd_servo_msg_t) < SFPTPD_SIZE_GLOBAL_MSGS);
+static_assert(sizeof(sfptpd_servo_msg_t) < SFPTPD_SIZE_GLOBAL_MSGS,
+	      "message fits into global pool entry");
 
 
 /****************************************************************************
