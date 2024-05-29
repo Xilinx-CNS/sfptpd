@@ -96,7 +96,9 @@ const static struct flag_desc if_flag_descs[] = {
 
 /* Only act on changes in flags that should cause the application to change
  * behaviour. */
-const static int significant_flags = IFF_RUNNING;
+const static int significant_flags = IFF_UP | IFF_RUNNING | IFF_MASTER |
+				     IFF_SLAVE | IFF_MULTICAST | 0x10000 |
+				     IFF_LOOPBACK | IFF_NOARP;
 
 enum nl_grp {
 	GRP_CTRL,
