@@ -284,7 +284,7 @@ void sfptpd_link_log(const struct sfptpd_link *link, const struct sfptpd_link *p
 				    " | %-17s"
 #endif
 				    " |\n";
-	const char *format_flags  = "|_%8s___%-*s_|\n";
+	const char *format_flags  = "| %8s   %-*s | %s\n";
 	char flags[256];
 	int prev_flags = 0;
 
@@ -329,7 +329,7 @@ void sfptpd_link_log(const struct sfptpd_link *link, const struct sfptpd_link *p
 					    prev_flags,
 					    link->if_flags);
 			DBG_L1(format_flags,
-			       "________", IF_NAMESIZE, "________________", flags);
+			       "        ", IF_NAMESIZE, "        changes:", flags);
 		}
 	}
 }
