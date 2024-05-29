@@ -60,7 +60,7 @@
 
 #include "../ptpd.h"
 
-#if defined(linux)
+#if defined(__linux__)
 #  include <netinet/ether.h>
 #elif defined( __FreeBSD__ )
 #  include <net/ethernet.h>
@@ -95,7 +95,7 @@ static int ether_ntohost_cache(char *hostname, size_t hostname_size,
 	static struct ether_addr prev_addr;
 	static char buf[BUF_SIZE];
  
-#if defined(linux) || defined(__NetBSD__)
+#if defined(__linux__) || defined(__NetBSD__)
 	if (memcmp(addr->ether_addr_octet, &prev_addr,
 		   sizeof(struct ether_addr )) != 0) {
 		valid = 0;
@@ -140,7 +140,7 @@ snprint_ClockIdentity_ntohost(char *s, int max_len, const ClockIdentity id)
 	for (i = 0, j = 0; i< CLOCK_IDENTITY_LENGTH ; i++ ) {
 		/* skip bytes 3 and 4 */
 		if (!((i==3) || (i==4))) {
-#if defined(linux) || defined(__NetBSD__)
+#if defined(__linux__) || defined(__NetBSD__)
 			e.ether_addr_octet[j] = (uint8_t) id[i];
 #else // e.g. defined(__FreeBSD__)
 			e.octet[j] = (uint8_t) id[i];

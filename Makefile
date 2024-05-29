@@ -54,7 +54,7 @@ include mk/install.mk
 ### Build flags for all targets
 #
 CFLAGS += -MMD -MP -Wall -Werror -Wundef -Wstrict-prototypes \
-	-Wnested-externs -g -pthread -fPIC -std=gnu99 \
+	-Wnested-externs -g -pthread -fPIC -std=c99 \
 	-D_ISOC99_SOURCE -D_BSD_SOURCE -D_DEFAULT_SOURCE -D_GNU_SOURCE \
 	$(CONDITIONAL_DEFS) \
 	-DINST_PREFIX=$(prefix) \

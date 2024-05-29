@@ -59,7 +59,7 @@
 *
 */
 
-#ifdef linux
+#ifdef __linux__
 #include <asm/types.h>
 #include <sys/socket.h>
 #include <time.h>

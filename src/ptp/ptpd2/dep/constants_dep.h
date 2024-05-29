@@ -1,27 +1,35 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
+/* (c) Copyright 2024 Advanced Micro Devices, Inc. */
 /* (c) Copyright 2012-2019 Xilinx, Inc. */
-/* (c) Copyright prior contributors */
+/* (c) Copyright ptpd2 contributors (see PTPD_COPYRIGHT) */
 
 #ifndef CONSTANTS_DEP_H
 #define CONSTANTS_DEP_H
 
 /**
-*\file
-* \brief Platform-dependent constants definition
-*
-* This header defines all includes and constants which are platform-dependent
-*
-* ptpdv2 is only implemented for linux, NetBSD and FreeBSD
+ *\file
+ * \brief Platform-dependent constants definition
+ *
+ * Includes historical compat for:
+ *   __NetBSD__
+ *   __FreeBSD__
+ *   __APPLE__
+ *
+ * However, sfptpd has only been tested on:
+ *   __linux__
+ *
+ * So there would be many other places to review to convert to
+ * a cross-platform solution today.
  */
 
 /* platform dependent */
 
-#if !defined(linux) && !defined(__NetBSD__) && !defined(__FreeBSD__) && \
+#if !defined(__linux__) && !defined(__NetBSD__) && !defined(__FreeBSD__) && \
   !defined(__APPLE__)
 #error Not ported to this architecture, please update.
 #endif
 
-#ifdef linux
+#ifdef __linux__
 #include <netinet/in.h>
 #include <net/if.h>
 #include <net/if_arp.h>
@@ -38,7 +46,7 @@
 #elif __BYTE_ORDER == __BIG_ENDIAN
 #define PTPD_MSBF
 #endif
-#endif /* linux */
+#endif /* __linux__ */
 
 #ifndef htobe64
 #if __BYTE_ORDER == __LITTLE_ENDIAN
