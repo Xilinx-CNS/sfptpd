@@ -307,7 +307,7 @@ static inline struct sfptpd_timespec *get_suitable_timestamp(PtpInterface *ptpIn
 	case PTPD_TIMESTAMP_TYPE_SW:
 		return &info->sw;
 	default:
-		return false;
+		return NULL;
 	}
 }
 
