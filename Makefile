@@ -55,7 +55,7 @@ include mk/install.mk
 #
 CFLAGS += -MMD -MP -Wall -Werror -Wundef -Wstrict-prototypes \
 	-Wnested-externs -g -pthread -fPIC -std=c11 \
-	-D_ISOC99_SOURCE -D_BSD_SOURCE -D_DEFAULT_SOURCE -D_GNU_SOURCE \
+	-D_GNU_SOURCE \
 	$(CONDITIONAL_DEFS) \
 	-DINST_PREFIX=$(prefix) \
 	-fstack-protector-all -Wstack-protector
