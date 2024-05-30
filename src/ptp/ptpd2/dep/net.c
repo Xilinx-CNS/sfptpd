@@ -1235,7 +1235,7 @@ truncated:
 		stats->resolved_quantile[quantile] = 0;
 }
 
-bool netCheckTimestampAlarms(PtpClock *ptpClock)
+enum sfptpd_tristate netCheckTimestampAlarms(PtpClock *ptpClock)
 {
 	struct sfptpd_ts_cache *cache = &ptpClock->interface->ts_cache;
 	struct sfptpd_timespec elapsed;
@@ -1243,7 +1243,7 @@ bool netCheckTimestampAlarms(PtpClock *ptpClock)
 	struct sfptpd_timespec now;
 	const int alarm_quantile = TS_TIME_TO_ALARM_E10 - TS_QUANTILE_E10_MIN;
 	const int evict_quantile = TS_TIME_TO_EVICT_E10 - TS_QUANTILE_E10_MIN;
-	bool alarm = false;
+	enum sfptpd_tristate alarm = TRISTATE_OFF; /* Default to clearing alarm */
 	char buf[48];
 
 	/* Do not set alarm because of evicted timestamping requests because
@@ -1261,8 +1261,15 @@ bool netCheckTimestampAlarms(PtpClock *ptpClock)
 			sfptpd_time_subtract(&elapsed, &now, &cache->packet[slot].sent_monotime);
 
 			/* Raise an alarm if there are timestamp requests waiting longer then the alarm threshold */
-			if (sfptpd_time_is_greater_or_equal(&elapsed, &cache->stats_periodic.quantile_bounds[alarm_quantile]))
-				alarm = true;
+			if (sfptpd_time_is_greater_or_equal(&elapsed, &cache->stats_periodic.quantile_bounds[alarm_quantile])
+			    && alarm != 1) {
+				if (cache->packet[slot].has_caused_alarm) {
+					alarm = TRISTATE_Z; /* hysteresis */
+				} else {
+					alarm = TRISTATE_ON;
+					cache->packet[slot].has_caused_alarm = true;
+				}
+			}
 
 			/* Evict timestamp requests taking longer than the eviction threshold.
 			 * These will not show up as alarmed next time round. */
@@ -2086,6 +2093,7 @@ struct sfptpd_ts_ticket netExpectTimestamp(struct sfptpd_ts_cache *cache,
 	/* Store packet information in cache */
 	pkt->user = *user;
 	pkt->seq = cache->seq++;
+	pkt->has_caused_alarm = false;
 	sfclock_gettime(CLOCK_MONOTONIC, &pkt->sent_monotime);
 	cache->free_bitmap &= ~(1 << bit);
 	cache->stats_periodic.total++;

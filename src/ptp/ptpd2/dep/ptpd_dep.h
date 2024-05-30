@@ -245,7 +245,16 @@ ssize_t netRecvError(PtpInterface *ptpInterface);
 ssize_t netRecvEvent(Octet*,PtpInterface*,struct sfptpd_ts_info*);
 ssize_t netRecvGeneral(Octet*,struct ptpd_transport*);
 void netCheckTimestampStats(struct sfptpd_ts_cache *cache, struct sfptpd_ts_stats *stats, int severity);
-bool netCheckTimestampAlarms(PtpClock *ptpClock);
+
+/** Check for timestamp alarms on port.
+ * The result is tristate: if the stats suggest an alarm but there have not
+ * been any new cases of over-long timestamp then an intervening success will
+ * clear the alarm state without this stats-based check flipping back to alarm.
+ * @param ptpClock the port context
+ * @return TRISTATE_ON on new alarm, TRISTATE_OFF to clear alarm or TRISTATE_Z if no new failures.
+ */
+enum sfptpd_tristate netCheckTimestampAlarms(PtpClock *ptpClock);
+
 struct sfptpd_ts_ticket netMatchPacketToTsCache(struct sfptpd_ts_cache *ts_cache,
 						struct sfptpd_ts_user *user,
 						const char *data, size_t length);

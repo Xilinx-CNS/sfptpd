@@ -23,6 +23,13 @@
 #include "sfptpd_general_config.h"
 
 
+enum sfptpd_tristate {
+	TRISTATE_ON,
+	TRISTATE_OFF,
+	TRISTATE_Z,
+};
+
+
 typedef struct {
 	int min;
 	int max;
@@ -703,6 +710,7 @@ struct sfptpd_ts_pkt {
 	struct sfptpd_ts_user user;
 	struct sfptpd_timespec sent_monotime;
 	uint64_t seq;
+	bool has_caused_alarm;
 };
 
 #define TS_QUANTILE_E10_MIN -4

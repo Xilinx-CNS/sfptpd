@@ -606,18 +606,18 @@ doTimerTick(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 
 	/* Timers valid in multiple states */
 	if (timerExpired(TIMESTAMP_CHECK_TIMER, ptpClock->itimer)) {
-		bool alarm;
+		enum sfptpd_tristate alarm_change;
 
 		DBGV("event TIMESTAMP_CHECK_TIMER expires\n");
 		timerStart(TIMESTAMP_CHECK_TIMER,
 			   TIMESTAMP_HEALTH_CHECK_INTERVAL,
 			   ptpClock->itimer);
 
-		alarm = netCheckTimestampAlarms(ptpClock);
+		alarm_change = netCheckTimestampAlarms(ptpClock);
 
-		if (alarm)
+		if (alarm_change == TRISTATE_ON)
 			SYNC_MODULE_ALARM_SET(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
-		else
+		else if (alarm_change == TRISTATE_OFF)
 			SYNC_MODULE_ALARM_CLEAR(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
 	}
 
