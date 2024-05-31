@@ -1053,6 +1053,12 @@ struct sfptpd_ts_ticket netMatchPacketToTsCache(struct sfptpd_ts_cache *ts_cache
 			/* Remove from cache */
 			ts_cache->free_bitmap |= (1 << ts_cache_bit(slot));
 
+			/* Record latest satisfied request to help manage the
+			 * no-tx-timestamps alarm. */
+			if (sfptpd_time_is_greater_or_equal(&pkt->sent_monotime,
+							    &ts_cache->last_satisfied_request))
+				ts_cache->last_satisfied_request = pkt->sent_monotime;
+
 			/* Record time take to get the result */
 			sfptpd_time_subtract(&elapsed, &now, &pkt->sent_monotime);
 			for (quantile = 0; quantile < TS_QUANTILES; quantile++) {
@@ -1276,9 +1282,14 @@ enum sfptpd_tristate netCheckTimestampAlarms(PtpClock *ptpClock)
 		if (cache->packet[slot].user.port == ptpClock) {
 			sfptpd_time_subtract(&elapsed, &now, &cache->packet[slot].sent_monotime);
 
-			/* Raise an alarm if there are timestamp requests waiting longer then the alarm threshold */
-			if (sfptpd_time_is_greater_or_equal(&elapsed, &cache->stats_periodic.quantile_bounds[alarm_quantile])
-			    && alarm != 1) {
+			/* Raise an alarm if there are timestamp requests
+			 * waiting longer then the alarm threshold and there
+			 * has not been a newer success. */
+			if (sfptpd_time_is_greater_or_equal(&elapsed,
+							    &cache->stats_periodic.quantile_bounds[alarm_quantile]) &&
+			    sfptpd_time_is_greater_or_equal(&cache->packet[slot].sent_monotime,
+							    &cache->last_satisfied_request) &&
+			    alarm != 1) {
 				if (cache->packet[slot].has_caused_alarm) {
 					alarm = TRISTATE_Z; /* hysteresis */
 				} else {
@@ -1620,6 +1631,7 @@ static void sfptpd_ts_cache_init(struct sfptpd_ts_cache *cache)
 	/* Initialise cache proper */
 	cache->free_bitmap = ~0;
 	cache->seq = 0;
+	sfptpd_time_zero(&cache->last_satisfied_request);
 
 	/* Initialise short term stats */
 	sfptpd_ts_stats_init(&cache->stats_periodic);

@@ -755,6 +755,9 @@ struct sfptpd_ts_cache {
 
 	/* On-demand statistics */
 	struct sfptpd_ts_stats stats_adhoc;
+
+	/* Request time of last satisfied timestamp request */
+	struct sfptpd_timespec last_satisfied_request;
 };
 
 /**
