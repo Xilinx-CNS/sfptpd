@@ -713,10 +713,18 @@ struct sfptpd_ts_pkt {
 	bool has_caused_alarm;
 };
 
+/* Define the quantiles which have an upper bound */
 #define TS_QUANTILE_E10_MIN -4
 #define TS_QUANTILE_E10_MAX 1
+
+/* The MIN and MAX E10 quantiles are inclusive so add 1,
+ * and we need an additional bucket for all longer times (T_MAX), so add 2. */
 #define TS_QUANTILES (TS_QUANTILE_E10_MAX) - (TS_QUANTILE_E10_MIN) + 2
+
+/* Alarm when timestamp has taken more then 1s */
 #define TS_TIME_TO_ALARM_E10 0
+
+/* Stop tracking timetamps that have taken more than 10s */
 #define TS_TIME_TO_EVICT_E10 1
 
 /* Structure defining short term stats for timestamp cache */

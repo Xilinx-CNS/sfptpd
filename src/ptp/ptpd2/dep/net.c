@@ -171,7 +171,27 @@ static inline void ts_cache_iterator_next(ts_cache_iterator_t *iterator)
  ****************************************************************************/
 
 const char *ts_quantile_units[] = { "1us", "10us", "100us", "1ms", "10ms", "100ms", "1s", "10s", "100s" };
+
+/* What x for 10^x is the lowest unit described above? */
 #define TS_QUANTILE_MIN_UNIT_E10 -6
+
+
+/****************************************************************************
+ * Internal ptpd net module functions
+ ****************************************************************************/
+
+static const char *ts_e10_quantile_to_unit(int q_e10)
+{
+	int q_index = q_e10 - TS_QUANTILE_E10_MIN;
+	int q_unit = q_e10 - TS_QUANTILE_MIN_UNIT_E10;
+
+	assert(q_unit >= 0);
+	assert(q_unit < (sizeof ts_quantile_units) / (sizeof *ts_quantile_units) ||
+	       q_index == TS_QUANTILES - 1);
+
+	/* The last quantile has no upper bound. */
+	return q_index == TS_QUANTILES - 1 ? "T_MAX" : ts_quantile_units[q_unit];
+}
 
 
 /****************************************************************************
@@ -1190,12 +1210,8 @@ void netCheckTimestampStats(struct sfptpd_ts_cache *cache,
 	for (q = 0; q < TS_QUANTILES; q++) {
 		int q_e10 = q + TS_QUANTILE_E10_MIN;
 
-		assert(q_e10 >= TS_QUANTILE_MIN_UNIT_E10);
-		assert(q < (sizeof ts_quantile_units) / (sizeof *ts_quantile_units));
-
 		ret = snprintf(buf + ptr, sizeof buf - ptr, " <%5s |",
-			       q == TS_QUANTILES - 1 ? "T_MAX" :
-			       ts_quantile_units[q_e10 - TS_QUANTILE_MIN_UNIT_E10]);
+			       ts_e10_quantile_to_unit(q_e10));
 		if (ret >= sizeof buf)
 			goto truncated;
 		else
@@ -1275,8 +1291,10 @@ enum sfptpd_tristate netCheckTimestampAlarms(PtpClock *ptpClock)
 			 * These will not show up as alarmed next time round. */
 			if (sfptpd_time_is_greater_or_equal(&elapsed, &cache->stats_periodic.quantile_bounds[evict_quantile])) {
 				formatTsPkt(&cache->packet[slot].user, buf);
-				DBGV("ptpd: timestamp taking longer than %s; evicting %s\n",
-				     ts_quantile_units[evict_quantile], buf);
+				DBGV("ptpd: timestamp taking longer than %s (" SFPTPD_FORMAT_FLOAT "s); evicting %s\n",
+				     ts_e10_quantile_to_unit(TS_TIME_TO_EVICT_E10),
+				     sfptpd_time_timespec_to_float_s(&elapsed),
+				     buf);
 				cache->free_bitmap |= ~((unsigned int) INT_MAX) >> slot;
 				cache->stats_periodic.evicted++;
 				cache->stats_adhoc.evicted++;
