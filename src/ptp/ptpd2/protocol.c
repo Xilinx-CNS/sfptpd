@@ -1636,6 +1636,7 @@ doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 	struct sfptpd_ts_info ts_info;
 	struct sfptpd_ts_user ts_user;
 	ssize_t length;
+	bool packet_matched;
 
 	while (error) {
 		length = netRecvError(ptpInterface);
@@ -1648,12 +1649,16 @@ doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 			      strerror(-length));
 			error = false;
 		} else {
-			netProcessError(ptpInterface, length, &ts_user, &ts_ticket, &ts_info);
-			if (is_suitable_timestamp(ptpInterface, &ts_info))
-				processTxTimestamp(ptpInterface, ts_user, ts_ticket,
-					           *get_suitable_timestamp(ptpInterface, &ts_info));
-			else
-				WARNING("ptp: ignoring unsuitable timestamp type\n");
+			packet_matched = netProcessError(ptpInterface, length, &ts_user, &ts_ticket, &ts_info);
+			if (packet_matched) {
+				if (is_suitable_timestamp(ptpInterface, &ts_info)) {
+					processTxTimestamp(ptpInterface, ts_user, ts_ticket,
+						           *get_suitable_timestamp(ptpInterface, &ts_info));
+				} else {
+					WARNING("ptp: ignoring unsuitable timestamp type\n");
+					SYNC_MODULE_ALARM_SET(ts_user.port->portAlarms, NO_TX_TIMESTAMPS);
+				}
+			}
 		}
 	}
 

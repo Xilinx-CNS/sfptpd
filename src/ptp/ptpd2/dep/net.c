@@ -1178,7 +1178,7 @@ bool netProcessError(PtpInterface *ptpInterface,
 	}
 
 finish:
-	return haveTs;
+	return havePkt;
 }
 
 void netCheckTimestampStats(struct sfptpd_ts_cache *cache,
