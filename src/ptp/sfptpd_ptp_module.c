@@ -4140,6 +4140,7 @@ static void ptp_on_user_fds(void *context,
 	for(interface = ptp->intf_list; interface; interface = interface->next) {
 		event = false;
 		general = false;
+		error = false;
 		for(i = 0; i < num_events; i++) {
 			if (events[i].fd == interface->ptpd_intf_fds.event_sock) {
 				if (events[i].flags.rd)
