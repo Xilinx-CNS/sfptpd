@@ -327,26 +327,33 @@ int sfptpd_priv_open_chrony(sfptpd_short_text_t failing_step,
 {
 	struct sfptpd_priv_req_msg req = { .req = SFPTPD_PRIV_REQ_OPEN_CHRONY };
 	struct sfptpd_priv_resp_msg resp = { 0 };
-	int rc;
+	int rc_in;
+	int rc_out;
 	int fds[1];
 
-	rc = sfptpd_priv_rpc(&priv_state, &req, &resp, fds);
-	if (rc > 0) {
+	rc_in = sfptpd_priv_rpc(&priv_state, &req, &resp, fds);
+	if (rc_in > 0) {
 		TRACE_L5("priv: open-chrony: got fd %d from helper\n", fds[0]);
-		return fds[0];
-	} else if (rc == 0) {
-		rc = resp.open_chrony.rc;
+		rc_out = fds[0];
+	} else if (rc_in == 0) {
+		rc_out = -resp.open_chrony.rc;
 		failing_step = resp.open_chrony.failing_step;
-	} else if (rc == -ENOTCONN) {
+	} else if (rc_in == -ENOTCONN) {
 		const char *step;
-		rc = sfptpd_crny_helper_connect(client_path,
-						CRNY_CONTROL_SOCKET_PATH,
-						fds, &step);
+		rc_in = sfptpd_crny_helper_connect(client_path,
+						   CRNY_CONTROL_SOCKET_PATH,
+						   fds, &step);
 		sfptpd_strncpy(failing_step, step, sizeof(sfptpd_short_text_t));
+		if (rc_in == 0)
+			rc_out = fds[0];
+		else
+			rc_out = -rc_in;
 	} else {
-		ERROR("priv: open_chrony: error calling helper, %s\n", strerror(rc));
+		ERROR("priv: open_chrony: error calling helper, %s\n", strerror(-rc_in));
+		rc_out = rc_in;
 	}
-	return -rc;
+
+	return rc_out;
 }
 
 int sfptpd_priv_open_dev(const char *path)
