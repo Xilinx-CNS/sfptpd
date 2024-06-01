@@ -788,6 +788,7 @@ static bool clock_control_at_launch(crny_module_t *ntp)
 	int rc;
 	ssize_t sz;
 	bool assume_absent = true;
+	bool checked_options = false;
 	enum {
 		OPT_START,
 		OPT_MINUS,
@@ -805,9 +806,6 @@ static bool clock_control_at_launch(crny_module_t *ntp)
 		goto finish;
 	}
 
-	DBG_L6("crny: chrony static check: running (%d, %s)\n",
-		chrony[0].a_pid, chrony[0].a_program);
-
 	pid = chrony[0].a_pid;
 
 	/* Consider clock control to be enabled if chronyd is launched
@@ -823,6 +821,7 @@ static bool clock_control_at_launch(crny_module_t *ntp)
 	if (fd == -1)
 		goto finish;
 
+	checked_options = true;
 	while ((sz = read(fd, buf, sizeof buf)) > 0 && state != OPT_X) {
 		int i;
 		for (i = 0; i < sz && state != OPT_X; i++) {
@@ -848,6 +847,12 @@ static bool clock_control_at_launch(crny_module_t *ntp)
 	close(fd);
 
 finish:
+	DBG_L6("crny: chrony static check: running (%d, %s) %s\n",
+		chrony[0].a_pid, chrony[0].a_program,
+		checked_options ?
+		(state == OPT_X ? "with -x" : "normally") :
+		"with unknown options");
+
 	if (!assume_absent && !ntp->config->clock_control) {
 		if (state == OPT_X) {
 			SYNC_MODULE_CONSTRAINT_SET(ntp->constraints, CANNOT_BE_SELECTED);
