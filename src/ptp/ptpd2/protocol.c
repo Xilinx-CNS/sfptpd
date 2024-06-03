@@ -502,9 +502,17 @@ doInitPort(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	}
 
 	/* Determine which clock to use based on the interface */
-	assert(ptpClock->physIface != NULL);
+	if (ptpClock->physIface == NULL) {
+		ERROR("ptp %s: failed to initialize port, missing interface\n", rtOpts->name);
+		toState(PTPD_FAULTY, rtOpts, ptpClock);
+		return FALSE;
+	}
 	ptpClock->clock = sfptpd_interface_get_clock(ptpClock->physIface);
-	assert(ptpClock->clock != NULL);
+	if (ptpClock->clock == NULL) {
+		ERROR("ptp %s: failed to initialize port, no clock for interface\n", rtOpts->name);
+		toState(PTPD_FAULTY, rtOpts, ptpClock);
+		return FALSE;
+	}
 
 	/* Get clock id */
 	sfptpd_clock_get_hw_id(ptpClock->clock, &rtOpts->ifOpts->clock_id);
