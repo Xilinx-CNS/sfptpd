@@ -21,15 +21,14 @@ jobs:
           - dist: el9
             build_os: stream9
             extra_build_deps: systemd-rpm-macros
-          - dist: el8
-            build_os: stream8
-            extra_build_deps: systemd-rpm-macros
           - dist: el7
             build_os: centos7
             extra_build_deps: systemd
           - dist: el6
             build_os: centos7
             extra_build_deps:
+        exclude:
+          - dist: el8
     runs-on: ubuntu-latest
     env:
       BUILD_DEPS: rpm-build git gcc make libmnl-devel libcap-devel python3-devel
