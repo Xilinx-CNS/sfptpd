@@ -710,7 +710,7 @@ void crny_parse_state(struct ntp_state *state, int rc, bool offset_unsafe)
 
 		if (peer->selected) {
 			if (state->selected_peer_idx != -1)
-				WARNING("crny: ntpd reporting more than one selected peer\n");
+				WARNING("crny: chronyd reporting more than one selected peer\n");
 			else
 				state->selected_peer_idx = i;
 		}
@@ -1483,7 +1483,7 @@ static bool ntp_handle_state_change(crny_module_t *ntp,
 
 		switch (new_state->state) {
 		case SYNC_MODULE_STATE_DISABLED:
-			WARNING("crny: ntpd no longer running\n");
+			WARNING("crny: chronyd no longer running\n");
 			if (!ntp->config->clock_control) {
 				SYNC_MODULE_CONSTRAINT_SET(ntp->constraints, CANNOT_BE_SELECTED);
 				SYNC_MODULE_CONSTRAINT_CLEAR(ntp->constraints, MUST_BE_SELECTED);
@@ -1491,7 +1491,7 @@ static bool ntp_handle_state_change(crny_module_t *ntp,
 			break;
 
 		case SYNC_MODULE_STATE_FAULTY:
-			ERROR("crny: not able to communicate with ntpd\n");
+			ERROR("crny: not able to communicate with chronyd\n");
 			break;
 
 		case SYNC_MODULE_STATE_MASTER:
@@ -1772,7 +1772,7 @@ static void ntp_on_offset_id_change(crny_module_t *ntp, struct ntp_state *new_st
 
 	if (new_state->offset_unsafe && !offset_id_is_valid(new_state)) {
 		new_state->offset_unsafe = false;
-		INFO("crny: new ntpd offset detected\n");
+		INFO("crny: new NTP offset detected\n");
 		sfptpd_clock_get_time(sfptpd_clock_get_system_clock(), &new_state->offset_timestamp);
 	}
 }
