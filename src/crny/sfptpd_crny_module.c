@@ -1035,8 +1035,10 @@ static int handle_get_sys_info(crny_module_t *ntp)
 	struct crny_comm *comm = &ntp->crny_comm;
 	struct crny_cmd_request *req = &comm->req;
 	struct crny_cmd_response *reply = &comm->resp;
-	struct sfptpd_ntpclient_sys_info sys_info;
 	struct ntp_state *next_state = &ntp->next_state;
+	struct sfptpd_ntpclient_sys_info sys_info = {
+		.clock_control_enabled = next_state->sys_info.clock_control_enabled
+	};
 
 	assert(ntp != NULL);
 
