@@ -10,32 +10,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Allow 32-bit userspace on 64-bit kernels (when built from source). (SWPTP-46)
 - Operate PTP to sub-nanosecond precision. (SWPTP-58)
-  - internal structures updated throughout to use times with sub-nanosecond
+  - Internal structures updated throughout to use times with sub-nanosecond
     resolution.
-  - when enabled with `onload_ext on` in the `[ptp]` configuration section,
+  - When enabled with `onload_ext on` in the `[ptp]` configuration section,
     attempt to retrieve timestamps with sub-nanosecond resolution via the
     [Onload Extensions API](https://docs.xilinx.com/r/en-US/ug1586-onload-user/Onload-Extensions-API).
-  - populate PTP correctionField to reflect sub-nanosecond timestamps (sfptpd
+  - Populate PTP correctionField to reflect sub-nanosecond timestamps (sfptpd
     already used subnanosecond corrections received over the PTP network)
-  - see notes below for current limitations
-- Improve LACP support. (SWPTP-738)
-  - select the local reference clock to be the one on which the latest Sync
-    message was received. (SWPTP-1434)
-  - try to send DelayReq messages on the interface that last received a
-    Sync message using a custom Onload CMSG. (SWPTP-976)
+  - See notes below for current limitations.
 - Add --socket option for sfptpdctl to control multiple processes. (SWPTP-624)
 - Add configurable patterns for log, state, control and stats paths. (SWPTP-649)
-  - supports logging to a directory shared between hosts
+  - Supports logging to a directory shared between hosts.
     ```
     json_stats /nfs/log/sfptpd-stats-%H:%Cd.jsonl
     ```
-  - or esoteric use cases requiring multiple sfptpd instances
+  - Or esoteric use cases requiring multiple sfptpd instances.
     ```
     state_path /var/lib/sfptpd-%P
     control_path /run/sfptpd-%P-control.sock
     ```
+- Enhance LACP support. (SWPTP-738)
+  - Switch the local reference clock to be the one by which the latest Sync
+    message was timestamped. (SWPTP-1434)
+  - Add support for dual boundary clock topology by sending DelayReq
+    messages over the physical interface that last received a Sync message
+    from the current PTP master. Implemented using an Onload extension feature
+    that must be enabled. (SWPTP-976)
 - Show unicast/multicast delay response flags in state file. (SWPTP-807)
+- Get transmit timestamps via epoll to avoid blocking PTP thread. (SWPTP-831)
 - Add configurable patterns for clock names and ids. (SWPTP-997)
   - enables colons to be omitted from clock ids in filenames:
     ```
@@ -48,20 +52,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - E.g. `reporting_intervals save_state 120 stats_log 2`
 - Add `step_threshold` option to change the offset threshold for allowing
   a step (when permitted by clock control setting). (SWPTP-1365)
+- Add shared clock feed. (SWPTP-1386)
+  - Deliver clock comparisons via shared feed, nearly halving the number
+    of measurements needed in a multi-NIC system.
+  - Reduce impact of missing and delayed clock measurements
 - Use 1588-2019 method for constructing clock ids from EUI-64s. (SWPTP-1402)
   - Allow unique clock id bits to be set with `unique_clockid_bits`.
   - Allow legacy (2008) clock ids to be used with `legacy_clock_ids`.
 - Add `pidadjust` control command to tweak PID controller co-efficients
   at runtime for experimental purposes only. Run `sfptpdctl` without
   arguments to see syntax. (SWPTP-1411)
+- Add Debian packaging. (SWPTP-1446)
 - Add `-D` command line option to specify default PTP domain. (SWPTP-1454)
 - Add master-only PTP option. (SWPTP-1459)
 - Add a privileged helper to support hotplugging, connecting to the chrony
   control socket and performing clock control over chrony when running as a
   non-root user. (SWPTP-1479)
+- Allow repeated -v arguments to increase verbosity. (SWPTP-1489)
 - Add `gps` sync module to use `gpsd` for PPS time of day.
-  - This is an **unsupported feature** neither compiled into supported releases
-    nor compiled by default from source.
+  - This is a unsupported feature not compiled in by default.
   - To use this feature install the appropriate development package for
     gpsd/libgps, build with `make NO_GPS=` and instantiate the `gps`
     sync module with information on how to access the `gpsd` daemon, e.g.:
@@ -71,36 +80,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     [pps]
     time_of_day gps1
     ```
+- Add Y2038 support when built for 32-bit targets with 64-bit time enabled.
+  (Xilinx-CNS/sfptpd#12)
 
 > [!NOTE]
 > Current versions of Onload do not support the acceleration of sfptpd.
 
 > [!NOTE]
-> The Onload Extensions API does not currently retrieve NIC timestamps
-> with sub-nanosecond resolution.
+> Currently-released versions of the Onload Extensions API do not provide the
+> sub-nanosecond portion of NIC timestamps.
 
-### Removed
+### Changed
 
+- Default polling interval for chronyd doubled to 2s.
 - The default value of `one_phc_per_nic` is now `off`. (SWPTP-1348)
    - See note under [v3.5.0.1004](#3501004---2022-05-13-feature-release)
      and the [README](README.md#using-non-solarflare-network-adapters).
-- The source can no longer be built for RHEL 6 without backported kernel
-  headers (SWPTP-1371)
+
+### Removed
+
+- The source can no longer be built on RHEL 6, which is unsupported. (But it
+  may be possible to build for RHEL 6 on RHEL 7 by defining `GLIBC_COMPAT=1`
+  or with `RPM_OSVER=el6 make build_srpm`.) (SWPTP-1371)
 
 ### Fixed
 
-- Issue #9
+- Xilinx-CNS/sfptpd#9
   - Fix issue that manifests as not being able to control the system clock
-    on some systems, such as Raspberry Pi 5 with Debian 12
-- Issue SWPTP-831
-  - Retrieve transmit timestamps via epoll to avoid blocking PTP thread
-- Issue SWPTP-1386
-  - Deliver clock comparisons via shared clock feed, nearly halving the number
-    of measurements needed in a multi-NIC system.
-  - Reduce impact of missing and delayed clock measurements
+    on some systems, such as Raspberry Pi 5 with Debian 12.
 - Issue SWPTP-1396
   - Provide correct clock timestamps in real time stats corresponding to the
     reported offsets rather than time of logging message.
+- Issue SWPTP-1481
+  - When `max_missing_delayresps` config supplied, stop using the wrong
+    value for hybrid fallback.
 
 ## [3.7.1.1007] - 2024-01-25
 

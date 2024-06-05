@@ -7,6 +7,11 @@ These release notes relate to official supported binary releases of sfptpd.
 Please see [the changelog](CHANGELOG.md) for a list of changes since earlier
 releases.
 
+> [!NOTE]
+> Features listed in the changelog that require building from source or relate
+> to operating systems or hardware not listed below as supported, are not
+> supported by AMD but should be considered exclusive to the open source project.
+
 (c) Copyright 2012-2024 Advanced Micro Devices, Inc.
 
 
@@ -99,6 +104,14 @@ Known Issues
      is enabled on the relevant interface. For more details see:
      <https://support.xilinx.com/s/article/000033083>
 
+- Issue SWNETLINUX-5126
+   - With affected driver verions (e.g. v5.3.16.1004, released November 2023),
+     sending a packet with a hardware timetamp on a 7000-series NIC can cause
+     an sfc net driver crash in the kernel. 7000-series devices are out of
+     support by AMD Solarflare including with sfptpd. Other devices are
+     unaffected. For more details see:
+     <https://support.xilinx.com/s/article/000036427>
+
 
 Advanced notice of possible future changes
 ------------------------------------------
@@ -122,6 +135,23 @@ Advanced notice of possible future changes
   The built-in receiver may be disabled in a future feature release. (Note
   that the current version of the script only supports unicast signalling
   on RHEL7, not multicast. Unicast signalling is recommended.)
+
+
+Summary of major new features since v3.7.1.1006
+-----------------------------------------------
+
+For a full list of changes see [the changelog](CHANGELOG.md). These
+include changes of interest to community users building from source.
+
+The following are selected as notable new features for AMD-supported
+use cases:
+
+- LACP PTP support extended to dual boundary clock solutions. (SWPTP-738)
+- Timestamp handling enhanced to improve daemon performance. (SWPTP-831)
+- Configurable path patterns enhance deployment over multiple hosts. (SWPTP-649)
+- New scheme for handling clock comparisons enhances performance. (SWPTP-1386)
+- Debian package now available for Debian and Ubuntu. (SWPTP-1446)
+- Privileged helper allows all features while running not as root. (SWPTP-1479)
 
 
 Copyright
