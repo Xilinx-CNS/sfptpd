@@ -1193,6 +1193,40 @@ struct sfptpd_ts_ticket netMatchPacketToTsCache(struct sfptpd_ts_cache *ts_cache
 	return TS_NULL_TICKET;
 }
 
+int netTryGetSockIfindex(PtpInterface *ptpInterface, int sockfd)
+{
+	bool ipv6 = (ptpInterface->ifOpts.transportAF == AF_INET6);
+	int ipproto = ipv6 ? IPPROTO_IPV6 : IPPROTO_IP;
+	int iptype = ipv6 ? IPV6_PKTINFO : IP_PKTINFO;
+	int cmsg_len = ipv6 ? CMSG_LEN(sizeof(struct in6_pktinfo))
+			    : CMSG_LEN(sizeof(struct in_pktinfo));
+	struct msghdr *msg = &ptpInterface->msgEbuf;
+	struct cmsghdr *cmsg;
+	ssize_t length;
+	int ifindex = 0;
+
+	length = netRecvError(ptpInterface, sockfd);
+	if (length <= 0)
+		return length;
+
+	for (cmsg = CMSG_FIRSTHDR(msg); cmsg != NULL; cmsg = CMSG_NXTHDR(msg, cmsg)) {
+		if (ipproto == cmsg->cmsg_level && iptype == cmsg->cmsg_type) {
+			if (cmsg->cmsg_len < cmsg_len) {
+				WARNING("netTryGetSockIfindex received a cmsg "
+					"of insufficient length, wanted %d "
+					"got %d!", cmsg_len, cmsg->cmsg_len);
+				break;
+			}
+
+			ifindex = ipv6
+				? ((struct in6_pktinfo*)CMSG_DATA(cmsg))->ipi6_ifindex
+				: ((struct in_pktinfo*)CMSG_DATA(cmsg))->ipi_ifindex;
+		}
+	}
+
+	return ifindex;
+}
+
 bool netProcessError(PtpInterface *ptpInterface,
 		     size_t length,
 		     struct sfptpd_ts_user *user,

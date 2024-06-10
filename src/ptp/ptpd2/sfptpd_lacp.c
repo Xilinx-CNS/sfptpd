@@ -14,6 +14,8 @@
 
 #include "sfptpd_lacp.h"
 #include "sfptpd_ptp_module.h"
+#include "sfptpd_thread.h"
+#include "ptpd.h"
 
 static inline void invalidateBondBypassSocket(struct ptpd_transport *transport, int sockIdx)
 {
@@ -96,6 +98,93 @@ void destroyBondSocks(struct ptpd_transport *transport)
 
 	/* Should already be true but doesn't hurt to do it here too */
 	transport->bondSocksValidMask = 0ull;
+	transport->bondSocksMcastResolutionMask = 0ull;
+	transport->multicastBondSocksLen = 0;
+}
+
+void probeBondSocks(struct ptpd_transport *transport)
+{
+	struct sockaddr addr;
+	struct msghdr msg = {
+		.msg_name = (struct sockaddr *) &addr,
+		.msg_namelen = 0,
+		.msg_iov = NULL,
+		.msg_iovlen = 0,
+		.msg_control = NULL,
+		.msg_controllen = 0
+	};
+
+	transport->bondSocksMcastResolutionMask = 0ull;
+	transport->multicastBondSocksLen = 0;
+
+	/* Short verion of `copyAddress` and `copyPort`, not worth
+	 * forcing these to be in a wider scope than necessary. */
+	memcpy(&addr, &transport->multicastAddr,
+	       transport->multicastAddrLen);
+	msg.msg_namelen = transport->multicastAddrLen;
+	if (transport->eventAddr.ss_family == AF_INET)
+		((struct sockaddr_in *)&addr)->sin_port =
+			((struct sockaddr_in *)&transport->eventAddr)->sin_port;
+	else
+		((struct sockaddr_in6 *)&addr)->sin6_port =
+			((struct sockaddr_in6 *)&transport->eventAddr)->sin6_port;
+
+	/* We send an empty UDP packet as this should be trivially
+	 * discarded by the other end, if this succeds then we make a
+	 * note that we expect to see something on the error queue. */
+	FOR_EACH_MASK_IDX(transport->bondSocksValidMask, idx)
+		if (sendmsg(transport->bondSocks[idx], &msg, 0) == 0)
+			transport->bondSocksMcastResolutionMask |= (1 << idx);
+}
+
+void bondSocksHandleMcastResolution(PtpInterface *ptpInterface)
+{
+	struct ptpd_transport *transport = &ptpInterface->transport;
+
+	/* TODO: the current approach is somewhat out of place with the rest of
+	 * the surrounding code. A better solution here would be to add these
+	 * sockets to the epoll set and handle retrieval of the ifindex from
+	 * the error queue alongside other data. This is perhaps already done,
+	 * and would just require properly filling out the "iptype_pktinfo"
+	 * section defined in `netProcessError`. */
+	FOR_EACH_MASK_IDX(transport->bondSocksMcastResolutionMask, idx) {
+		int i, ifindex;
+
+		ifindex = netTryGetSockIfindex(ptpInterface, transport->bondSocks[idx]);
+		/* Skip this socket if we don't know its ifindex yet. */
+		if (ifindex <= 0)
+			continue;
+
+		/* Check that we haven't already found this ifindex. */
+		for (i = 0; i < transport->multicastBondSocksLen; i++)
+			if (transport->multicastBondSocks[i].ifindex == ifindex)
+				break;
+
+		/* If we have already found this ifindex, or we don't have
+		 * enough space to store it, then remove this socket from the
+		 * waiting pool. */
+		const int maxLen = sizeof(transport->multicastBondSocks) /
+				   sizeof(transport->multicastBondSocks[0]);
+		if (i < transport->multicastBondSocksLen || i >= maxLen) {
+			/* Don't clean up the socket as it's still valid! */
+			transport->bondSocksMcastResolutionMask &= ~(1 << idx);
+			continue;
+		}
+
+		/* Record the newly found (socket, ifindex) pair. */
+		assert(i >= transport->multicastBondSocksLen);
+		assert(i < maxLen);
+		transport->multicastBondSocks[i].sockfd = transport->bondSocks[idx];
+		transport->multicastBondSocks[i].ifindex = ifindex;
+		transport->multicastBondSocksLen++;
+		transport->bondSocksMcastResolutionMask &= ~(1 << idx);
+		sfptpd_thread_user_fd_add(transport->bondSocks[idx], true, false);
+
+		/* If our storage is full, then lets make sure we skip this
+		 * discovery code in the future. */
+		if (transport->multicastBondSocksLen >= maxLen)
+			transport->bondSocksMcastResolutionMask = 0ull;
+	}
 }
 
 void setBondSockopt(struct ptpd_transport *transport, int level, int optname,

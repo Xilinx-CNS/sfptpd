@@ -61,6 +61,7 @@
 #include "ptpd.h"
 #include "ptpd_lib.h"
 #include "sfptpd_time.h"
+#include "sfptpd_lacp.h"
 
 static void handleAnnounce(MsgHeader*, ssize_t, RunTimeOpts*, PtpClock*);
 static void handleSync(const MsgHeader*, ssize_t, struct sfptpd_timespec*, Boolean, UInteger32, RunTimeOpts*, PtpClock*);
@@ -1700,6 +1701,8 @@ doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 		Boolean event, Boolean general, Boolean error)
 {
 	struct ptpd_transport *transport = &ptpInterface->transport;
+
+	bondSocksHandleMcastResolution(ptpInterface);
 
 	if (error) {
 		while (error)

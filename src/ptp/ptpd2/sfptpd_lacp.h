@@ -61,9 +61,13 @@
 
 struct ptpd_transport;
 typedef struct TsSetupMethod_s TsSetupMethod;
+typedef struct ptpd_intf_context PtpInterface;
 
 void createBondSocks(struct ptpd_transport *transport, int transportAF);
 void destroyBondSocks(struct ptpd_transport *transport);
+
+void probeBondSocks(struct ptpd_transport *transport);
+void bondSocksHandleMcastResolution(PtpInterface *ptpInterface);
 
 void setBondSockopt(struct ptpd_transport *transport, int level, int optname,
 		    const void *optval, socklen_t optlen);

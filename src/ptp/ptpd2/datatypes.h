@@ -603,6 +603,15 @@ struct ptpd_global_context {
 	PtpInterface *interfaces;
 };
 
+
+/* The unit of our mapping between a given socket and the ifindex a given send
+ * from that socket will be sent out of. */
+struct socket_ifindex {
+	int sockfd;
+	int ifindex;
+};
+
+
 /* A structure containing IP transport information. There is one of these
    per interface object. It is defined separately because different
    types of transport implementation may in future be required so it is
@@ -624,6 +633,14 @@ struct ptpd_transport {
 	 * valid means that we were able to create and set all of the socket
 	 * options that we wanted. */
 	uint64_t bondSocksValidMask;
+	/* A mask of `bondSocks` to get the sockets we are waiting to resolve.
+	 * We use this to know which sockets we need to check the errqueue of
+	 * to receive IP_PKTINFO and find the physical ifindex for mcast. */
+	uint64_t bondSocksMcastResolutionMask;
+	/* A mapping of socket fd to the physical ifindex the socket will send
+	 * out of for a multicast message. */
+	struct socket_ifindex multicastBondSocks[SFPTP_MAX_PHYSICAL_IFS];
+	int multicastBondSocksLen;
 
 	/* Listening event address */
 	struct sockaddr_storage eventAddr;

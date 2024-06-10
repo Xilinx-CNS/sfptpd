@@ -241,6 +241,7 @@ Boolean netInit(struct ptpd_transport*,InterfaceOpts*,PtpInterface*);
 Boolean netInitPort(PtpClock *ptpClock, RunTimeOpts *rtOpts);
 Boolean netShutdown(struct ptpd_transport*);
 int netSelect(struct sfptpd_timespec*,struct ptpd_transport*,fd_set*);
+int netTryGetSockIfindex(PtpInterface *ptpInterface, int sockfd);
 ssize_t netRecvError(PtpInterface *ptpInterface, int sockfd);
 ssize_t netRecvEvent(Octet*,PtpInterface*,struct sfptpd_ts_info*,int);
 ssize_t netRecvGeneral(Octet*,struct ptpd_transport*);
