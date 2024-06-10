@@ -593,6 +593,7 @@ struct ptpd_global_context {
 	PtpInterface *interfaces;
 };
 
+
 /* A structure containing IP transport information. There is one of these
    per interface object. It is defined separately because different
    types of transport implementation may in future be required so it is
@@ -607,6 +608,8 @@ struct ptpd_transport {
 	   bound to an interface, e.g. for unicast signalling monitoring
 	   messages */
 	int monitoringSock;
+
+	const struct sfptpd_ptp_bond_info *bond_info;
 
 	/* Listening event address */
 	struct sockaddr_storage eventAddr;

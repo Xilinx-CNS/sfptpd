@@ -101,7 +101,8 @@ int ptpd_create_port(struct ptpd_port_config *config,
 /* Create a PTPD interface based on the runtime options specified */
 int ptpd_create_interface(struct ptpd_intf_config *config,
 			  struct ptpd_global_context *global,
-			  struct ptpd_intf_context **ptpd_if);
+			  struct ptpd_intf_context **ptpd_if,
+			  const struct sfptpd_ptp_bond_info *bond_info);
 
 /* Destroy port instance of PTPD */
 void ptpd_port_destroy(struct ptpd_port_context *ptpd_port);
@@ -162,6 +163,7 @@ ptpd_timestamp_type_e ptpd_get_timestamping(struct ptpd_intf_context *ptpd_if);
 /* Change the interface being used for PTP */
 int ptpd_change_interface(struct ptpd_port_context *port, Octet *logical_iface_name,
 			  struct sfptpd_interface *physical_iface,
+			  const struct sfptpd_ptp_bond_info *bond_info,
 			  ptpd_timestamp_type_e timestamp_type);
 
 

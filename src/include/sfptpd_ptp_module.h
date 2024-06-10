@@ -56,6 +56,40 @@ typedef struct sfptpd_ptp_module_config {
 } sfptpd_ptp_module_config_t;
 
 
+/* Structure containing interface configuration */
+struct sfptpd_ptp_bond_info {
+	/* Logical interface specified when sfptpd was launched. This could
+	 * be a VLAN, a bond or a real interface */
+	char logical_if[IF_NAMESIZE];
+
+	/* Bond interface name. Note that if the supplied interface is not part
+	 * of a bond this will be in fact the physical interface name */
+	char bond_if[IF_NAMESIZE];
+
+	/* Type of bond detected including none for no bond */
+	enum sfptpd_bond_mode bond_mode;
+
+	/* Is a bridge */
+	bool is_bridge;
+
+	/* Set of physical interfaces associated with the logical interface.
+	 * If no bond is involved this will be a set of 1. */
+	unsigned int num_physical_ifs;
+
+	/* Set of physical interfaces */
+	struct sfptpd_ptp_bond_phys_if {
+		struct sfptpd_interface *intf;
+		bool is_up:1;
+		bool is_primary:1;
+		bool has_hwts:1;
+	} physical_ifs[SFPTP_MAX_PHYSICAL_IFS];
+
+	/* Active physical interface */
+	struct sfptpd_interface *active_if;
+};
+
+typedef struct sfptpd_ptp_bond_info sfptpd_ptp_bond_info_t;
+
 /* Forward structure declarations */
 struct sfptpd_engine;
 struct sfptpd_thread;

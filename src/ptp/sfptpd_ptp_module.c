@@ -85,7 +85,6 @@ enum ptp_stats_ids {
 
 typedef struct sfptpd_ptp_module sfptpd_ptp_module_t;
 typedef struct sfptpd_ptp_instance sfptpd_ptp_instance_t;
-typedef struct sfptpd_ptp_bond_info sfptpd_ptp_bond_info_t;
 typedef struct sfptpd_ptp_intf sfptpd_ptp_intf_t;
 
 /* Main objects making up the sfptpd PTP sync module
@@ -184,38 +183,6 @@ struct sfptpd_ptp_instance {
 	} test;
 
 	sfptpd_ptp_instance_t *next;
-};
-
-/* Structure containing interface configuration */
-struct sfptpd_ptp_bond_info {
-	/* Logical interface specified when sfptpd was launched. This could
-	 * be a VLAN, a bond or a real interface */
-	char logical_if[IF_NAMESIZE];
-
-	/* Bond interface name. Note that if the supplied interface is not part
-	 * of a bond this will be in fact the physical interface name */
-	char bond_if[IF_NAMESIZE];
-
-	/* Type of bond detected including none for no bond */
-	enum sfptpd_bond_mode bond_mode;
-
-	/* Is a bridge */
-	bool is_bridge;
-
-	/* Set of physical interfaces associated with the logical interface.
-	 * If no bond is involved this will be a set of 1. */
-	unsigned int num_physical_ifs;
-
-	/* Set of physical interfaces */
-	struct sfptpd_ptp_bond_phys_if {
-		struct sfptpd_interface *intf;
-		bool is_up:1;
-		bool is_primary:1;
-		bool has_hwts:1;
-	} physical_ifs[SFPTP_MAX_PHYSICAL_IFS];
-
-	/* Active physical interface */
-	struct sfptpd_interface *active_if;
 };
 
 /* Structure containing interface state */
@@ -1854,7 +1821,7 @@ static int ptp_handle_bonding_interface_change(struct sfptpd_ptp_intf *intf,
 		if (active_changed || ts_changed) {
 			/* Reconfigure PTPD to use the new interface */
 			rc = ptpd_change_interface(instance->ptpd_port_private, new_bond_info.logical_if,
-						   active_intf, timestamp_type);
+						   active_intf, &new_bond_info, timestamp_type);
 
 			*bond_changed |= true;
 		} else {
@@ -2092,7 +2059,9 @@ static bool ptp_update_instance_state(struct sfptpd_ptp_instance *instance,
 			if (rc == 0) {
 				ptpd_change_interface(instance->ptpd_port_private,
 						      instance->intf->bond_info.logical_if,
-						      active_intf, timestamp_type);
+						      active_intf,
+						      &instance->intf->bond_info,
+						      timestamp_type);
 			}
 		}
 	}
@@ -3866,7 +3835,8 @@ static int ptp_on_startup(void *context)
 		/* Create the PTPD interface instance */
 		rc = ptpd_create_interface(&ptp_get_config_for_interface(interface)->ptpd_intf,
 					   ptp->ptpd_global_private,
-					   &interface->ptpd_intf_private);
+					   &interface->ptpd_intf_private,
+					   &interface->bond_info);
 		if (rc != 0) {
 			CRITICAL("ptp: failed to create PTPD interface instance, %s\n", strerror(rc));
 			goto fail;

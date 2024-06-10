@@ -198,7 +198,8 @@ int ptpd_init(struct ptpd_global_context **ptpd_global) {
 }
 
 
-int ptpd_create_interface(struct ptpd_intf_config *config, struct ptpd_global_context *global, struct ptpd_intf_context **ptpd_if)
+int ptpd_create_interface(struct ptpd_intf_config *config, struct ptpd_global_context *global,
+			  struct ptpd_intf_context **ptpd_if, const struct sfptpd_ptp_bond_info *bond_info)
 {
 	struct ptpd_intf_context *new;
 	struct ptpd_intf_config *ifOpts;
@@ -224,6 +225,7 @@ int ptpd_create_interface(struct ptpd_intf_config *config, struct ptpd_global_co
 	new->transport.eventSock = -1;
 	new->transport.generalSock = -1;
 	new->transport.monitoringSock = -1;
+	new->transport.bond_info = bond_info;
 
 	/* Insert into linked list */
 	new->next = global->interfaces;
@@ -593,6 +595,7 @@ ptpd_timestamp_type_e ptpd_get_timestamping(struct ptpd_intf_context *ptpd_if)
 
 int ptpd_change_interface(struct ptpd_port_context *ptpd_port, Octet *logical_iface_name,
 			  struct sfptpd_interface *physical_iface,
+			  const struct sfptpd_ptp_bond_info *bond_info,
 			  ptpd_timestamp_type_e timestamp_type)
 {
 	bool new_time_mode = false;
@@ -625,6 +628,8 @@ int ptpd_change_interface(struct ptpd_port_context *ptpd_port, Octet *logical_if
 	ptpd_port->clock = sfptpd_interface_get_clock(ptpd_port->physIface);
 	ifOpts->physIface = physical_iface;
 	ifOpts->timestampType = timestamp_type;
+
+	ptpd_if->transport.bond_info = bond_info;
 
 	/* Initialize networking */
 	if(ptpd_port->physIface == NULL) {
