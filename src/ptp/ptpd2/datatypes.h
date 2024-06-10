@@ -593,7 +593,6 @@ struct ptpd_global_context {
 	PtpInterface *interfaces;
 };
 
-
 /* A structure containing IP transport information. There is one of these
    per interface object. It is defined separately because different
    types of transport implementation may in future be required so it is

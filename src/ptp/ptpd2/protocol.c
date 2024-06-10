@@ -1636,63 +1636,89 @@ processTxTimestamp(PtpInterface *interface,
 	}
 }
 
-/* Check and handle received messages */
-void
-doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
-		Boolean event, Boolean general, Boolean error)
+bool doHandleSocketsError(PtpInterface *ptpInterface, int sockfd)
 {
-	struct ptpd_transport *transport = &ptpInterface->transport;
 	struct sfptpd_ts_ticket ts_ticket = TS_NULL_TICKET;
 	struct sfptpd_ts_info ts_info;
 	struct sfptpd_ts_user ts_user;
 	ssize_t length;
 	bool packet_matched;
 
-	while (error) {
-		length = netRecvError(ptpInterface, transport->eventSock);
-		if (length == -EAGAIN || length == -EINTR) {
-			/* No more messges to read on error queue */
-			error = false;
-		} else if (length < 0) {
-			/* TODO: add stat */
-			ERROR("ptp: error reading socket error queue, %s\n",
-			      strerror(-length));
-			error = false;
-		} else {
-			packet_matched = netProcessError(ptpInterface, length, &ts_user, &ts_ticket, &ts_info);
-			if (packet_matched) {
-				if (is_suitable_timestamp(ptpInterface, &ts_info)) {
-					processTxTimestamp(ptpInterface, ts_user, ts_ticket,
-						           *get_suitable_timestamp(ptpInterface, &ts_info));
-				} else {
-					WARNING("ptp: ignoring unsuitable timestamp type\n");
-					SYNC_MODULE_ALARM_SET(ts_user.port->portAlarms, NO_TX_TIMESTAMPS);
-				}
+	length = netRecvError(ptpInterface, sockfd);
+	if (length == -EAGAIN || length == -EINTR) {
+		/* No more messges to read on error queue */
+		return false;
+	} else if (length < 0) {
+		/* TODO: add stat */
+		ERROR("ptp: error reading socket error queue, %s\n",
+		      strerror(-length));
+		return false;
+	} else {
+		packet_matched = netProcessError(ptpInterface, length, &ts_user, &ts_ticket, &ts_info);
+		if (packet_matched) {
+			if (is_suitable_timestamp(ptpInterface, &ts_info)) {
+				processTxTimestamp(ptpInterface, ts_user, ts_ticket,
+						   *get_suitable_timestamp(ptpInterface, &ts_info));
+			} else {
+				WARNING("ptp: ignoring unsuitable timestamp type\n");
+				SYNC_MODULE_ALARM_SET(ts_user.port->portAlarms, NO_TX_TIMESTAMPS);
 			}
 		}
 	}
+	return true;
+}
+
+int doHandleSocketsEvent(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
+			 int sockfd)
+{
+	struct sfptpd_ts_info ts_info;
+	ssize_t length;
+
+	length = netRecvEvent(ptpInterface->msgIbuf, ptpInterface, &ts_info,
+			      sockfd);
+	if (length < 0) {
+		PERROR("failed to receive on the event socket\n");
+		toStateAllPorts(PTPD_FAULTY, ptpInterface);
+		ptpInterface->counters.messageRecvErrors++;
+		return length;
+	}
+
+	if (length > 0) {
+		processMessage(ifOpts, ptpInterface,
+			       get_suitable_timestamp(ptpInterface, &ts_info),
+			       is_suitable_timestamp(ptpInterface, &ts_info),
+			       ts_info.if_index,
+			       length);
+	}
+
+	return 0;
+}
+
+/* Check and handle received messages */
+void
+doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
+		Boolean event, Boolean general, Boolean error)
+{
+	struct ptpd_transport *transport = &ptpInterface->transport;
+
+	if (error) {
+		while (error)
+			error = doHandleSocketsError(ptpInterface,
+						     transport->eventSock);
+	}
 
 	if (event) {
-		length = netRecvEvent(ptpInterface->msgIbuf, ptpInterface,
-				      &ts_info, transport->eventSock);
-		if (length < 0) {
-			PERROR("failed to receive on the event socket\n");
-			toStateAllPorts(PTPD_FAULTY, ptpInterface);
-			ptpInterface->counters.messageRecvErrors++;
-			return;
-		}
+		int rc;
 
-		if (length > 0) {
-			processMessage(ifOpts, ptpInterface,
-				       get_suitable_timestamp(ptpInterface, &ts_info),
-				       is_suitable_timestamp(ptpInterface, &ts_info),
-				       ts_info.if_index,
-				       length);
-		}
+		rc = doHandleSocketsEvent(ifOpts, ptpInterface,
+					  transport->eventSock);
+
+		if (rc < 0)
+			return;
 	}
 
 	if (general) {
-		length = netRecvGeneral(ptpInterface->msgIbuf, transport);
+		ssize_t length = netRecvGeneral(ptpInterface->msgIbuf, transport);
 		if (length < 0) {
 			PERROR("failed to receive on the general socket\n");
 			toStateAllPorts(PTPD_FAULTY, ptpInterface);
