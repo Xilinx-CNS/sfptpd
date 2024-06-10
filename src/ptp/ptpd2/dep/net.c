@@ -71,6 +71,7 @@
 #endif
 
 #include "sfptpd_time.h"
+#include "sfptpd_lacp.h"
 
 /* SO_EE_ORIGIN_TIMESTAMPING is defined in linux/errqueue.h in recent kernels.
  * Define it for compilation with older kernels.
@@ -477,6 +478,8 @@ netClearIPv4MulticastOptions(struct ptpd_transport *transport, struct sockaddr_s
 		   &imr, sizeof imr);
 	setsockopt(transport->generalSock, IPPROTO_IP, IP_DROP_MEMBERSHIP,
 		   &imr, sizeof imr);
+	setBondSockopt(transport, IPPROTO_IP, IP_DROP_MEMBERSHIP, &imr,
+		       sizeof(imr));
 
 	return TRUE;
 }
@@ -504,6 +507,8 @@ netClearIPv6MulticastOptions(struct ptpd_transport *transport, struct sockaddr_s
 		   &imr, sizeof imr);
 	setsockopt(transport->generalSock, IPPROTO_IPV6, IPV6_DROP_MEMBERSHIP,
 		   &imr, sizeof imr);
+	setBondSockopt(transport, IPPROTO_IPV6, IPV6_DROP_MEMBERSHIP, &imr,
+		       sizeof(imr));
 
 	return TRUE;
 }
@@ -597,6 +602,8 @@ netShutdown(struct ptpd_transport *transport)
 	freeIpv4AccessList(&transport->timingAcl);
 	freeIpv4AccessList(&transport->managementAcl);
 	freeIpv4AccessList(&transport->monitoringAcl);
+
+	destroyBondSocks(transport);
 
 	return TRUE;
 }
@@ -821,6 +828,9 @@ netSetIPv4MulticastOptions(struct ptpd_transport * transport, struct sockaddr_st
 		       imr.imr_ifindex);
 		return FALSE;
 	}
+	setBondSockopt(transport, IPPROTO_IP, IP_MULTICAST_IF,
+		       &imr, sizeof(imr));
+
 	/* join multicast group (for receiving) on specified interface */
 	if (setsockopt(transport->eventSock, IPPROTO_IP, IP_ADD_MEMBERSHIP, 
 		       &imr, sizeof(imr)) < 0 ||
@@ -830,6 +840,9 @@ netSetIPv4MulticastOptions(struct ptpd_transport * transport, struct sockaddr_st
 		       imr.imr_ifindex);
 		return FALSE;
 	}
+	setBondSockopt(transport, IPPROTO_IP, IP_ADD_MEMBERSHIP,
+		       &imr, sizeof(imr));
+
 	return TRUE;
 }
 
@@ -863,6 +876,9 @@ netSetIPv6MulticastOptions(struct ptpd_transport * transport, struct sockaddr_st
 		PERROR("failed to enable multi-cast on the interface");
 		return FALSE;
 	}
+	setBondSockopt(transport, IPPROTO_IPV6, IPV6_MULTICAST_IF,
+		       &imr, sizeof(imr));
+
 	/* join multicast group (for receiving) on specified interface */
 	if (setsockopt(transport->eventSock, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP,
 		       &imr, sizeof imr) < 0 ||
@@ -871,6 +887,9 @@ netSetIPv6MulticastOptions(struct ptpd_transport * transport, struct sockaddr_st
 		PERROR("failed to join the multi-cast group");
 		return FALSE;
 	}
+	setBondSockopt(transport, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP,
+		       &imr, sizeof(imr));
+
 	return TRUE;
 }
 
@@ -1034,6 +1053,8 @@ netSetMulticastLoopback(struct ptpd_transport *transport, Boolean value, int add
 		PERROR("Failed to set multicast loopback");
 		return FALSE;
 	}
+
+	setBondSockopt(transport, level, option, &temp, sizeof(temp));
 
 	return TRUE;
 }
@@ -1533,6 +1554,11 @@ static bool netTryEnableTimestamp(PtpInterface *ptpInterface, int *used_option)
 			       option, &flags, sizeof(flags)) == 0) {
 			*used_option = option;
 			ptpInterface->tsMethod = TS_METHOD_SYSTEM;
+			ptpInterface->tsSetupMethod = (TsSetupMethod) {
+				.is_onload = 0,
+				.sockopt = option,
+				.flags = flags
+			};
 			INFO("using %s software timestamps\n",
 			     get_timestamp_name(PTPD_TS_LINUX, option));
 			break;
@@ -1585,7 +1611,13 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 
 		if (netTryEnableTimestamping(ptpInterface, &flags, &option)) {
 			ptpInterface->tsMethod = TS_METHOD_SO_TIMESTAMPING;
+			ptpInterface->tsSetupMethod = (TsSetupMethod) {
+				.is_onload = 0,
+				.sockopt = option,
+				.flags = flags
+			};
 			INFO("using SO_TIMESTAMPING software timestamps\n");
+
 			return TRUE;
 		}
 	}
@@ -1593,6 +1625,12 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 	if (ifOpts->timestampType == PTPD_TIMESTAMP_TYPE_SW) {
 		if (netTryEnableTimestamp(ptpInterface, &option)) {
 			ptpInterface->tsMethod = TS_METHOD_SYSTEM;
+			ptpInterface->tsSetupMethod = (TsSetupMethod) {
+				.is_onload = 0,
+				.sockopt = option,
+				.flags = 1
+			};
+
 			return TRUE;
 		}
 
@@ -1615,11 +1653,16 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 			rc = onload_timestamping_request(ptpInterface->transport.eventSock,
 							 flags);
 		}
-
 		if (rc == 0) {
 			INFO("using Onload Extensions API NIC timestamps\n");
 			ptpInterface->tsMethod = TS_METHOD_SO_TIMESTAMPING;
 			ptpInterface->ts_fmt = PTPD_TS_ONLOAD_EXT;
+			ptpInterface->tsSetupMethod = (TsSetupMethod) {
+				.is_onload = 1,
+				.sockopt = 0,
+				.flags = flags
+			};
+
 			return TRUE;
 		} else if (rc == ENOTTY) {
 			INFO("using Onload but PTP event socket not accelerated\n");
@@ -1640,7 +1683,13 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 
 	if (netTryEnableTimestamping(ptpInterface, &flags, &option)) {
 		ptpInterface->tsMethod = TS_METHOD_SO_TIMESTAMPING;
+		ptpInterface->tsSetupMethod = (TsSetupMethod) {
+			.is_onload = 0,
+			.sockopt = option,
+			.flags = flags
+		};
 		INFO("using SO_TIMESTAMPING hardware timestamps\n");
+
 		return TRUE;
 	}
 
@@ -1834,6 +1883,10 @@ netInit(struct ptpd_transport * transport, InterfaceOpts * ifOpts, PtpInterface 
 		return FALSE;
 	}
 
+	/* Create bond bypass sockets, the function will only conditionally
+	 * create these sockets if the current setup it appropriate. */
+	createBondSocks(transport, ifOpts->transportAF);
+
 	/* TODO: The information printed below is misleading for IPv6
 	   because we actually use link local addressing not the adapter's
 	   global unicast address. */
@@ -1849,6 +1902,9 @@ netInit(struct ptpd_transport * transport, InterfaceOpts * ifOpts, PtpInterface 
 			PERROR("failed to set socket DSCP bits");
 			return FALSE;
 		}
+
+		setBondSockopt(transport, IPPROTO_IP, IP_TOS,
+			       &ifOpts->dscpValue, sizeof(int));
 	}
 
 	/* make timestamps available through recvmsg() */
@@ -1856,6 +1912,8 @@ netInit(struct ptpd_transport * transport, InterfaceOpts * ifOpts, PtpInterface 
 		ERROR("failed to enable packet time stamping\n");
 		return FALSE;
 	}
+
+	copyTimestampingToBondSocks(transport, &ptpInterface->tsSetupMethod);
 
 	if (ptpInterface->tsMethod != TS_METHOD_SYSTEM) {
 		// TODO @bind do we still need to -not- bind to interface for
@@ -1874,6 +1932,8 @@ netInit(struct ptpd_transport * transport, InterfaceOpts * ifOpts, PtpInterface 
 			PERROR("failed to call SO_BINDTODEVICE on the interface");
 			return FALSE;
 		}
+		setBondSockopt(transport, SOL_SOCKET, SO_BINDTODEVICE,
+			       ifOpts->ifaceName, strlen(ifOpts->ifaceName));
 	}
 
 	if (ifOpts->multicast_needed) {
@@ -1889,6 +1949,8 @@ netInit(struct ptpd_transport * transport, InterfaceOpts * ifOpts, PtpInterface 
 		/* start tracking TTL */
 		transport->ttlEvent = ifOpts->ttl;
 		transport->ttlGeneral = ifOpts->ttl;
+
+		copyMulticastTTLToBondSocks(transport);
 	}
 
 	loopback_multicast = (ptpInterface->tsMethod == TS_METHOD_SYSTEM);
@@ -1921,6 +1983,9 @@ netInit(struct ptpd_transport * transport, InterfaceOpts * ifOpts, PtpInterface 
 					     ifOpts->monitoringAclDenyText,
 					     ifOpts->monitoringAclOrder);
 	}
+
+	probeBondSocks(transport);
+
 	return TRUE;
 }
 
@@ -2309,6 +2374,7 @@ netSendEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 			/* Try restoring TTL */
 			if (netSetMulticastTTL(transport->eventSock,rtOpts->ifOpts->ttl)) {
 				transport->ttlEvent = rtOpts->ifOpts->ttl;
+				copyMulticastTTLToBondSocks(transport);
 			}
 		}
 
@@ -2486,6 +2552,7 @@ netSendPeerEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 			/* Try setting TTL to 1 */
 			if (netSetMulticastTTL(transport->eventSock,1)) {
 				transport->ttlEvent = 1;
+				copyMulticastTTLToBondSocks(transport);
 			}
 		}
 

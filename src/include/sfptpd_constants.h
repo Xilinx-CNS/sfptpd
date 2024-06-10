@@ -126,4 +126,11 @@ typedef enum sfptpd_ptp_profile {
 /** The maximum number of physical interfaces we can handle in a bond */
 #define SFPTP_MAX_PHYSICAL_IFS (16)
 
+/** Number of bond bypass sockets we will try to create per physical interface,
+    could reasonably smaller but it is currently set to max out the total
+    number of sockets allocated to 64 given the bitfield restriction. */
+#define SFPTP_BOND_BYPASS_PER_INTF_SOCK_COUNT (4)
+#define SFPTP_BOND_BYPASS_SOCK_COUNT (SFPTP_MAX_PHYSICAL_IFS * \
+				      SFPTP_BOND_BYPASS_PER_INTF_SOCK_COUNT)
+
 #endif /* _SFPTPD_CONSTANTS_H */

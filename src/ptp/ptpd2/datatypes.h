@@ -15,6 +15,7 @@
 
 
 #include <stdio.h>
+#include "sfptpd_constants.h"
 #include "sfptpd_statistics.h"
 #include "sfptpd_filter.h"
 #include "sfptpd_ptp_timestamp_dataset.h"
@@ -232,6 +233,15 @@ typedef enum {
 	TS_METHOD_SYSTEM,
 	TS_METHOD_SO_TIMESTAMPING
 } TsMethod;
+
+/* The above `TsMethod` gives an abstract view of the chosen timestamping
+ * method, whereas some cases need the fine details of the exact method to
+ * recreate the same setup. (e.g., the bond bypass sockets) */
+typedef struct TsSetupMethod_s {
+	bool is_onload;
+	int sockopt;
+	int flags;
+} TsSetupMethod;
 
 
 /** Forward declaration of clock and interface structures */
@@ -609,6 +619,11 @@ struct ptpd_transport {
 	int monitoringSock;
 
 	const struct sfptpd_ptp_bond_info *bond_info;
+	int bondSocks[SFPTP_BOND_BYPASS_SOCK_COUNT];
+	/* A mask of the above array for those sockets which are valid. Here,
+	 * valid means that we were able to create and set all of the socket
+	 * options that we wanted. */
+	uint64_t bondSocksValidMask;
 
 	/* Listening event address */
 	struct sockaddr_storage eventAddr;
@@ -776,6 +791,7 @@ struct ptpd_intf_context {
 	PtpClock *ports;
 
 	TsMethod tsMethod;
+	TsSetupMethod tsSetupMethod;
 	enum ptpd_ts_fmt ts_fmt;
 	struct sfptpd_ts_cache ts_cache;
 	struct msghdr msgEbuf;

@@ -21,7 +21,8 @@ LIB_SRCS_$(d) := arith.c \
 	dep/timer.c \
 	dep/ntpengine/ntp_isc_md5.c \
 	evtmon.c \
-	monitor.c
+	monitor.c \
+	sfptpd_lacp.c
 
 LIB_$(d) := ptpd2
 
