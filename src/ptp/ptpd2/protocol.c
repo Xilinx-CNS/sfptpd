@@ -1641,6 +1641,7 @@ void
 doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 		Boolean event, Boolean general, Boolean error)
 {
+	struct ptpd_transport *transport = &ptpInterface->transport;
 	struct sfptpd_ts_ticket ts_ticket = TS_NULL_TICKET;
 	struct sfptpd_ts_info ts_info;
 	struct sfptpd_ts_user ts_user;
@@ -1648,7 +1649,7 @@ doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 	bool packet_matched;
 
 	while (error) {
-		length = netRecvError(ptpInterface);
+		length = netRecvError(ptpInterface, transport->eventSock);
 		if (length == -EAGAIN || length == -EINTR) {
 			/* No more messges to read on error queue */
 			error = false;
@@ -1672,7 +1673,8 @@ doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 	}
 
 	if (event) {
-		length = netRecvEvent(ptpInterface->msgIbuf, ptpInterface, &ts_info);
+		length = netRecvEvent(ptpInterface->msgIbuf, ptpInterface,
+				      &ts_info, transport->eventSock);
 		if (length < 0) {
 			PERROR("failed to receive on the event socket\n");
 			toStateAllPorts(PTPD_FAULTY, ptpInterface);
@@ -1690,7 +1692,7 @@ doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 	}
 
 	if (general) {
-		length = netRecvGeneral(ptpInterface->msgIbuf, &ptpInterface->transport);
+		length = netRecvGeneral(ptpInterface->msgIbuf, transport);
 		if (length < 0) {
 			PERROR("failed to receive on the general socket\n");
 			toStateAllPorts(PTPD_FAULTY, ptpInterface);

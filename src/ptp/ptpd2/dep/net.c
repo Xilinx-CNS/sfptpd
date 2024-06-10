@@ -1019,21 +1019,18 @@ netSetMulticastTTL(int sockfd, int ttl)
 static Boolean
 netSetMulticastLoopback(struct ptpd_transport *transport, Boolean value, int addr_family) {
 	int temp = value ? 1 : 0;
-	int rc = 0;
+	int level = (addr_family == AF_INET) ? IPPROTO_IP : IPPROTO_IPV6;
+	int option = (addr_family == AF_INET) ? IP_MULTICAST_LOOP : IPV6_MULTICAST_LOOP;
 
 	assert(transport != NULL);
 
 	DBG("Going to set multicast loopback with %d \n", temp);
 
-	if (addr_family == AF_INET) {
-		rc = setsockopt(transport->eventSock, IPPROTO_IP, IP_MULTICAST_LOOP,
-				&temp, sizeof temp);
-	} else if (addr_family == AF_INET6) {
-		rc = setsockopt(transport->eventSock, IPPROTO_IPV6, IPV6_MULTICAST_LOOP,
-				&temp, sizeof temp);
-	}
+	if (addr_family != AF_INET || addr_family != AF_INET6)
+		return TRUE;
 
-	if (rc < 0) {
+	if (setsockopt(transport->eventSock, level, option,
+		       &temp, sizeof(temp)) < 0) {
 		PERROR("Failed to set multicast loopback");
 		return FALSE;
 	}
@@ -1474,7 +1471,7 @@ static Boolean getRxTimestamp(PtpInterface *ptpInterface,
 /* Attempt to use SO_TIMESTAMPING with the provided flags, and try to include
  * SOF_TIMESTAMPING_OPT_PKTINFO if possible. */
 static Boolean netTryEnableTimestampingPktinfo(PtpInterface *ptpInterface,
-					       int flags, int type)
+					       int *flags, int type)
 {
 	int has_pktinfo_flag;
 
@@ -1483,13 +1480,13 @@ static Boolean netTryEnableTimestampingPktinfo(PtpInterface *ptpInterface,
 	 * kernels will return `-EINVAL` on setsockopt, so we try both with
 	 * and without this option and let other code deal with the presence/
 	 * absence of pktinfo for timestamping. */
-	flags |= SOF_TIMESTAMPING_OPT_PKTINFO;
+	*flags |= SOF_TIMESTAMPING_OPT_PKTINFO;
 	for (has_pktinfo_flag = 1; has_pktinfo_flag >= 0; has_pktinfo_flag--) {
 		if (setsockopt(ptpInterface->transport.eventSock, SOL_SOCKET,
-			       type, &flags, sizeof(flags)) == 0) {
+			       type, flags, sizeof(*flags)) == 0) {
 			return TRUE;
 		}
-		flags &= ~SOF_TIMESTAMPING_OPT_PKTINFO;
+		*flags &= ~SOF_TIMESTAMPING_OPT_PKTINFO;
 	}
 
 	return FALSE;
@@ -1497,7 +1494,8 @@ static Boolean netTryEnableTimestampingPktinfo(PtpInterface *ptpInterface,
 
 /* y2038: attempt SO_TIMESTAMPING_NEW, falling back to SO_TIMESTAMPING_OLD,
  * allowing 32-bit systems to access 64-bit seconds on recent kernels. */
-static bool netTryEnableTimestamping(PtpInterface *ptpInterface, int flags)
+static bool netTryEnableTimestamping(PtpInterface *ptpInterface, int *flags,
+				     int *type)
 {
 	const int option[] = {
 		SO_TIMESTAMPING_NEW,
@@ -1506,14 +1504,16 @@ static bool netTryEnableTimestamping(PtpInterface *ptpInterface, int flags)
 	enum { FIRST, LAST } iter;
 	bool done = false;
 
-	for (iter = FIRST; !done && iter <= LAST; iter++)
-		done = netTryEnableTimestampingPktinfo(ptpInterface, flags, option[iter]);
+	for (iter = FIRST; !done && iter <= LAST; iter++) {
+		*type = option[iter];
+		done = netTryEnableTimestampingPktinfo(ptpInterface, flags, *type);
+	}
 
 	return done;
 }
 
 /* y2038: attempt SO_TIMESTAMP* family of options in pref order. */
-static bool netTryEnableTimestamp(PtpInterface *ptpInterface)
+static bool netTryEnableTimestamp(PtpInterface *ptpInterface, int *used_option)
 {
 	const int prefs[] = {
 		SO_TIMESTAMPNS_NEW,
@@ -1531,6 +1531,7 @@ static bool netTryEnableTimestamp(PtpInterface *ptpInterface)
 		    get_timestamp_name(PTPD_TS_LINUX, option));
 		if (setsockopt(ptpInterface->transport.eventSock, SOL_SOCKET,
 			       option, &flags, sizeof(flags)) == 0) {
+			*used_option = option;
 			ptpInterface->tsMethod = TS_METHOD_SYSTEM;
 			INFO("using %s software timestamps\n",
 			     get_timestamp_name(PTPD_TS_LINUX, option));
@@ -1551,7 +1552,7 @@ Boolean
 netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 {
 	sfptpd_interface_ts_caps_t ts_caps;
-	int flags;
+	int flags, option;
 
 	/* We want hardware timestamping. We need an interface that supports
 	 * hardware timestamping and a hardware clock */
@@ -1582,7 +1583,7 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 		      | SOF_TIMESTAMPING_RX_SOFTWARE
 		      | SOF_TIMESTAMPING_SOFTWARE;
 
-		if (netTryEnableTimestamping(ptpInterface, flags)) {
+		if (netTryEnableTimestamping(ptpInterface, &flags, &option)) {
 			ptpInterface->tsMethod = TS_METHOD_SO_TIMESTAMPING;
 			INFO("using SO_TIMESTAMPING software timestamps\n");
 			return TRUE;
@@ -1590,7 +1591,7 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 	}
 
 	if (ifOpts->timestampType == PTPD_TIMESTAMP_TYPE_SW) {
-		if (netTryEnableTimestamp(ptpInterface)) {
+		if (netTryEnableTimestamp(ptpInterface, &option)) {
 			ptpInterface->tsMethod = TS_METHOD_SYSTEM;
 			return TRUE;
 		}
@@ -1637,7 +1638,7 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 	      | SOF_TIMESTAMPING_RX_HARDWARE
 	      | SOF_TIMESTAMPING_RAW_HARDWARE;
 
-	if (netTryEnableTimestamping(ptpInterface, flags)) {
+	if (netTryEnableTimestamping(ptpInterface, &flags, &option)) {
 		ptpInterface->tsMethod = TS_METHOD_SO_TIMESTAMPING;
 		INFO("using SO_TIMESTAMPING hardware timestamps\n");
 		return TRUE;
@@ -1936,7 +1937,8 @@ netInit(struct ptpd_transport * transport, InterfaceOpts * ifOpts, PtpInterface 
 ssize_t
 netRecvEvent(Octet *buf,
 	     PtpInterface *ptpInterface,
-	     struct sfptpd_ts_info *info)
+	     struct sfptpd_ts_info *info,
+	     int sockfd)
 {
 	ssize_t ret;
 	struct msghdr msg;
@@ -1965,7 +1967,7 @@ netRecvEvent(Octet *buf,
 	msg.msg_controllen = sizeof(cmsg_un.control);
 	msg.msg_flags = 0;
 
-	ret = recvmsg(transport->eventSock, &msg, MSG_DONTWAIT | MSG_TRUNC);
+	ret = recvmsg(sockfd, &msg, MSG_DONTWAIT | MSG_TRUNC);
 	if (ret <= 0) {
 		if (errno == EAGAIN || errno == EINTR)
 			return 0;
@@ -2054,14 +2056,14 @@ netRecvGeneral(Octet *buf, struct ptpd_transport *transport)
  * Receive error queue message
  */
 ssize_t
-netRecvError(PtpInterface *ptpInterface)
+netRecvError(PtpInterface *ptpInterface, int sockfd)
 {
 	struct msghdr *msg = &ptpInterface->msgEbuf;
 	ssize_t len;
 
 	msg->msg_controllen = CONTROL_MSG_SIZE;
 
-	len = recvmsg(ptpInterface->transport.eventSock, msg, MSG_ERRQUEUE | MSG_DONTWAIT);
+	len = recvmsg(sockfd, msg, MSG_ERRQUEUE | MSG_DONTWAIT);
 
 	if (len == -1)
 		return -errno;
@@ -2080,46 +2082,53 @@ netRecvError(PtpInterface *ptpInterface)
 }
 
 
-static int generateSendMessageControl(void **control, socklen_t *controllen,
-				      int sockfd,
-				      int request_tx_ifindex,
-				      bool use_onload_ext)
+
+static int prepareSendMessage(struct ptpd_transport *transport,
+			      void **control, socklen_t *controllen,
+			      int *sockfd, int request_tx_ifindex,
+			      bool use_onload_ext, bool is_multicast)
 {
-	if (!controllen)
+	if (!sockfd)
 		return -EINVAL;
 
-	*controllen = 0;
+	*sockfd = 0;
 
 	if (request_tx_ifindex > 0) {
 #ifdef HAVE_ONLOAD_EXT
-		/* Onload includes functionality to try and send down a given
-		 * ifindex, much like IP_PKTINFO, but allowing for physical
-		 * interfaces rather than only logical. */
+		if (use_onload_ext) {
+			/* Onload includes functionality to try and send down a given
+			 * ifindex, much like IP_PKTINFO, but allowing for physical
+			 * interfaces rather than only logical. */
 #define ONLOAD_FD_FEAT_TX_SCM_TS_PKTINFO 2
-		int feat = ONLOAD_FD_FEAT_TX_SCM_TS_PKTINFO;
-		if( onload_fd_check_feature(sockfd, feat) == 1 &&
-		    use_onload_ext ) {
-			struct scm_ts_pktinfo send_info = { 0 };
-			struct cmsghdr *cmsg;
+			int feat = ONLOAD_FD_FEAT_TX_SCM_TS_PKTINFO;
+			if (onload_fd_check_feature(*sockfd, feat) == 1) {
+				struct scm_ts_pktinfo send_info = { 0 };
+				struct cmsghdr *cmsg;
 
-			if (!control || !*control)
-				return -EINVAL;
+				if (!control || !*control || !controllen)
+					return -EINVAL;
 
-			cmsg = (struct cmsghdr*)*control;
-			send_info.if_index = request_tx_ifindex;
-			cmsg->cmsg_level = SOL_SOCKET;
-			cmsg->cmsg_type = SCM_TIMESTAMPING_PKTINFO;
-			*(struct scm_ts_pktinfo*)(CMSG_DATA(cmsg)) = send_info;
-			cmsg->cmsg_len = CMSG_LEN(sizeof(send_info));
+				cmsg = (struct cmsghdr*)*control;
+				send_info.if_index = request_tx_ifindex;
+				cmsg->cmsg_level = SOL_SOCKET;
+				cmsg->cmsg_type = SCM_TIMESTAMPING_PKTINFO;
+				*(struct scm_ts_pktinfo*)(CMSG_DATA(cmsg)) = send_info;
+				cmsg->cmsg_len = CMSG_LEN(sizeof(send_info));
 
-			*controllen = cmsg->cmsg_len;
+				*controllen = cmsg->cmsg_len;
+			} else if (controllen) {
+				*controllen = 0;
+			}
 		}
 #endif
 	}
 
+	if (*sockfd <= 0)
+		*sockfd = transport->eventSock;
+
 	/* We don't really need a NULL control, but it might help, particularly
 	 * if running with onload, to skip some unnecessary logic. */
-	if (*controllen == 0)
+	if (controllen && *controllen == 0)
 		*control = NULL;
 
 	return 0;
@@ -2256,6 +2265,7 @@ netSendEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 	// which we assert above this function.
 	void *control = (void*)&ptpClock->interface->msgCbuf[0];
 	socklen_t controllen = 0;
+	int sockfd = 0;
 
 	if (ptpClock->unicastAddrLen != 0 || altDstLen != 0) {
 		if (ptpClock->unicastAddrLen != 0) {
@@ -2268,14 +2278,13 @@ netSendEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 		/* If we're sending to a unicast address, set the UNICAST flag */
 		*(char *)(buf + 6) |= PTPD_FLAG_UNICAST;
 
-		ret = generateSendMessageControl(&control, &controllen,
-						 transport->eventSock,
-						 request_tx_ifindex,
-						 use_onload_ext);
+		ret = prepareSendMessage(transport, &control, &controllen,
+					 &sockfd, request_tx_ifindex,
+					 use_onload_ext, false);
 		if (ret != 0)
 			return ret;
 
-		ret = sendMessage(transport->eventSock, buf, length,
+		ret = sendMessage(sockfd, buf, length,
 				  (struct sockaddr *)&addr, addrLen,
 				  "unicast event", control, controllen);
 		if (ret != 0)
@@ -2303,14 +2312,13 @@ netSendEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 			}
 		}
 
-		ret = generateSendMessageControl(&control, &controllen,
-						 transport->eventSock,
-						 request_tx_ifindex,
-						 use_onload_ext);
+		ret = prepareSendMessage(transport, &control, &controllen,
+					 &sockfd, request_tx_ifindex,
+					 use_onload_ext, true);
 		if (ret != 0)
 			return ret;
 
-		ret = sendMessage(transport->eventSock, buf, length,
+		ret = sendMessage(sockfd, buf, length,
 				  (struct sockaddr *)&addr, addrLen,
 				  "multicast event", control, controllen);
 	} else {
