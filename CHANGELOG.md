@@ -37,7 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Add support for dual boundary clock topology by sending DelayReq
     messages over the physical interface that last received a Sync message
     from the current PTP master. Implemented using an Onload extension feature
-    that must be enabled. (SWPTP-976)
+    or with a pool of sockets for multicast that must be enabled. (SWPTP-976)
 - Show unicast/multicast delay response flags in state file. (SWPTP-807)
 - Get transmit timestamps via epoll to avoid blocking PTP thread. (SWPTP-831)
 - Add configurable patterns for clock names and ids. (SWPTP-997)

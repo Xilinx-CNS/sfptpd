@@ -1708,13 +1708,33 @@ doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 		while (error)
 			error = doHandleSocketsError(ptpInterface,
 						     transport->eventSock);
+
+		for (int i = 0; i < transport->multicastBondSocksLen; i++) {
+			int sockfd = transport->multicastBondSocks[i].sockfd;
+			error = true;
+			while (error)
+				error = doHandleSocketsError(ptpInterface,
+							     sockfd);
+		}
 	}
 
 	if (event) {
-		int rc;
+		int rc, rc2;
 
 		rc = doHandleSocketsEvent(ifOpts, ptpInterface,
 					  transport->eventSock);
+
+		for (int i = 0; i < transport->multicastBondSocksLen; i++) {
+			int sockfd = transport->multicastBondSocks[i].sockfd;
+			rc2 = doHandleSocketsEvent(ifOpts, ptpInterface,
+						   sockfd);
+			/* We need to propagate the error somehow, and we only
+			 * care if any of these fail (with a negative return
+			 * value), so taking the minimum of all returned
+			 * values is a sufficient aggregate for us. */
+			if (rc2 < rc)
+				rc = rc2;
+		}
 
 		if (rc < 0)
 			return;

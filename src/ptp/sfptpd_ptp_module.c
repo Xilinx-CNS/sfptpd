@@ -4098,14 +4098,16 @@ static void ptp_on_user_fds(void *context,
 			    struct sfptpd_thread_event events[])
 {
 	struct sfptpd_ptp_intf *interface;
+	struct ptpd_transport *transport;
 	sfptpd_ptp_module_t *ptp = (sfptpd_ptp_module_t *)context;
 	bool event, general, error;
-	unsigned int i;
+	unsigned int i, j;
 
 	assert(ptp != NULL);
 	assert(events != NULL);
 
 	for(interface = ptp->intf_list; interface; interface = interface->next) {
+		transport = &interface->ptpd_intf_private->transport;
 		event = false;
 		general = false;
 		error = false;
@@ -4118,6 +4120,15 @@ static void ptp_on_user_fds(void *context,
 			}
 			if (events[i].fd == interface->ptpd_intf_fds.general_sock)
 				general = true;
+			for (j = 0; j < transport->multicastBondSocksLen; j++) {
+				int sockfd = transport->multicastBondSocks[j].sockfd;
+				if (events[i].fd == sockfd) {
+					if (events[i].flags.rd)
+						event = true;
+					if (events[i].flags.err)
+						error = true;
+				}
+			}
 		}
 
 		if (error || event || general) {

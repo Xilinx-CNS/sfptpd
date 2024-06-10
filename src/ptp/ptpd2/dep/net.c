@@ -1234,7 +1234,8 @@ bool netProcessError(PtpInterface *ptpInterface,
 		     struct sfptpd_ts_info *info)
 {
 	int ipproto = ptpInterface->ifOpts.transportAF == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP;
-	int iptype = ipproto == IPPROTO_IPV6 ? IPV6_RECVERR : IP_RECVERR;
+	int iptype_recverr = ipproto == IPPROTO_IPV6 ? IPV6_RECVERR : IP_RECVERR;
+	int iptype_pktinfo = ipproto == IPPROTO_IPV6 ? IPV6_PKTINFO : IP_PKTINFO;
 	Boolean haveTs = FALSE, havePkt = FALSE;
 	struct msghdr *msg = &ptpInterface->msgEbuf;
 	struct cmsghdr *cmsg;
@@ -1275,7 +1276,7 @@ bool netProcessError(PtpInterface *ptpInterface,
 						 ptpInterface->ts_fmt,
 						 info, true, type) == 0;
 		} else if ((ipproto == level) &&
-			   (iptype == type)) {
+			   (iptype_recverr == type)) {
 			err = (struct sock_extended_err *)CMSG_DATA(cmsg);
 			if (err->ee_origin != SO_EE_ORIGIN_TIMESTAMPING ||
 			    err->ee_errno != ENOMSG) {
@@ -1285,6 +1286,11 @@ bool netProcessError(PtpInterface *ptpInterface,
 			} else {
 				havePkt = TRUE;
 			}
+		} else if ((ipproto == level) && (iptype_pktinfo == type)) {
+			/* If we use the bond bypass sockets, they will give
+			 * us the packet info, but we only actually care for
+			 * the initial discovery. Just ignore it here, and
+			 * make sure we don't complain that it's unexpected. */
 		} else {
 			WARNING("unexpected socket error queue "
 				"msg: level %d, type %d\n",
@@ -2193,6 +2199,22 @@ static int prepareSendMessage(struct ptpd_transport *transport,
 	*sockfd = 0;
 
 	if (request_tx_ifindex > 0) {
+		/* Unicast is not currently supported with the sockpool method.
+		 * TODO: add support for unicast. */
+		if (is_multicast) {
+			struct socket_ifindex *map =
+				transport->multicastBondSocks;
+			int mapLen = transport->multicastBondSocksLen;
+			int i;
+
+			for (i = 0; i < mapLen; i++)
+				if (map[i].ifindex == request_tx_ifindex)
+					*sockfd = map[i].sockfd;
+		}
+
+		if (*sockfd <= 0)
+			*sockfd = transport->eventSock;
+
 #ifdef HAVE_ONLOAD_EXT
 		if (use_onload_ext) {
 			/* Onload includes functionality to try and send down a given
