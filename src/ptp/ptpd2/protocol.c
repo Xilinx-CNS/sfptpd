@@ -1142,7 +1142,8 @@ processPortMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
 	isFromSelf = (ptpClock->portIdentity.portNumber == ptpInterface->msgTmpHeader.sourcePortIdentity.portNumber
 		      && !memcmp(ptpInterface->msgTmpHeader.sourcePortIdentity.clockIdentity, ptpClock->portIdentity.clockIdentity, CLOCK_IDENTITY_LENGTH));
 
-	if (isFromSelf && timestampValid) {
+	if (isFromSelf && timestampValid &&
+	    ptpInterface->tsMethod == TS_METHOD_SYSTEM) {
 		struct sfptpd_ts_ticket ticket;
 		struct sfptpd_ts_user user;
 
