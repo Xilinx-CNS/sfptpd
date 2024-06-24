@@ -178,7 +178,8 @@ bool add_and_check_nodes(struct sfptpd_hash_table *table, struct test_details te
 
 	/* Re-add already added entries */
 	if (test.replay_entries) {
-		overall_success &= add_repeat_entries(table, reference_nodes, test.num_nodes);
+		if (!add_repeat_entries(table, reference_nodes, test.num_nodes))
+			overall_success = false;
 	}
 
 	entries = sfptpd_ht_get_num_entries(table);
@@ -242,7 +243,8 @@ bool add_and_check_wrapper(struct sfptpd_hash_table *table, struct test_details 
 	bool success = true;
 
 	for (ii = 0; ii < test.repeat; ii++) {
-		success &= add_and_check_nodes(table, test);
+		if (!add_and_check_nodes(table, test))
+			success = false;
 	}
 
 	return success;
@@ -268,13 +270,14 @@ int sfptpd_test_ht(void)
 
 	for (ii = 0; ii < (sizeof(tests) / sizeof(tests[0])); ii++) {
 		printf("%s", tests[ii].test_desc);
-		success &= output_test_result(add_and_check_wrapper(table, tests[ii]));
+		if (!output_test_result(add_and_check_wrapper(table, tests[ii])))
+			success = false;
 	}
 
 	sfptpd_ht_free(table);
 
 	if (!success) {
-		rc = 1;
+		rc = ERANGE;
 	}
 	return rc;
 }
