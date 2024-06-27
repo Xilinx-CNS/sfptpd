@@ -1486,7 +1486,7 @@ static Boolean netTryEnableTimestampingPktinfo(PtpInterface *ptpInterface,
 	flags |= SOF_TIMESTAMPING_OPT_PKTINFO;
 	for (has_pktinfo_flag = 1; has_pktinfo_flag >= 0; has_pktinfo_flag--) {
 		if (setsockopt(ptpInterface->transport.eventSock, SOL_SOCKET,
-			       SO_TIMESTAMPING, &flags, sizeof(flags)) == 0) {
+			       type, &flags, sizeof(flags)) == 0) {
 			return TRUE;
 		}
 		flags &= ~SOF_TIMESTAMPING_OPT_PKTINFO;
