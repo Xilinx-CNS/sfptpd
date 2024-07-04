@@ -48,8 +48,6 @@
 #define PTP_TIMER_ID (0)
 #define PTP_TIMER_INTERVAL_NS (62500000)
 
-#define PTP_MAX_PHYSICAL_IFS (16)
-
 /* Minimum time used to limit how often bond/team
  * is scanned for changes. */
 #define MIN_BOND_UPDATE_INTERVAL_NS (30 * 1000 * 1000)
@@ -214,7 +212,7 @@ struct sfptpd_ptp_bond_info {
 		bool is_up:1;
 		bool is_primary:1;
 		bool has_hwts:1;
-	} physical_ifs[PTP_MAX_PHYSICAL_IFS];
+	} physical_ifs[SFPTP_MAX_PHYSICAL_IFS];
 
 	/* Active physical interface */
 	struct sfptpd_interface *active_if;

@@ -123,4 +123,7 @@ typedef enum sfptpd_ptp_profile {
     servo alarm. */
 #define SFPTPD_SUSTAINED_SYNC_FAILURE_PERIOD (30)
 
+/** The maximum number of physical interfaces we can handle in a bond */
+#define SFPTP_MAX_PHYSICAL_IFS (16)
+
 #endif /* _SFPTPD_CONSTANTS_H */
