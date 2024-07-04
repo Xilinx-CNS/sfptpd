@@ -432,6 +432,8 @@ typedef struct ptpd_intf_config {
 	Boolean snmp_enabled; /* SNMP subsystem enabled / disabled even if compiled in */
 	Boolean displayPackets;
 
+	int use_lacp_bypass;
+
 	/* Access list settings */
 	Boolean timingAclEnabled;
 	Boolean managementAclEnabled;

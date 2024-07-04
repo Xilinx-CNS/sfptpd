@@ -63,6 +63,11 @@ struct ptpd_transport;
 typedef struct TsSetupMethod_s TsSetupMethod;
 typedef struct ptpd_intf_context PtpInterface;
 
+#define SFPTPD_BOND_BYPASS_USE_SOCKPOOL (1 << 0)
+#define SFPTPD_BOND_BYPASS_USE_CMSG (1 << 1)
+#define SFPTPD_BOND_BYPASS_USE_BOTH (SFPTPD_BOND_BYPASS_USE_SOCKPOOL | \
+				     SFPTPD_BOND_BYPASS_USE_CMSG)
+
 void createBondSocks(struct ptpd_transport *transport, int transportAF);
 void destroyBondSocks(struct ptpd_transport *transport);
 

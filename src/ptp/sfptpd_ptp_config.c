@@ -22,6 +22,7 @@
 #include "sfptpd_logging.h"
 #include "sfptpd_config.h"
 #include "ptpd_lib.h"
+#include "sfptpd_lacp.h"
 
 
 /****************************************************************************
@@ -1326,6 +1327,27 @@ static int parse_bmc_discriminator(struct sfptpd_config_section *section, const 
 	return 0;
 }
 
+static int parse_lacp_bypass(struct sfptpd_config_section *section, const char *option,
+			     unsigned int num_params, const char * const params[])
+{
+	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
+	assert(num_params == 1);
+
+	if (strcmp(params[0], "off") == 0) {
+		ptp->ptpd_intf.use_lacp_bypass = 0;
+	} else if (strcmp(params[0], "sockpool") == 0) {
+		ptp->ptpd_intf.use_lacp_bypass = SFPTPD_BOND_BYPASS_USE_SOCKPOOL;
+	} else if (strcmp(params[0], "cmsg") == 0) {
+		ptp->ptpd_intf.use_lacp_bypass = SFPTPD_BOND_BYPASS_USE_CMSG;
+	} else if (strcmp(params[0], "both") == 0) {
+		ptp->ptpd_intf.use_lacp_bypass = SFPTPD_BOND_BYPASS_USE_BOTH;
+	} else {
+		return EINVAL;
+	}
+
+	return 0;
+}
+
 
 static const sfptpd_config_option_t ptp_config_options[] =
 {
@@ -1648,6 +1670,15 @@ static const sfptpd_config_option_t ptp_config_options[] =
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
 		parse_onload_ext,
 		.hidden = true},
+	{"lacp_bypass", "<off | sockpool | cmsg | both>",
+		"Specify which LACP bond bypass method to use. The cmsg "
+		"option is currently only supported if running under onload "
+		"and requires `onload_ext on` to be present in the config. "
+		"This option is designed to improve LACP bond support where "
+		"bond ports are connected to different boundary clocks. "
+		"Disabled by default",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_lacp_bypass},
 };
 
 

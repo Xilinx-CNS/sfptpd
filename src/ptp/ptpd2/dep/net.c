@@ -1925,7 +1925,8 @@ netInit(struct ptpd_transport * transport, InterfaceOpts * ifOpts, PtpInterface 
 
 	/* Create bond bypass sockets, the function will only conditionally
 	 * create these sockets if the current setup it appropriate. */
-	createBondSocks(transport, ifOpts->transportAF);
+	if (ifOpts->use_lacp_bypass & SFPTPD_BOND_BYPASS_USE_SOCKPOOL)
+		createBondSocks(transport, ifOpts->transportAF);
 
 	/* TODO: The information printed below is misleading for IPv6
 	   because we actually use link local addressing not the adapter's
@@ -2191,7 +2192,8 @@ netRecvError(PtpInterface *ptpInterface, int sockfd)
 static int prepareSendMessage(struct ptpd_transport *transport,
 			      void **control, socklen_t *controllen,
 			      int *sockfd, int request_tx_ifindex,
-			      bool use_onload_ext, bool is_multicast)
+			      bool use_onload_ext, bool is_multicast,
+			      int use_lacp_bypass)
 {
 	if (!sockfd)
 		return -EINVAL;
@@ -2201,7 +2203,8 @@ static int prepareSendMessage(struct ptpd_transport *transport,
 	if (request_tx_ifindex > 0) {
 		/* Unicast is not currently supported with the sockpool method.
 		 * TODO: add support for unicast. */
-		if (is_multicast) {
+		if (use_lacp_bypass & SFPTPD_BOND_BYPASS_USE_SOCKPOOL &&
+		    is_multicast) {
 			struct socket_ifindex *map =
 				transport->multicastBondSocks;
 			int mapLen = transport->multicastBondSocksLen;
@@ -2216,7 +2219,8 @@ static int prepareSendMessage(struct ptpd_transport *transport,
 			*sockfd = transport->eventSock;
 
 #ifdef HAVE_ONLOAD_EXT
-		if (use_onload_ext) {
+		if (use_lacp_bypass & SFPTPD_BOND_BYPASS_USE_CMSG &&
+		    use_onload_ext) {
 			/* Onload includes functionality to try and send down a given
 			 * ifindex, much like IP_PKTINFO, but allowing for physical
 			 * interfaces rather than only logical. */
@@ -2382,6 +2386,7 @@ netSendEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 	socklen_t addrLen;
 	struct ptpd_transport *transport = &ptpClock->interface->transport;
 	bool use_onload_ext = rtOpts->ifOpts->use_onload_ext;
+	int use_lacp_bypass = rtOpts->ifOpts->use_lacp_bypass;
 	// This must be big enough to contain the SCM_TIMESTAMPING_PKTINFO cmsg
 	// which we assert above this function.
 	void *control = (void*)&ptpClock->interface->msgCbuf[0];
@@ -2401,7 +2406,8 @@ netSendEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 
 		ret = prepareSendMessage(transport, &control, &controllen,
 					 &sockfd, request_tx_ifindex,
-					 use_onload_ext, false);
+					 use_onload_ext, false,
+					 use_lacp_bypass);
 		if (ret != 0)
 			return ret;
 
@@ -2436,7 +2442,8 @@ netSendEvent(Octet *buf, UInteger16 length, PtpClock *ptpClock,
 
 		ret = prepareSendMessage(transport, &control, &controllen,
 					 &sockfd, request_tx_ifindex,
-					 use_onload_ext, true);
+					 use_onload_ext, true,
+					 use_lacp_bypass);
 		if (ret != 0)
 			return ret;
 

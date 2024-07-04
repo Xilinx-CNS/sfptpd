@@ -15,6 +15,7 @@
 #include "ptpd_lib.h"
 #include "ptpd.h"
 #include "sfptpd_statistics.h"
+#include "sfptpd_lacp.h"
 
 
 /* Default configuration */
@@ -169,6 +170,7 @@ void ptpd_config_intf_initialise(struct ptpd_intf_config *config)
 	config->transportAF = AF_INET;
 	config->linkLocalScope = TRUE;
 	config->use_onload_ext = FALSE;
+	config->use_lacp_bypass = 0;
 
 	sfptpd_strncpy(config->user_description, SFPTPD_USER_DESCRIPTION,
 		       sizeof(config->user_description));
