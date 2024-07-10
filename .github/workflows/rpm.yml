@@ -15,47 +15,41 @@ jobs:
     strategy:
       max-parallel: 2
       matrix:
-        dist: [el9, el8, el7, el6]
+        dist: [el9, el8]
         include:
           - dist: el9
-            build_os: stream9
+            build_os: almalinux/9
             extra_build_deps: systemd-rpm-macros
           - dist: el8
-            build_os: stream8
+            build_os: almalinux/8
             extra_build_deps: systemd-rpm-macros
-          - dist: el7
-            build_os: centos7
-            extra_build_deps: systemd
-          - dist: el6
-            build_os: centos7
-            extra_build_deps:
     runs-on: ubuntu-latest
     env:
       BUILD_DEPS: rpm-build gcc make libmnl-devel libcap-devel python3-devel
     container:
-      image: quay.io/centos/centos:${{ matrix.build_os }}
+      image: ghcr.io/${{ matrix.build_os }}-base:latest
     steps:
-      - name: checkout sfptpd
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
       - name: enable extra repositories
-        if: ${{ matrix.build_os == 'stream9' }}
+        if: ${{ matrix.build_os == 'almalinux/9' }}
         run: yum install -y 'dnf-command(config-manager)' && yum config-manager --set-enabled crb
       - name: install build prerequisites
         run: yum --setopt install_weak_deps=0 install -y ${BUILD_DEPS} ${{ matrix.extra_build_deps }}
+      - name: checkout sfptpd
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: build srpm
         run: set -o pipefail; make RPM_OSVER=${{ matrix.dist }} build_srpm | tee transcript && sed -n s,^ENV:,,p transcript >> "$GITHUB_ENV"
       - name: publish srpm
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: sfptpd-${{ env.SFPTPD_VERSION }}-srpm
+          name: sfptpd-${{ env.SFPTPD_VERSION }}-${{ matrix.dist }}-srpm
           path: ~/rpmbuild/SRPMS/
           if-no-files-found: error
       - name: build rpm
         run: rpmbuild --rebuild ${{ env.SFPTPD_SRPMS }}
       - name: publish rpms
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: sfptpd-${{ env.SFPTPD_VERSION }}-${{ matrix.dist }}-rpms
           path: ~/rpmbuild/RPMS/
@@ -67,10 +61,10 @@ jobs:
     env:
       BUILD_DEPS: gcc make libmnl-devel libcap-devel
     container:
-      image: quay.io/centos/centos:centos7
+      image: ghcr.io/almalinux/8-base:latest
     steps:
       - name: checkout sfptpd
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: install build prerequisites
@@ -81,15 +75,13 @@ jobs:
           SFPTPD_ARCH=$(uname -i)
           SFPTPD_VERSION=$(scripts/sfptpd_versioning read)
           SFPTPD_STAGING=sfptpd-${SFPTPD_VERSION}.${SFPTPD_ARCH}
-          # Some older gcc versions generate doubtful complaint with
-          # optimiser enabled. We'll catch real errors on the newer builds.
-          make flat_install DESTDIR=${SFPTPD_STAGING} EXTRA_CFLAGS="-O2 -Wno-strict-aliasing"
-          echo 'Built on EL7 to support glibc 2.17 or later' > README.ThisBuild
+          make flat_install DESTDIR=${SFPTPD_STAGING} EXTRA_CFLAGS="-O2"
+          echo 'Built on EL8 to support glibc 2.28 or later' > README.ThisBuild
           mkdir TGZ
           tar cvzf TGZ/${SFPTPD_STAGING}.tgz ${SFPTPD_STAGING} README.ThisBuild
           printf "SFPTPD_VERSION=$SFPTPD_VERSION" >> "$GITHUB_ENV"
       - name: publish binary archive
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: sfptpd-${{ env.SFPTPD_VERSION }}-bin
           path: TGZ
