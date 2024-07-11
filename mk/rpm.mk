@@ -63,7 +63,7 @@ rpm_prep: rpm_build_tree
 	ver="$(shell $(ver_gen_cmd))"; disttag="$(FORCE_DISTTAG)"; \
 	cp -a $(RPM_SPEC_INDIR)/* $(RPM_SOURCES)/ && \
 	mv $(RPM_SOURCES)/$(RPM_SPECFILE) $(RPM_SPECS)/ && \
-	tar cz --exclude=$(BUILD_DIR) --exclude=$(RPM_TOPDIR) -f $(RPM_SOURCES)/sfptpd-$$ver.tgz --transform=s,^\.,sfptpd-$$ver,g . && \
+	tar cz --exclude=$(BUILD_DIR) --exclude=$(RPM_TOPDIR) --exclude=.git -f $(RPM_SOURCES)/sfptpd-$$ver.tgz --transform=s,^\.,sfptpd-$$ver,g . && \
 	sed -i "s/^\(Version: \).*/\1 $$ver/g" $(RPM_SPECPATH) && \
 	[ -z "$$disttag" ] || sed -i "s/^\(Release: .*\)%{.*dist}/\1$(FORCE_DISTTAG_TO)/g" $(RPM_SPECPATH); \
 	echo ENV:SFPTPD_VERSION="$$ver"
