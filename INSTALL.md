@@ -64,7 +64,7 @@ Read more about [RPM builds](scripts/rpm/README.md).
 ## Build an RPM for EL6 on EL7 build host
 
 ```sh
-RPM_OSVER=el6 build_srpm
+RPM_OSVER=el6 make build_srpm
 ```
 
 Then invoke `rpmbuild --rebuild` on the generated `el6.src.rpm`

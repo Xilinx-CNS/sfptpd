@@ -60,7 +60,7 @@ else
 ver_gen_cmd := scripts/sfptpd_versioning $(VERSION_QUIRKS) derive
 endif
 rpm_prep: rpm_build_tree
-	ver="$(shell $(ver_gen_cmd))"; disttag="$(FORCE_DISTTAG)"; \
+	ver="$(shell $(ver_gen_cmd))"; disttag="$(FORCE_DISTTAG_TO)"; \
 	cp -a $(RPM_SPEC_INDIR)/* $(RPM_SOURCES)/ && \
 	mv $(RPM_SOURCES)/$(RPM_SPECFILE) $(RPM_SPECS)/ && \
 	tar cz --exclude=$(BUILD_DIR) --exclude=$(RPM_TOPDIR) --exclude=.git -f $(RPM_SOURCES)/sfptpd-$$ver.tgz --transform=s,^\.,sfptpd-$$ver,g . && \
