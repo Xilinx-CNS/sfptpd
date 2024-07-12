@@ -1642,7 +1642,7 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 		 * if not available. */
 
 		/* Try SO_TIMESTAMPING software timestamps */
-		DBG("trying SO_TIMESTAMPING software timestamping...\n");
+		DBG("trying SO_TIMESTAMPING* software timestamping...\n");
 
 		/* Enable software transmit and receive timestamping */
 		flags = SOF_TIMESTAMPING_TX_SOFTWARE
@@ -1656,7 +1656,8 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 				.sockopt = option,
 				.flags = flags
 			};
-			INFO("using SO_TIMESTAMPING software timestamps\n");
+			INFO("using %s software timestamps\n",
+			     get_timestamp_name(PTPD_TS_LINUX, option));
 
 			return TRUE;
 		}
@@ -1714,7 +1715,7 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 #endif
 
 	/* Configure hardware timestamping */
-	DBG("trying SO_TIMESTAMPING hardware timestamping...\n");
+	DBG("trying SO_TIMESTAMPING* hardware timestamping...\n");
 
 	/* Enable software transmit and receive timestamping */
 	flags = SOF_TIMESTAMPING_TX_HARDWARE
@@ -1728,7 +1729,8 @@ netInitTimestamping(PtpInterface *ptpInterface, InterfaceOpts *ifOpts)
 			.sockopt = option,
 			.flags = flags
 		};
-		INFO("using SO_TIMESTAMPING hardware timestamps\n");
+		INFO("using %s hardware timestamps\n",
+		     get_timestamp_name(PTPD_TS_LINUX, option));
 
 		return TRUE;
 	}
