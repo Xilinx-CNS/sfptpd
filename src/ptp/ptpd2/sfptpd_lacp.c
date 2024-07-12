@@ -104,7 +104,7 @@ void destroyBondSocks(struct ptpd_transport *transport)
 
 void probeBondSocks(struct ptpd_transport *transport)
 {
-	struct sockaddr addr;
+	struct sockaddr_storage addr;
 	struct msghdr msg = {
 		.msg_name = (struct sockaddr *) &addr,
 		.msg_namelen = 0,
