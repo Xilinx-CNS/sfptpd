@@ -131,6 +131,22 @@ typedef enum {
 } sfptpd_clock_type_t;
 
 
+struct sfptpd_clock_calibration {
+
+	/* Sampled offset */
+	struct sfptpd_timespec offset;
+
+	/* Error in calibration */
+	bool error;
+
+	/* Clock found to be read-only */
+	bool inert;
+
+	/* Clock that governs this one */
+	struct sfptpd_clock *governor;
+};
+
+
 struct sfptpd_clock_nic {
 	/* Canonical identifier for the NIC */
 	int nic_id;
@@ -1098,10 +1114,73 @@ static void clock_record_step(void)
 	clock_lock();
 	for (clock = sfptpd_clock_list_head; clock != NULL; clock = clock->next) {
 		assert(clock->magic == SFPTPD_CLOCK_MAGIC);
-		if (clock->type != SFPTPD_CLOCK_TYPE_SYSTEM)
+		if (!clock->deleted &&
+		    clock->type != SFPTPD_CLOCK_TYPE_SYSTEM &&
+		    clock->u.nic.phc)
 			sfptpd_phc_record_step(clock->u.nic.phc);
 	}
 	clock_unlock();
+}
+
+
+static int ptr_compar(const void *a, const void *b)
+{
+	const void **pa = (const void **) a;
+	const void **pb = (const void **) b;
+
+	if (*pa < *pb)
+		return -1;
+	else if (*pa > *pb)
+		return 1;
+	else
+		return 0;
+}
+
+
+/* Take a snapshot of the clocks list.
+ * This function should always be called with the hardware state lock
+ * already taken.
+ */
+static struct sfptpd_clock **clock_snapshot(size_t *num_clocks, bool no_sfc)
+{
+	struct sfptpd_clock **snapshot;
+	struct sfptpd_clock *node;
+	size_t count;
+	int index;
+
+	count = 0;
+	for (node = sfptpd_clock_list_head; node != NULL; node = node->next) {
+		assert(node->magic == SFPTPD_CLOCK_MAGIC);
+		if (!node->deleted &&
+		    (!no_sfc || node->type == SFPTPD_CLOCK_TYPE_NON_SFC)) count++;
+	}
+
+	snapshot = calloc(count, sizeof *snapshot);
+	if (!snapshot) {
+		ERROR("clock: error allocating space for active clock snapshot, %s\n",
+		      strerror(errno));
+		goto finish;
+	}
+
+	index = 0;
+	for (node = sfptpd_clock_list_head; node != NULL; node = node->next) {
+		assert(node->magic == SFPTPD_CLOCK_MAGIC);
+		if (!node->deleted &&
+		    (!no_sfc || node->type == SFPTPD_CLOCK_TYPE_NON_SFC)) {
+			assert(index < count);
+			snapshot[index++] = node;
+		}
+	}
+	assert(index == count);
+
+	/* Sort the active clock list by pointer as part of contract with
+	 * caller to make it easier for the caller to analyse changes. */
+	qsort(snapshot, count, sizeof *snapshot, ptr_compar);
+
+finish:
+	if (num_clocks)
+		*num_clocks = count;
+	return snapshot;
 }
 
 
@@ -1225,57 +1304,16 @@ int sfptpd_clock_get_total(void)
 	return count;
 }
 
-static int ptr_compar(const void *a, const void *b)
-{
-	const void **pa = (const void **) a;
-	const void **pb = (const void **) b;
-
-	if (*pa < *pb)
-		return -1;
-	else if (*pa > *pb)
-		return 1;
-	else
-		return 0;
-}
-
 struct sfptpd_clock **sfptpd_clock_get_active_snapshot(size_t *num_clocks)
 {
 	struct sfptpd_clock **snapshot;
-	struct sfptpd_clock *node;
-	size_t count;
-	int index;
+	size_t count = 0;
 
 	clock_lock();
-	count = 0;
-	for (node = sfptpd_clock_list_head; node != NULL; node = node->next) {
-		assert(node->magic == SFPTPD_CLOCK_MAGIC);
-		if (!node->deleted) count++;
-	}
-
-	snapshot = calloc(count, sizeof *snapshot);
-	if (!snapshot) {
-		ERROR("clock: error allocating space for active clock snapshot, %s\n",
-		      strerror(errno));
-		goto finish;
-	}
-
-	index = 0;
-	for (node = sfptpd_clock_list_head; node != NULL; node = node->next) {
-		assert(node->magic == SFPTPD_CLOCK_MAGIC);
-		if (!node->deleted) {
-			assert(index < count);
-			snapshot[index++] = node;
-		}
-	}
-	assert(index == count);
-
-	/* Sort the active clock list by pointer as part of contract with
-	 * caller to make it easier for the caller to analyse changes. */
-	qsort(snapshot, count, sizeof *snapshot, ptr_compar);
-
-finish:
+	snapshot = clock_snapshot(&count, false);
 	clock_unlock();
-	if (num_clocks)
+
+	if (count != 0)
 		*num_clocks = count;
 	return snapshot;
 }
@@ -2532,5 +2570,153 @@ bool sfptpd_clock_is_active(const struct sfptpd_clock *clock)
 
 	return clock && !clock->deleted;
 }
+
+int sfptpd_clock_deduplicate(void)
+{
+	struct sfptpd_clock **clocks_table;
+	struct sfptpd_clock *sys;
+	size_t count = 0;
+	/* A large settlement period is required; at least >1s in case of PPS
+	 * phc diff method being in use. */
+	const useconds_t settle = 1000000;
+	struct sfptpd_timespec test_adjustment;
+	struct sfptpd_timespec restore_adjustment;
+	struct sfptpd_timespec threshold;
+	struct sfptpd_timespec t;
+	struct sfptpd_clock_calibration *calibrations;
+	int i, j;
+	int rc;
+	int changes = 0;
+
+	clock_lock();
+
+	clocks_table = clock_snapshot(&count, true);
+
+	if (count < 2)
+		goto finish;
+
+	NOTICE("clock: identifying duplicate phc clocks, a destructive operation\n");
+
+	sys = sfptpd_clock_get_system_clock();
+	sfptpd_time_init(&test_adjustment, -1L, 0U, 0U);
+	sfptpd_time_init(&threshold, 0L, 200000000U, 0U);
+	sfptpd_time_negate(&restore_adjustment, &test_adjustment);
+	calibrations = calloc(count, sizeof *calibrations);
+	if (calibrations == NULL) {
+		rc = errno;
+		ERROR("clock: allocating calibration structures, %s\n", strerror(rc));
+		goto finish;
+        }
+
+	/* Record current offsets */
+	for (i = 0; i < count; i++) {
+		struct sfptpd_clock *clock = clocks_table[i];
+		struct sfptpd_clock_calibration *calibration = calibrations + i;
+
+		rc = sfptpd_clock_compare(clock, sys, &calibration->offset);
+		if (rc != 0) {
+			ERROR("clock %s: dedup1, %s\n",
+			      clock->short_name, strerror(rc));
+			calibration->error = true;
+		}
+	}
+
+	/* Check effect of adjusting freq for each clock */
+	for (i = 0; i < count; i++) {
+		struct sfptpd_clock *clock = clocks_table[i];
+		struct sfptpd_clock_calibration *calibration = calibrations + i;
+		struct sfptpd_timespec mod_offset;
+
+		/* Apply temporary offset */
+		sfptpd_time_add(&mod_offset, &calibration->offset, &test_adjustment);
+		rc = sfptpd_clock_adjust_time(clock, &test_adjustment);
+		if (rc != 0) {
+			ERROR("clock %s: dedup2, %s\n",
+			      clock->short_name, strerror(rc));
+			calibration->error = true;
+		}
+		usleep(settle);
+
+		/* Check new offset */
+		rc = sfptpd_clock_compare(clock, sys, &t);
+		if (rc != 0) {
+			ERROR("clock %s: dedup3, %s\n",
+			      clock->short_name, strerror(rc));
+			calibration->error = true;
+		}
+		if (!sfptpd_time_equal_within(&t, &mod_offset, &threshold)) {
+			INFO("clock %s: deduplication: did not take test adjustment\n",
+			     clock->short_name);
+			calibration->inert = true;
+		}
+
+		/* Check if offset impacts other clocks */
+		for (j = 0; j < count; j++) {
+			struct sfptpd_clock *other = clocks_table[j];
+			if (i == j)
+				continue;
+
+			rc = sfptpd_clock_compare(other, sys, &t);
+			if (rc != 0) {
+				ERROR("clock %s: dedup4, %s\n",
+				      other->short_name, strerror(rc));
+				calibrations[j].error = true;
+			}
+			if (!sfptpd_time_equal_within(&t, &calibrations[j].offset, &threshold)) {
+				struct sfptpd_timespec mod2;
+				TRACE_L4("clock %s: while adjusting this clock, clock %s also changed\n",
+				     clock->short_name, other->short_name);
+				sfptpd_time_add(&mod2, &calibrations[j].offset, &test_adjustment);
+				if (sfptpd_time_equal_within(&t, &mod2, &threshold)) {
+					INFO("clock %s: deduplication: %s governs %s\n",
+					     clock->short_name, clock->short_name, other->short_name);
+					calibrations[j].governor = clock;
+				}
+			}
+		}
+
+		/* Restore original offset */
+		rc = sfptpd_clock_adjust_time(clock, &restore_adjustment);
+		if (rc != 0) {
+			ERROR("clock %s: dedup5, %s\n",
+			      clock->short_name, strerror(rc));
+			calibration->error = true;
+		}
+		usleep(settle);
+	}
+
+	NOTICE("clock: identification of duplicate phc clocks complete\n");
+
+	for (i = 0; i < count; i++) {
+		struct sfptpd_clock *clock = clocks_table[i];
+		struct sfptpd_clock_calibration *calibration = calibrations + i;
+
+		if (calibration->governor) {
+			sfptpd_interface_reassign_to_nic(clock->u.nic.device_idx,
+							 calibration->governor->u.nic.device_idx);
+			changes++;
+		} else if (calibration->inert) {
+			NOTICE("clock: marking inert clock %s as read only\n",
+			       clock->short_name);
+			clock->read_only = true;
+			changes++;
+		}
+	}
+
+	free(calibrations);
+finish:
+	free(clocks_table);
+
+	if (changes) {
+		sfptpd_clock_rescan_interfaces();
+		sfptpd_interface_diagnostics(3);
+		sfptpd_clock_diagnostics(3);
+	}
+
+	clock_unlock();
+
+	return 0;
+}
+
 
 /* fin */

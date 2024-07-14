@@ -38,6 +38,7 @@
 #define SFPTPD_DEFAULT_DISCIPLINE_ALL_CLOCKS       (true)
 #define SFPTPD_DEFAULT_NON_SFC_NICS                (false)
 #define SFPTPD_DEFAULT_ASSUME_ONE_PHC_PER_NIC      (false)
+#define SFPTPD_DEFAULT_PHC_DEDUP                   (false)
 #define SFPTPD_DEFAULT_TEST_MODE                   (false)
 #define SFPTPD_DEFAULT_RTC_ADJUST                  (true)
 #define SFPTPD_DEFAULT_SELECTION_HOLDOFF_INTERVAL  10
@@ -214,6 +215,7 @@ typedef struct sfptpd_config_general {
 	sfptpd_config_clocks_t clocks;
 	bool non_sfc_nics;
 	bool assume_one_phc_per_nic;
+	bool phc_dedup;
 	bool avoid_efx;
 	bool test_mode;
 	bool daemon;

@@ -79,6 +79,8 @@ static int parse_non_solarflare_nics(struct sfptpd_config_section *section, cons
 				     unsigned int num_params, const char * const params[]);
 static int parse_assume_one_phc_per_nic(struct sfptpd_config_section *section, const char *option,
 					unsigned int num_params, const char * const params[]);
+static int parse_phc_dedup(struct sfptpd_config_section *section, const char *option,
+			   unsigned int num_params, const char * const params[]);
 static int parse_avoid_efx_ioctl(struct sfptpd_config_section *section, const char *option,
 				 unsigned int num_params, const char * const params[]);
 static int parse_timestamping_interfaces(struct sfptpd_config_section *section, const char *option,
@@ -256,6 +258,11 @@ static const sfptpd_config_option_t config_general_options[] =
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
 		parse_assume_one_phc_per_nic,
 		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_ASSUME_ONE_PHC_PER_NIC)},
+	{"phc_dedup", "<off | on>",
+		"Specify whether to identify duplicate PHC devices for the same clock",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_phc_dedup,
+		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_PHC_DEDUP)},
 	{"avoid_efx_ioctl", "<off | on>",
 		"Specify whether to avoid private SIOCEFX ioctl for Solarflare adapters. "
 		"This prevents use of the sync flag via Onload",
@@ -1126,6 +1133,24 @@ static int parse_assume_one_phc_per_nic(struct sfptpd_config_section *section, c
 }
 
 
+static int parse_phc_dedup(struct sfptpd_config_section *section, const char *option,
+			   unsigned int num_params, const char * const params[])
+{
+	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+	assert(num_params == 1);
+
+	if (strcmp(params[0], "off") == 0) {
+		general->phc_dedup = false;
+	} else if (strcmp(params[0], "on") == 0) {
+		general->phc_dedup = true;
+	} else {
+		return EINVAL;
+	}
+
+	return 0;
+}
+
+
 static int parse_avoid_efx_ioctl(struct sfptpd_config_section *section, const char *option,
 				 unsigned int num_params, const char * const params[])
 {
@@ -1723,6 +1748,7 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 
 		new->non_sfc_nics = SFPTPD_DEFAULT_NON_SFC_NICS;
 		new->assume_one_phc_per_nic = SFPTPD_DEFAULT_ASSUME_ONE_PHC_PER_NIC;
+		new->phc_dedup = SFPTPD_DEFAULT_PHC_DEDUP;
 		new->test_mode = false;
 		new->daemon = false;
 		new->lock = true;

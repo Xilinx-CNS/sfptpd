@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Add `phc_dedup` option to identify duplicate PHC devices sharing a single
+  NIC clock and treat as one device. Only relevant to non-Solarflare adapters.
+  (SWPTP-1348)
+  - This option requires a calibration step that may take a few seconds.
 - Add `avoid_efx_ioctl` option to avoid sfc proprietary ioctl(). (SWPTP-1535)
   - This prevents setting of the sync flags optionally used by Onload.
 

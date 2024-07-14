@@ -2265,4 +2265,44 @@ int sfptpd_interface_driver_stats_reset(struct sfptpd_interface *interface)
 }
 
 
+int sfptpd_interface_reassign_to_nic(int from_phc, int to_phc)
+{
+	struct sfptpd_db_query_result q;
+	struct sfptpd_interface *intf;
+	struct sfptpd_interface *nic;
+	int my_false = 0;
+	int rc = 0;
+	int i;
+
+	interface_lock();
+
+	nic = FIND_ANY(INTF_KEY_CLOCK, &to_phc,
+		       INTF_KEY_DELETED, &my_false,
+		       SFPTPD_DB_SEL_END);
+	if (nic == NULL) {
+		ERROR("interface: could not find nic with phc %d\n", to_phc);
+		rc = ENODEV;
+		goto finish;
+	}
+
+	q = sfptpd_db_table_query(sfptpd_interface_table,
+				  INTF_KEY_CLOCK, &from_phc,
+				  SFPTPD_DB_SEL_END);
+
+	for (i = 0; i < q.num_records; i++) {
+		intf = *((struct sfptpd_interface **) q.record_ptrs[i]);
+		assert(intf->magic == SFPTPD_INTERFACE_MAGIC);
+		intf->nic_id = nic->nic_id;
+		INFO("interface: reassigned %s to nic id %d\n",
+		     intf->name, nic->nic_id);
+	}
+
+	q.free(&q);
+
+finish:
+	interface_unlock();
+	return rc;
+}
+
+
 /* fin */

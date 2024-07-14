@@ -2349,6 +2349,11 @@ static int engine_on_startup(void *context)
 
 	config = engine->config;
 
+	/* Deduplicate non-sfc clock devices */
+	if (engine->general_config->phc_dedup) {
+		sfptpd_clock_deduplicate();
+	}
+
 	engine->clockfeed = sfptpd_clockfeed_create(&engine->clockfeed_thread,
 						    engine->general_config->clocks.sync_interval);
 	if (engine->clockfeed == NULL) {
