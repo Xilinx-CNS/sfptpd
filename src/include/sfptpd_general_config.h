@@ -134,6 +134,7 @@ typedef struct sfptpd_config_clocks {
 	int sync_interval;
 	enum sfptpd_clock_ctrl control;
 	bool persistent_correction;
+	bool no_initial_correction;
 	bool discipline_all;
 	unsigned int num_clocks;
 	char clocks[SFPTPD_CONFIG_TOKENS_MAX][SFPTPD_CONFIG_MAC_STRING_MAX];
