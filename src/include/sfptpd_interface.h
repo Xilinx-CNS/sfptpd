@@ -154,6 +154,13 @@ sfptpd_interface_class_t sfptpd_interface_get_class(struct sfptpd_interface *int
  */
 sfptpd_interface_ts_caps_t sfptpd_interface_ptp_caps(struct sfptpd_interface *interface);
 
+/** Gets ethtool ts_info structure for interface
+ * @param interface Pointer to interface instance
+ * @return Timestamp information structure
+ */
+void sfptpd_interface_get_ts_info(const struct sfptpd_interface *interface,
+				  struct ethtool_ts_info *ts_info);
+
 /** Checks if the interface has hardware PTP support
  * @param interface Pointer to interface instance
  * @return Boolean indicating whether PTP is supported

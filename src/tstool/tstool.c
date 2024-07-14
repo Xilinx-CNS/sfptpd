@@ -17,6 +17,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <fcntl.h>
+#include <linux/sockios.h>
+#include <linux/net_tstamp.h>
 
 #include "sfptpd_config.h"
 #include "sfptpd_general_config.h"
@@ -36,6 +38,62 @@ static const struct option opts_long[] = {
 	{ "verbose", 0, NULL, (int) 'v' },
 	{ NULL, 0, NULL, 0 }
 };
+
+const char *tx_types[] = {
+	"off",
+	"on",
+	"onestep-sync",
+	"onestep-p2p",
+};
+#define NUM_TX_TYPES (sizeof tx_types / sizeof *tx_types)
+
+const char *rx_filters[] = {
+	"none",
+	"all",
+	"some",
+	"ptp-v1-l4-event",
+	"ptp-v1-l4-sync",
+	"ptp-v1-l4-delay-req",
+	"ptp-v2-l4-event",
+	"ptp-v2-l4-sync",
+	"ptp-v2-l4-delay-req",
+	"ptp-v2-l2-event",
+	"ptp-v2-l2-sync",
+	"ptp-v2-l2-delay-req",
+	"ptp-v2-event",
+	"ptp-v2-sync",
+	"ptp-v2-delay-req",
+	"ptp-ntp-all",
+};
+#define NUM_RX_FILTERS (sizeof rx_filters / sizeof *rx_filters)
+
+const char *sof[] = {
+	"tx_hardware",
+	"tx_software",
+	"rx_hardware",
+	"rx_software",
+	"software",
+	"sys_hardware",
+	"raw_hardware",
+	"opt_id",
+	"tx_sched",
+	"tx_ack",
+	"opt_cmsg",
+	"opt_tsonly",
+	"opt_stats",
+	"opt_pktinfo",
+	"opt_tx_swhw",
+	"bind_phc",
+	"opt_id_tcp",
+	"17",
+	"18",
+	"19",
+	"20",
+	"21",
+	"22",
+	"onload_stream",
+};
+#define NUM_SOF (sizeof sof / sizeof *sof)
 
 
 /****************************************************************************
@@ -59,6 +117,18 @@ struct clock_command {
 	int clock_args;
 };
 
+enum intf_command_e {
+	INTF_CMD_LIST,
+	INTF_CMD_INFO,
+	INTF_CMD_SET_TS,
+	INTF_CMD_INVALID
+};
+
+struct intf_command {
+	enum intf_command_e tag;
+	const char *name;
+	int intf_args;
+};
 
 /****************************************************************************
  * Local Data
@@ -79,10 +149,62 @@ static const struct clock_command clock_cmds[] = {
 	{ CLOCK_CMD_INVALID, "INVALID", 0 },
 };
 
+static const struct intf_command intf_cmds[] = {
+	{ INTF_CMD_LIST,    "list",    0 },
+	{ INTF_CMD_INFO,    "info",    1 },
+	{ INTF_CMD_SET_TS,  "set_ts",  1 },
+	{ INTF_CMD_INVALID, "INVALID", 0 },
+};
+
 
 /****************************************************************************
  * Local functions
  ****************************************************************************/
+
+static void format_flags(char *buf, ssize_t space,
+			 const char **names, size_t num_known,
+			 unsigned long flags)
+{
+	int i;
+	int len = 0;
+	const char ellipsis[] = u8"\u2026";
+	ssize_t rewind = 1 + strlen(ellipsis);
+
+	assert(space >= rewind);
+	*buf = '\0';
+
+	for (i = 0; len >= 0 && flags != 0 && space >= rewind; i++, flags >>= 1) {
+		if (flags & 1) {
+			if (i < num_known)
+				len = snprintf(buf, space, " %s", names[i]);
+			else
+				len = snprintf(buf, space, " %d", i);
+			if (len >= space)
+				break;
+			else
+				space -= len, buf += len;
+		}
+	}
+
+	if (flags != 0)
+		snprintf(buf + space - rewind, rewind, "%s", ellipsis);
+}
+
+static int decode_option(const char **names, size_t num_known,
+			 unsigned long *option, const char *text)
+{
+	int i;
+
+	for (i = 0; i < num_known && strcmp(text, names[i]); i++);
+	if (i == num_known) {
+		ERROR("option %s invalid\n", text);
+		return 1;
+	}
+
+	*option = i;
+	return 0;
+}
+
 
 static int do_init(void)
 {
@@ -97,6 +219,7 @@ static int do_init(void)
 	/* Tweak config */
 	gconf = sfptpd_general_config_get(config);
 	gconf->non_sfc_nics = true;
+	gconf->timestamping.disable_on_exit = false;
 
 	/* Start netlink service */
 	netlink = sfptpd_netlink_init();
@@ -153,13 +276,19 @@ static void usage(FILE *stream)
 		"    -v, --verbose               Be verbose\n\n"
 		"  CLOCK SUBSYSTEM\n"
 		"    clock list                  List clocks\n"
-		"    clock info                  Show clock information\n"
+		"    clock info CLOCK            Show clock information\n"
 		"    clock get CLOCK             Read clock\n"
 		"    clock step CLOCK OFFSET     Step clock\n"
 		"    clock slew CLOCK PPB        Adjust clock frequency\n"
 		"    clock set_to CLOCK1 CLOCK2  CLOCK1 := CLOCK2\n"
 		"    clock diff CLOCK1 CLOCK2    CLOCK1 - CLOCK2\n\n"
-		"      CLOCK := <phcN> | <ethN> | system\n",
+		"      CLOCK := <phcN> | <ethN> | system\n\n"
+		"  INTERFACE SUBSYSTEM\n"
+		"    interface list              List physical interfaces\n"
+		"    interface info INTF         Show interface information\n"
+		"    interface set_ts TX RX      Set timestamp modes\n\n"
+		"      INTF := <ethN>\n"
+                "      See 'info' response for available TX and RX modes\n",
 		program_invocation_short_name);
 }
 
@@ -282,6 +411,132 @@ static int clock_command(int argc, char *argv[])
 }
 
 
+static int intf_command(int argc, char *argv[])
+{
+#define MAX_INTFS 2
+	struct sfptpd_interface *interfaces[MAX_INTFS];
+	struct sfptpd_db_query_result query_result;
+	struct hwtstamp_config so_ts_req = { 0 };
+	struct ethtool_ts_info ts_info;
+	struct sfptpd_interface *intf;
+	struct sfptpd_clock *clock;
+	const struct intf_command *cmd;
+	const char *command;
+	char tx_types_str[128];
+	char rx_filters_str[128];
+	char sof_str[128];
+	char tx_type_str[20];
+	char rx_filter_str[20];
+	bool supports_efx;
+	bool supports_phc;
+	unsigned long rx;
+	unsigned long tx;
+	int device_idx;
+	int rc = 0;
+	int i;
+
+	if (argc < 1) {
+		usage(stderr);
+		return EXIT_FAILURE;
+	}
+
+	command = argv[0];
+
+	for (cmd = intf_cmds;
+	     cmd->tag != INTF_CMD_INVALID &&
+	     strcmp(command, cmd->name);
+	     cmd++);
+
+	assert(cmd->intf_args <= MAX_INTFS);
+	if (argc - 1 < cmd->intf_args) {
+		ERROR("insufficient number of interfaces specified\n");
+		usage(stderr);
+		return EXIT_FAILURE;
+	}
+
+	for (i = 0; i < cmd->intf_args; i++) {
+		const char *intf_ref = argv[1 + i];
+		interfaces[i] = sfptpd_interface_find_by_name(intf_ref);
+		if (interfaces[i] == NULL) {
+			fprintf(stderr, "unknown interfface: %s\n", intf_ref);
+			return EXIT_FAILURE;
+		}
+	}
+
+	switch(cmd->tag) {
+	case INTF_CMD_LIST:
+		sfptpd_interface_diagnostics(3);
+		query_result = sfptpd_interface_get_active_ptp_snapshot();
+		for (i = 0; i < query_result.num_records; i++) {
+			struct sfptpd_interface **intfp = query_result.record_ptrs[i];
+
+			intf = *intfp;
+			printf("%s\n", sfptpd_interface_get_name(intf));
+		}
+		query_result.free(&query_result);
+		break;
+	case INTF_CMD_INFO:
+		intf = interfaces[0];
+		clock = sfptpd_interface_get_clock(intf);
+		sfptpd_interface_get_clock_device_idx(intf, &supports_phc, &device_idx, &supports_efx);
+		sfptpd_interface_get_ts_info(intf, &ts_info);
+		sfptpd_interface_ioctl(intf, SIOCGHWTSTAMP, &so_ts_req);
+		format_flags(tx_types_str, sizeof tx_types_str, tx_types, NUM_TX_TYPES, ts_info.tx_types);
+		format_flags(rx_filters_str, sizeof rx_filters_str, rx_filters, NUM_RX_FILTERS, ts_info.rx_filters);
+		format_flags(sof_str, sizeof sof_str, sof, NUM_SOF, ts_info.so_timestamping);
+		format_flags(tx_type_str, sizeof tx_types_str, tx_types, NUM_TX_TYPES, 1 << so_ts_req.tx_type);
+		format_flags(rx_filter_str, sizeof rx_filters_str, rx_filters, NUM_RX_FILTERS, 1 << so_ts_req.rx_filter);
+		printf("interface: %s\n"
+		       "clock: %s\n"
+		       "mac-address: %s\n"
+		       "fw-version: %s\n"
+		       "supported-apis:%s%s\n"
+		       "supported-tx-modes:%s\n"
+		       "supported-rx-filters:%s\n"
+		       "supported-sof-flags:%s\n"
+		       "tx-mode:%s\n"
+		       "rx-filter:%s\n",
+		       sfptpd_interface_get_name(intf),
+		       clock == NULL ? "none" : sfptpd_clock_get_short_name(clock),
+		       sfptpd_interface_get_mac_string(intf),
+		       sfptpd_interface_get_fw_version(intf),
+		       supports_phc ? " phc" : "",
+		       supports_efx ? " efx" : "",
+		       tx_types_str,
+		       rx_filters_str,
+		       sof_str,
+		       tx_type_str,
+		       rx_filter_str);
+		break;
+	case INTF_CMD_SET_TS:
+		intf = interfaces[0];
+		if (argc < 3 + cmd->intf_args) {
+			ERROR("insufficient arguments for timestamp configuration\n");
+			return EXIT_FAILURE;
+		}
+		if (decode_option(tx_types, NUM_TX_TYPES, &tx, argv[1 + cmd->intf_args]))
+			return EXIT_FAILURE;
+		if (decode_option(rx_filters, NUM_RX_FILTERS, &rx, argv[2 + cmd->intf_args]))
+			return EXIT_FAILURE;
+		so_ts_req.tx_type = tx;
+		so_ts_req.rx_filter = rx;
+		rc = sfptpd_interface_ioctl(intf, SIOCSHWTSTAMP, &so_ts_req);
+		break;
+	default:
+		fprintf(stderr, "unknown interface command: %s\n", command);
+		usage(stderr);
+		return EXIT_FAILURE;
+	}
+
+	if (rc != 0) {
+		ERROR("tstool: interface: %s: %s\n", command, strerror(rc));
+		return EXIT_FAILURE;
+	}
+
+	return EXIT_SUCCESS;
+}
+
+
 /****************************************************************************
  * Global functions
  ****************************************************************************/
@@ -323,6 +578,9 @@ int main(int argc, char *argv[])
 
 	if (!strcmp(subsystem, "clock")) {
 		rc = clock_command(argc - optind, argv + optind);
+	} else if (!strcmp(subsystem, "interface") ||
+		   !strcmp(subsystem, "intf")) {
+		rc = intf_command(argc - optind, argv + optind);
 	} else {
 		fprintf(stderr, "unknown subsystem: %s\n", subsystem);
 		usage(stderr);
