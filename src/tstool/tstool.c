@@ -33,12 +33,14 @@
  ****************************************************************************/
 
 #define OPT_PERSISTENT 0x10000
+#define OPT_INITIAL 0x10001
 
 static const char *opts_short = "hv";
 static const struct option opts_long[] = {
 	{ "help", 0, NULL, (int) 'h' },
 	{ "verbose", 0, NULL, (int) 'v' },
 	{ "persistent", 0, NULL, OPT_PERSISTENT },
+	{ "initial", 0, NULL, OPT_INITIAL },
 	{ NULL, 0, NULL, 0 }
 };
 
@@ -264,6 +266,7 @@ static void usage(FILE *stream)
 		"\n"
 		"  OPTIONS\n"
 		"        --persistent            Use sfptpd persistent frequency adjustment\n"
+		"        --initial               Perform sfptpd initial clock correction\n"
 		"    -h, --help                  Show usage\n"
 		"    -v, --verbose               Be verbose\n\n"
 		"  CLOCK SUBSYSTEM\n"
@@ -550,6 +553,7 @@ int main(int argc, char *argv[])
 	gconf->non_sfc_nics = true;
 	gconf->timestamping.disable_on_exit = false;
 	gconf->clocks.persistent_correction = false;
+	gconf->clocks.no_initial_correction = true;
 
 	/* Handle command line arguments */
 	while ((opt = getopt_long(argc, argv, opts_short, opts_long, &index)) != -1) {
@@ -564,6 +568,9 @@ int main(int argc, char *argv[])
 			break;
 		case OPT_PERSISTENT:
 			gconf->clocks.persistent_correction = true;
+			break;
+		case OPT_INITIAL:
+			gconf->clocks.no_initial_correction = false;
 			break;
 		default:
 			fprintf(stderr, "unexpected option: %s\n", argv[optind]);

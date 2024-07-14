@@ -543,7 +543,8 @@ static void fixup_clock(struct sfptpd_clock *clock, struct sfptpd_config_general
         /* Now that we have configured the clock's readonly flag, we can finally load saved frequency corrections
            and epoch startup correction.
         */
-        sfptpd_clock_correct_new(clock);
+	if (!cfg->clocks.no_initial_correction)
+	        sfptpd_clock_correct_new(clock);
 
         return;
 }
@@ -645,7 +646,8 @@ static int new_system_clock(struct sfptpd_config_general *config,
 	sfptpd_clock_system = new;
 
 	configure_new_clock(new, config);
-	sfptpd_clock_correct_new(new);
+	if (!config->clocks.no_initial_correction)
+		sfptpd_clock_correct_new(new);
 
 	*clock = new;
 	return 0;
@@ -1065,7 +1067,8 @@ static void sfptpd_clock_init_interface(int nic_id,
 		} else if (clock->deleted) {
 			/* If a previously-removed NIC is re-inserted we
 			   may need to step the clock */
-			sfptpd_clock_correct_new(clock);
+			if (!general_config->clocks.no_initial_correction)
+				sfptpd_clock_correct_new(clock);
 		}
 
 		/* Link the existing or newly created clock to the interface */
