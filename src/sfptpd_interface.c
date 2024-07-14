@@ -398,7 +398,7 @@ static struct utsname sysinfo = { .release = "uname-failed" };
  ****************************************************************************/
 
 static inline void interface_lock(void) {
-	int rc = pthread_mutex_lock(sfptpd_interface_lock);
+	int rc = sfptpd_interface_lock == NULL ? 0 : pthread_mutex_lock(sfptpd_interface_lock);
 	if (rc != 0) {
 		CRITICAL("interface: could not acquire hardware state lock\n");
 		exit(1);
@@ -407,7 +407,7 @@ static inline void interface_lock(void) {
 
 
 static inline void interface_unlock(void) {
-	int rc = pthread_mutex_unlock(sfptpd_interface_lock);
+	int rc = sfptpd_interface_lock == NULL ? 0 : pthread_mutex_unlock(sfptpd_interface_lock);
 	if (rc != 0) {
 		CRITICAL("interface: could not release hardware state lock\n");
 		exit(1);

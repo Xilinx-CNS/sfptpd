@@ -1,0 +1,52 @@
+.Dd July 13, 2024
+.Os Linux
+.Dt TSTOOL 8 SMM
+.Sh NAME
+.Nm tstool
+.Nd Timestamping control utility
+.Sh SYNOPSIS
+.Nm
+clock list
+.Nm
+clock info
+.Ar clock
+.Nm
+clock get
+.Ar clock
+.Nm
+clock step
+.Ar clock
+.Ar offset
+.Nm
+clock slew
+.Ar clock
+.Ar ppb
+.Nm
+clock set_to
+.Ar clock1
+.Ar clock2
+.Nm
+clock diff
+.Ar clock1
+.Ar clock2
+.Sh DESCRIPTION
+Examine and adjust PTP Hardware Clock devices and the system clock.
+.Pp
+This utility uses the mechanisms available to sfptpd to manipulate precision clocks on the system.
+.Pp
+Clocks may be specified by phc number, interface name or 'system'.
+.Sh BUGS
+Please raise bug reports at:
+.Aq https://github.com/Xilinx-CNS/sfptpd/issues
+.Pp
+Support for users of AMD Solarflare NICs is available from:
+.Aq support-nic@amd.com
+.Sh AUTHORS
+Advanced Micro Devices, Inc.
+.Sh SEE ALSO
+.Xr sfptpd 8 .
+.Pp
+Full documentation is available at:
+.Aq https://docs.amd.com/r/en-US/ug1602-ptp-user
+.Sh COPYRIGHT
+Copyright (c) 2024 Advanced Micro Devices, Inc.

@@ -301,7 +301,7 @@ static struct sfptpd_interpolation clock_format_specifiers[] = {
 
 static inline void clock_lock(void)
 {
-	int rc = pthread_mutex_lock(sfptpd_clock_lock);
+	int rc = sfptpd_clock_lock == NULL ? 0 : pthread_mutex_lock(sfptpd_clock_lock);
 	if (rc != 0) {
 		CRITICAL("clock: could not acquire hardware state lock\n");
 		exit(1);
@@ -311,7 +311,7 @@ static inline void clock_lock(void)
 
 static inline void clock_unlock(void)
 {
-	int rc = pthread_mutex_unlock(sfptpd_clock_lock);
+	int rc = sfptpd_clock_lock == NULL ? 0 : pthread_mutex_unlock(sfptpd_clock_lock);
 	if (rc != 0) {
 		CRITICAL("clock: could not release hardware state lock\n");
 		exit(1);
