@@ -98,6 +98,19 @@ void sfptpd_time_subtract(struct sfptpd_timespec *c,
 	sfptpd_time_normalise(c);
 }
 
+bool sfptpd_time_equal_within(const struct sfptpd_timespec *a,
+			      const struct sfptpd_timespec *b,
+			      const struct sfptpd_timespec *threshold)
+{
+	struct sfptpd_timespec c;
+
+	sfptpd_time_subtract(&c, a, b);
+	if (c.sec < 0)
+		sfptpd_time_negate(&c, &c);
+
+	return sfptpd_time_is_greater_or_equal(threshold, &c);
+}
+
 int sfptpd_time_cmp(const struct sfptpd_timespec *a, const struct sfptpd_timespec *b)
 {
 	if (a->sec < b->sec)
