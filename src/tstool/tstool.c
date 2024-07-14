@@ -298,6 +298,8 @@ static int clock_command(int argc, char *argv[])
 	const struct clock_command *cmd;
 	const char *command;
 	size_t num_clocks;
+	sfptpd_time_t freq_adj;
+	sfptpd_time_t tick_len;
 	sfptpd_time_t f;
 	int tokens;
 	int rc = 0;
@@ -344,17 +346,22 @@ static int clock_command(int argc, char *argv[])
 		sfptpd_clock_free_active_snapshot(all_clocks);
 		break;
 	case CLOCK_CMD_INFO:
+		sfptpd_clock_get_frequency(clocks[0], &freq_adj, &tick_len);
 		printf("short-name: %s\n"
 		       "long-name: %s\n"
 		       "hw-id: %s\n"
 		       "persistent-freq-correction: %.3Lf ppb\n"
 		       "max-freq-adj: %.3Lf ppb\n"
+		       "freq-adj: %.3Lf ppb\n"
+		       "tick-len: %.3Lf s\n"
 		       "diff-method: %s\n",
 		       sfptpd_clock_get_short_name(clocks[0]),
 		       sfptpd_clock_get_long_name(clocks[0]),
 		       sfptpd_clock_get_hw_id_string(clocks[0]),
 		       sfptpd_clock_get_freq_correction(clocks[0]),
 		       sfptpd_clock_get_max_frequency_adjustment(clocks[0]),
+		       freq_adj,
+		       tick_len / 1000000000.0L,
 		       sfptpd_clock_get_diff_method(clocks[0]));
 		break;
 	case CLOCK_CMD_GET:
