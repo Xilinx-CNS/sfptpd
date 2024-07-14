@@ -527,5 +527,9 @@ bool sfptpd_clock_is_system(const struct sfptpd_clock *clock);
  */
 bool sfptpd_clock_is_active(const struct sfptpd_clock *clock);
 
+/** Deduplicate phc devices sharing underlying clock
+ * @return 0 on success else error code
+ */
+int sfptpd_clock_deduplicate(void);
 
 #endif /* _SFPTPD_CLOCK_H */

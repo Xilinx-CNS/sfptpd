@@ -113,6 +113,7 @@ enum clock_command_e {
 	CLOCK_CMD_SLEW,
 	CLOCK_CMD_SET_TO,
 	CLOCK_CMD_DIFF,
+	CLOCK_CMD_DEDUP,
 	CLOCK_CMD_INVALID
 };
 
@@ -151,6 +152,7 @@ static const struct clock_command clock_cmds[] = {
 	{ CLOCK_CMD_SLEW,    "slew",    1 },
 	{ CLOCK_CMD_SET_TO,  "set_to",  2 },
 	{ CLOCK_CMD_DIFF,    "diff",    2 },
+	{ CLOCK_CMD_DEDUP,   "dedup",   0 },
 	{ CLOCK_CMD_INVALID, "INVALID", 0 },
 };
 
@@ -276,7 +278,8 @@ static void usage(FILE *stream)
 		"    clock step CLOCK OFFSET     Step clock\n"
 		"    clock slew CLOCK PPB        Adjust clock frequency\n"
 		"    clock set_to CLOCK1 CLOCK2  CLOCK1 := CLOCK2\n"
-		"    clock diff CLOCK1 CLOCK2    CLOCK1 - CLOCK2\n\n"
+		"    clock diff CLOCK1 CLOCK2    CLOCK1 - CLOCK2\n"
+		"    clock dedup                 Deduplicate shared phc devices\n\n"
 		"      CLOCK := <phcN> | <ethN> | system\n\n"
 		"  INTERFACE SUBSYSTEM\n"
 		"    interface list              List physical interfaces\n"
@@ -286,7 +289,6 @@ static void usage(FILE *stream)
                 "      See 'info' response for available TX and RX modes\n",
 		program_invocation_short_name);
 }
-
 
 static int clock_command(int argc, char *argv[])
 {
@@ -396,6 +398,9 @@ static int clock_command(int argc, char *argv[])
 		break;
 	case CLOCK_CMD_SET_TO:
 		rc = sfptpd_clock_set_time(clocks[0], clocks[1], NULL, false);
+		break;
+	case CLOCK_CMD_DEDUP:
+		rc = sfptpd_clock_deduplicate();
 		break;
 	default:
 		fprintf(stderr, "unknown clock command: %s\n", command);
@@ -570,7 +575,7 @@ int main(int argc, char *argv[])
 			goto fail;
 		case 'v':
 			sfptpd_log_set_trace_level(SFPTPD_COMPONENT_ID_NETLINK, 3);
-			sfptpd_log_set_trace_level(SFPTPD_COMPONENT_ID_SFPTPD, 3);
+			sfptpd_log_set_trace_level(SFPTPD_COMPONENT_ID_SFPTPD, 6);
 			sfptpd_log_set_trace_level(SFPTPD_COMPONENT_ID_CLOCKS, 3);
 			break;
 		case OPT_PERSISTENT:

@@ -323,4 +323,11 @@ int sfptpd_interface_driver_stats_reset(struct sfptpd_interface *interface);
  */
 void sfptpd_interface_diagnostics(int trace_level);
 
+/** Reassign interface to another one
+ * @param from_phc phc index of interface to change
+ * @param to_phc phc index to use
+ * @return 0 on success, else errno
+ */
+int sfptpd_interface_reassign_to_nic(int from_phc, int to_phc);
+
 #endif /* _SFPTPD_INTERFACE_H */

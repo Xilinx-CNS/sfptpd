@@ -32,6 +32,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - IP address of parent clock added to topology files (SWPTP-1312)
 - Add option to configure state file and stats log update rates. (SWPTP-1326)
   - e.g. `reporting_intervals save_state 120 stats_log 2`
+- Add `phc_dedup` option to identify duplicate PHC devices sharing a single
+  NIC clock with non-Solarflare adapters and treat as one device. (SWPTP-1348)
 - Add `step_threshold` option to change the offset threshold for allowing
   a step (when permitted by clock control setting). (SWPTP-1365)
 - Add shared clock feed. (SWPTP-1386)
