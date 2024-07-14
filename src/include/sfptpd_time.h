@@ -82,6 +82,17 @@ void sfptpd_time_negate(struct sfptpd_timespec *a, struct sfptpd_timespec *b);
  */
 bool sfptpd_time_is_greater_or_equal(const struct sfptpd_timespec *a, const struct sfptpd_timespec *b);
 
+/** Compare time a and b and return true if a and b differ by no more then
+ * threshold.
+ * @param a  First time
+ * @param b  Second time
+ * @param c  Equivalence threshold
+ * @return Boolean indicating whether a and b are the same within threshold
+ */
+bool sfptpd_time_equal_within(const struct sfptpd_timespec *a,
+			      const struct sfptpd_timespec *b,
+			      const struct sfptpd_timespec *threshold);
+
 /** Convert a floating point number of seconds into a timespec structure.
  * @param s  Time to convert in seconds
  * @return Time converted to a timespec structure
