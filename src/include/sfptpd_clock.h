@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2023 Xilinx, Inc. */
+/* (c) Copyright 2012-2024 Xilinx, Inc. */
 
 #ifndef _SFPTPD_CLOCK_H
 #define _SFPTPD_CLOCK_H
@@ -364,6 +364,16 @@ int sfptpd_clock_adjust_frequency(struct sfptpd_clock *clock, long double freq_a
  * @return 0 for success otherwise an errno status code.
  */
 int sfptpd_clock_get_time(const struct sfptpd_clock *clock, struct sfptpd_timespec *time);
+
+/** Get the clock frequency
+ * @param clock     Pointer to clock instance
+ * @param freq_adj  Pointer to where frequency adjustment in ppb will be written
+ * @param tick      Pointer to where tick lenth in ns will be written
+ * @return 0 for success otherwise an errno status code.
+ */
+int sfptpd_clock_get_frequency(struct sfptpd_clock *clock,
+			       sfptpd_time_t *freq_adj,
+			       sfptpd_time_t *tick_len);
 
 /** Schedule or deschedule a leap second for midnight today UTC for all
  * clocks that support leap second scheduling

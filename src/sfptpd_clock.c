@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2022 Xilinx, Inc. */
+/* (c) Copyright 2012-2024 Xilinx, Inc. */
 
 /**
  * @file   sfptpd_clock.c
@@ -1916,6 +1916,53 @@ int sfptpd_clock_adjust_frequency(struct sfptpd_clock *clock, long double freq_a
 	}
 
 	/* clock_adjtime() returns a non-negative value on success */
+	rc = 0;
+ finish:
+	clock_unlock();
+	return rc;
+}
+
+
+int sfptpd_clock_get_frequency(struct sfptpd_clock *clock,
+			       sfptpd_time_t *freq_adj,
+			       sfptpd_time_t *tick_len)
+{
+	int rc = 0;
+
+	clock_lock();
+
+	assert(freq_adj != NULL);
+	assert(tick_len != NULL);
+	assert(clock != NULL);
+	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
+
+	if (clock->type != SFPTPD_CLOCK_TYPE_SYSTEM &&
+	    clock->u.nic.phc == NULL) {
+		ERROR("clock %s: unable to adjust frequency - no phc device\n",
+		      clock->long_name);
+		rc = ENODEV;
+		goto finish;
+	}
+
+	struct timex t;
+	memset(&t, 0, sizeof(t));
+
+	rc = clock_adjtime(clock->posix_id, &t);
+	if (rc < 0) {
+		WARNING("clock %s: failed to read clock frequency using clock_adjtime(), %s\n",
+			clock->long_name, strerror(errno));
+		rc = errno;
+		goto finish;
+	}
+
+	*freq_adj = (1000.0L * (sfptpd_time_t) t.freq) / 65536.0L;
+
+	if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM &&
+	    t.tick != 0)
+		*tick_len = clock->u.system.tick_resolution_ppb * (sfptpd_time_t) t.tick;
+	else
+		*tick_len = 1000000000.0L;
+
 	rc = 0;
  finish:
 	clock_unlock();
