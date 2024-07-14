@@ -32,10 +32,13 @@
  * Constant
  ****************************************************************************/
 
+#define OPT_PERSISTENT 0x10000
+
 static const char *opts_short = "hv";
 static const struct option opts_long[] = {
 	{ "help", 0, NULL, (int) 'h' },
 	{ "verbose", 0, NULL, (int) 'v' },
+	{ "persistent", 0, NULL, OPT_PERSISTENT },
 	{ NULL, 0, NULL, 0 }
 };
 
@@ -208,18 +211,7 @@ static int decode_option(const char **names, size_t num_known,
 
 static int do_init(void)
 {
-        struct sfptpd_config_general *gconf;
 	int rc;
-
-	/* Initialise config */
-	rc = sfptpd_config_create(&config);
-	if (rc != 0)
-		return EXIT_FAILURE;
-
-	/* Tweak config */
-	gconf = sfptpd_general_config_get(config);
-	gconf->non_sfc_nics = true;
-	gconf->timestamping.disable_on_exit = false;
 
 	/* Start netlink service */
 	netlink = sfptpd_netlink_init();
@@ -263,7 +255,6 @@ static void do_finit(void)
 	sfptpd_interface_shutdown(config);
 	if (netlink != NULL)
 		sfptpd_netlink_finish(netlink);
-	sfptpd_config_destroy(config);
 }
 
 static void usage(FILE *stream)
@@ -272,6 +263,7 @@ static void usage(FILE *stream)
 		"syntax: %s [OPTIONS] SUBSYSTEM COMMAND..\n"
 		"\n"
 		"  OPTIONS\n"
+		"        --persistent            Use sfptpd persistent frequency adjustment\n"
 		"    -h, --help                  Show usage\n"
 		"    -v, --verbose               Be verbose\n\n"
 		"  CLOCK SUBSYSTEM\n"
@@ -342,7 +334,6 @@ static int clock_command(int argc, char *argv[])
 
 	switch(cmd->tag) {
 	case CLOCK_CMD_LIST:
-		sfptpd_clock_diagnostics(3);
 		all_clocks = sfptpd_clock_get_active_snapshot(&num_clocks);
 		for (i = 0; i < num_clocks; i++) {
 			printf("%s\n", sfptpd_clock_get_long_name(all_clocks[i]));
@@ -465,7 +456,6 @@ static int intf_command(int argc, char *argv[])
 
 	switch(cmd->tag) {
 	case INTF_CMD_LIST:
-		sfptpd_interface_diagnostics(3);
 		query_result = sfptpd_interface_get_active_ptp_snapshot();
 		for (i = 0; i < query_result.num_records; i++) {
 			struct sfptpd_interface **intfp = query_result.record_ptrs[i];
@@ -543,13 +533,23 @@ static int intf_command(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
+        struct sfptpd_config_general *gconf;
 	const char *subsystem;
 	int index;
 	int opt;
 	int rc = EXIT_FAILURE;
+	int ret;
 
-	if (do_init() != 0)
-		goto fail;
+	/* Initialise config */
+	ret = sfptpd_config_create(&config);
+	if (ret != 0)
+		return EXIT_FAILURE;
+
+	/* Tweak config */
+	gconf = sfptpd_general_config_get(config);
+	gconf->non_sfc_nics = true;
+	gconf->timestamping.disable_on_exit = false;
+	gconf->clocks.persistent_correction = false;
 
 	/* Handle command line arguments */
 	while ((opt = getopt_long(argc, argv, opts_short, opts_long, &index)) != -1) {
@@ -561,6 +561,9 @@ int main(int argc, char *argv[])
 			sfptpd_log_set_trace_level(SFPTPD_COMPONENT_ID_NETLINK, 3);
 			sfptpd_log_set_trace_level(SFPTPD_COMPONENT_ID_SFPTPD, 3);
 			sfptpd_log_set_trace_level(SFPTPD_COMPONENT_ID_CLOCKS, 3);
+			break;
+		case OPT_PERSISTENT:
+			gconf->clocks.persistent_correction = true;
 			break;
 		default:
 			fprintf(stderr, "unexpected option: %s\n", argv[optind]);
@@ -574,6 +577,9 @@ int main(int argc, char *argv[])
 		goto fail;
 	}
 
+	if (do_init() != 0)
+		goto fail;
+
 	subsystem = argv[optind++];
 
 	if (!strcmp(subsystem, "clock")) {
@@ -586,8 +592,10 @@ int main(int argc, char *argv[])
 		usage(stderr);
 	}
 
-fail:
 	do_finit();
+
+fail:
+	sfptpd_config_destroy(config);
 
 	return rc;
 }
