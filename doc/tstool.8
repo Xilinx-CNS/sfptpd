@@ -29,8 +29,18 @@ clock set_to
 clock diff
 .Ar clock1
 .Ar clock2
+.Nm
+interface list
+.Nm
+interface info
+.Ar interface
+.Nm
+interface set_ts
+.Ar interface
+.Ar tx-type
+.Ar rx-filter
 .Sh DESCRIPTION
-Examine and adjust PTP Hardware Clock devices and the system clock.
+Examine and adjust PTP Hardware Clock devices, system clock and interface timestamping settings.
 .Pp
 This utility uses the mechanisms available to sfptpd to manipulate precision clocks on the system.
 .Pp

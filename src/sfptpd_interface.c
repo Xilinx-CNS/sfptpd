@@ -756,7 +756,7 @@ static int interface_get_versions(struct sfptpd_interface *interface)
 }
 
 
-static void interface_get_ts_info(struct sfptpd_interface *interface)
+static void interface_populate_ts_info(struct sfptpd_interface *interface)
 {
 	int rc = 0;
 
@@ -1091,7 +1091,7 @@ static int interface_init(const struct sfptpd_link *link, const char *sysfs_dir,
 		ret = rc;
 
 	/* Get the timestamping capabilities of the interface */
-	interface_get_ts_info(interface);
+	interface_populate_ts_info(interface);
 
 	/* Check whether the driver supports the EFX ioctl */
 	interface_check_efx_support(interface);
@@ -1736,6 +1736,23 @@ void sfptpd_interface_get_clock_device_idx(const struct sfptpd_interface *interf
 	*supports_phc = interface->clock_supports_phc;
 	*supports_efx = interface->driver_supports_efx;
 	*device_idx = interface->ts_info.phc_index;
+	interface_unlock();
+}
+
+
+void sfptpd_interface_get_ts_info(const struct sfptpd_interface *interface,
+				  struct ethtool_ts_info *ts_info)
+{
+	assert(interface != NULL);
+	assert(ts_info != NULL);
+
+	if (!interface_get_canonical_with_lock((struct sfptpd_interface **) &interface)) {
+		memset(ts_info, '\0', sizeof *ts_info);
+		return;
+	}
+
+	assert(interface->magic == SFPTPD_INTERFACE_MAGIC);
+	*ts_info = interface->ts_info;
 	interface_unlock();
 }
 
