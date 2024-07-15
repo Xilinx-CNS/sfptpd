@@ -330,4 +330,18 @@ void sfptpd_interface_diagnostics(int trace_level);
  */
 int sfptpd_interface_reassign_to_nic(int from_phc, int to_phc);
 
+/** Suspend hardware timestamping, saving old setting
+ * @param q pointer to location to store affected interface list
+ * @param for_phc clock id whose interfaces to suspend
+ * @return 0 on success, else errno
+ */
+int sfptpd_interface_hw_timestamping_suspend(struct sfptpd_db_query_result *q,
+					     int for_phc);
+
+/** Restore suspend hardware timestamping from saved config
+ * @param q pointer to location with affected interface list
+ * @return 0 on success, else errno
+ */
+int sfptpd_interface_hw_timestamping_restore(struct sfptpd_db_query_result *q);
+
 #endif /* _SFPTPD_INTERFACE_H */
