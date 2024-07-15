@@ -1559,7 +1559,9 @@ static bool netTryEnableTimestamping(PtpInterface *ptpInterface, int *flags,
 				     int *type)
 {
 	const int option[] = {
+#ifdef HAVE_TIME_TYPES
 		SO_TIMESTAMPING_NEW,
+#endif
 		SO_TIMESTAMPING_OLD,
 	};
 	enum { FIRST, LAST } iter;
@@ -1577,9 +1579,13 @@ static bool netTryEnableTimestamping(PtpInterface *ptpInterface, int *flags,
 static bool netTryEnableTimestamp(PtpInterface *ptpInterface, int *used_option)
 {
 	const int prefs[] = {
+#ifdef HAVE_TIME_TYPES
 		SO_TIMESTAMPNS_NEW,
+#endif
 		SO_TIMESTAMPNS_OLD,
+#ifdef HAVE_TIME_TYPES
 		SO_TIMESTAMP_NEW,
+#endif
 		SO_TIMESTAMP_OLD,
 	};
 	const int num_options = sizeof prefs / sizeof prefs[0];
