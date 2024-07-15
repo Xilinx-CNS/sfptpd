@@ -193,6 +193,9 @@ struct sfptpd_interface {
 
 	/* A copy of the link table object, not necessarily current */
 	struct sfptpd_link link;
+
+	/* Saved hardware timestamping state for suspend */
+	struct hwtstamp_config saved_ts_conf;
 };
 
 
@@ -2287,12 +2290,17 @@ int sfptpd_interface_reassign_to_nic(int from_phc, int to_phc)
 
 	q = sfptpd_db_table_query(sfptpd_interface_table,
 				  INTF_KEY_CLOCK, &from_phc,
+				  INTF_KEY_DELETED, &my_false,
 				  SFPTPD_DB_SEL_END);
 
 	for (i = 0; i < q.num_records; i++) {
 		intf = *((struct sfptpd_interface **) q.record_ptrs[i]);
 		assert(intf->magic == SFPTPD_INTERFACE_MAGIC);
 		intf->nic_id = nic->nic_id;
+		intf->ts_info = nic->ts_info;
+		intf->clock = nic->clock;
+		intf->clock_supports_phc = nic->clock_supports_phc;
+		intf->driver_supports_efx = nic->driver_supports_efx;
 		INFO("interface: reassigned %s to nic id %d\n",
 		     intf->name, nic->nic_id);
 	}
@@ -2304,5 +2312,80 @@ finish:
 	return rc;
 }
 
+/* Must be matched by a call to the restore function, where the
+ * interface database query result is freed. */
+int sfptpd_interface_hw_timestamping_suspend(struct sfptpd_db_query_result *q,
+					     int for_phc)
+{
+	struct hwtstamp_config req;
+	struct sfptpd_interface *intf;
+	int my_false = 0;
+	int rc = 0;
+	int i;
+
+	assert(q);
+	assert(for_phc >= 0);
+
+	interface_lock();
+
+	*q = sfptpd_db_table_query(sfptpd_interface_table,
+				   INTF_KEY_CLOCK, &for_phc,
+				   INTF_KEY_DELETED, &my_false,
+				   SFPTPD_DB_SEL_END);
+
+	for (i = 0; i < q->num_records; i++) {
+		intf = *((struct sfptpd_interface **) q->record_ptrs[i]);
+		assert(intf->magic == SFPTPD_INTERFACE_MAGIC);
+
+		rc = sfptpd_interface_ioctl(intf, SIOCGHWTSTAMP, &intf->saved_ts_conf);
+		if (rc != 0) {
+			ERROR("interface %s: could not get timestamping config for suspend, %s\n",
+			     intf->name, strerror(rc));
+			q->free(q);
+			goto fail;
+		}
+	}
+
+	for (i = 0; i < q->num_records; i++) {
+		intf = *((struct sfptpd_interface **) q->record_ptrs[i]);
+		memset(&req, 0, sizeof req);
+		req.tx_type = HWTSTAMP_TX_OFF;
+		req.rx_filter = HWTSTAMP_FILTER_NONE;
+		sfptpd_interface_ioctl(intf, SIOCSHWTSTAMP, &req);
+		INFO("interface %s: suspended hardware timestamping\n",
+		     intf->name);
+	}
+
+fail:
+	interface_unlock();
+	return rc;
+}
+
+int sfptpd_interface_hw_timestamping_restore(struct sfptpd_db_query_result *q)
+{
+	struct sfptpd_interface *intf;
+	int rc2 = 0;
+	int rc;
+	int i;
+
+	assert(q);
+	interface_lock();
+	for (i = 0; i < q->num_records; i++) {
+		intf = *((struct sfptpd_interface **) q->record_ptrs[i]);
+		assert(intf->magic == SFPTPD_INTERFACE_MAGIC);
+		rc = sfptpd_interface_ioctl(intf, SIOCSHWTSTAMP, &intf->saved_ts_conf);
+		if (rc != 0) {
+			ERROR("interface %s: failed to restore hw timestamping setting, %s\n",
+			      intf->name, strerror(rc));
+			rc2 = rc;
+		} else {
+			INFO("interface %s: restored hardware timestamping setting\n",
+			     intf->name);
+		}
+	}
+	interface_unlock();
+	q->free(q);
+	return rc2;
+}
 
 /* fin */

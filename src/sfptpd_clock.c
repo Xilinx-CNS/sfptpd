@@ -144,6 +144,9 @@ struct sfptpd_clock_calibration {
 
 	/* Clock that governs this one */
 	struct sfptpd_clock *governor;
+
+	/* Interface query result */
+	struct sfptpd_db_query_result intf_query;
 };
 
 
@@ -2613,6 +2616,10 @@ int sfptpd_clock_deduplicate(void)
 		struct sfptpd_clock *clock = clocks_table[i];
 		struct sfptpd_clock_calibration *calibration = calibrations + i;
 
+		rc = sfptpd_interface_hw_timestamping_suspend(&calibration->intf_query,
+							      clock->u.nic.device_idx);
+		if (rc != 0)
+			calibration->error = true;
 		rc = sfptpd_clock_compare(clock, sys, &calibration->offset);
 		if (rc != 0) {
 			ERROR("clock %s: dedup1, %s\n",
@@ -2626,6 +2633,9 @@ int sfptpd_clock_deduplicate(void)
 		struct sfptpd_clock *clock = clocks_table[i];
 		struct sfptpd_clock_calibration *calibration = calibrations + i;
 		struct sfptpd_timespec mod_offset;
+
+		if (calibration->error)
+			continue;
 
 		/* Apply temporary offset */
 		sfptpd_time_add(&mod_offset, &calibration->offset, &test_adjustment);
@@ -2654,6 +2664,8 @@ int sfptpd_clock_deduplicate(void)
 		for (j = 0; j < count; j++) {
 			struct sfptpd_clock *other = clocks_table[j];
 			if (i == j)
+				continue;
+			if (calibrations[j].error)
 				continue;
 
 			rc = sfptpd_clock_compare(other, sys, &t);
@@ -2690,6 +2702,8 @@ int sfptpd_clock_deduplicate(void)
 	for (i = 0; i < count; i++) {
 		struct sfptpd_clock *clock = clocks_table[i];
 		struct sfptpd_clock_calibration *calibration = calibrations + i;
+
+		sfptpd_interface_hw_timestamping_restore(&calibration->intf_query);
 
 		if (calibration->governor) {
 			sfptpd_interface_reassign_to_nic(clock->u.nic.device_idx,
