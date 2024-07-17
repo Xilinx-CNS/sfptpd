@@ -1291,9 +1291,6 @@ static int parse_onload_ext(struct sfptpd_config_section *section, const char *o
 		ptp->ptpd_intf.use_onload_ext = false;
 	} else if (strcmp(params[0], "on") == 0) {
 		ptp->ptpd_intf.use_onload_ext = true;
-#ifndef HAVE_ONLOAD_EXT
-		WARNING("config: onload extensions requested but not compiled in\n");
-#endif
 	} else {
 		return EINVAL;
 	}
@@ -1665,11 +1662,10 @@ static const sfptpd_config_option_t ptp_config_options[] =
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_announce_comm_caps},
 	{"onload_ext", "<off | on>",
-		"Specify whether to use Onload extensions API if avaialable. "
-		"Disabled by default",
+		"Specify whether to use Onload extensions API timestamping if Onloaded. "
+		"Enabled by default",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_onload_ext,
-		.hidden = true},
+		parse_onload_ext},
 	{"lacp_bypass", "<off | sockpool | cmsg | both>",
 		"Specify which LACP bond bypass method to use. The cmsg "
 		"option is currently only supported if running under onload "

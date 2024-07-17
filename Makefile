@@ -41,7 +41,6 @@ endif
 
 ifndef NO_ONLOAD
 CONDITIONAL_DEFS += $(shell $(call if_header_then,onload/extensions.h,-DHAVE_ONLOAD_EXT))
-CONDITIONAL_LIBS += $(shell $(call if_header_then,onload/extensions.h,-lonload_ext))
 endif
 
 ### Unit testing

@@ -238,7 +238,6 @@ typedef enum {
  * method, whereas some cases need the fine details of the exact method to
  * recreate the same setup. (e.g., the bond bypass sockets) */
 typedef struct TsSetupMethod_s {
-	bool is_onload;
 	int sockopt;
 	int flags;
 } TsSetupMethod;
@@ -374,10 +373,6 @@ typedef enum {
 	PTPD_TIMESTAMP_TYPE_AUTO,
 } ptpd_timestamp_type_e;
 
-enum ptpd_ts_fmt {
-	PTPD_TS_LINUX,
-	PTPD_TS_ONLOAD_EXT,
-};
 
 /**
 * \enum Bad timestamp types enumeration
@@ -811,7 +806,6 @@ struct ptpd_intf_context {
 
 	TsMethod tsMethod;
 	TsSetupMethod tsSetupMethod;
-	enum ptpd_ts_fmt ts_fmt;
 	struct sfptpd_ts_cache ts_cache;
 	struct msghdr msgEbuf;
 

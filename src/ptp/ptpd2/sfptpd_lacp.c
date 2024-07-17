@@ -207,17 +207,6 @@ void copyTimestampingToBondSocks(struct ptpd_transport *transport,
 				 TsSetupMethod *tsSetupMethod)
 {
 	int flags = tsSetupMethod->flags | SOF_TIMESTAMPING_OPT_CMSG;
-#ifdef HAVE_ONLOAD_EXT
-	if (tsSetupMethod->is_onload) {
-		FOR_EACH_MASK_IDX(transport->bondSocksValidMask, i)
-			if (onload_timestamping_request(transport->bondSocks[i],
-							flags) != 0)
-				invalidateBondBypassSocket(transport, i);
-	}
-	else
-#endif
-	{
-		setBondSockopt(transport, SOL_SOCKET, tsSetupMethod->sockopt,
-			       &flags, sizeof(flags));
-	}
+	setBondSockopt(transport, SOL_SOCKET, tsSetupMethod->sockopt,
+		       &flags, sizeof(flags));
 }

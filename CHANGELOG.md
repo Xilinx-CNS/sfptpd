@@ -14,9 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Operate PTP to sub-nanosecond precision. (SWPTP-58)
   - Internal structures updated throughout to use times with sub-nanosecond
     resolution.
-  - When enabled with `onload_ext on` in the `[ptp]` configuration section,
-    attempt to retrieve timestamps with sub-nanosecond resolution via the
-    [Onload Extensions API](https://docs.xilinx.com/r/en-US/ug1586-onload-user/Onload-Extensions-API).
+  - When run with Onload 9.0 or later, retrieve timestamps with sub-nanosecond
+    resolution via updated extensions API. Disable with `onload_ext off`.
   - Populate PTP correctionField to reflect sub-nanosecond timestamps (sfptpd
     already used subnanosecond corrections received over the PTP network)
   - See notes below for current limitations.
@@ -84,11 +83,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (Xilinx-CNS/sfptpd#12)
 
 > [!NOTE]
-> Current versions of Onload do not support the acceleration of sfptpd.
-
-> [!NOTE]
-> Currently-released versions of the Onload Extensions API do not provide the
-> sub-nanosecond portion of NIC timestamps.
+> It is not normally helpful to accelerate sfptpd with Onload but this is
+> possible from Onload 9.0 onwards and enables sub-nanosecond timestamping
+> and, if configured, interoperability with LACP boundary clocks using unicast
+> delay measurement mode.
 
 ### Changed
 

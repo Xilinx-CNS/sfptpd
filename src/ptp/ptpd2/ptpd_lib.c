@@ -169,7 +169,7 @@ void ptpd_config_intf_initialise(struct ptpd_intf_config *config)
 	config->displayPackets = FALSE;
 	config->transportAF = AF_INET;
 	config->linkLocalScope = TRUE;
-	config->use_onload_ext = FALSE;
+	config->use_onload_ext = TRUE;
 	config->use_lacp_bypass = 0;
 
 	sfptpd_strncpy(config->user_description, SFPTPD_USER_DESCRIPTION,
