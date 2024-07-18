@@ -125,7 +125,7 @@ $(BUILD_DIR):
 
 # Patch init paths
 $(BUILD_DIR)/%.service: scripts/systemd/%.service $(BUILD_DIR)
-	sed s,%DEFAULTSDIR%,$(patsubst $(DESTDIR)%,%,$(INST_DEFAULTSDIR)),g < $< > $@
+	sed s,/etc/sysconfig,$(patsubst $(DESTDIR)%,%,$(INST_DEFAULTSDIR)),g < $< > $@
 
 .PHONY: install
 install: sfptpd sfptpdctl sfptpd_priv_helper $(addprefix $(BUILD_DIR)/,sfptpd.service)
@@ -170,7 +170,7 @@ uninstall:
 
 .PHONY: flat_install
 flat_install: SBINDIR=bin
-flat_install: prefix=/
+flat_install: prefix=
 flat_install: install
 	cd $(DESTDIR) && ln -sf $(SBINDIR)/* .
 
