@@ -1567,6 +1567,7 @@ static bool netTryEnableTimestamping(PtpInterface *ptpInterface, int *flags,
 
 		DBG("trying %s hardware timestamping...\n",
 		    get_timestamp_name(option));
+		*type = option;
 		if (netTryEnableTimestampingPktinfo(ptpInterface, flags, option))
 			break;
 	}
