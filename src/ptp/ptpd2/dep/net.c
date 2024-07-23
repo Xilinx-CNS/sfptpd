@@ -1265,7 +1265,8 @@ bool netProcessError(PtpInterface *ptpInterface,
 
 		if ((SOL_SOCKET == level) &&
 		    (SO_TIMESTAMPING_OLD == type ||
-		     SO_TIMESTAMPING_NEW == type)) {
+		     SO_TIMESTAMPING_NEW == type ||
+		     SO_TIMESTAMPING_OOEXT == type)) {
 			haveTs = parse_timestamp(CMSG_DATA(cmsg), len,
 						 info, true, type) == 0;
 		} else if ((ipproto == level) &&
