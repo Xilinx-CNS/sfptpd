@@ -53,12 +53,14 @@ int sfptpd_multicast_unpublish(uint32_t msg_id);
  * @param hdr Header of the message to be sent
  * @param msg_id The message id of the multicast group
  * @param pool Pool from which to allocate the replicated messages
+ * @param wait Wait for free message slots, else abort if not enough
  * @return 0 on success or errno
  */
 int sfptpd_multicast_send(sfptpd_msg_hdr_t *hdr,
 			  uint32_t msg_id,
-			  enum sfptpd_msg_pool_id pool);
-#define SFPTPD_MULTICAST_SEND(msg, msg_id, pool) \
-		sfptpd_multicast_send(&((msg)->hdr), (msg_id), (pool))
+			  enum sfptpd_msg_pool_id pool,
+			  bool wait);
+#define SFPTPD_MULTICAST_SEND(msg, msg_id, pool, wait) \
+		sfptpd_multicast_send(&((msg)->hdr), (msg_id), (pool), (wait))
 
 #endif /* _SFPTPD_MULTICAST_H */

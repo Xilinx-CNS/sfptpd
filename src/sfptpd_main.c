@@ -744,7 +744,7 @@ static void on_control_socket_fd(int fd)
 		SFPTPD_MSG_INIT(msg.app);
 		SFPTPD_MULTICAST_SEND(&msg.app,
 				      SFPTPD_APP_MSG_DUMP_TABLES,
-				      SFPTPD_MSG_POOL_GLOBAL);
+				      SFPTPD_MSG_POOL_GLOBAL, false);
 		break;
 	case CONTROL_PID_ADJUST:
 		/* Adjust PID controller coefficients */
@@ -762,7 +762,7 @@ static void on_control_socket_fd(int fd)
 		msg.servo.u.pid_adjust.reset = param.pid_adjust.reset;
 		SFPTPD_MULTICAST_SEND(&msg.servo,
 				      SFPTPD_SERVO_MSG_PID_ADJUST,
-				      SFPTPD_MSG_POOL_GLOBAL);
+				      SFPTPD_MSG_POOL_GLOBAL, true);
 		break;
 	}
 }

@@ -290,7 +290,7 @@ static void clockfeed_send_sync_event(struct sfptpd_clockfeed *clockfeed)
 	SFPTPD_MSG_INIT(msg);
 	SFPTPD_MULTICAST_SEND(&msg,
 			      SFPTPD_CLOCKFEED_MSG_SYNC_EVENT,
-			      SFPTPD_MSG_POOL_LOCAL);
+			      SFPTPD_MSG_POOL_LOCAL, false);
 }
 
 static void clockfeed_reap_zombies(struct sfptpd_clockfeed *module,

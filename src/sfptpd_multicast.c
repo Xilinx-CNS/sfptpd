@@ -322,7 +322,8 @@ int sfptpd_multicast_unpublish(uint32_t msg_id)
 
 int sfptpd_multicast_send(sfptpd_msg_hdr_t *hdr,
 			  uint32_t msg_id,
-			  enum sfptpd_msg_pool_id pool)
+			  enum sfptpd_msg_pool_id pool,
+			  bool wait)
 {
 	struct multicast_group *group;
 	struct multicast_user *user;
@@ -359,7 +360,7 @@ int sfptpd_multicast_send(sfptpd_msg_hdr_t *hdr,
 	SLIST_FOREACH(user, &group->subscribers, users) {
 		assert(user->magic == MULTICAST_USER_MAGIC);
 		dests[i].thread = user->thread;
-		dests[i].msg = sfptpd_msg_alloc(pool, true);
+		dests[i].msg = sfptpd_msg_alloc(pool, wait);
 		if (dests[i++].msg == NULL) {
 			rc = errno;
 			break;
