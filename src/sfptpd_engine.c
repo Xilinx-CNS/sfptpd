@@ -299,7 +299,7 @@ static void on_netlink_coalesce_timer(void *user_context, unsigned int timer_id)
 struct engine_timer_defn {
 	enum engine_timer_ids timer_id;
 	clockid_t clock_id;
-	sfptpd_thread_on_timer_fn expiry_fn;
+	sfptpd_thread_on_event_fn expiry_fn;
 };
 
 static const struct engine_timer_defn engine_timer_defns[] =

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2019 Xilinx, Inc. */
+/* (c) Copyright 2012-2024 Xilinx, Inc. */
 
 #ifndef _SFPTPD_THREAD_H
 #define _SFPTPD_THREAD_H
@@ -30,6 +30,10 @@ enum sfptpd_thread_zombie_policy {
  * Structures and Types
  ****************************************************************************/
 
+/** Type for event ids, including timers. */
+typedef unsigned int sfptpd_event_id_t;
+
+
 /** User I/O event */
 struct sfptpd_thread_readyfd {
 	int fd;
@@ -38,6 +42,11 @@ struct sfptpd_thread_readyfd {
 		bool wr:1;
 		bool err:1;
 	} flags;
+};
+
+/** Thread event writer */
+struct sfptpd_thread_event_writer {
+	int fd;
 };
 
 
@@ -102,13 +111,12 @@ struct sfptpd_thread_ops
 };
 
 
-/** Typedef for user timer handler
+/** Typedef for user event handler
  * @user_context Context supplied when signal handling was configured
- * @id ID of the timer that has expired
+ * @id ID of the event that has been triggered
  */
-typedef void (*sfptpd_thread_on_timer_fn)(void *user_context,
+typedef void (*sfptpd_thread_on_event_fn)(void *user_context,
 					  unsigned int id);
-
 
 /****************************************************************************
  * Function Prototypes
@@ -219,7 +227,7 @@ int sfptpd_thread_alloc_msg_pool(enum sfptpd_msg_pool_id pool_type,
  * @return 0 on success or an errno otherwise
  */
 int sfptpd_thread_timer_create(unsigned int timer_id, clockid_t clock_id,
-			       sfptpd_thread_on_timer_fn on_expiry,
+			       sfptpd_thread_on_event_fn on_expiry,
 			       void *user_context);
 
 /** Start a timer
@@ -262,6 +270,39 @@ int sfptpd_thread_user_fd_add(int fd, bool read, bool write);
  * @return 0 on success or an errno otherwise
  */
 int sfptpd_thread_user_fd_remove(int fd);
+
+/** Create an event for the thread.
+ * @param event_id User-supplied ID for the event which must be unique for
+ * this thread.
+ * @param on_event Function to call when event fires
+ * @param user_context Context to be supplied to event handler
+ * @return 0 on success or an errno otherwise
+ */
+int sfptpd_thread_event_create(sfptpd_event_id_t event_id,
+			       sfptpd_thread_on_event_fn on_event,
+			       void *user_context);
+
+/** Create an event writer
+ * @praam thread Thread to receive the events
+ * @param event_id ID of the thread's event
+ * @param writer Pointer to space that will store writer object
+ * @return 0 on success or an errno otherwise
+ */
+int sfptpd_thread_event_create_writer(struct sfptpd_thread *thread,
+				      sfptpd_event_id_t event_id,
+				      struct sfptpd_thread_event_writer *writer);
+
+/** Destroy an event writer
+ * @param writer Pointer to writer object
+ * @return 0 on success or an errno otherwise
+ */
+void sfptpd_thread_event_destroy_writer(struct sfptpd_thread_event_writer *writer);
+
+/** Post an event
+ * @param writer Pointer to writer object
+ * @return 0 on success or an errno otherwise
+ */
+int sfptpd_thread_event_post(struct sfptpd_thread_event_writer *writer);
 
 
 #endif /* _SFPTPD_THREAD_H */

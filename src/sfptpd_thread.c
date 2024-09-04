@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2019 Xilinx, Inc. */
+/* (c) Copyright 2012-2024 Xilinx, Inc. */
 
 /**
  * @file   sfptpd_thread.c
@@ -44,7 +44,7 @@
 /* Maximum number of events we handle in the epoll */
 #define SFPTPD_THREAD_MAX_EPOLL_EVENTS (32)
 
-#define SFPTPD_TIMER_MAGIC  (0x75315eed)
+#define SFPTPD_EVENT_MAGIC  (0x75315eed)
 #define SFPTPD_THREAD_MAGIC (0xf00dface)
 #define SFPTPD_ZOMBIE_MAGIC (0x203b111e)
 #define SFPTPD_DEAD_MAGIC   (0xdead7ead)
@@ -59,6 +59,10 @@
  * normal operation if transmit timestamping is not working. */
 #define TIMER_EXPIRIES_WARN_THRESH (2)
 
+enum thread_event_type {
+	THREAD_EVENT_TIMER,
+	THREAD_EVENT_EVENT,
+};
 
 /* This is a helper structure around a standard posix pipe. */
 struct sfptpd_pipe
@@ -87,21 +91,25 @@ struct sfptpd_pipe
 #define F_GETPIPE_SZ (F_LINUX_SPECIFIC_BASE + 8)
 #endif
 
-/* User timer structure */
-struct sfptpd_timer
+
+/* User event structure */
+struct sfptpd_event
 {
-	/* Magic number and link to next timer */
+	/* Magic number and link to next event */
 	uint32_t magic;
-	struct sfptpd_timer *next;
+	struct sfptpd_event *next;
 
-	/* User assigned ID for the timer */
-	unsigned int id;
+	/* Type of event */
+	enum thread_event_type type;
 
-	/* Timer file descriptor */
+	/* User assigned ID for the event */
+	sfptpd_event_id_t id;
+
+	/* Event file descriptor */
 	int fd;
 
 	/* Function to call when timer occurs */
-	sfptpd_thread_on_timer_fn on_expiry;
+	sfptpd_thread_on_event_fn on_event;
 
 	/* User context to pass in to event fn */
 	void *user_context;
@@ -182,8 +190,8 @@ struct sfptpd_thread
 	/* Queue used only to handle replies to blocking sends */
 	struct sfptpd_queue queue_wait_reply;
 
-	/* Timers */
-	struct sfptpd_timer *timer_list;
+	/* Events, including timers */
+	struct sfptpd_event *event_list;
 };
 
 
@@ -673,54 +681,127 @@ static int pool_receive(struct sfptpd_pool *pool, sfptpd_msg_hdr_t **msg,
 
 
 /****************************************************************************
- * Timer Functions
+ * Event Functions
  ****************************************************************************/
 
-static int sfptpd_timer_create(unsigned int timer_id, clockid_t clock_id,
-			       void (*on_expiry)(void *, unsigned int),
-			       void *user_context, struct sfptpd_timer **timer)
+static int event_get_id(struct sfptpd_event *event)
 {
-	struct sfptpd_timer *new;
-	int flags;
+	assert(event != NULL);
+	assert(event->magic == SFPTPD_EVENT_MAGIC);
+	return event->id;
+}
 
-	assert(on_expiry != NULL);
-	assert(timer != NULL);
 
-	new = (struct sfptpd_timer *)calloc(1, sizeof(*new));
+static int event_get_fd(struct sfptpd_event *event)
+{
+	assert(event != NULL);
+	assert(event->magic == SFPTPD_EVENT_MAGIC);
+	return event->fd;
+}
+
+
+static void event_set_next(struct sfptpd_event *event, struct sfptpd_event *next)
+{
+	assert(event != NULL);
+	assert(event->magic == SFPTPD_EVENT_MAGIC);
+	event->next = next;
+}
+
+
+static struct sfptpd_event *event_get_next(struct sfptpd_event *event)
+{
+	assert(event != NULL);
+	assert(event->magic == SFPTPD_EVENT_MAGIC);
+	return event->next;
+}
+
+
+static struct sfptpd_event *event_find_by_id(struct sfptpd_thread *thread,
+					     sfptpd_event_id_t event_id)
+{
+	struct sfptpd_event *event;
+
+	assert(thread);
+
+	for (event = thread->event_list; event != NULL; event = event_get_next(event))
+		if (event_get_id(event) == event_id)
+			return event;
+
+	return NULL;
+}
+
+
+static struct sfptpd_event *thread_event_find_by_id(sfptpd_event_id_t event_id)
+{
+	return event_find_by_id(sfptpd_thread_self(), event_id);
+}
+
+
+static int thread_event_check_type(struct sfptpd_event *event,
+				   enum thread_event_type type)
+{
+	if (event == NULL)
+		return ENOENT;
+	else if (event->type != type)
+		return EINVAL;
+	else
+		return 0;
+}
+
+
+static const char *thread_event_type(enum thread_event_type type)
+{
+	switch (type) {
+	case THREAD_EVENT_TIMER:
+		return "timer";
+	case THREAD_EVENT_EVENT:
+		return "event";
+	default:
+		return "invalid";
+	}
+}
+
+
+static int event_create(sfptpd_event_id_t event_id,
+			enum thread_event_type event_type,
+			clockid_t clock_id,
+			sfptpd_thread_on_event_fn on_event,
+			void *user_context,
+			struct sfptpd_event **event)
+{
+	struct sfptpd_event *new;
+	const char *type;
+
+	assert(on_event != NULL);
+	assert(event != NULL);
+
+	type = thread_event_type(event_type);
+	new = (struct sfptpd_event *)calloc(1, sizeof(*new));
 	if (new == NULL)
 		return ENOMEM;
 
-	new->fd = timerfd_create(clock_id, 0);
+	if (event_type == THREAD_EVENT_TIMER) {
+		new->fd = timerfd_create(clock_id, TFD_NONBLOCK);
+	} else {
+		assert(event_type == THREAD_EVENT_EVENT);
+		new->fd = eventfd(0, EFD_NONBLOCK);
+	}
 	if (new->fd < 0) {
-		ERROR("thread %s timer %d: failed to create timerfd, %s\n",
-		      thread_get_name(), timer_id, strerror(errno));
+		ERROR("thread %s %s %d: failed to create %sfd, %s\n",
+		      thread_get_name(), type, event_id, type, strerror(errno));
 		goto fail1;
 	}
 
-	flags = fcntl(new->fd, F_GETFL, 0);
-	if (flags == -1) {
-		ERROR("thread %s timer %d: failed to get timerfd flags, %s\n",
-		      thread_get_name(), timer_id, strerror(errno));
-		goto fail1;
-	}
-
-	/* Clear the blocking flag. */
-	flags |= O_NONBLOCK;
-	if (fcntl(new->fd, F_SETFL, flags) == -1) {
-		ERROR("thread %s timer %d: failed to set timerfd flags, %s\n",
-		      thread_get_name(), timer_id, strerror(errno));
-		goto fail1;
-	}
-
-	new->magic = SFPTPD_TIMER_MAGIC;
+	new->magic = SFPTPD_EVENT_MAGIC;
 	new->next = NULL;
-	new->id = timer_id;
-	new->on_expiry = on_expiry;
+	new->id = event_id;
+	new->on_event = on_event;
 	new->user_context = user_context;
+	new->type = event_type;
 
-	DBG_L3("thread %s timer %d: created timer with fd %d\n",
-	       thread_get_name(), timer_id, new->fd);
-	*timer = new;
+	DBG_L3("thread %s: created %s %d with fd %d\n",
+	       thread_get_name(), type, event_id, new->fd);
+	*event = new;
 	return 0;
 
 fail1:
@@ -729,31 +810,81 @@ fail1:
 }
 
 
-static void sfptpd_timer_destroy(struct sfptpd_timer *timer)
+static void event_destroy(struct sfptpd_event *event)
 {
-	assert(timer != NULL);
-	assert(timer->magic == SFPTPD_TIMER_MAGIC);
+	assert(event != NULL);
+	assert(event->magic == SFPTPD_EVENT_MAGIC);
 
-	DBG_L3("thread %s timer %d: destroyed\n",
-	       thread_get_name(), timer->id);
+	DBG_L3("thread %s %s %d: destroyed\n",
+	       thread_get_name(),
+	       thread_event_type(event->type), event->id);
 
 	/* Close the timer handle and free the memory */
-	(void)close(timer->fd);
+	(void)close(event->fd);
 
 	/* Clear the magic value and free the memory */
-	timer->magic = 0;
-	free(timer);
+	event->magic = 0;
+	free(event);
 }
 
 
-static int timer_start(struct sfptpd_timer *timer, bool periodic,
+static int thread_event_create(unsigned int event_id,
+			       enum thread_event_type event_type,
+			       clockid_t clock_id,
+			       sfptpd_thread_on_event_fn on_event,
+			       void *user_context)
+{
+	struct sfptpd_thread *self;
+	struct sfptpd_event *source;
+	struct epoll_event event;
+	const char *type;
+	int rc;
+
+	assert(on_event != NULL);
+
+	type = thread_event_type(event_type);
+	self = sfptpd_thread_self();
+
+	/* Fail if the timer already exists. */
+	if (thread_event_find_by_id(event_id))
+		return EALREADY;
+
+	rc = event_create(event_id, event_type,
+			  clock_id, on_event, user_context, &source);
+	if (rc != 0) {
+		ERROR("thread %s: failed to create %s %u, %s\n",
+		      self->name, type, event_id, strerror(rc));
+		return rc;
+	}
+
+	memset(&event, 0, sizeof event);
+	event.events = EPOLLIN;
+	event.data.fd = event_get_fd(source);
+	rc = epoll_ctl(self->epoll_fd, EPOLL_CTL_ADD, event.data.fd, &event);
+	if (rc != 0) {
+		ERROR("thread %s: failed to add %s %u fd %d to epoll, %s\n",
+		      self->name, type,
+		      event.data.fd, strerror(errno));
+		event_destroy(source);
+		return errno;
+	}
+
+	/* Add the event to the event list for the thread */
+	event_set_next(source, self->event_list);
+	self->event_list = source;
+	return 0;
+}
+
+
+static int timer_start(struct sfptpd_event *timer, bool periodic,
 		       bool absolute, const struct sfptpd_timespec *interval)
 {
 	struct itimerspec timer_spec;
 	int flags = 0;
 
 	assert(timer != NULL);
-	assert(timer->magic == SFPTPD_TIMER_MAGIC);
+	assert(timer->magic == SFPTPD_EVENT_MAGIC);
+	assert(timer->type == THREAD_EVENT_TIMER);
 	assert(interval != NULL);
 
 	if (absolute)
@@ -777,12 +908,13 @@ static int timer_start(struct sfptpd_timer *timer, bool periodic,
 }
 
 
-static int timer_stop(struct sfptpd_timer *timer)
+static int timer_stop(struct sfptpd_event *timer)
 {
 	struct itimerspec timer_spec;
 
 	assert(timer != NULL);
-	assert(timer->magic == SFPTPD_TIMER_MAGIC);
+	assert(timer->magic == SFPTPD_EVENT_MAGIC);
+	assert(timer->type == THREAD_EVENT_TIMER);
 
 	timer_spec.it_value.tv_sec = 0;
 	timer_spec.it_value.tv_nsec = 0;
@@ -800,12 +932,13 @@ static int timer_stop(struct sfptpd_timer *timer)
 }
 
 
-static int timer_get_time_left(struct sfptpd_timer *timer, struct sfptpd_timespec *interval)
+static int timer_get_time_left(struct sfptpd_event *timer, struct sfptpd_timespec *interval)
 {
 	struct itimerspec timer_spec;
 
 	assert(timer != NULL);
-	assert(timer->magic == SFPTPD_TIMER_MAGIC);
+	assert(timer->magic == SFPTPD_EVENT_MAGIC);
+	assert(timer->type == THREAD_EVENT_TIMER);
 	assert(interval != NULL);
 
 	if (timerfd_gettime(timer->fd, &timer_spec) != 0) {
@@ -819,45 +952,14 @@ static int timer_get_time_left(struct sfptpd_timer *timer, struct sfptpd_timespe
 }
 
 
-static int timer_get_id(struct sfptpd_timer *timer)
-{
-	assert(timer != NULL);
-	assert(timer->magic == SFPTPD_TIMER_MAGIC);
-	return timer->id;
-}
-
-
-static int timer_get_fd(struct sfptpd_timer *timer)
-{
-	assert(timer != NULL);
-	assert(timer->magic == SFPTPD_TIMER_MAGIC);
-	return timer->fd;
-}
-
-
-static void timer_set_next(struct sfptpd_timer *timer, struct sfptpd_timer *next)
-{
-	assert(timer != NULL);
-	assert(timer->magic == SFPTPD_TIMER_MAGIC);
-	timer->next = next;
-}
-
-
-static struct sfptpd_timer *timer_get_next(struct sfptpd_timer *timer)
-{
-	assert(timer != NULL);
-	assert(timer->magic == SFPTPD_TIMER_MAGIC);
-	return timer->next;
-}
-
-
-static void timer_on_expiry(struct sfptpd_timer *timer)
+static void timer_on_expiry(struct sfptpd_event *timer)
 {
 	uint64_t expirations;
 	ssize_t result;
 
 	assert(timer != NULL);
-	assert(timer->magic == SFPTPD_TIMER_MAGIC);
+	assert(timer->magic == SFPTPD_EVENT_MAGIC);
+	assert(timer->type == THREAD_EVENT_TIMER);
 
 	result = read(timer->fd, &expirations, sizeof(expirations));
 	if (result == -1) {
@@ -880,7 +982,38 @@ static void timer_on_expiry(struct sfptpd_timer *timer)
 			thread_get_name(), timer->id, expirations);
 	}
 
-	timer->on_expiry(timer->user_context, timer->id);
+	timer->on_event(timer->user_context, timer->id);
+}
+
+
+static void event_on_event(struct sfptpd_event *event)
+{
+	uint64_t count;
+	ssize_t result;
+
+	assert(event != NULL);
+	assert(event->magic == SFPTPD_EVENT_MAGIC);
+	assert(event->type == THREAD_EVENT_EVENT);
+
+	result = read(event->fd, &count, sizeof(count));
+	if (result == -1) {
+		if (errno == EAGAIN) {
+			WARNING("thread %s event %d: fd unexpectedly ready when not yet fired\n",
+				thread_get_name(), event->id);
+			return;
+		} else {
+			WARNING("thread %s event %d: error reading event count, %s\n",
+				thread_get_name(), event->id, strerror(errno));
+		}
+	} else if (result != sizeof(uint64_t)) {
+		WARNING("thread %s event %d: read unexpected length from event fd, %zd\n",
+			thread_get_name(), event->id, result);
+	} else if (count > TIMER_EXPIRIES_WARN_THRESH) {
+		WARNING("thread %s event %d: fired %d times since last handled\n",
+			thread_get_name(), event->id, count);
+	}
+
+	event->on_event(event->user_context, event->id);
 }
 
 
@@ -1151,16 +1284,19 @@ static void thread_exit_notify(struct sfptpd_thread *thread, int rc)
 }
 
 
-static int thread_on_possible_timer_event(struct sfptpd_thread *thread, unsigned int fd)
+static int thread_on_possible_event(struct sfptpd_thread *thread, unsigned int fd)
 {
-	struct sfptpd_timer *timer;
+	struct sfptpd_event *event;
 
 	/* This routine must only be called for the current thread */
 	assert(thread == sfptpd_thread_self());
 
-	for (timer = thread->timer_list; timer != NULL; timer = timer_get_next(timer)) {
-		if (timer_get_fd(timer) == fd) {
-			timer_on_expiry(timer);
+	for (event = thread->event_list; event != NULL; event = event_get_next(event)) {
+		if (event_get_fd(event) == fd) {
+			if (event->type == THREAD_EVENT_TIMER)
+				timer_on_expiry(event);
+			else
+				event_on_event(event);
 			return 0;
 		}
 	}
@@ -1297,7 +1433,7 @@ static void *thread_entry(void *arg)
 				thread_on_signal(thread);
 			} else if (fd == queue_get_read_fd(&thread->queue_general)) {
 				thread_on_message_event(thread);
-			} else if (thread_on_possible_timer_event(thread, fd) != 0) {
+			} else if (thread_on_possible_event(thread, fd) != 0) {
 				user_evs[num_user_fds++] = (struct sfptpd_thread_readyfd) {
 					.fd = fd,
 					.flags = {
@@ -1415,7 +1551,7 @@ static int thread_destroy(struct sfptpd_thread *thread)
 	ssize_t wrote;
 	struct signalfd_siginfo signal;
 	struct sfptpd_thread **trace;
-	struct sfptpd_timer *timer;
+	struct sfptpd_event *event;
 	unsigned int waited;
 	const uint64_t value = 1;
 
@@ -1455,15 +1591,16 @@ static int thread_destroy(struct sfptpd_thread *thread)
 	queue_destroy(&thread->queue_wait_reply, true);
 	pool_destroy(&thread->msg_pool);
 
-	/* Delete all the timers */
-	while (thread->timer_list != NULL) {
-		/* Unlink the timer */
-		timer = thread->timer_list;
-		thread->timer_list = timer_get_next(timer);
+	/* Delete all the events */
+	while (thread->event_list != NULL) {
+		/* Unlink the event */
+		event = thread->event_list;
+		thread->event_list = event_get_next(event);
 
 		/* Stop and destroy the timer */
-		timer_stop(timer);
-		sfptpd_timer_destroy(timer);
+		if (event->type == THREAD_EVENT_TIMER)
+			timer_stop(event);
+		event_destroy(event);
 	}
 
 	/* If signal handling has been configured for this thread, free the
@@ -1530,7 +1667,7 @@ static int thread_create(const char *name, const struct sfptpd_thread_ops *ops,
 	new->on_signal = NULL;
 	new->user_context = user_context;
 	new->exit_errno = 0;
-	new->timer_list = NULL;
+	new->event_list = NULL;
 	new->signal_fd = -1;
 	if (!root_thread)
 		new->parent = sfptpd_thread_self();
@@ -1758,7 +1895,7 @@ void sfptpd_threading_shutdown(void)
 		struct sfptpd_thread *next_zombie = thread->next_zombie;
 
 		if (sfptpd_thread_lib.zombie_policy != SFPTPD_THREAD_ZOMBIES_REAP_AT_EXIT)
-			WARNING("zombie threads exist at exist contrary to reaping policy\n");
+			WARNING("zombie threads exist at exit contrary to reaping policy\n");
 		thread->magic = SFPTPD_DEAD_MAGIC;
 		free(thread);
 		thread = next_zombie;
@@ -1896,8 +2033,8 @@ const char *sfptpd_thread_get_name(struct sfptpd_thread *thread)
 
 
 int sfptpd_thread_alloc_msg_pool(enum sfptpd_msg_pool_id pool_type,
-								 unsigned int num_msgs,
-								 unsigned int msg_size)
+				 unsigned int num_msgs,
+				 unsigned int msg_size)
 {
 	struct sfptpd_thread *self;
 	int rc;
@@ -1931,100 +2068,111 @@ int sfptpd_thread_alloc_msg_pool(enum sfptpd_msg_pool_id pool_type,
 }
 
 
-int sfptpd_thread_timer_create(unsigned int timer_id, clockid_t clock_id,
-			       sfptpd_thread_on_timer_fn on_expiry,
+int sfptpd_thread_timer_create(sfptpd_event_id_t timer_id,
+			       clockid_t clock_id,
+			       sfptpd_thread_on_event_fn on_expiry,
 			       void *user_context)
 {
-	struct sfptpd_thread *self;
-	struct sfptpd_timer *timer;
-	struct epoll_event event;
-	int rc;
-
-	assert(on_expiry != NULL);
-
-	self = sfptpd_thread_self();
-
-	/* Fail if the timer already exists. */
-	for (timer = self->timer_list; timer != NULL; timer = timer_get_next(timer)) {
-		if (timer_id == timer_get_id(timer))
-			return EALREADY;
-	}
-
-	rc = sfptpd_timer_create(timer_id, clock_id, on_expiry, user_context, &timer);
-	if (rc != 0) {
-		ERROR("thread %s: failed to create timer %d, %s\n",
-		      self->name, timer_id, strerror(rc));
-		return rc;
-	}
-
-	memset(&event, 0, sizeof event);
-	event.events = EPOLLIN;
-	event.data.fd = timer_get_fd(timer);
-	rc = epoll_ctl(self->epoll_fd, EPOLL_CTL_ADD, event.data.fd, &event);
-	if (rc != 0) {
-		ERROR("thread %s: failed to add timer %d fd to epoll, %s\n",
-		      self->name, event.data.fd, strerror(errno));
-		sfptpd_timer_destroy(timer);
-		return errno;
-	}
-
-	/* Add the timer to the timer list for the thread */
-	timer_set_next(timer, self->timer_list);
-	self->timer_list = timer;
-	return 0;
+	return thread_event_create(timer_id, THREAD_EVENT_TIMER, clock_id,
+				   on_expiry, user_context);
 }
 
 
-int sfptpd_thread_timer_start(unsigned int timer_id, bool periodic,
+int sfptpd_thread_timer_start(sfptpd_event_id_t timer_id, bool periodic,
 			      bool absolute, const struct sfptpd_timespec *interval)
 {
-	struct sfptpd_thread *self;
-	struct sfptpd_timer *timer;
+	struct sfptpd_event *timer;
+	int rc;
 
 	assert(interval != NULL);
 
-	self = sfptpd_thread_self();
-
-	for (timer = self->timer_list; timer != NULL; timer = timer_get_next(timer)) {
-		if (timer_get_id(timer) == timer_id)
-			return timer_start(timer, periodic, absolute, interval);
-	}
-
-	return ENOENT;
+	timer = thread_event_find_by_id(timer_id);
+	rc = thread_event_check_type(timer, THREAD_EVENT_TIMER);
+	if (rc == 0)
+		rc = timer_start(timer, periodic, absolute, interval);
+	return rc;
 }
 
 
-int sfptpd_thread_timer_stop(unsigned int timer_id)
+int sfptpd_thread_timer_stop(sfptpd_event_id_t timer_id)
 {
-	struct sfptpd_thread *self;
-	struct sfptpd_timer *timer;
+	struct sfptpd_event *timer;
+	int rc;
 
-	self = sfptpd_thread_self();
-
-	for (timer = self->timer_list; timer != NULL; timer = timer_get_next(timer)) {
-		if (timer_get_id(timer) == timer_id)
-			return timer_stop(timer);
-	}
-
-	return ENOENT;
+	timer = thread_event_find_by_id(timer_id);
+	rc = thread_event_check_type(timer, THREAD_EVENT_TIMER);
+	if (!rc)
+		rc = timer_stop(timer);
+	return rc;
 }
 
 
-int sfptpd_thread_timer_get_time_left(unsigned int timer_id, struct sfptpd_timespec *interval)
+int sfptpd_thread_timer_get_time_left(sfptpd_event_id_t timer_id,
+				      struct sfptpd_timespec *interval)
 {
-	struct sfptpd_thread *self;
-	struct sfptpd_timer *timer;
+	struct sfptpd_event *timer;
+	int rc;
 
 	assert(interval != NULL);
 
-	self = sfptpd_thread_self();
+	timer = thread_event_find_by_id(timer_id);
+	rc = thread_event_check_type(timer, THREAD_EVENT_TIMER);
+	if (!rc)
+		return timer_get_time_left(timer, interval);
+	return rc;
+}
 
-	for (timer = self->timer_list; timer != NULL; timer = timer_get_next(timer)) {
-		if (timer_get_id(timer) == timer_id)
-			return timer_get_time_left(timer, interval);
+int sfptpd_thread_event_create(sfptpd_event_id_t event_id,
+			       sfptpd_thread_on_event_fn on_event,
+			       void *user_context)
+{
+	return thread_event_create(event_id, THREAD_EVENT_EVENT, 0,
+				   on_event, user_context);
+}
+
+
+int sfptpd_thread_event_create_writer(struct sfptpd_thread *thread,
+				      sfptpd_event_id_t event_id,
+				      struct sfptpd_thread_event_writer *writer)
+{
+	struct sfptpd_event *event;
+	int rc;
+
+	assert(writer != NULL);
+
+	event = event_find_by_id(thread, event_id);
+	rc = thread_event_check_type(event, THREAD_EVENT_EVENT);
+	if (rc == 0) {
+		writer->fd = dup(event->fd);
+		if (writer->fd == -1)
+			rc = errno;
 	}
+	return rc;
+}
 
-	return ENOENT;
+
+void sfptpd_thread_event_destroy_writer(struct sfptpd_thread_event_writer *writer)
+{
+	assert(writer != NULL);
+
+	close(writer->fd);
+}
+
+
+int sfptpd_thread_event_post(struct sfptpd_thread_event_writer *writer)
+{
+	uint64_t increment = 1;
+	int rc;
+
+	assert(writer != NULL);
+
+	rc = write(writer->fd, &increment, sizeof increment);
+	if (rc == -1)
+		return errno;
+
+	/* eventfd(2) defines accesses as being "8 bytes". */
+	assert(rc == 8);
+	return 0;
 }
 
 

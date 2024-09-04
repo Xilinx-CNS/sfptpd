@@ -47,7 +47,13 @@
  ****************************************************************************/
 
 #define TEST_NUM_TIMERS (7)
+#define TEST_NUM_EVENTS (3)
 #define TEST_NUM_THREADS (5)
+
+#define TEST_EVENT_ID_BASE (TEST_NUM_TIMERS)
+#define TEST_TIMER_ID_SIGNAL (100)
+static_assert(TEST_TIMER_ID_SIGNAL >= TEST_EVENT_ID_BASE + TEST_NUM_TIMERS,
+	      "signal timer id not overlapping with other timer and event ids");
 
 #define TEST_TIMER_TEST_LEN (5)
 #define TEST_SIGNAL_TEST_INTERVAL (100000)
@@ -89,6 +95,10 @@ struct test_thread
 	uint64_t timer_interval[TEST_NUM_TIMERS];
 	uint64_t timer_count[TEST_NUM_TIMERS];
 
+	unsigned int events_rxed[TEST_NUM_EVENTS];
+	unsigned int events_txed[TEST_NUM_THREADS][TEST_NUM_EVENTS];
+	struct sfptpd_thread_event_writer event_writer[TEST_NUM_THREADS][TEST_NUM_EVENTS];
+
 	unsigned int asyncs_txed[TEST_NUM_THREADS];
 	unsigned int reqs_txed[TEST_NUM_THREADS];
 	unsigned int resps_txed[TEST_NUM_THREADS];
@@ -112,7 +122,9 @@ static bool test_timers = false;
 static bool test_messaging = false;
 static bool test_signals = false;
 static bool test_user_fds = false;
+static bool test_events = false;
 static bool expect_signal_coalescing = false;
+static bool expect_event_coalescing = false;
 static int test_rc = 0;
 static sigset_t test_signal_set;
 
@@ -122,6 +134,7 @@ static int test_signals_rxed[TEST_NUM_THREADS];
 static int test_on_startup(void *context);
 static void test_on_shutdown(void *context);
 static void test_on_timer(void *context, unsigned int id);
+static void test_on_event(void *context, unsigned int id);
 static void test_on_message(void *context, struct sfptpd_msg_hdr *msg);
 static void test_on_user_fd(void *context, unsigned int num_fds,
 			    struct sfptpd_thread_readyfd events[]);
@@ -277,9 +290,32 @@ static int test_on_startup(void *context)
 		}
 	}
 
+	if (test_events) {
+		/* Create some events */
+		for (i = 0; i < TEST_NUM_TIMERS; i++) {
+			rc = sfptpd_thread_event_create(TEST_EVENT_ID_BASE + i,
+							test_on_event, t);
+			if (rc != 0) {
+				printf("thread %d: failed to create event %i, %d\n",
+				       t->id, i, rc);
+				return rc;
+			}
+		}
+
+		/* Try to create an event that already exists */
+		rc = sfptpd_thread_event_create(TEST_EVENT_ID_BASE,
+						test_on_event, t);
+		if (rc != EALREADY) {
+			printf("thread %d: unexpectedly created an event that already exists, %d\n",
+			       t->id, rc);
+			return rc;
+		}
+	}
+
 	if (test_signals) {
 		/* Try a timer to generate data/signals */
-		rc = sfptpd_thread_timer_create(100, CLOCK_MONOTONIC,
+		rc = sfptpd_thread_timer_create(TEST_TIMER_ID_SIGNAL,
+						CLOCK_MONOTONIC,
 						test_on_timer, t);
 		if (rc != 0) {
 			printf("ERROR: failed to create signal timer, %d\n", rc);
@@ -288,7 +324,7 @@ static int test_on_startup(void *context)
 
 		interval.sec = 0;
 		interval.nsec = TEST_SIGNAL_TEST_INTERVAL * (t->id + 1);
-		rc = sfptpd_thread_timer_start(100, true, false, &interval);
+		rc = sfptpd_thread_timer_start(TEST_TIMER_ID_SIGNAL, true, false, &interval);
 		if (rc != 0) {
 			printf("ERROR: failed to start signal timer, %d\n", rc);
 			return rc;
@@ -365,7 +401,7 @@ static void test_on_shutdown(void *context)
 	}
 
 	if (test_signals) {
-		sfptpd_thread_timer_stop(100);
+		sfptpd_thread_timer_stop(TEST_TIMER_ID_SIGNAL);
 	}
 }
 
@@ -375,7 +411,7 @@ static void test_on_timer(void *context, unsigned int id)
 	int rc;
 
 	/* If this is the signal test timer, send a signal */
-	if (id == 100) {
+	if (id == TEST_TIMER_ID_SIGNAL) {
 		if (!t->send_signals)
 			return;
 
@@ -398,11 +434,18 @@ static void test_on_timer(void *context, unsigned int id)
 
 }
 
+static void test_on_event(void *context, unsigned int id)
+{
+	struct test_thread *t = (struct test_thread *)context;
+
+	t->events_rxed[id - TEST_EVENT_ID_BASE] += 1;
+}
+
 static void test_on_message(void *context, struct sfptpd_msg_hdr *msg)
 {
 	struct test_thread *t = (struct test_thread *)context;
 	test_msg_t *m;
-	unsigned int i, sender, recipient;
+	unsigned int i, j, sender, recipient;
 	int rc;
 
 	//printf("thread %d: on_message\n", t->id);
@@ -446,6 +489,38 @@ static void test_on_message(void *context, struct sfptpd_msg_hdr *msg)
 			printf("thread %d: start signal test\n", t->id);
 			t->send_signals = true;
 		}
+
+		if (test_events) {
+			printf("thread %d: start event test\n", t->id);
+
+			/* Create event writers */
+			for (i = 0; i < TEST_NUM_THREADS; i++) {
+				for (j = 0; j < TEST_NUM_EVENTS; j++) {
+					rc = sfptpd_thread_event_create_writer(threads[i].thread,
+									       TEST_EVENT_ID_BASE + j,
+									       &t->event_writer[i][j]);
+					if (rc != 0) {
+						printf("ERROR: thread %d: failed to create event writer for thread %d event %d, %s\n",
+						       t->id, i, j, strerror(rc));
+						exit(rc);
+					}
+				}
+			}
+
+			/* Post test events */
+			for (i = 0; i < TEST_NUM_THREADS; i++) {
+				for (j = 0; j < TEST_NUM_EVENTS; j++) {
+					rc = sfptpd_thread_event_post(&t->event_writer[i][j]);
+					if (rc != 0) {
+						printf("ERROR: thread %d: failed to post event %d to thread %d, %s\n",
+						       t->id, j, i, strerror(rc));
+						exit(rc);
+					} else {
+						t->events_txed[i][j] += 1;
+					}
+				}
+			}
+		}
 		break;
 
 	case TEST_MSG_ID_STOP:
@@ -458,6 +533,14 @@ static void test_on_message(void *context, struct sfptpd_msg_hdr *msg)
 			printf("thread %d: stop user fds test\n", t->id);
 		if (test_signals)
 			printf("thread %d: stop sending signals\n", t->id);
+		if (test_events) {
+			printf("thread %d: stop event test\n", t->id);
+			for (i = 0; i < TEST_NUM_THREADS; i++) {
+				for (j = 0; j < TEST_NUM_EVENTS; j++) {
+					sfptpd_thread_event_destroy_writer(&t->event_writer[i][j]);
+				}
+			}
+		}
 		t->send_msgs = false;
 		t->send_data = false;
 		t->send_signals = false;
@@ -611,7 +694,7 @@ static int root_on_startup(void *context)
 		return rc;
 	}
 
-	if (test_messaging || test_user_fds || test_signals) {
+	if (test_messaging || test_user_fds || test_signals || test_events) {
 		/* If we are running socket tests, we have to ensure all threads are
 		 * initialised and running before starting to send data */
 		if (test_user_fds)
@@ -671,6 +754,42 @@ static void root_on_shutdown(void *context)
 				} else {
 					//printf("thread %d, timer %d expired %"PRIi64" times\n",
 					//       i, j, threads[i].timer_count[j]);
+				}
+			}
+		}
+	}
+
+	if (test_events) {
+		for (i = 0; i < TEST_NUM_THREADS; i++) {
+			for (j = 0; j < TEST_NUM_EVENTS; j++) {
+				int sent = 0;
+				int k;
+
+				for (k = 0; k < TEST_NUM_THREADS; k++)
+					sent += threads[k].events_txed[i][j];
+
+				if (expect_event_coalescing) {
+					if (sent > 0 && threads[i].events_rxed[i] == 0) {
+						printf("ERROR: thread %d: event %d never rxed. %d txed\n",
+						       i, j, sent);
+						rc = ERANGE;
+					} else if (threads[i].events_rxed[j] > sent) {
+						printf("ERROR: thread %d: event %d %d rxed > %d txed\n",
+						       i, j, threads[i].events_rxed[j], sent);
+						rc = ERANGE;
+					} else {
+						printf("thread %d: event %d %d rxed <= %d txed\n",
+						       i, j, threads[i].events_rxed[j], sent);
+					}
+				} else {
+					if (threads[i].events_rxed[j] != sent) {
+						printf("ERROR: thread %d: event %d %d rxed != %d txed\n",
+						       i, j, threads[i].events_rxed[j], sent);
+						rc = ERANGE;
+					} else {
+						printf("thread %d: event %d %d rxed ~= %d txed\n",
+						       i, j, threads[i].events_rxed[j], sent);
+					}
 				}
 			}
 		}
@@ -782,7 +901,7 @@ static void root_on_timer(void *context, unsigned int id)
 	int i;
 	if (id == 0) {
 		printf("root: exit timer expired\n");
-		if (test_messaging || test_user_fds || test_signals) {
+		if (test_messaging || test_user_fds || test_signals || test_events) {
 			for (i = 0; i < TEST_NUM_THREADS; i++) {
 				msg = (test_msg_t *)sfptpd_msg_alloc(SFPTPD_MSG_POOL_GLOBAL, false);
 
@@ -829,7 +948,8 @@ static void root_on_signal(void *user_context, int signal_num)
  ****************************************************************************/
 
 static int test_threading(const char *name, bool timers, bool messaging,
-			  bool signals, bool user_fds, bool signal_coalescing)
+			  bool signals, bool user_fds, bool signal_coalescing,
+			  bool events, bool event_coalescing)
 {
 	sigset_t signal_set;
 	unsigned int i;
@@ -843,10 +963,12 @@ static int test_threading(const char *name, bool timers, bool messaging,
 	}
 
 	test_timers = timers;
+	test_events = events;
 	test_messaging = messaging;
 	test_signals = signals;
 	test_user_fds = user_fds;
 	expect_signal_coalescing = signal_coalescing;
+	expect_event_coalescing = event_coalescing;
 
 	memset(test_signals_rxed, 0, sizeof(test_signals_rxed));
 	memset(threads, 0, sizeof(threads));
@@ -884,27 +1006,32 @@ int sfptpd_test_threading(void)
 
 	do {
 		/* Timers */
-		rc = test_threading("timers", true, false, false, false, false);
+		rc = test_threading("timers", true, false, false, false, false, false, false);
+		if (rc != 0)
+			return rc;
+
+		/* Events */
+		rc = test_threading("events", false, false, false, false, false, true, true);
 		if (rc != 0)
 			return rc;
 
 		/* Messages */
-		rc = test_threading("messaging", false, true, false, false, false);
+		rc = test_threading("messaging", false, true, false, false, false, false, false);
 		if (rc != 0)
 			return rc;
 
 		/* Signals */
-		rc = test_threading("signals", false, false, true, false, false);
+		rc = test_threading("signals", false, false, true, false, false, false, false);
 		if (rc != 0)
 			return rc;
 
 		/* User FDs */
-		rc = test_threading("user fds", false, false, false, true, false);
+		rc = test_threading("user fds", false, false, false, true, false, false, false);
 		if (rc != 0)
 			return rc;
 
 		/* Everything */
-		rc = test_threading("everything", true, true, true, true, true);
+		rc = test_threading("everything", true, true, true, true, true, true, true);
 		if (rc != 0)
 			return rc;
 	} while (soak);
