@@ -204,6 +204,7 @@ typedef struct sfptpd_crny_module {
 	struct crny_comm crny_comm;
 
 	/* Save state of clock control at chrony launch */
+	bool chrony_running;
 	bool chrony_state_saved;
 	bool clock_control_at_save;
 
@@ -781,6 +782,9 @@ static void unblock_clock(crny_module_t *ntp)
 	}
 }
 
+/* Return check the static state of chrony's control of the system clock
+ * by reviewing its command line parameters at launch.
+ * Returns true if chrony is controlling the system clock, else false. */
 static bool clock_control_at_launch(crny_module_t *ntp)
 {
 	pid_t pid;
@@ -866,7 +870,9 @@ finish:
 		SYNC_MODULE_CONSTRAINT_CLEAR(ntp->constraints, CANNOT_BE_SELECTED);
 	}
 
-	return assume_absent || state == OPT_X ? 0 : 1;
+	ntp->chrony_running = !assume_absent;
+
+	return !(assume_absent || state == OPT_X);
 }
 
 int crny_configure_ntpd(crny_module_t *ntp)
@@ -1232,20 +1238,6 @@ int handle_get_ntp_datum(crny_module_t *ntp)
 }
 
 
-static int crny_resolve(crny_module_t *ntp)
-{
-	assert(ntp);
-
-	/* check if chronyd is running */
-	if (access(CRNY_RUN_PATH, F_OK) != 0) {
-		DBG_L4("crny: nonexistent path %s, %s. Is chronyd running?\n",
-		       CRNY_RUN_PATH, strerror(errno));
-		return errno;
-	} else {
-		return 0;
-	}
-}
-
 static int crny_connect(crny_module_t *ntp)
 {
 	sfptpd_short_text_t failing_step;
@@ -1278,7 +1270,7 @@ static int crny_connect(crny_module_t *ntp)
 }
 
 static bool crny_state_machine(crny_module_t *ntp,
-				  enum ntp_query_event event)
+			       enum ntp_query_event event)
 {
 	int rc;
 	bool update = false;
@@ -1323,7 +1315,6 @@ static bool crny_state_machine(crny_module_t *ntp,
 		} else if (rc == EINPROGRESS) {
 			next_query_state = NTP_QUERY_STATE_CONNECT_WAIT;
 		} else {
-			chrony_next_clock_control_state(ntp, &update);
 			crny_parse_state(next_state, rc, next_state->offset_unsafe);
 			next_query_state = NTP_QUERY_STATE_SLEEP_DISCONNECTED;
 		}
@@ -1418,7 +1409,8 @@ static bool crny_state_machine(crny_module_t *ntp,
 		(void)sfclock_gettime(CLOCK_MONOTONIC, &time_now);
 		sfptpd_time_subtract(&time_left, &ntp->next_poll_time, &time_now);
 		if (time_left.sec < 0 || event == NTP_QUERY_EVENT_RUN) {
-			if (crny_resolve(ntp) == 0)
+			chrony_next_clock_control_state(ntp, &update);
+			if (ntp->chrony_running)
 				next_query_state = NTP_QUERY_STATE_CONNECT;
 			else
 				crny_parse_state(next_state, ENOPROTOOPT, next_state->offset_unsafe);
@@ -2243,7 +2235,7 @@ static int ntp_on_startup(void *context)
 		goto fail;
 	}
 
-	if (crny_resolve(ntp) != 0)
+	if (!ntp->chrony_running)
 		ntp->state.state = SYNC_MODULE_STATE_DISABLED;
 
 	ntp->next_state = ntp->state;
