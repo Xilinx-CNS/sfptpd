@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2023 Advanced Micro Devices, Inc. */
+/* (c) Copyright 2023-2024 Advanced Micro Devices, Inc. */
 
 /**
  * @file   sfptpd_multicast.c
@@ -25,6 +25,11 @@
  * Types
  ****************************************************************************/
 
+enum multicast_subscriber_type {
+	MULTICAST_RECEIVE_AS_MESSAGE,
+	MULTICAST_RECEIVE_AS_EVENT,
+};
+
 struct multicast_user {
 
 	/* Magic word */
@@ -32,6 +37,16 @@ struct multicast_user {
 
 	/* Thread of subscriber or publisher */
 	struct sfptpd_thread *thread;
+
+	struct {
+		enum multicast_subscriber_type receive_as;
+		union {
+			struct sfptpd_thread_event_writer event_writer;
+		};
+	} subscriber;
+
+	/* Optional comment string */
+	const char *comment;
 
 	/* Internal state for container implementation */
 	SLIST_ENTRY(multicast_user) users;
@@ -109,14 +124,16 @@ void multicast_dump_group(struct sfptpd_multicast *module, struct multicast_grou
 	TRACE_LX(sev, PREFIX "   publishers:\n");
 	SLIST_FOREACH(user, &group->publishers, users) {
 		assert(user->magic == MULTICAST_USER_MAGIC);
-		TRACE_LX(sev, PREFIX "    - %p %s\n", user->thread,
-			 sfptpd_thread_get_name(user->thread));
+		TRACE_LX(sev, PREFIX "    - %p %s: %s\n", user->thread,
+			 sfptpd_thread_get_name(user->thread),
+			 user->comment);
 	}
 	TRACE_LX(sev, PREFIX "   subscribers:\n");
 	SLIST_FOREACH(user, &group->subscribers, users) {
 		assert(user->magic == MULTICAST_USER_MAGIC);
-		TRACE_LX(sev, PREFIX "    - %p %s\n", user->thread,
-			 sfptpd_thread_get_name(user->thread));
+		TRACE_LX(sev, PREFIX "    - %p %s%s\n", user->thread,
+			 sfptpd_thread_get_name(user->thread),
+			 user->subscriber.receive_as == MULTICAST_RECEIVE_AS_MESSAGE ? "" : " as event");
 	}
 
 	pthread_mutex_unlock(&module->lock);
@@ -139,9 +156,28 @@ void multicast_dump_groups(struct sfptpd_multicast *module, int sev)
 	pthread_mutex_unlock(&module->lock);
 }
 
-int multicast_add_user(struct sfptpd_multicast *module,
-		       struct sfptpd_thread *thread,
-		       uint32_t msg_id, bool publisher)
+static struct multicast_user multicast_user_init(void)
+{
+	return (struct multicast_user) {
+		.magic = MULTICAST_USER_MAGIC,
+		.thread = sfptpd_thread_self(),
+		.subscriber = { .receive_as = MULTICAST_RECEIVE_AS_MESSAGE },
+	};
+}
+
+static void multicast_user_finit(struct multicast_user *user)
+{
+	assert(user->magic == MULTICAST_USER_MAGIC);
+
+	if (user->subscriber.receive_as == MULTICAST_RECEIVE_AS_EVENT)
+		sfptpd_thread_event_destroy_writer(&user->subscriber.event_writer);
+
+	user->magic = MULTICAST_DELETED_MAGIC;
+}
+
+static int multicast_add_user(struct sfptpd_multicast *module,
+			      struct multicast_user *user_in,
+			      uint32_t msg_id, bool publisher)
 {
 	struct multicast_group *group;
 	struct multicast_user *user;
@@ -151,11 +187,14 @@ int multicast_add_user(struct sfptpd_multicast *module,
 	assert(module);
 	assert(module->magic == MULTICAST_MAGIC);
 
-	TRACE_L4(PREFIX "%s(%s, %x)\n", action, sfptpd_thread_get_name(thread), msg_id);
+	TRACE_L4(PREFIX "%s(%s, %x)\n", action, sfptpd_thread_get_name(user_in->thread), msg_id);
 
 	user = calloc(1, sizeof *user);
-	if (user == NULL)
+	if (user == NULL) {
+		multicast_user_finit(user_in);
 		return errno;
+	}
+	*user = *user_in;
 
 	pthread_mutex_lock(&sfptpd_multicast->lock);
 
@@ -175,24 +214,22 @@ int multicast_add_user(struct sfptpd_multicast *module,
 		SLIST_INSERT_HEAD(&sfptpd_multicast->groups, group, groups);
 	}
 
-	user->magic = MULTICAST_USER_MAGIC;
-	user->thread = thread;
 	SLIST_INSERT_HEAD(publisher ? &group->publishers : &group->subscribers,
 			  user, users);
 
 fail:
-	multicast_dump_groups(sfptpd_multicast, 4);
-	pthread_mutex_unlock(&sfptpd_multicast->lock);
 	if (rc != 0) {
-		user->magic = MULTICAST_DELETED_MAGIC;
+		multicast_user_finit(user);
 		free(user);
 	}
+	multicast_dump_groups(sfptpd_multicast, 4);
+	pthread_mutex_unlock(&sfptpd_multicast->lock);
 	return rc;
 }
 
-int multicast_remove_user(struct sfptpd_multicast *module,
-			  struct sfptpd_thread *thread,
-			  uint32_t msg_id, bool publisher)
+static int multicast_remove_user(struct sfptpd_multicast *module,
+				 struct sfptpd_thread *thread,
+				 uint32_t msg_id, bool publisher)
 {
 	struct multicast_group *group;
 	struct multicast_user *user;
@@ -230,7 +267,7 @@ int multicast_remove_user(struct sfptpd_multicast *module,
 	}
 
 	SLIST_REMOVE(publisher ? &group->publishers : &group->subscribers, user, multicast_user, users);
-	user->magic = MULTICAST_DELETED_MAGIC;
+	multicast_user_finit(user);
 	free(user);
 
 fail:
@@ -302,12 +339,32 @@ void sfptpd_multicast_dump_state(void)
 
 int sfptpd_multicast_subscribe(uint32_t msg_id)
 {
-	return multicast_add_user(sfptpd_multicast, sfptpd_thread_self(), msg_id, false);
+	struct multicast_user user = multicast_user_init();
+
+	user.subscriber.receive_as = MULTICAST_RECEIVE_AS_MESSAGE;
+	return multicast_add_user(sfptpd_multicast, &user, msg_id, false);
 }
 
-int sfptpd_multicast_publish(uint32_t msg_id)
+int sfptpd_multicast_subscribe_event(uint32_t msg_id, sfptpd_event_id_t event_id)
 {
-	return multicast_add_user(sfptpd_multicast, sfptpd_thread_self(), msg_id, true);
+	struct multicast_user user = multicast_user_init();
+	int rc;
+
+	user.subscriber.receive_as = MULTICAST_RECEIVE_AS_EVENT;
+	rc = sfptpd_thread_event_create_writer(user.thread, event_id, &user.subscriber.event_writer);
+
+	if (rc == 0)
+		rc = multicast_add_user(sfptpd_multicast, &user, msg_id, false);
+
+	return rc;
+}
+
+int sfptpd_multicast_publish(uint32_t msg_id, const char *comment)
+{
+	struct multicast_user user = multicast_user_init();
+
+	user.comment = comment;
+	return multicast_add_user(sfptpd_multicast, &user, msg_id, true);
 }
 
 int sfptpd_multicast_unsubscribe(uint32_t msg_id)
@@ -344,26 +401,34 @@ int sfptpd_multicast_send(sfptpd_msg_hdr_t *hdr,
 
 	if (group == NULL) {
 		rc = ECONNREFUSED;
-		goto fail;
+		goto finish;
 	}
 	assert(group->magic == MULTICAST_GROUP_MAGIC);
 
 	pthread_mutex_lock(&sfptpd_multicast->lock);
 
-	/* Count destinations */
+	/* Send to event-only destinations and count message destinations */
 	SLIST_FOREACH(user, &group->subscribers, users)
-		count++;
+		switch (user->subscriber.receive_as) {
+		case MULTICAST_RECEIVE_AS_MESSAGE:
+			count++;
+			break;
+		case MULTICAST_RECEIVE_AS_EVENT:
+			sfptpd_thread_event_post(&user->subscriber.event_writer);
+		}
 
 	/* Allocate destinations */
 	dests = calloc(count, sizeof *dests);
 	i = 0;
 	SLIST_FOREACH(user, &group->subscribers, users) {
 		assert(user->magic == MULTICAST_USER_MAGIC);
-		dests[i].thread = user->thread;
-		dests[i].msg = sfptpd_msg_alloc(pool, wait);
-		if (dests[i++].msg == NULL) {
-			rc = errno;
-			break;
+		if (user->subscriber.receive_as == MULTICAST_RECEIVE_AS_MESSAGE) {
+			dests[i].thread = user->thread;
+			dests[i].msg = sfptpd_msg_alloc(pool, wait);
+			if (dests[i++].msg == NULL) {
+				rc = errno;
+				break;
+			}
 		}
 	}
 	assert(rc != 0 || i == count);
@@ -378,7 +443,7 @@ int sfptpd_multicast_send(sfptpd_msg_hdr_t *hdr,
 	pthread_mutex_unlock(&sfptpd_multicast->lock);
 
 	if (rc != 0)
-		goto fail;
+		goto finish;
 
 	/* Replicate message */
 	for (i = 0; i < count; i++) {
@@ -396,7 +461,7 @@ int sfptpd_multicast_send(sfptpd_msg_hdr_t *hdr,
 			rc = ret;
 	}
 
-fail:
+finish:
 	if (dests != NULL)
 		free(dests);
 	sfptpd_msg_free(hdr);

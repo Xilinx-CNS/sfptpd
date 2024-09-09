@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2023 Xilinx, Inc. */
+/* (c) Copyright 2012-2024 Xilinx, Inc. */
 
 /**
  * @file   sfptpd_main.c
@@ -594,8 +594,8 @@ static int main_on_startup(void *not_used)
 		}
 	}
 
-	sfptpd_multicast_publish(SFPTPD_SERVO_MSG_PID_ADJUST);
-	sfptpd_multicast_publish(SFPTPD_APP_MSG_DUMP_TABLES);
+	sfptpd_multicast_publish(SFPTPD_SERVO_MSG_PID_ADJUST, "PID coefficient adjustment command");
+	sfptpd_multicast_publish(SFPTPD_APP_MSG_DUMP_TABLES, "diagnostic table dump request");
 
 	/* Configure control socket handling */
 	control_fd = sfptpd_control_socket_get_fd();

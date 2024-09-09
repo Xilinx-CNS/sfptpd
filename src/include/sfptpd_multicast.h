@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2023 Advanced Micro Devices, Inc. */
+/* (c) Copyright 2023-2024 Advanced Micro Devices, Inc. */
 
 #ifndef _SFPTPD_MULTICAST_H
 #define _SFPTPD_MULTICAST_H
@@ -31,11 +31,21 @@ void sfptpd_multicast_dump_state(void);
  */
 int sfptpd_multicast_subscribe(uint32_t msg_id);
 
-/** Register a publisher of multicast sfptpd messages.
- * @param msg_id The message id of the multicast group
+/** Join a subscriber to an sfptpd message multicast group
+ * but receiving only events, not message payloads.
+ * @param msg_id The message id of the multicast group to join
+ * @param event_id The event id for receiving the notification
  * @return 0 on success or errno
  */
-int sfptpd_multicast_publish(uint32_t msg_id);
+int sfptpd_multicast_subscribe_event(uint32_t msg_id,
+				     sfptpd_event_id_t event_id);
+
+/** Register a publisher of multicast sfptpd messages.
+ * @param msg_id The message id of the multicast group
+ * @param comment Optional description of the group
+ * @return 0 on success or errno
+ */
+int sfptpd_multicast_publish(uint32_t msg_id, const char *comment);
 
 /** Leave an sfptpd message multicast group.
  * @param msg_id The message id of the multicast group to leave

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2023 Xilinx, Inc. */
+/* (c) Copyright 2012-2024 Xilinx, Inc. */
 
 /**
  * @file   sfptpd_engine.c
@@ -171,7 +171,7 @@ static_assert(STATS_KEY_END < 8 * sizeof(((struct sfptpd_sync_instance_rt_stats_
  ****************************************************************************/
 
 /* Timer identities */
-enum engine_timer_ids {
+enum engine_event_ids {
 	ENGINE_TIMER_LOG_STATS,
 	ENGINE_TIMER_STATS_PERIOD_END,
 	ENGINE_TIMER_SAVE_STATE,
@@ -179,6 +179,7 @@ enum engine_timer_ids {
 	ENGINE_TIMER_SELECTION_HOLDOFF,
 	ENGINE_TIMER_NETLINK_RESCAN,
 	ENGINE_TIMER_NETLINK_COALESCE,
+	ENGINE_EVENT_CLOCKFEED_SYNC,
 };
 
 /* Leap second states */
@@ -297,7 +298,7 @@ static void on_netlink_rescan_timer(void *user_context, unsigned int timer_id);
 static void on_netlink_coalesce_timer(void *user_context, unsigned int timer_id);
 
 struct engine_timer_defn {
-	enum engine_timer_ids timer_id;
+	enum engine_event_ids timer_id;
 	clockid_t clock_id;
 	sfptpd_thread_on_event_fn expiry_fn;
 };
@@ -1833,6 +1834,13 @@ static void on_selection_holdoff_timer(void *user_context, unsigned int timer_id
 	}
 }
 
+static void on_clockfeed_sync_event(void *user_context, sfptpd_event_id_t event_id)
+{
+	struct sfptpd_engine *engine = (struct sfptpd_engine *)user_context;
+	assert(engine != NULL);
+
+	on_synchronize(engine);
+}
 
 static void on_thread_exit(struct sfptpd_engine *engine,
 			   sfptpd_msg_thread_exit_notify_t *msg)
@@ -2533,7 +2541,12 @@ static void on_run(struct sfptpd_engine *engine)
 	assert(engine != NULL);
 
 	/* Register for clock feed events */
-	rc = sfptpd_multicast_subscribe(SFPTPD_CLOCKFEED_MSG_SYNC_EVENT);
+	rc = sfptpd_thread_event_create(ENGINE_EVENT_CLOCKFEED_SYNC,
+					on_clockfeed_sync_event,
+					engine);
+	if (rc == 0)
+		rc = sfptpd_multicast_subscribe_event(SFPTPD_CLOCKFEED_MSG_SYNC_EVENT,
+						      ENGINE_EVENT_CLOCKFEED_SYNC);
 	if (rc != 0) {
 		CRITICAL("failed to subscribe to clock feed sync events, %s\n",
 			 strerror(rc));
@@ -2646,11 +2659,6 @@ static void engine_on_message(void *context, struct sfptpd_msg_hdr *hdr)
 
 	case SFPTPD_SERVO_MSG_PID_ADJUST:
 		on_servo_pid_adjust(engine, (sfptpd_servo_msg_t *) msg);
-		SFPTPD_MSG_FREE(msg);
-		break;
-
-	case SFPTPD_CLOCKFEED_MSG_SYNC_EVENT:
-		on_synchronize(engine);
 		SFPTPD_MSG_FREE(msg);
 		break;
 

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2023 Advanced Micro Devices, Inc. */
+/* (c) Copyright 2023-2024 Advanced Micro Devices, Inc. */
 
 /**
  * @file   sfptpd_clockfeed.c
@@ -400,7 +400,7 @@ static int clockfeed_on_startup(void *context)
 
 	assert(module != NULL);
 
-	sfptpd_multicast_publish(SFPTPD_CLOCKFEED_MSG_SYNC_EVENT);
+	sfptpd_multicast_publish(SFPTPD_CLOCKFEED_MSG_SYNC_EVENT, "clock feed updated");
 	sfptpd_multicast_subscribe(SFPTPD_APP_MSG_DUMP_TABLES);
 
 	/* Create a message pool for sending end-of-scan sync messages */
