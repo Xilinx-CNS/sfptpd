@@ -1190,7 +1190,7 @@ static void gps_do_io(struct gps_instance *gps)
 		update_state(gps);
 }
 
-static void gps_on_user_fds(void *context, unsigned int num_fds, struct sfptpd_thread_event fds[])
+static void gps_on_user_fds(void *context, unsigned int num_fds, struct sfptpd_thread_readyfd fds[])
 {
 	struct gps_module *module = (struct gps_module *) context;
 	struct gps_instance *gps;

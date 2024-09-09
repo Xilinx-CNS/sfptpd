@@ -31,7 +31,7 @@ enum sfptpd_thread_zombie_policy {
  ****************************************************************************/
 
 /** User I/O event */
-struct sfptpd_thread_event {
+struct sfptpd_thread_readyfd {
 	int fd;
 	struct {
 		bool rd:1;
@@ -85,7 +85,7 @@ typedef void (*sfptpd_thread_on_message_fn)(void *user_context,
  */
 typedef void (*sfptpd_thread_on_user_fds_fn)(void *user_context,
 					     unsigned int num_events,
-					     struct sfptpd_thread_event events[]);
+					     struct sfptpd_thread_readyfd events[]);
 
 /** Thread operations
  * @on_startup: Function to call when thread begins executing

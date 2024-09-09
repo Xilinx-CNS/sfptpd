@@ -1847,7 +1847,7 @@ static void pps_on_timer(void *user_context, unsigned int id)
 
 static void pps_on_user_fds(void *context,
 			    unsigned int num_fds,
-			    struct sfptpd_thread_event fds[])
+			    struct sfptpd_thread_readyfd fds[])
 {
 	int i;
 	pps_module_t *pps = (pps_module_t *)context;

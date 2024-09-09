@@ -2361,7 +2361,7 @@ static void crny_do_io(crny_module_t *ntp)
 
 
 static void ntp_on_user_fds(void *context, unsigned int num_fds,
-			    struct sfptpd_thread_event events[])
+			    struct sfptpd_thread_readyfd events[])
 {
 	int i;
 	crny_module_t *ntp = (crny_module_t *) context;

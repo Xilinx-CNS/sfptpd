@@ -769,7 +769,7 @@ static void on_control_socket_fd(int fd)
 
 
 static void main_on_user_fds(void *not_used, unsigned int num_fds,
-			     struct sfptpd_thread_event fds[])
+			     struct sfptpd_thread_readyfd fds[])
 {
 	int i;
 	int rc;

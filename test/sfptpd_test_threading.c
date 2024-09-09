@@ -124,7 +124,7 @@ static void test_on_shutdown(void *context);
 static void test_on_timer(void *context, unsigned int id);
 static void test_on_message(void *context, struct sfptpd_msg_hdr *msg);
 static void test_on_user_fd(void *context, unsigned int num_fds,
-			    struct sfptpd_thread_event events[]);
+			    struct sfptpd_thread_readyfd events[]);
 
 static const struct sfptpd_thread_ops test_thread_ops =
 {
@@ -136,7 +136,7 @@ static void root_on_shutdown(void *context);
 static void root_on_timer(void *context, unsigned int id);
 static void root_on_message(void *context, struct sfptpd_msg_hdr *msg);
 static void root_on_user_fd(void *context, unsigned int num_fds,
-			    struct sfptpd_thread_event events[]);
+			    struct sfptpd_thread_readyfd events[]);
 static void root_on_signal(void *context, int signal_num);
 
 static const struct sfptpd_thread_ops root_thread_ops =
@@ -541,7 +541,7 @@ static void test_on_message(void *context, struct sfptpd_msg_hdr *msg)
 }
 
 static void test_on_user_fd(void *context, unsigned int num_fds,
-			    struct sfptpd_thread_event events[])
+			    struct sfptpd_thread_readyfd events[])
 {
 	unsigned int idx;
 
@@ -800,7 +800,7 @@ static void root_on_timer(void *context, unsigned int id)
 }
 
 static void root_on_user_fd(void *context, unsigned int num_fds,
-			    struct sfptpd_thread_event events[])
+			    struct sfptpd_thread_readyfd events[])
 {
 	printf("root: unexpected user event with %u active sockets\n", num_fds);
 	assert(false);

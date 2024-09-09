@@ -1584,7 +1584,7 @@ static void engine_handle_new_link_table(struct sfptpd_engine *engine, int versi
 
 
 static void engine_on_user_fds(void *context, unsigned int num_fds,
-			       struct sfptpd_thread_event fd[])
+			       struct sfptpd_thread_readyfd fd[])
 {
 	struct sfptpd_engine *engine = (struct sfptpd_engine *)context;
 	struct sfptpd_timespec interval;

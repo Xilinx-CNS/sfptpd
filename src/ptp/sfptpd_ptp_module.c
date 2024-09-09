@@ -4095,7 +4095,7 @@ static void ptp_on_message(void *context, struct sfptpd_msg_hdr *hdr)
 
 static void ptp_on_user_fds(void *context,
 			    unsigned int num_events,
-			    struct sfptpd_thread_event events[])
+			    struct sfptpd_thread_readyfd events[])
 {
 	struct sfptpd_ptp_intf *interface;
 	struct ptpd_transport *transport;

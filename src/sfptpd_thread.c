@@ -1264,7 +1264,7 @@ static void *thread_entry(void *arg)
 		 * could be starved. */
 		struct epoll_event events[SFPTPD_THREAD_MAX_EPOLL_EVENTS];
 		int num_events, i;
-		struct sfptpd_thread_event user_evs[SFPTPD_THREAD_MAX_EPOLL_EVENTS];
+		struct sfptpd_thread_readyfd user_evs[SFPTPD_THREAD_MAX_EPOLL_EVENTS];
 		unsigned int num_user_fds;
 
 		num_events = epoll_wait(thread->epoll_fd, events,
@@ -1298,7 +1298,7 @@ static void *thread_entry(void *arg)
 			} else if (fd == queue_get_read_fd(&thread->queue_general)) {
 				thread_on_message_event(thread);
 			} else if (thread_on_possible_timer_event(thread, fd) != 0) {
-				user_evs[num_user_fds++] = (struct sfptpd_thread_event) {
+				user_evs[num_user_fds++] = (struct sfptpd_thread_readyfd) {
 					.fd = fd,
 					.flags = {
 						.rd = evbits & EPOLLIN,
