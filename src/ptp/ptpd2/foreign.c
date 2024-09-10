@@ -323,7 +323,7 @@ calculateForeignOffset(ForeignSyncSnapshot *syncSnapshot, const Timestamp *syncO
 		       ForeignMasterRecord *record, PtpClock *ptpClock)
 {
 	struct timespec sync_time;
-/* sync_time will store the sync origin timestamp, which is from the foreign
+	/* sync_time will store the sync origin timestamp, which is from the foreign
 	master under scrutiny and has NOT had the UTC offset applied to it. 
 
 	This timestamp could be in UTC or it could be in TAI. 
@@ -350,11 +350,12 @@ calculateForeignOffset(ForeignSyncSnapshot *syncSnapshot, const Timestamp *syncO
 	The sync message may arrive before the announce message. In that case, 
 	we must wait until the announce message arrives, which is why we check
 	for record->announceTimesCount in order to decide whether to return a 
-	result or not. 
-*/
+	result or not. */
+
 	struct timespec foreign_offset; /* foreign_offset holds the result. */
+
 	struct timespec local_time;
-/* local_time will hold the local timestamp from the NIC that has already 
+	/* local_time will hold the local timestamp from the NIC that has already
 	had the	applyUtcOffset function called on it. 
 
 	This means it may or may not have had a UTC offset added to it. If a 
@@ -381,8 +382,7 @@ calculateForeignOffset(ForeignSyncSnapshot *syncSnapshot, const Timestamp *syncO
 	before it has had the applyUtcOffset function called on it. 
 
 	This approach was considered cleaner as it keeps the special code for this
-	feature in as few places as possible.
-*/
+	feature in as few places as possible. */
 
 	assert(syncSnapshot != NULL);
 	assert(syncOriginTimestamp != NULL);
@@ -419,20 +419,21 @@ recordForeignSync(const MsgHeader *header, PtpClock *ptpClock, TimeInternal *tim
 	if (ptpClock->discriminator_valid) {
 		ForeignMasterRecord *record = findForeignMasterRecord(header, &ptpClock->foreign);
 		if (record) {
-			ForeignSyncSnapshot *snapshot = &record->syncSnapshot;
+			ForeignSyncSnapshot *snapshot = &record->nextSyncSnapshot;
 
-			snapshot->have_timestamp = true;
-			snapshot->seq = header->sequenceId;
+			*snapshot = (ForeignSyncSnapshot) {
+				.have_timestamp = true,
+				.seq = header->sequenceId,
+				.two_step = header->flagField0 & PTPD_FLAG_TWO_STEP,
+			};
 			internalTime_to_ts(timestamp, &snapshot->timestamp);
 
-			if ((header->flagField0 & PTPD_FLAG_TWO_STEP) == 0) {
+			if (!snapshot->two_step) {
 				calculateForeignOffset(snapshot,
 						       &ptpClock->interface->msgTmp.sync.originTimestamp,
 						       record,
 						       ptpClock);
-
-			} else {
-				snapshot->have_offset = false;
+				record->syncSnapshot = *snapshot;
 			}
 		}
 	}
@@ -445,15 +446,19 @@ recordForeignFollowUp(const MsgHeader *header, PtpClock *ptpClock, const MsgFoll
 	if (ptpClock->discriminator_valid) {
 		ForeignMasterRecord *record = findForeignMasterRecord(header, &ptpClock->foreign);
 		if (record) {
-			ForeignSyncSnapshot *snapshot = &record->syncSnapshot;
+			ForeignSyncSnapshot *snapshot = &record->nextSyncSnapshot;
 
-			if (header->sequenceId == snapshot->seq) {
+			if (snapshot->two_step &&
+			    !snapshot->have_offset &&
+			    header->sequenceId == snapshot->seq) {
 				calculateForeignOffset(snapshot,
 						       &payload->preciseOriginTimestamp,
 						       record,
 						       ptpClock);
+				record->syncSnapshot = *snapshot;
 			} else {
-				/* Invalidate snapshot if sequence ID of FollowUp does not match Sync */
+				/* Invalidate pending snapshot if sequence ID of FollowUp
+				 * does not match Sync */
 				snapshot->have_timestamp = false;
 				snapshot->have_offset = false;
 			}
