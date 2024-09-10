@@ -3263,7 +3263,7 @@ static bool ptp_measure_offset_from_discriminator(struct sfptpd_ptp_instance *in
 		rc = sfptpd_sync_module_get_status(instance->discriminator.sync_instance->module,
 						   instance->discriminator.sync_instance->handle,
 						   &status);
-		if (rc == 0 && sfptpd_time_is_zero(&status.offset_from_master)) {
+		if (rc == 0 && !sfptpd_time_is_zero(&status.offset_from_master)) {
 			struct sfptpd_timespec discrim_lrc_to_instance_lrc;
 			rc = sfptpd_clock_compare(status.clock,
 						  instance->ptpd_port_private->clock,
