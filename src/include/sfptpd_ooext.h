@@ -11,8 +11,6 @@
 #ifdef HAVE_ONLOAD_EXT
 #include <onload/extensions.h>
 #else
-#define SO_TIMESTAMPING_OOEXT 0x000F5300
-#define SCM_TIMESTAMPING_OOEXT SO_TIMESTAMPING_OOEXT
 
 struct onload_timestamp {
 	uint64_t sec;
@@ -20,6 +18,12 @@ struct onload_timestamp {
 	unsigned nsec_frac:24;
 	unsigned flags:8;
 };
+
+#endif
+
+#ifndef SO_TIMESTAMPING_OOEXT
+#define SO_TIMESTAMPING_OOEXT 0x000F5300
+#define SCM_TIMESTAMPING_OOEXT SO_TIMESTAMPING_OOEXT
 
 struct scm_timestamping_ooext {
 	uint32_t type;
