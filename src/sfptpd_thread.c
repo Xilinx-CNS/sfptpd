@@ -806,6 +806,7 @@ static int event_create(sfptpd_event_id_t event_id,
 
 fail1:
 	free(new);
+	*event = NULL;
 	return errno;
 }
 
