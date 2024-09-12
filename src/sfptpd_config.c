@@ -119,11 +119,16 @@ static void config_display_help(void)
 		printf("%s:\n", set->description);
 
 		for (j = 0; j < set->num_options; j++) {
-			if (!set->options[j].hidden) {
-				printf("%-28s %-30s %s\n",
-				       set->options[j].option,
-				       set->options[j].params,
-				       set->options[j].description);
+			const sfptpd_config_option_t *opt = set->options + j;
+			if (!opt->hidden) {
+				printf("%-28s %-30s %s%s%s%s%s\n",
+				       opt->option,
+				       opt->params,
+				       opt->description,
+				       opt->dfl ? ". " : "",
+				       opt->dfl ? opt->dfl : "",
+				       opt->dfl && opt->unit ? " " : "",
+				       opt->dfl && opt->unit ? opt->unit : "");
 			}
 		}
 

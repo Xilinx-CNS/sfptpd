@@ -449,6 +449,21 @@
 /** Maximum section name length in config files */
 #define SFPTPD_CONFIG_SECTION_NAME_MAX (64)
 
+/** Produce help text for default config value. */
+#define SFPTPD_CONFIG_DFL(val) _Generic((val), \
+	bool: (val) ? "Enabled by default" : "Disabled by default", \
+	default: "Default is " STRINGIFY(val))
+
+/** Produce help text for default config value with compat for pre-C23
+ *  compilers (can be removed when gcc-10 become baseline) */
+#define SFPTPD_CONFIG_DFL_BOOL(val) _Generic((val), \
+	int: (val) ? "Enabled by default" : "Disabled by default", \
+	default: SFPTPD_CONFIG_DFL(val))
+
+/** Produce help text for default string config quoted macro values */
+#define SFPTPD_CONFIG_DFL_STR(val) _Generic((val), \
+	char *: "Defaults to " val)
+
 /** Enumeration of different config section categories. */
 enum sfptpd_config_category {
 
@@ -555,6 +570,8 @@ typedef struct sfptpd_config_option {
 	enum sfptpd_config_scope scope;
 	int (*parse)(struct sfptpd_config_section *, const char *option,
 		     unsigned int num_params, const char * const *params);
+	const char *dfl;
+	const char *unit;
 	bool hidden;
 	bool confidential;
 } sfptpd_config_option_t;
