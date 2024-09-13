@@ -59,17 +59,18 @@ Linux distribution support
 This package is supported on:
 
 - Red Hat Enterprise Linux 7.9
-- Red Hat Enterprise Linux 8.1 - 8.9
-- Red Hat Enterprise Linux 9.0 - 9.3
-- Canonical Ubuntu Server LTS 20.04, 22.04
+- Red Hat Enterprise Linux 8.1 - 8.10
+- Red Hat Enterprise Linux 9.0 - 9.4
+- Canonical Ubuntu Server LTS 20.04, 22.04, 24.04
 - Debian 10 "Buster"
 - Debian 11 "Bullseye"
 - Debian 12 "Bookworm"
-- Linux kernels 3.0 - 6.7
+- Linux kernels 3.0 - 6.10
 
-Other and older platforms and non-amd64 architectures may be compatibile with
-sfptpd. Please raise issues and patches for unsupported OSs on the
-community-supported repository at <https://github.com/Xilinx-CNS/sfptpd>.
+Other and older platforms and non-amd64 architectures may be compatible with
+sfptpd but are not supported by AMD. Please raise issues and patches for
+unsupported OSs on the community-supported repository at
+<https://github.com/Xilinx-CNS/sfptpd>.
 
 
 Documentation

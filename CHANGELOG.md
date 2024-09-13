@@ -112,6 +112,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Issue SWPTP-1481
   - When `max_missing_delayresps` config supplied, stop using the wrong
     value for hybrid fallback.
+- Issue SWPTP-1515
+  - Fix issue with BMC discriminator disqualifying sources when evaluated
+    inbetween Sync and FollowUp reception.
 
 ## [3.7.1.1007] - 2024-01-25
 
@@ -239,6 +242,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Issue SWPTP-1278
   - Fix retrieval of transmit timestamps to recover from nic reset quicker
+- Issue SWPTP-1290
+  - Fix failure subsequently to enable timestamps when started with empty bond
 - Issue SWPTP-1296
   - Improve logging of timer fd activity to identify system configuration issues
 - Issue SWPTP-1314
