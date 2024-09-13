@@ -16,6 +16,7 @@ BuildRequires: make
 BuildRequires: systemd
 BuildRequires: libmnl-devel
 BuildRequires: libcap-devel
+BuildRequires: devtoolset-8-gcc
 
 %description
 Use multiple PTP an PPS sources and sync local clocks together in one
@@ -42,7 +43,7 @@ scripts/sfptpd_versioning write %{version}
 sed -i 's,.*\(SFPTPD_USER=\).*",#\1"",g' scripts/sfptpd.env
 
 %build
-%make_build
+scl enable devtoolset-8 '%make_build'
 
 %install
 export CC='false # no compilation at installation stage #'
