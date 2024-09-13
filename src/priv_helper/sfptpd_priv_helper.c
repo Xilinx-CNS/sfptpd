@@ -21,6 +21,8 @@
 #include "sfptpd_crny_proto.h"
 #include "sfptpd_crny_helper.h"
 
+#include "glibc_compat.h"
+
 
 /****************************************************************************
  * Constant
