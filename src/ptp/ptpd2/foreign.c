@@ -1,4 +1,5 @@
 /*-
+ * Copyright (c) 2024      Advanced Micro Devices, Inc.
  * Copyright (c) 2019      Xilinx, Inc.
  * Copyright (c) 2014-2018 Solarflare Communications Inc.
  * Copyright (c) 2013      Harlan Stenn,
@@ -352,7 +353,10 @@ calculateForeignOffset(ForeignSyncSnapshot *syncSnapshot, const Timestamp *syncO
 	for record->announceTimesCount in order to decide whether to return a 
 	result or not. 
 	*/
-	struct sfptpd_timespec foreign_offset; /* foreign_offset holds the result. */
+
+	struct sfptpd_timespec foreign_offset;
+	/* foreign_offset holds the result. */
+
 	struct sfptpd_timespec local_time;
 	/* local_time will hold the local timestamp from the NIC that has already 
 	had the	applyUtcOffset function called on it. 
@@ -381,8 +385,7 @@ calculateForeignOffset(ForeignSyncSnapshot *syncSnapshot, const Timestamp *syncO
 	before it has had the applyUtcOffset function called on it. 
 
 	This approach was considered cleaner as it keeps the special code for this
-	feature in as few places as possible.
-*/
+	feature in as few places as possible. */
 
 	assert(syncSnapshot != NULL);
 	assert(syncOriginTimestamp != NULL);
@@ -418,20 +421,21 @@ recordForeignSync(const MsgHeader *header, PtpClock *ptpClock, const struct sfpt
 	if (ptpClock->discriminator_valid) {
 		ForeignMasterRecord *record = findForeignMasterRecord(header, &ptpClock->foreign);
 		if (record) {
-			ForeignSyncSnapshot *snapshot = &record->syncSnapshot;
+			ForeignSyncSnapshot *snapshot = &record->nextSyncSnapshot;
 
-			snapshot->have_timestamp = true;
-			snapshot->seq = header->sequenceId;
-			snapshot->timestamp = *timestamp;
+			*snapshot = (ForeignSyncSnapshot) {
+				.have_timestamp = true,
+				.timestamp = *timestamp,
+				.seq = header->sequenceId,
+				.two_step = header->flagField0 & PTPD_FLAG_TWO_STEP,
+			};
 
-			if ((header->flagField0 & PTPD_FLAG_TWO_STEP) == 0) {
+			if (!snapshot->two_step) {
 				calculateForeignOffset(snapshot,
 						       &ptpClock->interface->msgTmp.sync.originTimestamp,
 						       record,
 						       ptpClock);
-
-			} else {
-				snapshot->have_offset = false;
+				record->syncSnapshot = *snapshot;
 			}
 		}
 	}
@@ -444,15 +448,19 @@ recordForeignFollowUp(const MsgHeader *header, PtpClock *ptpClock, const MsgFoll
 	if (ptpClock->discriminator_valid) {
 		ForeignMasterRecord *record = findForeignMasterRecord(header, &ptpClock->foreign);
 		if (record) {
-			ForeignSyncSnapshot *snapshot = &record->syncSnapshot;
+			ForeignSyncSnapshot *snapshot = &record->nextSyncSnapshot;
 
-			if (header->sequenceId == snapshot->seq) {
+			if (snapshot->two_step &&
+			    !snapshot->have_offset &&
+			    header->sequenceId == snapshot->seq) {
 				calculateForeignOffset(snapshot,
 						       &payload->preciseOriginTimestamp,
 						       record,
 						       ptpClock);
+				record->syncSnapshot = *snapshot;
 			} else {
-				/* Invalidate snapshot if sequence ID of FollowUp does not match Sync */
+				/* Invalidate pending snapshot if sequence ID of FollowUp
+				 * does not match Sync */
 				snapshot->have_timestamp = false;
 				snapshot->have_offset = false;
 			}

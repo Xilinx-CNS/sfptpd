@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
-/* (c) Copyright 2012-2023 Advanced Micro Devices, Inc. */
+/* (c) Copyright 2012-2024 Advanced Micro Devices, Inc. */
 /* (c) Copyright ptpd2 contributors (see PTPD_COPYRIGHT) */
 
 #ifndef DATATYPES_H_
@@ -66,6 +66,7 @@ typedef struct {
 	sfptpd_time_t offset;
 	bool have_timestamp;
 	bool have_offset;
+	bool two_step;
 	UInteger16 seq;
 } ForeignSyncSnapshot;
 
@@ -95,6 +96,7 @@ typedef struct
 
 	/* Snapshot of Sync for use with discriminator */
 	ForeignSyncSnapshot syncSnapshot;
+	ForeignSyncSnapshot nextSyncSnapshot;
 } ForeignMasterRecord;
 
 typedef struct {
