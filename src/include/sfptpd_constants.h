@@ -34,9 +34,9 @@
 #define SFPTPD_OUI2 (0x53U)
 
 /** Clock delta threshold above which the servo will step the clock */
-#define SFPTPD_SERVO_CLOCK_STEP_THRESHOLD_S  (1)
-#define SFPTPD_SERVO_CLOCK_STEP_THRESHOLD_S_MIN (0.1)
-#define SFPTPD_SERVO_CLOCK_STEP_THRESHOLD_S_MAX (10)
+#define SFPTPD_SERVO_CLOCK_STEP_THRESHOLD_S      0.9
+#define SFPTPD_SERVO_CLOCK_STEP_THRESHOLD_S_MIN  0.1
+#define SFPTPD_SERVO_CLOCK_STEP_THRESHOLD_S_MAX 10.0
 
 /** Clock servo filter stiffness */
 #define SFPTPD_SERVO_FILTER_STIFFNESS_MIN  (1)

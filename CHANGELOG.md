@@ -94,9 +94,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - Default polling interval for chronyd doubled to 2s.
-- The default value of `one_phc_per_nic` is now `off`. (SWPTP-1348)
+- Default value of `one_phc_per_nic` is now `off`. (SWPTP-1348)
    - See note under [v3.5.0.1004](#3501004---2022-05-13-feature-release)
      and the [README](README.md#using-non-solarflare-network-adapters).
+- Default threshold to step rather than slew reduced to 900ms. (SWPTP-1519)
+   - This avoids asymmetric behaviour for offsets slightly above or below
+     1.0s as can occur with a leap second or when an erroneous 1s step is
+     corrected.
 
 ### Removed
 
