@@ -2343,8 +2343,14 @@ void sfptpd_clock_correct_new(struct sfptpd_clock *clock)
 		if (rc != 0) {
 			ERROR("failed to read clock %s time, %s\n",
 			      clock->long_name, strerror(rc));
-		} else if (time.sec < SFPTPD_NIC_TIME_VALID_THRESHOLD) {
-			sfptpd_clock_set_time(clock, sfptpd_clock_system, NULL);
+		} else {
+		        struct sfptpd_config_general *gconf;
+			gconf = sfptpd_general_config_get(sfptpd_clock_config);
+
+			if (time.sec < SFPTPD_NIC_TIME_VALID_THRESHOLD ||
+			    gconf->initial_clock_correction == SFPTPD_CLOCK_INITIAL_CORRECTION_ALWAYS) {
+				sfptpd_clock_set_time(clock, sfptpd_clock_system, NULL);
+			}
 		}
 	}
 }

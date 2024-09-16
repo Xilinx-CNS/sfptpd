@@ -28,6 +28,7 @@
 #define SFPTPD_DEFAULT_CLOCK_CTRL                  (SFPTPD_CLOCK_CTRL_SLEW_AND_STEP)
 #define SFPTPD_DEFAULT_STEP_THRESHOLD_NS           (SFPTPD_SERVO_CLOCK_STEP_THRESHOLD_S * ONE_BILLION)
 #define SFPTPD_DEFAULT_EPOCH_GUARD                 (SFPTPD_EPOCH_GUARD_CORRECT_CLOCK)
+#define SFPTPD_DEFAULT_INITIAL_CLOCK_CORRECTION    (SFPTPD_CLOCK_INITIAL_CORRECTION_ALWAYS)
 #define SFPTPD_DEFAULT_CLUSTERING_MODE             (SFPTPD_CLUSTERING_DISABLED)
 #define SFPTPD_DEFAULT_CLUSTERING_SCORE_ABSENT_DISCRIM 1
 #define SFPTPD_DEFAULT_CLUSTERING_GUARD            (false)
@@ -96,6 +97,12 @@ enum sfptpd_epoch_guard_config {
 	SFPTPD_EPOCH_GUARD_ALARM_ONLY,
 	SFPTPD_EPOCH_GUARD_PREVENT_SYNC,
 	SFPTPD_EPOCH_GUARD_CORRECT_CLOCK
+};
+
+/** Initial clock correction options */
+enum sfptpd_clock_initial_correction {
+	SFPTPD_CLOCK_INITIAL_CORRECTION_ALWAYS,
+	SFPTPD_CLOCK_INITIAL_CORRECTION_IF_UNSET,
 };
 
 enum clock_config_state {
@@ -186,7 +193,7 @@ typedef struct sfptpd_config_timestamping {
  * @netlink_rescan_interval: Interval between rescanning interface with netlink
  * @pid_filter.kp: Secondary servo PID filter proportional term coefficient
  * @pid_filter.ki: Secondary servo PID filter integral term coefficient
- * rely on a signal from an external entity via sfptpdctl.
+ * @initial_clock_correction: When to apply an initial clock correction
  */
 typedef struct sfptpd_config_general {
 	sfptpd_config_section_t hdr;
@@ -237,6 +244,7 @@ typedef struct sfptpd_config_general {
 	char json_stats_filename[PATH_MAX];
 	char json_remote_monitor_filename[PATH_MAX];
 	enum sfptpd_epoch_guard_config epoch_guard;
+	enum sfptpd_clock_initial_correction initial_clock_correction;
 	enum sfptpd_clustering_mode clustering_mode;
 	enum sfptpd_phc_diff_method phc_diff_methods[SFPTPD_DIFF_METHOD_MAX+1];
 	char clustering_discriminator_name[SFPTPD_CONFIG_SECTION_NAME_MAX];

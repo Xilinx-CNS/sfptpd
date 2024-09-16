@@ -125,6 +125,8 @@ static int parse_unique_clockid_bits(struct sfptpd_config_section *section, cons
 				     unsigned int num_params, const char * const params[]);
 static int parse_legacy_clockids(struct sfptpd_config_section *section, const char *option,
 				  unsigned int num_params, const char * const params[]);
+static int parse_initial_clock_correction(struct sfptpd_config_section *section, const char *option,
+					  unsigned int num_params, const char * const params[]);
 
 static int validate_config(struct sfptpd_config_section *section);
 
@@ -377,6 +379,10 @@ static const sfptpd_config_option_t config_general_options[] =
 		"Use legacy 1588-2008 clock ids of the form :::ff:fe:::",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_legacy_clockids,
 		.dfl = SFPTPD_CONFIG_DFL_BOOL(false)},
+	{"initial_clock_correction", "<always | if-unset>",
+		"When to apply an initial clock correction to NIC clocks",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_initial_clock_correction,
+		.dfl = "Defaults to always"},
 };
 
 static const sfptpd_config_option_set_t config_general_option_set =
@@ -970,6 +976,25 @@ static int parse_epoch_guard(struct sfptpd_config_section *section, const char *
 		general->epoch_guard = SFPTPD_EPOCH_GUARD_PREVENT_SYNC;
 	} else if (strcmp(params[0], "correct-clock") == 0) {
 		general->epoch_guard = SFPTPD_EPOCH_GUARD_CORRECT_CLOCK;
+	} else {
+		rc = EINVAL;
+	}
+
+	return rc;
+}
+
+static int parse_initial_clock_correction(struct sfptpd_config_section *section, const char *option,
+					  unsigned int num_params, const char * const params[])
+{
+	int rc = 0;
+	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+
+	assert(num_params == 1);
+
+	if (strcmp(params[0], "always") == 0) {
+		general->initial_clock_correction = SFPTPD_CLOCK_INITIAL_CORRECTION_ALWAYS;
+	} else if (strcmp(params[0], "if-unset") == 0) {
+		general->initial_clock_correction = SFPTPD_CLOCK_INITIAL_CORRECTION_IF_UNSET;
 	} else {
 		rc = EINVAL;
 	}
@@ -1692,6 +1717,7 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		new->clocks.discipline_all = SFPTPD_DEFAULT_DISCIPLINE_ALL_CLOCKS;
 		new->clocks.num_clocks = 0;
 		new->epoch_guard = SFPTPD_DEFAULT_EPOCH_GUARD;
+		new->initial_clock_correction = SFPTPD_DEFAULT_INITIAL_CLOCK_CORRECTION;
 
 		new->non_sfc_nics = SFPTPD_DEFAULT_NON_SFC_NICS;
 		new->assume_one_phc_per_nic = SFPTPD_DEFAULT_ASSUME_ONE_PHC_PER_NIC;

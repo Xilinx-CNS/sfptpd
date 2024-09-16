@@ -61,6 +61,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Add `pidadjust` control command to tweak PID controller co-efficients
   at runtime for experimental purposes only. Run `sfptpdctl` without
   arguments to see syntax. (SWPTP-1411)
+- Always set NIC clocks on startup by default. The previous behaviour of
+  only setting them when not already set or if used as PTP master or with
+  a freerunning clock instance can be configured. (SWPTP-1431)
 - Add Debian packaging. (SWPTP-1446)
 - Add `-D` command line option to specify default PTP domain. (SWPTP-1454)
 - Add master-only PTP option. (SWPTP-1459)
