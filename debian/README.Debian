@@ -1,0 +1,26 @@
+sfptpd for Debian
+-----------------
+
+The supported Debian packages for sfptpd are provided as amd64 binary
+builds. To obtain the corresponding source code, locate the equivalent tag
+from <https://github.com/Xilinx-CNS/sfptpd/tags> and follow the build
+directions in INSTALL.md.
+
+The following builds are currently provided:
+
+| Part number  | Supported Debian OSs | Supported Ubuntu OSs |
+| ------------ | -------------------- | -------------------- |
+| XN-202410-LS | Debian 12 Bookworm   | 24.04 LTS            |
+| ------------ | -------------------- | -------------------- |
+| XN-202411-LS | Debian 11 Bullseye   | 22.04 LTS            |
+|              | Debian 10 Buster     | 20.04 LTS            |
+
+The sfptpd daemon is installed as a service using native service definitions
+for the sysvinit, systemd and runit init systems. The service is installed
+initially disabled and not started.
+
+After configuring sfptpd's /etc/sfptpd.conf file, using the examples in
+/usr/share/doc/sfptpd/config for guidance, run commands appropriate to
+the init system to enable and start, e.g. systemctl enable sfptpd
+
+ -- AMD NIC Support <support-nic@amd.com>  Tue, 17 Sep 2024 18:21:00 +0100

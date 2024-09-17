@@ -19,3 +19,9 @@ override_dh_auto_test:
 
 override_dh_installchangelogs:
 	dh_installchangelogs CHANGELOG.md
+
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start
+
+override_dh_installinit:
+	dh_installinit --no-enable --no-start
