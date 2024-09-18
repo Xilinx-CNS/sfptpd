@@ -133,7 +133,17 @@ void probeBondSocks(struct ptpd_transport *transport)
 
 void bondSocksOnTxIfindex(struct ptpd_transport *transport, int sockfd, int ifindex)
 {
+	struct socket_ifindex *mapElement;
 	int i;
+
+	/* First check if the socket is one we already are sending over, and
+	 * verify that we are getting the correct tx ifindex. */
+	mapElement = bondSockFindMulticastMappingByFd(transport, sockfd);
+	if (mapElement != NULL && mapElement->ifindex != ifindex)
+	{
+		transport->multicastBondSocksLen = 0;
+		probeBondSocks(transport);
+	}
 
 	/* If this sockfd isn't in our mapping already, then lets update our
 	 * mapping to include it and the ifindex. */
