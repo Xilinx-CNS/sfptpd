@@ -901,7 +901,7 @@ static int timer_start(struct sfptpd_event *timer, bool periodic,
 	}
 
 	DBG_L5("thread %s timer %d: started with interval "
-	       SFPTPD_FMT_SFTIMESPEC SFPTPD_FORMAT_TIMESPEC "\n",
+	       SFPTPD_FORMAT_TIMESPEC ", " SFPTPD_FORMAT_TIMESPEC "\n",
 	       thread_get_name(), timer->id,
 	       SFPTPD_ARGS_TIMESPEC(timer_spec.it_value),
 	       SFPTPD_ARGS_TIMESPEC(timer_spec.it_interval));
