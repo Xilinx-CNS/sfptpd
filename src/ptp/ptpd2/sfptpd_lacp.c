@@ -24,13 +24,6 @@ static inline void invalidateBondBypassSocket(struct ptpd_transport *transport, 
 	transport->bondSocks[sockIdx] = 0;
 }
 
-/* This macro is intended as a relatively general purpose iterator over a
- * bitmask, such that `copyMask |= (1 << idx)` will recreate `mask`. */
-#define FOR_EACH_MASK_IDX(mask, idx) \
-	for (uint64_t msk = (mask), idx = __builtin_ffsll(msk) - 1; \
-	     msk != 0; \
-	     msk &= ~(1 << idx), idx = __builtin_ffsll(msk) - 1)
-
 void createBondSocks(struct ptpd_transport *transport, int transportAF)
 {
 	int i;
@@ -86,6 +79,8 @@ void createBondSocks(struct ptpd_transport *transport, int transportAF)
 			continue;
 		}
 
+		sfptpd_thread_user_fd_add(sockfd, true, false);
+
 		transport->bondSocks[i] = sockfd;
 		transport->bondSocksValidMask |= (1 << i);
 	}
@@ -98,7 +93,6 @@ void destroyBondSocks(struct ptpd_transport *transport)
 
 	/* Should already be true but doesn't hurt to do it here too */
 	transport->bondSocksValidMask = 0ull;
-	transport->bondSocksMcastResolutionMask = 0ull;
 	transport->multicastBondSocksLen = 0;
 }
 
@@ -114,7 +108,8 @@ void probeBondSocks(struct ptpd_transport *transport)
 		.msg_controllen = 0
 	};
 
-	transport->bondSocksMcastResolutionMask = 0ull;
+	TRACE_L3("LACP bypass: resolving multicast port-ifindex mapping\n");
+
 	transport->multicastBondSocksLen = 0;
 
 	/* Short verion of `copyAddress` and `copyPort`, not worth
@@ -133,58 +128,55 @@ void probeBondSocks(struct ptpd_transport *transport)
 	 * discarded by the other end, if this succeds then we make a
 	 * note that we expect to see something on the error queue. */
 	FOR_EACH_MASK_IDX(transport->bondSocksValidMask, idx)
-		if (sendmsg(transport->bondSocks[idx], &msg, 0) == 0)
-			transport->bondSocksMcastResolutionMask |= (1 << idx);
+		sendmsg(transport->bondSocks[idx], &msg, 0);
 }
 
-void bondSocksHandleMcastResolution(PtpInterface *ptpInterface)
+void bondSocksOnTxIfindex(struct ptpd_transport *transport, int sockfd, int ifindex)
 {
-	struct ptpd_transport *transport = &ptpInterface->transport;
+	int i;
 
-	/* TODO: the current approach is somewhat out of place with the rest of
-	 * the surrounding code. A better solution here would be to add these
-	 * sockets to the epoll set and handle retrieval of the ifindex from
-	 * the error queue alongside other data. This is perhaps already done,
-	 * and would just require properly filling out the "iptype_pktinfo"
-	 * section defined in `netProcessError`. */
-	FOR_EACH_MASK_IDX(transport->bondSocksMcastResolutionMask, idx) {
-		int i, ifindex;
+	/* If this sockfd isn't in our mapping already, then lets update our
+	 * mapping to include it and the ifindex. */
+	for (i = 0; i < transport->multicastBondSocksLen; i++)
+		if (transport->multicastBondSocks[i].ifindex == ifindex)
+			break;
 
-		ifindex = netTryGetSockIfindex(ptpInterface, transport->bondSocks[idx]);
-		/* Skip this socket if we don't know its ifindex yet. */
-		if (ifindex <= 0)
-			continue;
-
-		/* Check that we haven't already found this ifindex. */
-		for (i = 0; i < transport->multicastBondSocksLen; i++)
-			if (transport->multicastBondSocks[i].ifindex == ifindex)
-				break;
-
-		/* If we have already found this ifindex, or we don't have
-		 * enough space to store it, then remove this socket from the
-		 * waiting pool. */
-		const int maxLen = sizeof(transport->multicastBondSocks) /
-				   sizeof(transport->multicastBondSocks[0]);
-		if (i < transport->multicastBondSocksLen || i >= maxLen) {
-			/* Don't clean up the socket as it's still valid! */
-			transport->bondSocksMcastResolutionMask &= ~(1 << idx);
-			continue;
-		}
-
-		/* Record the newly found (socket, ifindex) pair. */
-		assert(i >= transport->multicastBondSocksLen);
-		assert(i < maxLen);
-		transport->multicastBondSocks[i].sockfd = transport->bondSocks[idx];
-		transport->multicastBondSocks[i].ifindex = ifindex;
-		transport->multicastBondSocksLen++;
-		transport->bondSocksMcastResolutionMask &= ~(1 << idx);
-		sfptpd_thread_user_fd_add(transport->bondSocks[idx], true, false);
-
-		/* If our storage is full, then lets make sure we skip this
-		 * discovery code in the future. */
-		if (transport->multicastBondSocksLen >= maxLen)
-			transport->bondSocksMcastResolutionMask = 0ull;
+	/* If we have already found this ifindex, or we don't have
+	 * enough space to store it, then remove this socket from the
+	 * waiting pool. */
+	const int maxLen = sizeof(transport->multicastBondSocks) /
+			   sizeof(transport->multicastBondSocks[0]);
+	if (i < transport->multicastBondSocksLen || i >= maxLen) {
+		return;
 	}
+
+	/* Record the newly found (socket, ifindex) pair. */
+	assert(i >= transport->multicastBondSocksLen);
+	assert(i < maxLen);
+	transport->multicastBondSocks[i].sockfd = sockfd;
+	transport->multicastBondSocks[i].ifindex = ifindex;
+	transport->multicastBondSocksLen++;
+}
+
+struct socket_ifindex*
+bondSockFindMulticastMappingByFd(struct ptpd_transport *transport, int sockfd)
+{
+	int i;
+
+	for (i = 0; i < transport->multicastBondSocksLen; i++)
+		if (transport->multicastBondSocks[i].sockfd == sockfd)
+			return &transport->multicastBondSocks[i];
+
+	return NULL;
+}
+
+int bondSockFdIndexInSockPool(struct ptpd_transport *transport, int sockfd)
+{
+	FOR_EACH_MASK_IDX(transport->bondSocksValidMask, idx)
+		if (transport->bondSocks[idx] == sockfd)
+			return idx;
+
+	return -1;
 }
 
 void setBondSockopt(struct ptpd_transport *transport, int level, int optname,

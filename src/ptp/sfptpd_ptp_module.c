@@ -37,6 +37,7 @@
 #include "sfptpd_pps_module.h"
 #include "sfptpd_link.h"
 #include "sfptpd_multicast.h"
+#include "sfptpd_lacp.h"
 
 #include "ptpd_lib.h"
 
@@ -4101,7 +4102,7 @@ static void ptp_on_user_fds(void *context,
 	struct ptpd_transport *transport;
 	sfptpd_ptp_module_t *ptp = (sfptpd_ptp_module_t *)context;
 	bool event, general, error;
-	unsigned int i, j;
+	unsigned int i;
 
 	assert(ptp != NULL);
 	assert(events != NULL);
@@ -4120,8 +4121,8 @@ static void ptp_on_user_fds(void *context,
 			}
 			if (events[i].fd == interface->ptpd_intf_fds.general_sock)
 				general = true;
-			for (j = 0; j < transport->multicastBondSocksLen; j++) {
-				int sockfd = transport->multicastBondSocks[j].sockfd;
+			FOR_EACH_MASK_IDX(transport->bondSocksValidMask, j) {
+				int sockfd = transport->bondSocks[j];
 				if (events[i].fd == sockfd) {
 					if (events[i].flags.rd)
 						event = true;

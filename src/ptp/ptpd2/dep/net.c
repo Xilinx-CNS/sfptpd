@@ -1225,12 +1225,14 @@ bool netProcessError(PtpInterface *ptpInterface,
 		     size_t length,
 		     struct sfptpd_ts_user *user,
 		     struct sfptpd_ts_ticket *ticket,
-		     struct sfptpd_ts_info *info)
+		     struct sfptpd_ts_info *info,
+		     int fd)
 {
-	int ipproto = ptpInterface->ifOpts.transportAF == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP;
-	int iptype_recverr = ipproto == IPPROTO_IPV6 ? IPV6_RECVERR : IP_RECVERR;
-	int iptype_pktinfo = ipproto == IPPROTO_IPV6 ? IPV6_PKTINFO : IP_PKTINFO;
-	Boolean haveTs = FALSE, havePkt = FALSE;
+	bool ipv6 = (ptpInterface->ifOpts.transportAF == AF_INET6);
+	int ipproto = ipv6 ? IPPROTO_IPV6 : IPPROTO_IP;
+	int iptype_recverr = ipv6 ? IPV6_RECVERR : IP_RECVERR;
+	int iptype_pktinfo = ipv6 ? IPV6_PKTINFO : IP_PKTINFO;
+	Boolean haveTs = FALSE, havePkt = FALSE, matchedBondSock = FALSE;
 	struct msghdr *msg = &ptpInterface->msgEbuf;
 	struct cmsghdr *cmsg;
 	struct sock_extended_err *err;
@@ -1281,10 +1283,17 @@ bool netProcessError(PtpInterface *ptpInterface,
 				havePkt = TRUE;
 			}
 		} else if ((ipproto == level) && (iptype_pktinfo == type)) {
-			/* If we use the bond bypass sockets, they will give
-			 * us the packet info, but we only actually care for
-			 * the initial discovery. Just ignore it here, and
-			 * make sure we don't complain that it's unexpected. */
+			/* NOTE: it may be useful for the unicast solution to
+			 * note that recvmsg will return the full data packet
+			 * including ethernet headers. This should allow us to
+			 * check whether the packet was sent to a multicast IP
+			 * to differentiate the cases. */
+			int ifindex = ipv6
+				    ? ((struct in6_pktinfo*)CMSG_DATA(cmsg))->ipi6_ifindex
+				    : ((struct in_pktinfo*)CMSG_DATA(cmsg))->ipi_ifindex;
+			bondSocksOnTxIfindex(&ptpInterface->transport, fd, ifindex);
+			matchedBondSock =
+				(bondSockFdIndexInSockPool(&ptpInterface->transport, fd) >= 0);
 		} else {
 			WARNING("unexpected socket error queue "
 				"msg: level %d, type %d\n",
@@ -1315,7 +1324,7 @@ bool netProcessError(PtpInterface *ptpInterface,
 				"packet but no timestamp\n");
 		}
 	} else {
-		if (havePkt) {
+		if (havePkt && !matchedBondSock) {
 			WARNING("unexpected pkt received on "
 				"socket error queue. Expected one of:\n");
 			TS_CACHE_FOREACH(&ptpInterface->ts_cache, slot) {

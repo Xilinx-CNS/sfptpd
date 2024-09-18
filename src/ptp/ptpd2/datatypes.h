@@ -632,10 +632,6 @@ struct ptpd_transport {
 	 * valid means that we were able to create and set all of the socket
 	 * options that we wanted. */
 	uint64_t bondSocksValidMask;
-	/* A mask of `bondSocks` to get the sockets we are waiting to resolve.
-	 * We use this to know which sockets we need to check the errqueue of
-	 * to receive IP_PKTINFO and find the physical ifindex for mcast. */
-	uint64_t bondSocksMcastResolutionMask;
 	/* A mapping of socket fd to the physical ifindex the socket will send
 	 * out of for a multicast message. */
 	struct socket_ifindex multicastBondSocks[SFPTP_MAX_PHYSICAL_IFS];

@@ -53,6 +53,7 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
+#include <netinet/ip6.h>
 #include <netinet/udp.h>
 #include <netinet/if_ether.h>
 

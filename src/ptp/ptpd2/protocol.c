@@ -1655,8 +1655,8 @@ bool doHandleSocketsError(PtpInterface *ptpInterface, int sockfd)
 		      strerror(-length));
 		return false;
 	} else {
-		packet_matched = netProcessError(ptpInterface, length, &ts_user, &ts_ticket, &ts_info);
-		if (packet_matched) {
+		packet_matched = netProcessError(ptpInterface, length, &ts_user, &ts_ticket, &ts_info, sockfd);
+		if (packet_matched && sfptpd_ts_is_ticket_valid(ts_ticket)) {
 			if (is_suitable_timestamp(ptpInterface, &ts_info)) {
 				processTxTimestamp(ptpInterface, ts_user, ts_ticket,
 						   *get_suitable_timestamp(ptpInterface, &ts_info));
@@ -1702,15 +1702,13 @@ doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 {
 	struct ptpd_transport *transport = &ptpInterface->transport;
 
-	bondSocksHandleMcastResolution(ptpInterface);
-
 	if (error) {
 		while (error)
 			error = doHandleSocketsError(ptpInterface,
 						     transport->eventSock);
 
-		for (int i = 0; i < transport->multicastBondSocksLen; i++) {
-			int sockfd = transport->multicastBondSocks[i].sockfd;
+		FOR_EACH_MASK_IDX(transport->bondSocksValidMask, idx) {
+			int sockfd = transport->bondSocks[idx];
 			error = true;
 			while (error)
 				error = doHandleSocketsError(ptpInterface,
@@ -1724,8 +1722,8 @@ doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 		rc = doHandleSocketsEvent(ifOpts, ptpInterface,
 					  transport->eventSock);
 
-		for (int i = 0; i < transport->multicastBondSocksLen; i++) {
-			int sockfd = transport->multicastBondSocks[i].sockfd;
+		FOR_EACH_MASK_IDX(transport->bondSocksValidMask, idx) {
+			int sockfd = transport->bondSocks[idx];
 			rc2 = doHandleSocketsEvent(ifOpts, ptpInterface,
 						   sockfd);
 			/* We need to propagate the error somehow, and we only

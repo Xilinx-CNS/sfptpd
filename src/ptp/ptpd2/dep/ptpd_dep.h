@@ -271,7 +271,8 @@ bool netProcessError(PtpInterface *ptpInterface,
 		     size_t length,
 		     struct sfptpd_ts_user *user,
 		     struct sfptpd_ts_ticket *ticket,
-		     struct sfptpd_ts_info *info);
+		     struct sfptpd_ts_info *info,
+		     int sockfd);
 
 static inline size_t getTrailerLength(PtpClock *ptpClock)
 {

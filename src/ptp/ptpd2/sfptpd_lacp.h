@@ -63,6 +63,13 @@ struct ptpd_transport;
 typedef struct TsSetupMethod_s TsSetupMethod;
 typedef struct ptpd_intf_context PtpInterface;
 
+/* This macro is intended as a relatively general purpose iterator over a
+ * bitmask, such that `copyMask |= (1 << idx)` will recreate `mask`. */
+#define FOR_EACH_MASK_IDX(mask, idx) \
+	for (uint64_t msk = (mask), idx = __builtin_ffsll(msk) - 1; \
+	     msk != 0; \
+	     msk &= ~(1 << idx), idx = __builtin_ffsll(msk) - 1)
+
 #define SFPTPD_BOND_BYPASS_USE_SOCKPOOL (1 << 0)
 #define SFPTPD_BOND_BYPASS_USE_CMSG (1 << 1)
 #define SFPTPD_BOND_BYPASS_USE_BOTH (SFPTPD_BOND_BYPASS_USE_SOCKPOOL | \
@@ -72,7 +79,13 @@ void createBondSocks(struct ptpd_transport *transport, int transportAF);
 void destroyBondSocks(struct ptpd_transport *transport);
 
 void probeBondSocks(struct ptpd_transport *transport);
-void bondSocksHandleMcastResolution(PtpInterface *ptpInterface);
+
+void bondSocksOnTxIfindex(struct ptpd_transport *transport,
+			  int sockfd, int ifindex);
+
+struct socket_ifindex*
+bondSockFindMulticastMappingByFd(struct ptpd_transport *transport, int sockfd);
+int bondSockFdIndexInSockPool(struct ptpd_transport *transport, int sockfd);
 
 void setBondSockopt(struct ptpd_transport *transport, int level, int optname,
 		    const void *optval, socklen_t optlen);
