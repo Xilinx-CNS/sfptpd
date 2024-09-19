@@ -9,7 +9,7 @@ def nm = new NotificationManager(this)
 nm.slack_notify() {
   def scmVars
 
-  node('unit-test-parallel') {
+  node('unit-test-master') {
     stage('Checkout') {
       scmVars = checkout scm
       echo "Got revision ${scmVars.GIT_COMMIT}"
