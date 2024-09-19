@@ -785,45 +785,29 @@ void sfptpd_clockfeed_add_clock(struct sfptpd_clockfeed *clockfeed,
 				struct sfptpd_clock *clock,
 				int poll_period_log2)
 {
-	struct clockfeed_msg *msg;
+	struct clockfeed_msg msg;
 
 	assert(clockfeed);
 	assert(clockfeed->magic == CLOCKFEED_MODULE_MAGIC);
 
-	msg = (struct clockfeed_msg *)sfptpd_msg_alloc(SFPTPD_MSG_POOL_GLOBAL, false);
-	if (msg == NULL) {
-		SFPTPD_MSG_LOG_ALLOC_FAILED("global");
-		return;
-	}
-
-	memset(&msg->u.add_clock, 0, sizeof(msg->u.add_clock));
-
-	msg->u.add_clock.clock = clock;
-	msg->u.add_clock.poll_period_log2 = poll_period_log2;
-
-	SFPTPD_MSG_SEND_WAIT(msg, clockfeed->thread,
+	SFPTPD_MSG_INIT(msg);
+	msg.u.add_clock.clock = clock;
+	msg.u.add_clock.poll_period_log2 = poll_period_log2;
+	SFPTPD_MSG_SEND_WAIT(&msg, clockfeed->thread,
 			     CLOCKFEED_MSG_ADD_CLOCK);
 }
 
 void sfptpd_clockfeed_remove_clock(struct sfptpd_clockfeed *clockfeed,
 				   struct sfptpd_clock *clock)
 {
-	struct clockfeed_msg *msg;
+	struct clockfeed_msg msg;
 
 	assert(clockfeed);
 	assert(clockfeed->magic == CLOCKFEED_MODULE_MAGIC);
 
-	msg = (struct clockfeed_msg *)sfptpd_msg_alloc(SFPTPD_MSG_POOL_GLOBAL, false);
-	if (msg == NULL) {
-		SFPTPD_MSG_LOG_ALLOC_FAILED("global");
-		return;
-	}
-
-	memset(&msg->u.remove_clock, 0, sizeof(msg->u.remove_clock));
-
-	msg->u.remove_clock.clock = clock;
-
-	SFPTPD_MSG_SEND_WAIT(msg, clockfeed->thread,
+	SFPTPD_MSG_INIT(msg);
+	msg.u.remove_clock.clock = clock;
+	SFPTPD_MSG_SEND_WAIT(&msg, clockfeed->thread,
 			     CLOCKFEED_MSG_REMOVE_CLOCK);
 }
 
@@ -831,7 +815,7 @@ int sfptpd_clockfeed_subscribe(struct sfptpd_clockfeed *clockfeed,
 			       struct sfptpd_clock *clock,
 			       struct sfptpd_clockfeed_sub **sub)
 {
-	struct clockfeed_msg *msg;
+	struct clockfeed_msg msg;
 	int rc;
 
 	assert(clockfeed);
@@ -846,22 +830,14 @@ int sfptpd_clockfeed_subscribe(struct sfptpd_clockfeed *clockfeed,
 		return 0;
 	}
 
-	msg = (struct clockfeed_msg *)sfptpd_msg_alloc(SFPTPD_MSG_POOL_GLOBAL, false);
-	if (msg == NULL) {
-		SFPTPD_MSG_LOG_ALLOC_FAILED("global");
-		return ENOMEM;
-	}
-
-	memset(&msg->u.subscribe_req, 0, sizeof(msg->u.subscribe_req));
-
-	msg->u.subscribe_req.clock = clock;
-
-	rc = SFPTPD_MSG_SEND_WAIT(msg, clockfeed->thread,
+	SFPTPD_MSG_INIT(msg);
+	msg.u.subscribe_req.clock = clock;
+	rc = SFPTPD_MSG_SEND_WAIT(&msg, clockfeed->thread,
 				  CLOCKFEED_MSG_SUBSCRIBE);
 	if (rc == 0) {
-		assert(msg->u.subscribe_resp.sub);
-		assert(msg->u.subscribe_resp.sub->magic == CLOCKFEED_SUBSCRIBER_MAGIC);
-		*sub = msg->u.subscribe_resp.sub;
+		assert(msg.u.subscribe_resp.sub);
+		assert(msg.u.subscribe_resp.sub->magic == CLOCKFEED_SUBSCRIBER_MAGIC);
+		*sub = msg.u.subscribe_resp.sub;
 	}
 
 	return rc;
@@ -870,7 +846,7 @@ int sfptpd_clockfeed_subscribe(struct sfptpd_clockfeed *clockfeed,
 void sfptpd_clockfeed_unsubscribe(struct sfptpd_clockfeed *clockfeed,
 				 struct sfptpd_clockfeed_sub *subscriber)
 {
-	struct clockfeed_msg *msg;
+	struct clockfeed_msg msg;
 
 	assert(clockfeed);
 	assert(clockfeed->magic == CLOCKFEED_MODULE_MAGIC);
@@ -880,17 +856,9 @@ void sfptpd_clockfeed_unsubscribe(struct sfptpd_clockfeed *clockfeed,
 
 	assert(subscriber->magic == CLOCKFEED_SUBSCRIBER_MAGIC);
 
-	msg = (struct clockfeed_msg *)sfptpd_msg_alloc(SFPTPD_MSG_POOL_GLOBAL, false);
-	if (msg == NULL) {
-		SFPTPD_MSG_LOG_ALLOC_FAILED("global");
-		return;
-	}
-
-	memset(&msg->u.unsubscribe, 0, sizeof(msg->u.unsubscribe));
-
-	msg->u.unsubscribe.sub = subscriber;
-
-	SFPTPD_MSG_SEND_WAIT(msg, clockfeed->thread,
+	SFPTPD_MSG_INIT(msg);
+	msg.u.unsubscribe.sub = subscriber;
+	SFPTPD_MSG_SEND_WAIT(&msg, clockfeed->thread,
 			     CLOCKFEED_MSG_UNSUBSCRIBE);
 }
 
