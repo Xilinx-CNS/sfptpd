@@ -3,7 +3,7 @@
 
 Name: sfptpd
 Version: %{pkgversion}
-Release: 1%{?dist}
+Release: 1
 Summary: System time sync daemon supporting PTP, NTP and 1PPS
 License: BSD-3-Clause AND BSD-2-Clause AND NTP AND ISC
 Group: System Environment/Daemons
@@ -109,5 +109,5 @@ make fast_test
 %{_libexecdir}/%{name}/chrony_clockcontrol.py
 
 %changelog
-* Mon Jan  8 2024 Andrew Bower <andrew.bower@amd.com> - 3.7.1.1003-1
+* Fri Sep 20 2024 AMD NIC Support <support-nic@amd.com> - 3.8.0.1002-1
 - see CHANGELOG.md in source archive for changelog

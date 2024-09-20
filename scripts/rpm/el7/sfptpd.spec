@@ -109,5 +109,5 @@ make fast_test
 %exclude %{_libexecdir}/%{name}/*.py[co]
 
 %changelog
-* Mon Jan  8 2024 Andrew Bower <andrew.bower@amd.com> - 3.7.1.1003-1
+* Fri Sep 20 2024 AMD NIC Support <support-nic@amd.com> - 3.8.0.1002-1
 - see CHANGELOG.md in source archive for changelog
