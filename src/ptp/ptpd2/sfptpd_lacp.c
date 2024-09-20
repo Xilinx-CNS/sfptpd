@@ -79,7 +79,11 @@ void createBondSocks(struct ptpd_transport *transport, int transportAF)
 			continue;
 		}
 
-		sfptpd_thread_user_fd_add(sockfd, true, false);
+		rc = sfptpd_thread_user_fd_add(sockfd, true, false);
+		if (rc != 0) {
+			close(sockfd);
+			continue;
+		}
 
 		transport->bondSocks[i] = sockfd;
 		transport->bondSocksValidMask |= (1 << i);
