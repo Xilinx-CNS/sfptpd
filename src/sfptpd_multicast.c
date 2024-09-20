@@ -464,7 +464,6 @@ int sfptpd_multicast_send(sfptpd_msg_hdr_t *hdr,
 finish:
 	if (dests != NULL)
 		free(dests);
-	sfptpd_msg_free(hdr);
 	return rc;
 }
 

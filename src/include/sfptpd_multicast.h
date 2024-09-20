@@ -59,7 +59,8 @@ int sfptpd_multicast_unsubscribe(uint32_t msg_id);
  */
 int sfptpd_multicast_unpublish(uint32_t msg_id);
 
-/** Send a multicast sfptpd messages.
+/** Send a multicast sfptpd messages. The sender
+ * retains ownership of the message buffer.
  * @param hdr Header of the message to be sent
  * @param msg_id The message id of the multicast group
  * @param pool Pool from which to allocate the replicated messages
