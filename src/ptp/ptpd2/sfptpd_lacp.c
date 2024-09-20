@@ -60,27 +60,44 @@ void createBondSocks(struct ptpd_transport *transport, int transportAF)
 	assert(sockCount <= SFPTP_BOND_BYPASS_SOCK_COUNT);
 	for (i = 0; i < sockCount; i++) {
 		int sockfd, rc;
+		union bond_sock_invalid_description *invalid_desc =
+			&transport->bondSocksInvalidDescriptions[i];
 
 		assert(transport->bondSocks[i] == 0);
 
 		sockfd = socket(transportAF, SOCK_DGRAM, 0);
-		if (sockfd < 0)
+		if (sockfd < 0) {
+			invalid_desc->socket.reason =
+				BOND_SOCK_INVALID_REASON_SOCKET;
+			invalid_desc->socket.rc = sockfd;
 			continue;
+		}
 
 		rc = bind(sockfd, &localAddr, sizeof(localAddr));
 		if (rc < 0) {
+			invalid_desc->bind.reason =
+				BOND_SOCK_INVALID_REASON_BIND;
+			invalid_desc->bind.rc = rc;
 			close(sockfd);
 			continue;
 		}
 
 		rc = setsockopt(sockfd, level, opt, &one, sizeof(one));
 		if (rc < 0) {
+			invalid_desc->setsockopt.reason =
+				BOND_SOCK_INVALID_REASON_SETSOCKOPT;
+			invalid_desc->setsockopt.rc = rc;
+			invalid_desc->setsockopt.level = level;
+			invalid_desc->setsockopt.sockopt = opt;
 			close(sockfd);
 			continue;
 		}
 
 		rc = sfptpd_thread_user_fd_add(sockfd, true, false);
 		if (rc != 0) {
+			invalid_desc->add_to_epoll_set.reason =
+				BOND_SOCK_INVALID_REASON_ADD_TO_EPOLL_SET;
+			invalid_desc->add_to_epoll_set.rc = rc;
 			close(sockfd);
 			continue;
 		}
@@ -92,8 +109,15 @@ void createBondSocks(struct ptpd_transport *transport, int transportAF)
 
 void destroyBondSocks(struct ptpd_transport *transport)
 {
-	FOR_EACH_MASK_IDX(transport->bondSocksValidMask, idx)
+	FOR_EACH_MASK_IDX(transport->bondSocksValidMask, idx) {
+		union bond_sock_invalid_description *invalid_desc =
+			&transport->bondSocksInvalidDescriptions[idx];
+
 		invalidateBondBypassSocket(transport, idx);
+
+		invalid_desc->shutdown.reason =
+			BOND_SOCK_INVALID_REASON_SHUTDOWN;
+	}
 
 	/* Should already be true but doesn't hurt to do it here too */
 	transport->bondSocksValidMask = 0ull;
@@ -196,10 +220,23 @@ int bondSockFdIndexInSockPool(struct ptpd_transport *transport, int sockfd)
 void setBondSockopt(struct ptpd_transport *transport, int level, int optname,
 		    const void *optval, socklen_t optlen)
 {
-	FOR_EACH_MASK_IDX(transport->bondSocksValidMask, idx)
-		if (setsockopt(transport->bondSocks[idx], level, optname,
-			       optval, optlen) < 0)
+	int rc;
+	FOR_EACH_MASK_IDX(transport->bondSocksValidMask, idx) {
+		if ((rc = setsockopt(transport->bondSocks[idx], level, optname,
+			       optval, optlen)) < 0) {
+			union bond_sock_invalid_description *invalid_desc =
+				&transport->bondSocksInvalidDescriptions[idx];
+
 			invalidateBondBypassSocket(transport, idx);
+
+			invalid_desc->setsockopt.reason =
+				BOND_SOCK_INVALID_REASON_SETSOCKOPT;
+			invalid_desc->setsockopt.rc = rc;
+			invalid_desc->setsockopt.level = level;
+			invalid_desc->setsockopt.sockopt = optname;
+		}
+
+	}
 }
 
 void copyMulticastTTLToBondSocks(struct ptpd_transport *transport)
