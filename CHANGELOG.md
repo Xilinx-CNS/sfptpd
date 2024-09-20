@@ -11,14 +11,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Allow 32-bit userspace on 64-bit kernels (when built from source). (SWPTP-46)
-- Operate PTP to sub-nanosecond precision. (SWPTP-58)
-  - Internal structures updated throughout to use times with sub-nanosecond
-    resolution.
-  - When run with Onload 9.0 or later, retrieve timestamps with sub-nanosecond
-    resolution via updated extensions API. Disable with `onload_ext off`.
-  - Populate PTP correctionField to reflect sub-nanosecond timestamps (sfptpd
-    already used subnanosecond corrections received over the PTP network)
-  - See notes below for current limitations.
 - Add --socket option for sfptpdctl to control multiple processes. (SWPTP-624)
 - Add configurable patterns for log, state, control and stats paths. (SWPTP-649)
   - Supports logging to a directory shared between hosts.
@@ -31,13 +23,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     control_path /run/sfptpd-%P-control.sock
     ```
 - Enhance LACP support. (SWPTP-738)
-  - Switch the local reference clock to be the one by which the latest Sync
-    message was timestamped. (SWPTP-1434)
   - Add support for dual boundary clock topology by sending DelayReq
     messages over the physical interface that last received a Sync message
-    from the current PTP master. Implemented using an Onload extension feature
-    or with a pool of sockets for multicast that must be enabled.  To enable
-    this feature, see [this example](config/ptp_slave_lacp.cfg). (SWPTP-976)
+    from the current PTP master. Uses a pool of sockets for multicast.
+    To enable, see [example](config/ptp_slave_lacp.cfg). (SWPTP-976)
+  - Switch the local reference clock to be the one by which the latest Sync
+    message was timestamped. (SWPTP-1434)
 - Show unicast/multicast delay response flags in state file. (SWPTP-807)
 - Get transmit timestamps via epoll to avoid blocking PTP thread. (SWPTP-831)
 - Add configurable patterns for clock names and ids. (SWPTP-997)
@@ -85,12 +76,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     ```
 - Add Y2038 support when built for 32-bit targets with 64-bit time enabled.
   (Xilinx-CNS/sfptpd#12)
-
-> [!NOTE]
-> It is not normally helpful to accelerate sfptpd with Onload but this is
-> possible from Onload 9.0 onwards and enables sub-nanosecond timestamping
-> and, if configured, interoperability with LACP boundary clocks using unicast
-> delay measurement mode.
 
 ### Changed
 
