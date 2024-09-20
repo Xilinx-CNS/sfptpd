@@ -267,8 +267,8 @@ static const char *link_bond_mode(enum sfptpd_bond_mode mode) {
 
 void sfptpd_link_log(const struct sfptpd_link *link, const struct sfptpd_link *prev)
 {
-	const char *header[] = { "if_index", "if_name", "flags", "kind", "mode", "role", "link", "master", "active", "vlan"};
-	const char *format_header = "| %-8s | %-*s | %-5s | %-8s | %-4s | %-5s | %-6s | %-6s | %-6s | %-5s"
+	const char *header[] = { "if_index", "if_name", "flags", "kind", "mode", "role", "link", "master", "active", "vlan", "hash"};
+	const char *format_header = "| %-8s | %-*s | %-5s | %-8s | %-4s | %-5s | %-6s | %-6s | %-6s | %-5s | %-5s"
 #ifdef HAVE_ETHTOOL_NETLINK
 				    " | phc"
 #endif
@@ -276,7 +276,7 @@ void sfptpd_link_log(const struct sfptpd_link *link, const struct sfptpd_link *p
 				    " | permaddr         "
 #endif
 				    " |\n";
-	const char *format_record = "| %8d%3s%-*s | %05x | %-8s | %-4s | %-5s | %6d | %6d | %6d | %5d"
+	const char *format_record = "| %8d%3s%-*s | %05x | %-8s | %-4s | %-5s | %6d | %6d | %6d | %5d | %-5s"
 #ifdef HAVE_ETHTOOL_NETLINK
 				    " | %3d"
 #endif
@@ -292,7 +292,7 @@ void sfptpd_link_log(const struct sfptpd_link *link, const struct sfptpd_link *p
 		DBG_L1(format_header,
 		       header[0], IF_NAMESIZE, header[1], header[2], header[3],
 		       header[4], header[5], header[6], header[7],
-		       header[8], header[9]);
+		       header[8], header[9], header[10]);
 	}
 	if (prev != NULL) {
 		DBG_L1(format_record,
@@ -300,7 +300,8 @@ void sfptpd_link_log(const struct sfptpd_link *link, const struct sfptpd_link *p
 		       prev->if_flags, prev->if_kind,
 		       link_bond_mode(prev->bond.bond_mode), prev->is_slave ? "slave" : "",
 		       prev->if_link, prev->bond.if_master,
-		       prev->bond.active_slave, prev->vlan_id
+		       prev->bond.active_slave, prev->vlan_id,
+		       sfptpd_link_xmit_hash_policy(prev)
 #ifdef HAVE_ETHTOOL_NETLINK
 		       , prev->ts_info.phc_index
 #endif
@@ -316,7 +317,8 @@ void sfptpd_link_log(const struct sfptpd_link *link, const struct sfptpd_link *p
 		       link->if_flags, link->if_kind,
 		       link_bond_mode(link->bond.bond_mode), link->is_slave ? "slave" : "",
 		       link->if_link, link->bond.if_master,
-		       link->bond.active_slave, link->vlan_id
+		       link->bond.active_slave, link->vlan_id,
+		       sfptpd_link_xmit_hash_policy(link)
 #ifdef HAVE_ETHTOOL_NETLINK
 		       , link->ts_info.phc_index
 #endif
@@ -466,7 +468,8 @@ MNL_VALIDATE_CB(link_attr_info, IFLA_INFO_MAX, EXPECTED(
 
 MNL_VALIDATE_CB(link_attr_info_bond, IFLA_BOND_MAX, EXPECTED(
 		A(IFLA_BOND_MODE,		MNL_TYPE_U8),
-		A(IFLA_BOND_ACTIVE_SLAVE,	MNL_TYPE_U32)))
+		A(IFLA_BOND_ACTIVE_SLAVE,	MNL_TYPE_U32),
+		A(IFLA_BOND_XMIT_HASH_POLICY,	MNL_TYPE_U8)))
 
 MNL_VALIDATE_CB(link_attr_info_vlan, IFLA_VLAN_MAX, EXPECTED(
 		A(IFLA_VLAN_ID,			MNL_TYPE_U16)))
@@ -566,9 +569,10 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 						link->bond.bond_mode = SFPTPD_BOND_MODE_UNSUPPORTED;
 					}
 				}
-
 				if (nested2[IFLA_BOND_ACTIVE_SLAVE])
 					link->bond.active_slave = mnl_attr_get_u32(nested2[IFLA_BOND_ACTIVE_SLAVE]);
+				if (nested2[IFLA_BOND_XMIT_HASH_POLICY])
+					link->bond.xmit_hash_policy = mnl_attr_get_u8(nested2[IFLA_BOND_XMIT_HASH_POLICY]);
 				break;
 
 			case SFPTPD_LINK_VLAN:

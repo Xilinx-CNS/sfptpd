@@ -60,6 +60,22 @@ static const char *sfptpd_link_type_names[] = {
  * Public Functions
  ****************************************************************************/
 
+const char *sfptpd_link_xmit_hash_policy(const struct sfptpd_link *link)
+{
+	switch (link->bond.bond_mode) {
+	case SFPTPD_BOND_MODE_LACP:
+		switch (link->bond.xmit_hash_policy) {
+		case BOND_XMIT_POLICY_LAYER34:
+			return "l3+4";
+		default:
+			return "other";
+		}
+		break;
+	default:
+		return "";
+	}
+}
+
 const char *sfptpd_link_event_str(enum sfptpd_link_event event)
 {
 	switch (event) {

@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <net/if.h>
+#include <linux/if_bonding.h>
 #include <linux/ethtool.h>
 
 /****************************************************************************
@@ -78,6 +79,7 @@ struct sfptpd_link {
 		int if_master;
 		enum sfptpd_bond_mode bond_mode;
 		int active_slave;
+		uint8_t xmit_hash_policy;
 	} bond;
 	bool is_slave;
 	uint16_t vlan_id;
@@ -121,5 +123,7 @@ int sfptpd_link_table_copy(const struct sfptpd_link_table *src,
 			   struct sfptpd_link_table *dest);
 
 void sfptpd_link_table_free_copy(struct sfptpd_link_table *copy);
+
+const char *sfptpd_link_xmit_hash_policy(const struct sfptpd_link *link);
 
 #endif
