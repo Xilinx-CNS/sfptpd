@@ -7,8 +7,16 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <net/if.h>
-#include <linux/if_bonding.h>
 #include <linux/ethtool.h>
+
+/* On RHEL7 duplicate definitions get brought in between user and kernel
+ * headers if we include everything we need. This can be avoided by not
+ * including the bonding definitions and working around them.
+ * https://bugzilla.redhat.com/show_bug.cgi?id=1300256 &c.
+ * #include <linux/if_bonding.h>
+ */
+#define BOND_XMIT_POLICY_LAYER34 1
+/* End of workaround */
 
 /****************************************************************************
  * Structures, Types, Defines
