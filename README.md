@@ -54,9 +54,9 @@ The user guide for supported releases is available at
 
 The sfptpd daemon provides a system-centric time sync solution that can
 be used with any network adapter and driver supporting standard Linux time
-APIs. This gives advantages over other software which lacks the same degree of
-support for link aggregation and which does not integrate remote and local
-synchronisation in one process.
+APIs. The monolithic design of sfptpd enables a holistic approach to
+system time synchronisation, supporting link aggregation and integrating
+remote and local clock synchronisation.
 
 ### Using non-Solarflare network adapters
 
@@ -66,8 +66,8 @@ Enable the use of non-Solarflare adapters with:
 non_solarflare_nics on
 ```
 
-By default non-Solarflare adapters are not synchronised to avoid potential
-limitations with their drivers:
+By default, non-Solarflare adapters are not synchronised to avoid hitting
+a potential limitation with some drivers.
 
 Sfptpd is normally configured to synchronise all available NIC clocks
 automatically so that applications can obtain meaningful hardware timestamps
@@ -75,28 +75,12 @@ on all interfaces.
 
 In the case of Solarflare NICs, the `sfc` net driver presents the same "PTP
 Hardware Clock" (PHC) device (e.g. `/dev/ptp0`) for each of the physical
-network ports on a single adapter. Other NICs typically present an
-apparently independent PHC device for each network port.
+network ports on a single adapter. Some NICs, however, present separate and
+_apparently_ independent PHC devices for each network port which actually
+represent the same underlying physical clock.
 
-However, these apparently independent PHC devices typically are not independent
-but represent the same underlying physical clock. This arrangement has one of
-two consequences:
-
-1. When sfptpd tries to synchronise the same physical clock using
-   apparently but not actually independent PHC devices, duplicate corrections
-   occur. To mitigate this sfptpd has an option `assume_one_phc_per_nic`.
-2. If all but one of the PHC devices is treated by the driver as read only
-   **and** the instance made writable by the net driver is not the one on the
-   lowest-numbered port, then with `assume_one_phc_per_nic` set to `on`, sfptpd
-   will attempt to discipline the clock but there will be no effect. This
-   situation can be mitigated by leaving `assume_one_phc_per_nic` `off` but
-   that will result in wasteful clock comparisons for all the PHC devices
-   that are effectively read only.
-
-The current best recommendation to mitigate these limitations is to list
-explicitly the network ports of the NIC clocks to be disciplined with
-`clock_list`. Typically other software expects the clocks to be explicitly
-listed anyway.
+When using third party NICs affected by this issue the recommended mitigation
+is to list explicitly the NIC clocks to be disciplined with `clock_list`.
 
 ## Footnotes
 

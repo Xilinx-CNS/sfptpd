@@ -1,7 +1,7 @@
 AMD Solarflare Enhanced PTP Daemon
 ==================================
 
-Version: v3.8.0.x (unreleased)
+Version: v3.8.0.1001
 
 These release notes relate to official supported binary releases of sfptpd.
 Please see [the changelog](CHANGELOG.md) for a list of changes since earlier
@@ -126,7 +126,7 @@ Advanced notice of possible future changes
 - Supporting new IEEE1588 specifications
 
   Future releases may report support for PTP v2.1 on the wire by default. If
-  this causes difficulty with third-party equipment, specify `ptp_version 2.0`
+  this causes difficulty with unpatched time servers, specify `ptp_version 2.0`
   in the `ptp` configuration section.
 
 - Deprecation of remote monitor

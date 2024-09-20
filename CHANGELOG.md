@@ -6,22 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 (c) Copyright 2012-2024 Advanced Micro Devices, Inc.
 
-## [Unreleased]
+## [3.8.0.1001] - 2024-09-30
 
 ### Added
 
-- Allow 32-bit userspace on 64-bit kernels (when built from source). (SWPTP-46)
 - Add --socket option for sfptpdctl to control multiple processes. (SWPTP-624)
 - Add configurable patterns for log, state, control and stats paths. (SWPTP-649)
-  - Supports logging to a directory shared between hosts.
-    ```
-    json_stats /nfs/log/sfptpd-stats-%H:%Cd.jsonl
-    ```
-  - Or esoteric use cases requiring multiple sfptpd instances.
-    ```
-    state_path /var/lib/sfptpd-%P
-    control_path /run/sfptpd-%P-control.sock
-    ```
+  - Supports logging to a directory shared between hosts, e.g.
+    `json_stats /nfs/log/sfptpd-stats-%H:%Cd.jsonl`
+  - Or esoteric use cases requiring multiple sfptpd instances:
+    `state_path /var/lib/sfptpd-%P`
 - Enhance LACP support. (SWPTP-738)
   - Add support for dual boundary clock topology by sending DelayReq
     messages over the physical interface that last received a Sync message
@@ -32,15 +26,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Show unicast/multicast delay response flags in state file. (SWPTP-807)
 - Get transmit timestamps via epoll to avoid blocking PTP thread. (SWPTP-831)
 - Add configurable patterns for clock names and ids. (SWPTP-997)
-  - enables colons to be omitted from clock ids in filenames:
-    ```
-    clock_display_fmts phc%P phc%P(%I) %C: %D
-    ```
+  - e.g. avoid colons in filenames: `clock_display_fmts phc%P phc%P(%I) %C: %D`
 - Ethtool queries are now conducted over netlink instead of ioctl on kernels
   where this is supported. (SWPTP-1304)
 - IP address of parent clock added to topology files (SWPTP-1312)
 - Add option to configure state file and stats log update rates. (SWPTP-1326)
-  - E.g. `reporting_intervals save_state 120 stats_log 2`
+  - e.g. `reporting_intervals save_state 120 stats_log 2`
 - Add `step_threshold` option to change the offset threshold for allowing
   a step (when permitted by clock control setting). (SWPTP-1365)
 - Add shared clock feed. (SWPTP-1386)
@@ -62,18 +53,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Add a privileged helper to support hotplugging, connecting to the chrony
   control socket and performing clock control over chrony when running as a
   non-root user. (SWPTP-1479)
-- Allow repeated -v arguments to increase verbosity. (SWPTP-1489)
+- Allow repeated -v arguments as convenience to increase verbosity. (SWPTP-1489)
+
+### Added for unsupported source builds only
+
+- Allow 32-bit userspace on 64-bit kernels. (SWPTP-181)
 - Add `gps` sync module to use `gpsd` for PPS time of day.
-  - This is a unsupported feature not compiled in by default.
-  - To use this feature install the appropriate development package for
-    gpsd/libgps, build with `make NO_GPS=` and instantiate the `gps`
-    sync module with information on how to access the `gpsd` daemon, e.g.:
-    ```
-    [gps1]
-    gpsd ::1 2947
-    [pps]
-    time_of_day gps1
-    ```
+  - Build with `make NO_GPS=` having installed `libgps-dev`.
+  - Instantiate the `gps` sync module giving connection details (e.g.
+    `gpsd ::1 2947` and set as time of day source.
 - Add Y2038 support when built for 32-bit targets with 64-bit time enabled.
   (Xilinx-CNS/sfptpd#12)
 
@@ -96,9 +84,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- Xilinx-CNS/sfptpd#9
-  - Fix issue that manifests as not being able to control the system clock
-    on some systems, such as Raspberry Pi 5 with Debian 12.
 - Issue SWPTP-1396
   - Provide correct clock timestamps in real time stats corresponding to the
     reported offsets rather than time of logging message.
@@ -108,6 +93,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Issue SWPTP-1515
   - Fix issue with BMC discriminator disqualifying sources when evaluated
     inbetween Sync and FollowUp reception.
+- Xilinx-CNS/sfptpd#9
+  - Fix issue that manifests as not being able to control the system clock
+    on some systems, such as Raspberry Pi 5 with Debian 12.
 
 ## [3.7.1.1007] - 2024-01-25
 
