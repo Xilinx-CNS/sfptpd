@@ -60,27 +60,44 @@ void createBondSocks(struct ptpd_transport *transport, int transportAF)
 	assert(sockCount <= SFPTP_BOND_BYPASS_SOCK_COUNT);
 	for (i = 0; i < sockCount; i++) {
 		int sockfd, rc;
+		union bond_sock_invalid_description *invalid_desc =
+			&transport->bondSocksInvalidDescriptions[i];
 
 		assert(transport->bondSocks[i] == 0);
 
 		sockfd = socket(transportAF, SOCK_DGRAM, 0);
-		if (sockfd < 0)
+		if (sockfd < 0) {
+			invalid_desc->socket.reason =
+				BOND_SOCK_INVALID_REASON_SOCKET;
+			invalid_desc->socket.rc = sockfd;
 			continue;
+		}
 
 		rc = bind(sockfd, &localAddr, sizeof(localAddr));
 		if (rc < 0) {
+			invalid_desc->bind.reason =
+				BOND_SOCK_INVALID_REASON_BIND;
+			invalid_desc->bind.rc = rc;
 			close(sockfd);
 			continue;
 		}
 
 		rc = setsockopt(sockfd, level, opt, &one, sizeof(one));
 		if (rc < 0) {
+			invalid_desc->setsockopt.reason =
+				BOND_SOCK_INVALID_REASON_SETSOCKOPT;
+			invalid_desc->setsockopt.rc = rc;
+			invalid_desc->setsockopt.level = level;
+			invalid_desc->setsockopt.sockopt = opt;
 			close(sockfd);
 			continue;
 		}
 
 		rc = sfptpd_thread_user_fd_add(sockfd, true, false);
 		if (rc != 0) {
+			invalid_desc->add_to_epoll_set.reason =
+				BOND_SOCK_INVALID_REASON_ADD_TO_EPOLL_SET;
+			invalid_desc->add_to_epoll_set.rc = rc;
 			close(sockfd);
 			continue;
 		}
@@ -88,12 +105,23 @@ void createBondSocks(struct ptpd_transport *transport, int transportAF)
 		transport->bondSocks[i] = sockfd;
 		transport->bondSocksValidMask |= (1 << i);
 	}
+
+	/* We want to include even those that might have failed for the sake of
+	 * being able to log which sockets have been invalidated. */
+	transport->bondSocksCreatedCount = sockCount;
 }
 
 void destroyBondSocks(struct ptpd_transport *transport)
 {
-	FOR_EACH_MASK_IDX(transport->bondSocksValidMask, idx)
+	FOR_EACH_MASK_IDX(transport->bondSocksValidMask, idx) {
+		union bond_sock_invalid_description *invalid_desc =
+			&transport->bondSocksInvalidDescriptions[idx];
+
 		invalidateBondBypassSocket(transport, idx);
+
+		invalid_desc->shutdown.reason =
+			BOND_SOCK_INVALID_REASON_SHUTDOWN;
+	}
 
 	/* Should already be true but doesn't hurt to do it here too */
 	transport->bondSocksValidMask = 0ull;
@@ -196,10 +224,23 @@ int bondSockFdIndexInSockPool(struct ptpd_transport *transport, int sockfd)
 void setBondSockopt(struct ptpd_transport *transport, int level, int optname,
 		    const void *optval, socklen_t optlen)
 {
-	FOR_EACH_MASK_IDX(transport->bondSocksValidMask, idx)
-		if (setsockopt(transport->bondSocks[idx], level, optname,
-			       optval, optlen) < 0)
+	int rc;
+	FOR_EACH_MASK_IDX(transport->bondSocksValidMask, idx) {
+		if ((rc = setsockopt(transport->bondSocks[idx], level, optname,
+			       optval, optlen)) < 0) {
+			union bond_sock_invalid_description *invalid_desc =
+				&transport->bondSocksInvalidDescriptions[idx];
+
 			invalidateBondBypassSocket(transport, idx);
+
+			invalid_desc->setsockopt.reason =
+				BOND_SOCK_INVALID_REASON_SETSOCKOPT;
+			invalid_desc->setsockopt.rc = rc;
+			invalid_desc->setsockopt.level = level;
+			invalid_desc->setsockopt.sockopt = optname;
+		}
+
+	}
 }
 
 void copyMulticastTTLToBondSocks(struct ptpd_transport *transport)
@@ -215,4 +256,86 @@ void copyTimestampingToBondSocks(struct ptpd_transport *transport,
 	int flags = tsSetupMethod->flags | SOF_TIMESTAMPING_OPT_CMSG;
 	setBondSockopt(transport, SOL_SOCKET, tsSetupMethod->sockopt,
 		       &flags, sizeof(flags));
+}
+
+#define BOND_SOCK_INVALID_REASON_STRLEN 39
+void getBondSockInvalidReason(struct ptpd_transport *transport, int idx,
+			      char *reason)
+{
+	union bond_sock_invalid_description *invalid_desc =
+		&transport->bondSocksInvalidDescriptions[idx];
+
+	switch (invalid_desc->anonymous.reason) {
+	case BOND_SOCK_INVALID_REASON_SOCKET:
+		snprintf(reason, BOND_SOCK_INVALID_REASON_STRLEN,
+			 "INVALID: socket = %d",
+			 invalid_desc->socket.rc);
+		break;
+	case BOND_SOCK_INVALID_REASON_BIND:
+		snprintf(reason, BOND_SOCK_INVALID_REASON_STRLEN,
+			 "INVALID: bind = %d",
+			 invalid_desc->bind.rc);
+		break;
+	case BOND_SOCK_INVALID_REASON_SETSOCKOPT:
+		snprintf(reason, BOND_SOCK_INVALID_REASON_STRLEN,
+			 "INVALID: setsockopt(%d, %d) = %d",
+			 invalid_desc->setsockopt.level,
+			 invalid_desc->setsockopt.sockopt,
+			 invalid_desc->setsockopt.rc);
+		break;
+	case BOND_SOCK_INVALID_REASON_ADD_TO_EPOLL_SET:
+		snprintf(reason, BOND_SOCK_INVALID_REASON_STRLEN,
+			 "INVALID: add_to_epoll = %d",
+			 invalid_desc->add_to_epoll_set.rc);
+		break;
+	case BOND_SOCK_INVALID_REASON_SHUTDOWN:
+		snprintf(reason, BOND_SOCK_INVALID_REASON_STRLEN,
+			 "INVALID: shutdown");
+		break;
+	default:
+		snprintf(reason, BOND_SOCK_INVALID_REASON_STRLEN,
+			 "INVALID: unknown reason");
+		break;
+	}
+}
+
+void bondSocksDumpState(struct ptpd_intf_context *intf, int sev)
+{
+	const char *header[] = { "#", "fd", "port", "mcast ifindex" };
+	const char *formatHeader = "| %-2s | %-10s | %-10s | %-13s |\n";
+	const char *formatRecordValid = "| %-2d | %-10d | %-10d | %-13d |\n";
+	const char *formatRecordInvalid =
+		"| %-2d | %-" STRINGIFY(BOND_SOCK_INVALID_REASON_STRLEN) "s |\n";
+	const char *separator =
+		"|----+------------+------------+---------------|\n";
+	char invalidReason[BOND_SOCK_INVALID_REASON_STRLEN];
+	struct ptpd_transport *transport = &intf->transport;
+	int i;
+
+	if (transport->bondSocksCreatedCount <= 0)
+		return;
+
+	TRACE_LX(sev, "LACP bypass sockets state for interface %s:\n",
+		 transport->bond_info->bond_if);
+	TRACE_LX(sev, formatHeader, header[0], header[1], header[2], header[3]);
+	TRACE_LX(sev, separator);
+	for (i = 0; i < transport->bondSocksCreatedCount; i++) {
+		if (transport->bondSocksValidMask & (1 << i)) {
+			int fd = transport->bondSocks[i];
+			struct sockaddr_in addr;
+			socklen_t addrlen = sizeof(addr);
+			int getsockname_rc;
+			struct socket_ifindex *mapping;
+
+			getsockname_rc = getsockname(fd, &addr, &addrlen);
+			mapping = bondSockFindMulticastMappingByFd(transport, fd);
+
+			TRACE_LX(sev, formatRecordValid, i, fd,
+				 (getsockname_rc == 0) ? ntohs(addr.sin_port) : 0,
+				 (mapping) ? mapping->ifindex : 0);
+		} else {
+			getBondSockInvalidReason(transport, i, invalidReason);
+			TRACE_LX(sev, formatRecordInvalid, i, invalidReason);
+		}
+	}
 }

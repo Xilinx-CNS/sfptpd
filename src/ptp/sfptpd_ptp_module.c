@@ -3986,8 +3986,10 @@ static void on_dump_tables(struct sfptpd_ptp_module *ptp,
 {
 	struct sfptpd_ptp_intf *interface;
 
-	for (interface = ptp->intf_list; interface; interface = interface->next)
+	for (interface = ptp->intf_list; interface; interface = interface->next) {
 		ptpd_process_intf_stats(interface->ptpd_intf_private, true);
+		bondSocksDumpState(interface->ptpd_intf_private, 0);
+	}
 
 	SFPTPD_MSG_FREE(msg);
 }

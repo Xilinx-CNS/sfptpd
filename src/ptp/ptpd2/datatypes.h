@@ -611,6 +611,34 @@ struct socket_ifindex {
 };
 
 
+/* A unique reason for why a given bond socket has been invalidated. */
+enum bond_sock_invalid_reason {
+	BOND_SOCK_INVALID_REASON_SOCKET,
+	BOND_SOCK_INVALID_REASON_BIND,
+	BOND_SOCK_INVALID_REASON_SETSOCKOPT,
+	BOND_SOCK_INVALID_REASON_ADD_TO_EPOLL_SET,
+	BOND_SOCK_INVALID_REASON_SHUTDOWN
+};
+
+
+/* A more in-depth description about why a bond socket has been invalidated */
+union bond_sock_invalid_description {
+	struct {
+		enum bond_sock_invalid_reason reason;
+	} anonymous, shutdown;
+	struct {
+		enum bond_sock_invalid_reason reason;
+		int rc;
+	} socket, bind, add_to_epoll_set;
+	struct {
+		enum bond_sock_invalid_reason reason;
+		int rc;
+		int level;
+		int sockopt;
+	} setsockopt;
+};
+
+
 /* A structure containing IP transport information. There is one of these
    per interface object. It is defined separately because different
    types of transport implementation may in future be required so it is
@@ -628,10 +656,17 @@ struct ptpd_transport {
 
 	const struct sfptpd_ptp_bond_info *bond_info;
 	int bondSocks[SFPTP_BOND_BYPASS_SOCK_COUNT];
+	/* This keeps track of how many sockets we tried creating, and is only
+	 * used for diagnostics. See `bondSocksValidMask` for checking which
+	 * entires in `bondSocks` are usable. */
+	int bondSocksCreatedCount;
 	/* A mask of the above array for those sockets which are valid. Here,
 	 * valid means that we were able to create and set all of the socket
 	 * options that we wanted. */
 	uint64_t bondSocksValidMask;
+	/* A collection of reasons why a given bond socket is invalid, useful
+	 * for diagnostics purposes. */
+	union bond_sock_invalid_description bondSocksInvalidDescriptions[SFPTP_BOND_BYPASS_SOCK_COUNT];
 	/* A mapping of socket fd to the physical ifindex the socket will send
 	 * out of for a multicast message. */
 	struct socket_ifindex multicastBondSocks[SFPTP_MAX_PHYSICAL_IFS];

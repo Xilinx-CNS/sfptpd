@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-## [3.8.0.1002] - 2024-09-30
+## [3.8.0.1002] - 2024-09-30 [Feature Release]
 
 ### Added
 
