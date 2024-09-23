@@ -26,10 +26,10 @@ SBINDIR ?= sbin
 
 ifneq (,$(wildcard /etc/debian_version))
 DEFAULT_DEFAULTSDIR := default
-DEFAULT_UNITPREFIX :=
+DEFAULT_UNITPREFIX =
 else
 DEFAULT_DEFAULTSDIR := sysconfig
-DEFAULT_UNITPREFIX := $(prefix)
+DEFAULT_UNITPREFIX = $(prefix)
 endif
 
 # Installation variables
