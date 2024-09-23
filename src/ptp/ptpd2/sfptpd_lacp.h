@@ -93,4 +93,6 @@ void copyMulticastTTLToBondSocks(struct ptpd_transport *transport);
 void copyTimestampingToBondSocks(struct ptpd_transport *transport,
 				 TsSetupMethod *tsMethodVerbose);
 
+void bondSocksDumpState(struct ptpd_intf_context *intf, int sev);
+
 #endif /* _SFPTPD_LACP_H */

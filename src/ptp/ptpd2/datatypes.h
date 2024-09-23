@@ -656,6 +656,10 @@ struct ptpd_transport {
 
 	const struct sfptpd_ptp_bond_info *bond_info;
 	int bondSocks[SFPTP_BOND_BYPASS_SOCK_COUNT];
+	/* This keeps track of how many sockets we tried creating, and is only
+	 * used for diagnostics. See `bondSocksValidMask` for checking which
+	 * entires in `bondSocks` are usable. */
+	int bondSocksCreatedCount;
 	/* A mask of the above array for those sockets which are valid. Here,
 	 * valid means that we were able to create and set all of the socket
 	 * options that we wanted. */
