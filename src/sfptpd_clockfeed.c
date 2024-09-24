@@ -368,7 +368,7 @@ static void clockfeed_on_timer(void *user_context, unsigned int id)
 			else
 				sfptpd_time_zero(&record->snapshot);
 
-			DBG_L6("%s: %llu: %llu: %d: "
+			DBG_L6("%s: cycle %llu: write_counter %llu: rc %d: "
 			       SFPTPD_FMT_SFTIMESPEC " " SFPTPD_FMT_SFTIMESPEC "\n",
 			       sfptpd_clock_get_short_name(source->clock),
 			       source->cycles, source->shm.write_counter, record->rc,
@@ -876,7 +876,6 @@ static int clockfeed_compare_to_sys(struct sfptpd_clockfeed_sub *sub,
 	struct sfptpd_timespec age;
 	int writer1;
 	int writer2;
-	int rc = 0;
 
 	sfptpd_time_zero(diff);
 
@@ -901,7 +900,7 @@ static int clockfeed_compare_to_sys(struct sfptpd_clockfeed_sub *sub,
 	sample = &shm->samples[(writer1 - 1) & index_mask];
 
 	if (sample->rc != 0)
-		return rc;
+		return sample->rc;
 
 	sfptpd_time_subtract(diff, &sample->snapshot, &sample->system);
 
@@ -919,10 +918,8 @@ static int clockfeed_compare_to_sys(struct sfptpd_clockfeed_sub *sub,
 		        sfptpd_clock_get_short_name(clock), writer1, sub->min_counter);
 		return ESTALE;
 	}
-	if (sub->have_max_age) {
-		rc = sfclock_gettime(CLOCK_MONOTONIC, &now_mono);
-		if (rc != 0)
-			return EAGAIN;
+	if (sub->have_max_age &&
+	    0 == sfclock_gettime(CLOCK_MONOTONIC, &now_mono)) {
 		sfptpd_time_subtract(&age, &now_mono, &sample->mono);
 		if (sfptpd_time_cmp(&age, &sub->max_age) > 0) {
 			WARNING(PREFIX "%s: sample too old\n",
@@ -936,11 +933,11 @@ static int clockfeed_compare_to_sys(struct sfptpd_clockfeed_sub *sub,
 		*t2 = sample->system;
 	if (mono_time)
 		*mono_time = sample->mono;
-	if (rc == 0) {
+	if (sample->rc == 0) {
 		sub->read_counter = writer1;
 	}
 
-	return rc;
+	return sample->rc;
 }
 
 int sfptpd_clockfeed_compare(struct sfptpd_clockfeed_sub *sub1,
