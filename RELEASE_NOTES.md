@@ -145,7 +145,7 @@ use cases:
 
 - LACP PTP support extended to dual boundary clock solutions. (SWPTP-738)
 - Timestamp handling enhanced to improve daemon performance. (SWPTP-831)
-- Configurable path patterns enhance deployment over multiple hosts. (SWPTP-649)
+- Configurable filename patterns for multi-host config deployment. (SWPTP-649)
 - New scheme for handling clock comparisons enhances performance. (SWPTP-1386)
 - Debian package now available for Debian and Ubuntu. (SWPTP-1446)
 - Privileged helper allows all features while running not as root. (SWPTP-1479)

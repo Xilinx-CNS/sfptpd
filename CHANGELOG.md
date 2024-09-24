@@ -11,11 +11,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Add --socket option for sfptpdctl to control multiple processes. (SWPTP-624)
-- Add configurable patterns for log, state, control and stats paths. (SWPTP-649)
-  - Supports logging to a directory shared between hosts, e.g.
-    `json_stats /nfs/log/sfptpd-stats-%H:%Cd.jsonl`
-  - Or esoteric use cases requiring multiple sfptpd instances:
-    `state_path /var/lib/sfptpd-%P`
+- Add support for interpolating values into file paths and other output.
+  - Configurable patterns for log, state, control and stats paths. (SWPTP-649)
+  - Configurable patterns for clock names and ids. (SWPTP-997)
+  - See [example config](config/option-examples.cfg) for specification.
 - Enhance LACP support. (SWPTP-738)
   - Add support for dual boundary clock topology by sending DelayReq
     messages over the physical interface that last received a Sync message
@@ -25,8 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     message was timestamped. (SWPTP-1434)
 - Show unicast/multicast delay response flags in state file. (SWPTP-807)
 - Get transmit timestamps via epoll to avoid blocking PTP thread. (SWPTP-831)
-- Add configurable patterns for clock names and ids. (SWPTP-997)
-  - e.g. avoid colons in filenames: `clock_display_fmts phc%P phc%P(%I) %C: %D`
+- Add interpolated config of patterns for clock names and ids. (SWPTP-997)
 - Ethtool queries are now conducted over netlink instead of ioctl on kernels
   where this is supported. (SWPTP-1304)
 - IP address of parent clock added to topology files (SWPTP-1312)
@@ -60,7 +58,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Allow 32-bit userspace on 64-bit kernels. (SWPTP-181)
 - Add `gps` sync module to use `gpsd` for PPS time of day.
   - Build with `make NO_GPS=` having installed `libgps-dev`.
-  - Instantiate the `gps` sync module giving connection details (e.g.
+  - Instantiate the `gps` sync module giving connection details, e.g.
     `gpsd ::1 2947` and set as time of day source.
 - Add Y2038 support when built for 32-bit targets with 64-bit time enabled.
   (Xilinx-CNS/sfptpd#12)
