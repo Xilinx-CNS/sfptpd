@@ -2005,7 +2005,8 @@ netInit(struct ptpd_transport * transport, InterfaceOpts * ifOpts, PtpInterface 
 					     ifOpts->monitoringAclOrder);
 	}
 
-	probeBondSocks(transport);
+	if (ifOpts->use_lacp_bypass & SFPTPD_BOND_BYPASS_USE_SOCKPOOL)
+		probeBondSocks(transport);
 
 	return TRUE;
 }
