@@ -1683,10 +1683,7 @@ int doHandleSocketsEvent(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 		PERROR("failed to receive on the event socket\n");
 		toStateAllPorts(PTPD_FAULTY, ptpInterface);
 		ptpInterface->counters.messageRecvErrors++;
-		return length;
-	}
-
-	if (length > 0) {
+	} else if (length > 0) {
 		processMessage(ifOpts, ptpInterface,
 			       get_suitable_timestamp(ptpInterface, &ts_info),
 			       is_suitable_timestamp(ptpInterface, &ts_info),
@@ -1694,7 +1691,7 @@ int doHandleSocketsEvent(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 			       length);
 	}
 
-	return 0;
+	return length;
 }
 
 /* Check and handle received messages */
@@ -1719,38 +1716,31 @@ doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 	}
 
 	if (event) {
-		int rc, rc2;
+		int rc = 1;
 
-		rc = doHandleSocketsEvent(ifOpts, ptpInterface,
-					  transport->eventSock);
+		while (rc > 0)
+			rc = doHandleSocketsEvent(ifOpts, ptpInterface,
+						  transport->eventSock);
 
 		FOR_EACH_MASK_IDX(transport->bondSocksValidMask, idx) {
 			int sockfd = transport->bondSocks[idx];
-			rc2 = doHandleSocketsEvent(ifOpts, ptpInterface,
-						   sockfd);
-			/* We need to propagate the error somehow, and we only
-			 * care if any of these fail (with a negative return
-			 * value), so taking the minimum of all returned
-			 * values is a sufficient aggregate for us. */
-			if (rc2 < rc)
-				rc = rc2;
+			rc = 1;
+			while (rc > 0)
+				rc = doHandleSocketsEvent(ifOpts, ptpInterface,
+							   sockfd);
 		}
-
-		if (rc < 0)
-			return;
 	}
 
-	if (general) {
+	while (general) {
 		ssize_t length = netRecvGeneral(ptpInterface->msgIbuf, transport);
 		if (length < 0) {
 			PERROR("failed to receive on the general socket\n");
 			toStateAllPorts(PTPD_FAULTY, ptpInterface);
 			ptpInterface->counters.messageRecvErrors++;
-			return;
-		}
-
-		if (length > 0)
+		} else if (length > 0) {
 			processMessage(ifOpts, ptpInterface, NULL, FALSE, 0, length);
+		}
+		general = (length > 0);
 	}
 }
 
