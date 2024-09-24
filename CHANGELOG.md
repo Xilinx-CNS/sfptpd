@@ -16,17 +16,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Configurable patterns for clock names and ids. (SWPTP-997)
   - See [example config](config/option-examples.cfg) for specification.
 - Enhance LACP support. (SWPTP-738)
-  - Add support for dual boundary clock topology by sending DelayReq
-    messages over the physical interface that last received a Sync message
-    from the current PTP master. Uses a pool of sockets for multicast.
-    To enable, see [example](config/ptp_slave_lacp.cfg). (SWPTP-976)
+  - Support dual boundary clock topology when using multicast delay measurement.
+  - Send DelayReq over the physical interface that last received a Sync from
+    the current PTP master by maintaining a pool of sockets. (SWPTP-976)
   - Switch the local reference clock to be the one by which the latest Sync
     message was timestamped. (SWPTP-1434)
+  - To enable, see [example](config/ptp_slave_lacp.cfg).
 - Show unicast/multicast delay response flags in state file. (SWPTP-807)
 - Get transmit timestamps via epoll to avoid blocking PTP thread. (SWPTP-831)
 - Add interpolated config of patterns for clock names and ids. (SWPTP-997)
-- Ethtool queries are now conducted over netlink instead of ioctl on kernels
-  where this is supported. (SWPTP-1304)
+- Ethtool queries conducted over netlink on supported kernels. (SWPTP-1304)
 - IP address of parent clock added to topology files (SWPTP-1312)
 - Add option to configure state file and stats log update rates. (SWPTP-1326)
   - e.g. `reporting_intervals save_state 120 stats_log 2`
@@ -40,17 +39,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Allow unique clock id bits to be set with `unique_clockid_bits`.
   - Allow legacy (2008) clock ids to be used with `legacy_clock_ids`.
 - Add `pidadjust` control command to tweak PID controller co-efficients
-  at runtime for experimental purposes only. Run `sfptpdctl` without
-  arguments to see syntax. (SWPTP-1411)
-- Always set NIC clocks on startup by default. The previous behaviour of
-  only setting them when not already set or if used as PTP master or with
-  a freerunning clock instance can be configured. (SWPTP-1431)
+  at runtime for experimental purposes only. (SWPTP-1411)
+  - Run `sfptpdctl` without arguments for syntax.
+- Always set NIC clocks on startup by default. (SWPTP-1431)
+  - Can be reverted to previous behaviour of only setting when not already
+    set or if used as PTP master or with a freerunning clock instance.
 - Add Debian packaging. (SWPTP-1446)
+  - As a new package type, the .deb follows best practice for the Debian
+    and derivative distributions by creating and running sfptpd as a new
+    system user.
 - Add `-D` command line option to specify default PTP domain. (SWPTP-1454)
-- Add master-only PTP option. (SWPTP-1459)
-- Add a privileged helper to support hotplugging, connecting to the chrony
-  control socket and performing clock control over chrony when running as a
-  non-root user. (SWPTP-1479)
+- Add master-only PTP mode. (SWPTP-1459)
+- Add optional privileged helper process when running as non-root. (SWPTP-1479)
+  - Enables hotplugging and connecting to and controlling chronyd.
 - Allow repeated -v arguments as convenience to increase verbosity. (SWPTP-1489)
 
 ### Added for unsupported source builds only
