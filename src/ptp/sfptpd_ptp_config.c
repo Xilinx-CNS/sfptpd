@@ -1345,6 +1345,14 @@ static int parse_lacp_bypass(struct sfptpd_config_section *section, const char *
 	return 0;
 }
 
+static int parse_on_alarm_trace_ptp(struct sfptpd_config_section *section, const char *option,
+				    unsigned int num_params, const char * const params[])
+{
+	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
+	ptp->on_alarm_trace_ptp = TRUE;
+	return 0;
+}
+
 
 static const sfptpd_config_option_t ptp_config_options[] =
 {
@@ -1675,6 +1683,11 @@ static const sfptpd_config_option_t ptp_config_options[] =
 		"Disabled by default",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
 		parse_lacp_bypass},
+	{"on_alarm_trace_ptp", "",
+		"Begin verbose PTP tracing upon alarm",
+		0, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_on_alarm_trace_ptp,
+		.hidden = true},
 };
 
 

@@ -53,6 +53,9 @@ typedef struct sfptpd_ptp_module_config {
 
 	/** PTP profile */
 	enum sfptpd_ptp_profile profile;
+
+	/** Conditional PTP tracing */
+	bool on_alarm_trace_ptp;
 } sfptpd_ptp_module_config_t;
 
 

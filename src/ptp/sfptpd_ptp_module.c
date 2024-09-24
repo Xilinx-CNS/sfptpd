@@ -248,6 +248,9 @@ struct sfptpd_ptp_module {
 	/* Whether the timers have been started */
 	bool timers_started;
 
+	/* Whether elevated tracing has been enabled */
+	bool tracing_elevated;
+
 	/* Copy of current link table */
 	struct sfptpd_link_table link_table;
 };
@@ -2031,8 +2034,17 @@ static bool ptp_update_instance_state(struct sfptpd_ptp_instance *instance,
 
 	/* If the port alarms have changed, generate a state change to the
 	 * engine to ensure that the topology and state files get updated */
-	if ((snapshot.port.alarms | instance->local_alarms) != ptp_get_alarms_snapshot(instance))
+	if ((snapshot.port.alarms | instance->local_alarms) != ptp_get_alarms_snapshot(instance)) {
 		state_changed = true;
+
+		if ((snapshot.port.alarms | instance->local_alarms) &&
+		    instance->config->on_alarm_trace_ptp &&
+		    !module->tracing_elevated) {
+			NOTICE("ptp: elevating trace due to alarm\n");
+			sfptpd_log_set_trace_level(SFPTPD_COMPONENT_ID_PTPD2, 3);
+			module->tracing_elevated = true;
+		}
+	}
 
 	/* Record whether the leap second flags have changed. */
 	if ((snapshot.time.leap59 != instance->ptpd_port_snapshot.time.leap59) ||
