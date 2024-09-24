@@ -140,8 +140,6 @@ void probeBondSocks(struct ptpd_transport *transport)
 		.msg_controllen = 0
 	};
 
-	TRACE_L3("LACP bypass: resolving multicast port-ifindex mapping\n");
-
 	transport->multicastBondSocksLen = 0;
 
 	/* Short verion of `copyAddress` and `copyPort`, not worth

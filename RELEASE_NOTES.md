@@ -10,7 +10,7 @@ releases.
 > [!NOTE]
 > Features listed in the changelog that require building from source or relate
 > to operating systems or hardware not listed below as supported, are not
-> supported by AMD but should be considered exclusive to the open source project.
+> supported by AMD and should be considered exclusive to the open source project.
 
 (c) Copyright 2012-2024 Advanced Micro Devices, Inc.
 
@@ -39,10 +39,6 @@ The daemon contained in this package supports the following AMD adapters:
    - XtremeScale(TM) X2541 Single Port 10/25/40/50/100GbE Adapter
    - XtremeScale(TM) X2542 Dual Port 10/25/40/50/100GbE Adapter
    - Alveo(TM) XtremeScale(TM) X3522 low latency network adapter
-
-- OEM Server Adapters (with Precision Time license upgrade):
-   - HP 570FLB Dual-Port 10GbE FlexibleLOM Server Adapter
-   - HP 570M Dual-Port 10GbE Mezzanine Server Adapter
 
 - Support for non-Solarflare adapters is best effort. Particular attention
   should be paid to the tendency to advertise an independent physical clock
@@ -149,7 +145,7 @@ use cases:
 
 - LACP PTP support extended to dual boundary clock solutions. (SWPTP-738)
 - Timestamp handling enhanced to improve daemon performance. (SWPTP-831)
-- Configurable path patterns enhance deployment over multiple hosts. (SWPTP-649)
+- Configurable filename patterns for multi-host config deployment. (SWPTP-649)
 - New scheme for handling clock comparisons enhances performance. (SWPTP-1386)
 - Debian package now available for Debian and Ubuntu. (SWPTP-1446)
 - Privileged helper allows all features while running not as root. (SWPTP-1479)

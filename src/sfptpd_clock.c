@@ -234,11 +234,14 @@ struct sfptpd_clock {
 		struct sfptpd_clock_nic nic;
 	} u;
 
-	bool cfg_non_sfc_nics;
-	bool cfg_avoid_efx;
-	bool cfg_rtc_adjust;
+	/* Config options copied into state for convenience */
+	bool cfg_non_sfc_nics:1;
+	bool cfg_avoid_efx:1;
+	bool cfg_rtc_adjust:1;
 
-        bool lrc_been_locked;
+	/* Status flags */
+        bool lrc_been_locked:1;
+	bool initial_correction_applied:1;
 };
 
 
@@ -2145,12 +2148,14 @@ int sfptpd_clock_compare(struct sfptpd_clock *clock1, struct sfptpd_clock *clock
 
 int sfptpd_clock_set_time(struct sfptpd_clock *clock_to,
 			  struct sfptpd_clock *clock_from,
-			  const struct sfptpd_timespec *threshold)
+			  const struct sfptpd_timespec *threshold,
+			  bool is_initial_correction)
 {
 	struct sfptpd_timespec diff;
 	int rc;
 
-	if (clock_to == clock_from)
+	if (clock_to == clock_from ||
+	    clock_to->initial_correction_applied)
 		return 0;
 
 	clock_lock();
@@ -2166,8 +2171,11 @@ int sfptpd_clock_set_time(struct sfptpd_clock *clock_to,
 
 	if (rc == 0 &&
 	    (threshold == NULL ||
-	     sfptpd_time_cmp(&diff, threshold) >= 0))
+	     sfptpd_time_cmp(&diff, threshold) >= 0)) {
 		rc = sfptpd_clock_adjust_time(clock_to, &diff);
+		if (rc == 0 && is_initial_correction)
+			clock_to->initial_correction_applied = true;
+	}
 
 	clock_unlock();
 	return rc;
@@ -2349,7 +2357,7 @@ void sfptpd_clock_correct_new(struct sfptpd_clock *clock)
 
 			if (time.sec < SFPTPD_NIC_TIME_VALID_THRESHOLD ||
 			    gconf->initial_clock_correction == SFPTPD_CLOCK_INITIAL_CORRECTION_ALWAYS) {
-				sfptpd_clock_set_time(clock, sfptpd_clock_system, NULL);
+				sfptpd_clock_set_time(clock, sfptpd_clock_system, NULL, true);
 			}
 		}
 	}
