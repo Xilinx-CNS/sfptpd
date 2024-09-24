@@ -435,7 +435,8 @@ static int freerun_select_clock(freerun_module_t *fr,
 
 	/* Set the NIC clock based on the system clock to ensure
 	   it has a sensible initial value */
-	rc = sfptpd_clock_set_time(instance->clock, system_clock, NULL);
+	rc = sfptpd_clock_set_time(instance->clock, system_clock, NULL, true);
+
 	if (rc != 0) {
 		TRACE_L4("freerun %s: failed to compare and set clock %s to system clock, error %s\n",
 			 SFPTPD_CONFIG_GET_NAME(config),

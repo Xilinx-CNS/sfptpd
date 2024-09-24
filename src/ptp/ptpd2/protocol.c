@@ -528,7 +528,7 @@ doInitPort(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	/* If using a NIC clock and we are in a PTP master mode then step the
 	 * NIC clock to the current system time. */
 	if ((ptpClock->clock != system_clock) && !ptpClock->rtOpts.slaveOnly) {
-		rc = sfptpd_clock_set_time(ptpClock->clock, system_clock, NULL);
+		rc = sfptpd_clock_set_time(ptpClock->clock, system_clock, NULL, true);
 		if (rc != 0) {
 			TRACE_L4("ptp: failed to compare and set clock %s to system clock, %s\n",
 				 sfptpd_clock_get_short_name(ptpClock->clock),

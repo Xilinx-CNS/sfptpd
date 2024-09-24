@@ -395,11 +395,14 @@ int sfptpd_clock_compare(struct sfptpd_clock *clock1, struct sfptpd_clock *clock
  * @param clock_from  Pointer to the clock to use as a reference
  * @param threshold   A threshold which below which the clock difference
  *		      should not trigger an adjustment or NULL.
+ * @param is_initial_correction This is an initial clock correction
+ *                    and should not be repeated if already done.
  * @return 0 for success otherwise an errno status code.
  */
 int sfptpd_clock_set_time(struct sfptpd_clock *clock_to,
 			  struct sfptpd_clock *clock_from,
-			  const struct sfptpd_timespec *threshold);
+			  const struct sfptpd_timespec *threshold,
+			  bool is_initial_correction);
 
 /** Report the sync status to the NIC associated with the clock. This is used
  * by the NIC firmware to report the sync status to other interested parties
