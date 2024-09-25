@@ -3662,7 +3662,7 @@ issueDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		/* Check error queue immediately before falling back to epoll. */
 		doHandleSockets(&ptpClock->interface->ifOpts,
 				ptpClock->interface,
-				TRUE, FALSE, FALSE);
+				false, false, true);
 	}
 }
 
@@ -3721,7 +3721,7 @@ issuePDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		/* Check error queue immediately before falling back to epoll. */
 		doHandleSockets(&ptpClock->interface->ifOpts,
 				ptpClock->interface,
-				TRUE, FALSE, FALSE);
+				false, false, true);
 	}
 }
 
