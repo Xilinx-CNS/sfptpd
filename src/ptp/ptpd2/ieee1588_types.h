@@ -418,6 +418,19 @@ typedef struct {
 	ManagementTLV* tlv;
 } MsgManagement;
 
+typedef union {
+	MsgSync sync;
+	MsgFollowUp follow;
+	MsgDelayReq req;
+	MsgDelayResp resp;
+	MsgPDelayReq preq;
+	MsgPDelayResp presp;
+	MsgPDelayRespFollowUp prespfollow;
+	MsgManagement manage;
+	MsgAnnounce announce;
+	MsgSignaling signaling;
+} MsgPayload;
+
 #include "ieee1588_optional_types.h"
 #include "ieee1588_thirdparty_types.h"
 #include "ieee1588_sfc_types.h"
