@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Update sfptpd to be sub nanosecond-ready. (SWPTP-58)
+  - Some times and offsets are now output at picosecond resolution that were
+    previously output at nanosecond resolution.
 - Add --socket option for sfptpdctl to control multiple processes. (SWPTP-624)
 - Add support for interpolating values into file paths and other output.
   - Configurable patterns for log, state, control and stats paths. (SWPTP-649)
