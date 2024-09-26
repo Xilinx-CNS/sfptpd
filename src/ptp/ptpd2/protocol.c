@@ -69,7 +69,7 @@ static void handleFollowUp(const MsgHeader*, ssize_t, const MsgFollowUp*, Boolea
 static void handlePDelayReq(MsgHeader*, ssize_t, struct sfptpd_timespec*, Boolean, RunTimeOpts*, PtpClock*);
 static void handleDelayReq(const MsgHeader*, ssize_t, struct sfptpd_timespec*, Boolean, RunTimeOpts*, PtpClock*);
 static void handlePDelayResp(const MsgHeader*, ssize_t, struct sfptpd_timespec*, Boolean, RunTimeOpts*, PtpClock*);
-static void handleDelayResp(const MsgHeader*, ssize_t, RunTimeOpts*, PtpClock*);
+static void handleDelayResp(const MsgHeader*, ssize_t, const MsgDelayResp*, bool, RunTimeOpts*, PtpClock*);
 static void handlePDelayRespFollowUp(const MsgHeader*, ssize_t, RunTimeOpts*, PtpClock*);
 static void handleManagement(MsgHeader*, ssize_t, RunTimeOpts*, PtpClock*);
 static void handleSignaling(PtpClock*);
@@ -376,7 +376,8 @@ toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		 * Otherwise we will converge as normal.
 		 */
 		ptpClock->waitingForFollow = FALSE;
-		ptpClock->waitingForDelayResp = FALSE;
+		ptpClock->delay_state.tx_ts_pending = false;
+		ptpClock->delay_state.rx_msg_pending = false;
 
 		/* Copy announced communication capabilities from foreign master record */
 		ptpClock->partner_comm_caps =
@@ -1513,6 +1514,7 @@ handleMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
 		break;
 	case PTPD_MSG_DELAY_RESP:
 		handleDelayResp(&ptpInterface->msgTmpHeader, safe_length,
+				&ptpInterface->msgTmp.resp, false,
 				rtOpts, ptpClock);
 		break;
 	case PTPD_MSG_PDELAY_RESP:
@@ -1647,7 +1649,7 @@ bool doHandleSocketsError(PtpInterface *ptpInterface, int sockfd)
 
 	length = netRecvError(ptpInterface, sockfd);
 	if (length == -EAGAIN || length == -EINTR) {
-		/* No more messges to read on error queue */
+		/* No more messages to read on error queue */
 		return false;
 	} else if (length < 0) {
 		/* TODO: add stat */
@@ -1681,10 +1683,7 @@ int doHandleSocketsEvent(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 		PERROR("failed to receive on the event socket\n");
 		toStateAllPorts(PTPD_FAULTY, ptpInterface);
 		ptpInterface->counters.messageRecvErrors++;
-		return length;
-	}
-
-	if (length > 0) {
+	} else if (length > 0) {
 		processMessage(ifOpts, ptpInterface,
 			       get_suitable_timestamp(ptpInterface, &ts_info),
 			       is_suitable_timestamp(ptpInterface, &ts_info),
@@ -1692,7 +1691,7 @@ int doHandleSocketsEvent(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 			       length);
 	}
 
-	return 0;
+	return length;
 }
 
 /* Check and handle received messages */
@@ -1717,38 +1716,31 @@ doHandleSockets(InterfaceOpts *ifOpts, PtpInterface *ptpInterface,
 	}
 
 	if (event) {
-		int rc, rc2;
+		int rc = 1;
 
-		rc = doHandleSocketsEvent(ifOpts, ptpInterface,
-					  transport->eventSock);
+		while (rc > 0)
+			rc = doHandleSocketsEvent(ifOpts, ptpInterface,
+						  transport->eventSock);
 
 		FOR_EACH_MASK_IDX(transport->bondSocksValidMask, idx) {
 			int sockfd = transport->bondSocks[idx];
-			rc2 = doHandleSocketsEvent(ifOpts, ptpInterface,
-						   sockfd);
-			/* We need to propagate the error somehow, and we only
-			 * care if any of these fail (with a negative return
-			 * value), so taking the minimum of all returned
-			 * values is a sufficient aggregate for us. */
-			if (rc2 < rc)
-				rc = rc2;
+			rc = 1;
+			while (rc > 0)
+				rc = doHandleSocketsEvent(ifOpts, ptpInterface,
+							   sockfd);
 		}
-
-		if (rc < 0)
-			return;
 	}
 
-	if (general) {
+	while (general) {
 		ssize_t length = netRecvGeneral(ptpInterface->msgIbuf, transport);
 		if (length < 0) {
 			PERROR("failed to receive on the general socket\n");
 			toStateAllPorts(PTPD_FAULTY, ptpInterface);
 			ptpInterface->counters.messageRecvErrors++;
-			return;
-		}
-
-		if (length > 0)
+		} else if (length > 0) {
 			processMessage(ifOpts, ptpInterface, NULL, FALSE, 0, length);
+		}
+		general = (length > 0);
 	}
 }
 
@@ -2122,6 +2114,41 @@ processMonitoringSyncFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *r
 	issueFollowupForMonitoring(&timestamp, rtOpts, ptpClock, sequenceId);
 }
 
+static void
+stash_message(PtpClock *ptpClock, size_t payload_length)
+{
+	MsgHeader *header = &ptpClock->interface->msgTmpHeader;
+	MsgPayload *payload = &ptpClock->interface->msgTmp;
+	ptpd_msg_id_e msg_type = header->messageType;
+	struct sfptpd_msg_cache *msg_cache = &ptpClock->msg_cache;
+	struct sfptpd_msg_pkt *slot = &msg_cache->packet[msg_type];
+
+	if (slot->valid) {
+		DBG("ptp %s: evicting cached message type %d, seq %d\n",
+		    ptpClock->rtOpts.name, msg_type, slot->header.sequenceId);
+		slot->valid = false;
+		slot->count.evicted++;
+		ptpClock->counters.discardedMessages++;
+	}
+
+	if (payload_length > sizeof slot->payload) {
+		WARNING("ptp %s: discarded message type %d, seq %d too big to stash (%zd > %zd)\n",
+			ptpClock->rtOpts.name,
+			msg_type, header->sequenceId, payload_length, sizeof slot->payload);
+		slot->count.oversized++;
+		ptpClock->counters.discardedMessages++;
+		return;
+	}
+
+	DBG("ptp %s: stashing premature message type %d, seq %d\n",
+	    ptpClock->rtOpts.name, msg_type, header->sequenceId);
+	slot->header = *header;
+	slot->payload_length = payload_length;
+	memcpy(&slot->payload, payload, payload_length);
+	slot->valid = true;
+	slot->count.stashed++;
+}
+
 
 static void
 handleFollowUp(const MsgHeader *header, ssize_t length,
@@ -2315,7 +2342,7 @@ handleDelayReq(const MsgHeader *header, ssize_t length,
 static void
 processDelayReqFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
-	ptpClock->waitingForDelayResp = TRUE;
+	struct sfptpd_msg_pkt *delay_resp = &ptpClock->msg_cache.packet[PTPD_MSG_DELAY_RESP];
 
 	/* Provide the new measurements to any egress event monitors. */
 	egressEventMonitor(ptpClock, rtOpts, PTPD_MSG_DELAY_REQ, time);
@@ -2326,18 +2353,38 @@ processDelayReqFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts,
 	DBGV("processDelayReqFromSelf: seq# %d ts " SFPTPD_FMT_SFTIMESPEC "\n",
 	     ptpClock->sentDelayReqSequenceId,
 	     SFPTPD_ARGS_SFTIMESPEC(ptpClock->delay_req_send_time));
+
+	if (!ptpClock->delay_state.tx_ts_pending)
+		return;
+
+	ptpClock->delay_state.tx_ts_pending = false;
+	if (!ptpClock->delay_state.rx_msg_pending &&
+	    delay_resp->valid) {
+		delay_resp->count.retrieved++;
+		delay_resp->valid = false;
+		DBG("ptp %s: retrieving premature message type %d, seq %d\n",
+		    rtOpts->name,
+		    delay_resp->header.messageType,
+		    delay_resp->header.sequenceId);
+		handleDelayResp(&delay_resp->header,
+				delay_resp->payload_length + sizeof(MsgHeader),
+				&delay_resp->payload.resp, true,
+				rtOpts, ptpClock);
+	}
 }
 
 
 static void
 handleDelayResp(const MsgHeader *header, ssize_t length,
+		const MsgDelayResp *payload, bool deferred,
 		RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
 	Integer8 msgInterval;
+	ssize_t payload_length = length - sizeof *header;
 
 	DBGV("delayResp message received : \n");
 	
-	if(length < PTPD_DELAY_RESP_LENGTH) {
+	if(length < PTPD_DELAY_RESP_LENGTH || payload_length < 0) {
 		DBG("Error: DelayResp message too short\n");
 		ptpClock->counters.messageFormatErrors++;
 		return;
@@ -2371,9 +2418,21 @@ handleDelayResp(const MsgHeader *header, ssize_t length,
 		     ptpClock->interface->msgTmp.resp.requestingPortIdentity.portNumber)
 		    && (isFromCurrentParent(ptpClock, header) || rtOpts->delay_resp_ignore_port_id)) {
 
+			if (!deferred &&
+			    ptpClock->delay_state.rx_msg_pending &&
+			    ptpClock->delay_state.tx_ts_pending) {
+				assert(header == &ptpClock->interface->msgTmpHeader);
+				assert(payload == &ptpClock->interface->msgTmp.resp);
+
+				/* Stash the response until we have a tx timestamp for the delay request */
+				stash_message(ptpClock, payload_length);
+				ptpClock->delay_state.rx_msg_pending = false;
+				return;
+			}
+
 			DBG("==> Handle DelayResp (%d)\n", header->sequenceId);
 
-			if (!ptpClock->waitingForDelayResp) {
+			if (!deferred && !ptpClock->delay_state.rx_msg_pending) {
 				DBGV("Ignored DelayResp - not waiting for one\n");
 				ptpClock->counters.discardedMessages++;
 				break;
@@ -2393,7 +2452,7 @@ handleDelayResp(const MsgHeader *header, ssize_t length,
 			/* We have received a Delay Response so clear the alarm. */
 			SYNC_MODULE_ALARM_CLEAR(ptpClock->portAlarms, NO_DELAY_RESPS);
 			ptpClock->sequentialMissingDelayResps = 0;
-			ptpClock->waitingForDelayResp = FALSE;
+			ptpClock->delay_state.rx_msg_pending = false;
 
 			/* Hybrid mode has succeeded - mark the failure count as
 			 * negative to indicate this */
@@ -2408,7 +2467,7 @@ handleDelayResp(const MsgHeader *header, ssize_t length,
 					  ptpClock->itimer);
 
 			toInternalTime(&ptpClock->delay_req_receive_time,
-				       &ptpClock->interface->msgTmp.resp.receiveTimestamp);
+				       &payload->receiveTimestamp);
 
 			sfptpd_time_from_ns16(&ptpClock->delay_correction_field, header->correctionField);
 
@@ -3537,7 +3596,8 @@ issueDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	socklen_t dstLen = 0;
 	int rc;
 
-	ptpClock->waitingForDelayResp = FALSE;
+	ptpClock->delay_state.rx_msg_pending = false;
+	ptpClock->delay_state.tx_ts_pending = false;
 
 	DBG("==> Issue DelayReq (%d)\n", ptpClock->sentDelayReqSequenceId);
 
@@ -3586,10 +3646,13 @@ issueDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 			   powl(2, ptpClock->logDelayRespReceiptTimeout),
 			   ptpClock->itimer);
 
+		ptpClock->delay_state.rx_msg_pending = true;
+		ptpClock->delay_state.tx_ts_pending = true;
+
 		/* Check error queue immediately before falling back to epoll. */
 		doHandleSockets(&ptpClock->interface->ifOpts,
 				ptpClock->interface,
-				TRUE, FALSE, FALSE);
+				false, false, true);
 	}
 }
 
@@ -3648,7 +3711,7 @@ issuePDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		/* Check error queue immediately before falling back to epoll. */
 		doHandleSockets(&ptpClock->interface->ifOpts,
 				ptpClock->interface,
-				TRUE, FALSE, FALSE);
+				false, false, true);
 	}
 }
 

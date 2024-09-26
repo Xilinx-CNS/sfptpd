@@ -803,7 +803,7 @@ struct sfptpd_ts_stats {
 
 #define TS_CACHE_SIZE (8 * sizeof(unsigned int) / sizeof(uint8_t))
 
-/* Structure holding packets waiting for a timestamp */
+/* Structure holding tx packets waiting for a timestamp */
 struct sfptpd_ts_cache {
 	/* Descriptors for packets awaiting timestamp. */
 	struct sfptpd_ts_pkt packet[TS_CACHE_SIZE];
@@ -822,6 +822,25 @@ struct sfptpd_ts_cache {
 
 	/* Request time of last satisfied timestamp request */
 	struct sfptpd_timespec last_satisfied_request;
+};
+
+/* Structure holding rx packets waiting for e.g. a tx timestamp */
+struct sfptpd_msg_pkt {
+	MsgHeader header;
+	MsgPayload payload;
+	size_t payload_length;
+	bool valid;
+	struct {
+		unsigned int evicted;
+		unsigned int oversized;
+		unsigned int stashed;
+		unsigned int retrieved;
+	} count;
+};
+
+/* Rx packet stash per message type */
+struct sfptpd_msg_cache {
+	struct sfptpd_msg_pkt packet[16];
 };
 
 /**
@@ -849,18 +868,7 @@ struct ptpd_intf_context {
 
 	Octet msgIbuf[PACKET_SIZE];
 	MsgHeader msgTmpHeader;
-	union {
-		MsgSync sync;
-		MsgFollowUp follow;
-		MsgDelayReq req;
-		MsgDelayResp resp;
-		MsgPDelayReq preq;
-		MsgPDelayResp presp;
-		MsgPDelayRespFollowUp prespfollow;
-		MsgManagement manage;
-		MsgAnnounce announce;
-		MsgSignaling signaling;
-	} msgTmp;
+	MsgPayload msgTmp;
 	MsgManagement outgoingManageTmp;
 
 	/* Interface-level timers */
@@ -992,9 +1000,12 @@ struct ptpd_port_context {
 	UInteger16 recvSyncSequenceId;
 	UInteger16 recvPDelayRespSequenceId;
 	Boolean waitingForFollow;
-	Boolean waitingForDelayResp;
 	Boolean waitingForPDelayResp;
 	Boolean waitingForPDelayRespFollow;
+	struct {
+		bool tx_ts_pending:1;
+		bool rx_msg_pending:1;
+	} delay_state;
 
 	struct sfptpd_ts_ticket sync_ticket;
 	struct sfptpd_ts_ticket delayreq_ticket;
@@ -1008,6 +1019,10 @@ struct ptpd_port_context {
 	/* Used to store a follow-up in case the sync is received out-of-order */
 	MsgHeader outOfOrderFollowUpHeader;
 	MsgFollowUp outOfOrderFollowUpPayload;
+
+	/* Used when a delay response is received before the delay request
+	 * timestamp is available */
+	struct sfptpd_msg_cache msg_cache;
 
 	IntervalTimer itimer[TIMER_ARRAY_SIZE];
 
