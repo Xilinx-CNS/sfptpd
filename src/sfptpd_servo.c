@@ -439,8 +439,9 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 				/* set the NIC clock to system clock */
 				WARNING("%s: correcting master clock %s to system time\n", servo->servo_name,
 					sfptpd_clock_get_long_name(servo->master));
-				sfptpd_clock_correct_new(servo->master);
-				/* After we set the LRC's time to system time, return early so that we don't propagate the error */
+				sfptpd_clock_set_time(servo->master, sfptpd_clock_get_system_clock(), NULL, false);
+				/* After we set the LRC's time to system time,
+				   return early so that we don't propagate the error */
 				return EAGAIN;
 			}
 		}
@@ -470,7 +471,7 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
                         /* set the NIC clock to system clock */
                         WARNING("%s: correcting slave clock %s to system time\n", servo->servo_name,
                                 sfptpd_clock_get_long_name(servo->slave));
-                        sfptpd_clock_correct_new(servo->slave);
+			sfptpd_clock_set_time(servo->slave, sfptpd_clock_get_system_clock(), NULL, false);
                         /* After we set the slave clock's time to system time, 
                          * return early so that we don't propagate the error */
                         return EAGAIN;
@@ -513,7 +514,7 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 	if ((servo->clock_ctrl == SFPTPD_CLOCK_CTRL_SLEW_AND_STEP) ||
 	    ((servo->clock_ctrl == SFPTPD_CLOCK_CTRL_STEP_AT_STARTUP || 
                 servo->clock_ctrl == SFPTPD_CLOCK_CTRL_STEP_ON_FIRST_LOCK) && !servo->active) || 
-	    ((servo->clock_ctrl == SFPTPD_CLOCK_CTRL_STEP_ON_FIRST_LOCK) && 
+	    ((servo->clock_ctrl == SFPTPD_CLOCK_CTRL_STEP_ON_FIRST_LOCK) &&
                 !servo->stepped_after_lrc_locked && sfptpd_clock_get_been_locked(servo->master)) || 
             ((servo->clock_ctrl == SFPTPD_CLOCK_CTRL_STEP_FORWARD) && (diff_ns < 0))) {
 		if ((diff_ns <= -servo->step_threshold) ||
