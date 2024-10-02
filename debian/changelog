@@ -1,5 +1,5 @@
-sfptpd (3.8.0.1000) UNRELEASED; urgency=medium
+sfptpd (3.8.0.1004) UNRELEASED; urgency=medium
 
   * Upstream's Debian package for sfptpd; see CHANGELOG.md for real changelog.
 
- -- AMD NIC Support <support-nic@amd.com>  Mon,  4 Mar 2024 11:00:00 +0000
+ -- AMD NIC Support <support-nic@amd.com>  Thu,  3 Oct 2024 11:00:00 +0000

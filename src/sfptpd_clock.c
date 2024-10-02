@@ -2155,7 +2155,8 @@ int sfptpd_clock_set_time(struct sfptpd_clock *clock_to,
 	int rc;
 
 	if (clock_to == clock_from ||
-	    clock_to->initial_correction_applied)
+	    (is_initial_correction &&
+	     clock_to->initial_correction_applied))
 		return 0;
 
 	clock_lock();
