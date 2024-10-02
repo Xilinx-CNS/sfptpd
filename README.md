@@ -13,7 +13,7 @@ subject to limitations, `chronyd`. The daemon works on Linux systems for 3.0
 kernels and later.
 
 See [the changelog](CHANGELOG.md) for recent additions to sfptpd.  The current
-stable branch is [v3_7](https://github.com/Xilinx-CNS/sfptpd/tree/v3_7). 
+stable branch is [v3_8](https://github.com/Xilinx-CNS/sfptpd/tree/v3_8).
 
 For a **quick start** (operating PTP on bond0, domain 100), see
 [one line docker example](/INSTALL.md#running-a-pre-built-container-image).
