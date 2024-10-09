@@ -2364,7 +2364,7 @@ processDelayReqFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts,
 		    delay_resp->header.messageType,
 		    delay_resp->header.sequenceId);
 		handleDelayResp(&delay_resp->header,
-				delay_resp->payload_length + sizeof(MsgHeader),
+				delay_resp->payload_length + PTPD_HEADER_LENGTH,
 				&delay_resp->payload.resp, true,
 				rtOpts, ptpClock);
 	}
@@ -2377,7 +2377,7 @@ handleDelayResp(const MsgHeader *header, ssize_t length,
 		RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
 	Integer8 msgInterval;
-	ssize_t payload_length = length - sizeof *header;
+	ssize_t payload_length = length - PTPD_HEADER_LENGTH;
 
 	DBGV("delayResp message received : \n");
 	
