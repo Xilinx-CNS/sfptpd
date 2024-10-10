@@ -718,7 +718,7 @@ doTimerTick(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		if (timerExpired(DELAYRESP_RECEIPT_TIMER, ptpClock->itimer)) {
 			WARNING("ptp %s: failed to receive DelayResp for DelayReq sequence number %d\n",
 				rtOpts->name,
-				(ptpClock->sentDelayReqSequenceId - 1) & 0xffff);
+				ptpClock->sentDelayReqSequenceId & 0xffff);
 			/* Record the fact that we didn't get a timely response
 			 * and set the alarm if it's happened too many times. */
 			ptpClock->sequentialMissingDelayResps++;
@@ -762,7 +762,7 @@ doTimerTick(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 				WARNING("ptp %s: failed to receive PDelayResp for "
 					"PDelayReq sequence number %d\n",
 					rtOpts->name,
-					(ptpClock->sentPDelayReqSequenceId - 1) & 0xffff);
+					ptpClock->sentPDelayReqSequenceId & 0xffff);
 
 				/* Record the fact that we didn't get a timely response,
 				 * and set the alarm if it's happened too many times. */
@@ -1560,18 +1560,15 @@ processTxTimestamp(PtpInterface *interface,
 	switch (ts_user.type) {
 	case TS_SYNC:
 		check_ticket = ptpClock->sync_ticket;
-		/* "sent id" field is actually the next one... */
-		check_seq = ptpClock->sentSyncSequenceId - 1;
+		check_seq = ptpClock->sentSyncSequenceId;
 		break;
 	case TS_DELAY_REQ:
 		check_ticket = ptpClock->delayreq_ticket;
-		/* "sent id" field is actually the next one... */
-		check_seq = ptpClock->sentDelayReqSequenceId - 1;
+		check_seq = ptpClock->sentDelayReqSequenceId;
 		break;
 	case TS_PDELAY_REQ:
 		check_ticket = ptpClock->pdelayreq_ticket;
-		/* "sent id" field is actually the next one... */
-		check_seq = ptpClock->sentPDelayReqSequenceId - 1;
+		check_seq = ptpClock->sentPDelayReqSequenceId;
 		break;
 	case TS_PDELAY_RESP:
 		check_ticket = ptpClock->pdelayresp_ticket;
@@ -2367,7 +2364,7 @@ processDelayReqFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts,
 		    delay_resp->header.messageType,
 		    delay_resp->header.sequenceId);
 		handleDelayResp(&delay_resp->header,
-				delay_resp->payload_length + sizeof(MsgHeader),
+				delay_resp->payload_length + PTPD_HEADER_LENGTH,
 				&delay_resp->payload.resp, true,
 				rtOpts, ptpClock);
 	}
@@ -2380,7 +2377,7 @@ handleDelayResp(const MsgHeader *header, ssize_t length,
 		RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
 	Integer8 msgInterval;
-	ssize_t payload_length = length - sizeof *header;
+	ssize_t payload_length = length - PTPD_HEADER_LENGTH;
 
 	DBGV("delayResp message received : \n");
 	
@@ -2439,7 +2436,7 @@ handleDelayResp(const MsgHeader *header, ssize_t length,
 			}
 
 			if (ptpClock->sentDelayReqSequenceId !=
-			    ((UInteger16)(header->sequenceId + 1))) {
+			    ((UInteger16)(header->sequenceId))) {
 				DBG("HandleDelayResp : sequence mismatch - "
 				    "last DelayReq sent: %d, delayResp received: %d\n",
 				    ptpClock->sentDelayReqSequenceId,
@@ -2685,7 +2682,7 @@ handlePDelayResp(const MsgHeader *header, ssize_t length,
 			}
 
 			if (ptpClock->sentPDelayReqSequenceId !=
-			    ((UInteger16)(header->sequenceId + 1))) {
+			    ((UInteger16)(header->sequenceId))) {
 				DBGV("HandlePDelayResp: sequence mismatch - "
 				     "request: %d, response: %d\n",
 				     ptpClock->sentPDelayReqSequenceId,
@@ -2829,7 +2826,7 @@ handlePDelayRespFollowUp(const MsgHeader *header, ssize_t length,
 				break;
 			}
 
-			if (((UInteger16)(header->sequenceId + 1) !=
+			if (((UInteger16)(header->sequenceId) !=
 		             ptpClock->sentPDelayReqSequenceId) ||
 		            (header->sequenceId != ptpClock->recvPDelayRespSequenceId)) {
 				DBG("HandleDelayRespFollowUp : sequence mismatch - "
@@ -3438,7 +3435,7 @@ issueSync(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	struct sfptpd_ts_user ts_user = {
 		.port = ptpClock,
 		.type = TS_SYNC,
-		.seq_id = ptpClock->sentSyncSequenceId,
+		.seq_id = ++ptpClock->sentSyncSequenceId,
 	};
 	struct sfptpd_ts_ticket ticket;
 	int rc;
@@ -3468,8 +3465,6 @@ issueSync(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 			SYNC_MODULE_ALARM_SET(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
 			ptpClock->counters.txPktNoTimestamp++;
 		}
-
-		ptpClock->sentSyncSequenceId++;
 
 		/* Check error queue immediately before falling back to epoll.
 		 * This optimisation does not seem to succeed in the way
@@ -3589,7 +3584,7 @@ issueDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	struct sfptpd_ts_user ts_user = {
 		.port = ptpClock,
 		.type = TS_DELAY_REQ,
-		.seq_id = ptpClock->sentDelayReqSequenceId,
+		.seq_id = ++ptpClock->sentDelayReqSequenceId,
 	};
 	struct sfptpd_ts_ticket ticket;
 	struct sockaddr_storage dst;
@@ -3635,10 +3630,6 @@ issueDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		ptpClock->counters.delayReqMessagesSent++;
 		DBGV("DelayReq MSG sent!\n");
 
-		/* From now on, we will only accept delayreq and delayresp of 
-		 * (sentDelayReqSequenceId - 1) */
-		ptpClock->sentDelayReqSequenceId++;
-
 		/* Stop the delay request timer and start the timer for delay
 		 * response timeout */
 		timerStop(DELAYREQ_INTERVAL_TIMER, ptpClock->itimer);
@@ -3663,7 +3654,7 @@ issuePDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	struct sfptpd_ts_user ts_user = {
 		.port = ptpClock,
 		.type = TS_PDELAY_REQ,
-		.seq_id = ptpClock->sentPDelayReqSequenceId,
+		.seq_id = ++ptpClock->sentPDelayReqSequenceId,
 	};
 	struct sfptpd_ts_ticket ticket;
 	int rc;
@@ -3698,8 +3689,6 @@ issuePDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 
 		ptpClock->counters.pdelayReqMessagesSent++;
 		DBGV("PDelayReq MSG sent!\n");
-
-		ptpClock->sentPDelayReqSequenceId++;
 
 		/* Stop the delay request timer and start the timer for delay
 		 * response timeout */
