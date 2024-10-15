@@ -39,6 +39,7 @@ LABEL \
 RUN microdnf install -y libmnl && microdnf clean all
 COPY --from=builder /staging /
 COPY --from=builder /staging/LICENSE /licenses/
+ADD https://www.redhat.com/licenses/EULA_Red_Hat_Universal_Base_Image_English_20190422.pdf /licenses
 RUN ln -sf /usr/share/doc/sfptpd/config /
 WORKDIR /var/lib/sfptpd
 
