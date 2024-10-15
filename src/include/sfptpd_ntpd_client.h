@@ -83,6 +83,8 @@ struct sfptpd_ntpclient_peer {
 	bool self;
 	long double offset;
 	long double root_dispersion;
+	long double smoothed_offset;
+	long double smoothed_root_dispersion;
 };
 
 /** Structure to return information about the peers of the NTP daemon.

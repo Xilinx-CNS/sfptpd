@@ -1391,6 +1391,8 @@ static int mode6_get_peer_info(struct sfptpd_ntpclient_state *ntpclient,
 		peer = &peer_info->peers[i];
 
 		/* Populate peer object */
+		peer->smoothed_offset = NAN;
+		peer->smoothed_root_dispersion = NAN;
 
 		/* Parse text-based packet payload of requested peer variables */
 		while (next_var(&resp_size, &resp_var_data, &name, &value))

@@ -72,6 +72,14 @@ struct crny_ntpdata {
 	char ignore5[24];
 };
 
+struct crny_sourcestats {
+	uint32_t ignore1;
+	struct crny_addr ignore2;
+	uint32_t ignore3[6];
+	uint32_t offset_f;
+	uint32_t offset_error_f;
+};
+
 
 /****************************************************************************
  * Constants
@@ -90,12 +98,14 @@ struct crny_ntpdata {
 #define CRNY_REQ_GET_NUM_SOURCES 14
 #define CRNY_REQ_SOURCE_DATA_ITEM 15
 #define CRNY_REQ_TRACKING_STATE 33
+#define CRNY_REQ_SOURCE_STATS 34
 #define CRNY_REQ_NTP_DATA 57
 
 /* Response codes */
 #define CRNY_RESP_NUM_SOURCES 2
 #define CRNY_RESP_SOURCE_DATA_ITEM 3
 #define CRNY_RESP_TRACKING_STATE 5
+#define CRNY_RESP_SOURCE_STATS 6
 #define CRNY_RESP_NTP_DATA 16
 
 /* ntpdata mode codes that are we interested in */

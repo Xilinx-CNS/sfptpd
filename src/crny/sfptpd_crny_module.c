@@ -71,6 +71,7 @@ enum ntp_query_state {
 	NTP_QUERY_STATE_SYS_INFO,
 	NTP_QUERY_STATE_SOURCE_COUNT,
 	NTP_QUERY_STATE_SOURCE_DATUM,
+	NTP_QUERY_STATE_SOURCE_STATS,
 	NTP_QUERY_STATE_NTP_DATUM,
 };
 
@@ -179,8 +180,12 @@ typedef struct sfptpd_crny_module {
 	sfptpd_sync_module_constraints_t constraints;
 
 	/* NTP daemon query state. */
-	enum ntp_query_state query_state;
-	int query_src_idx;
+	struct {
+		enum ntp_query_state state;
+		int src_idx;
+		struct crny_addr src_addr;
+		enum crny_src_mode_code src_mode;
+	} query;
 
 	/* Time for next poll of the NTP daemon */
 	struct sfptpd_timespec next_poll_time;
@@ -241,6 +246,7 @@ static const char *query_state_names[] = {
 	"SYS_INFO",
 	"SOURCE_COUNT",
 	"SOURCE_DATUM",
+	"SOURCE_STATS",
 	"NTP_DATUM",
 };
 
@@ -1138,11 +1144,13 @@ int handle_get_source_count(crny_module_t *ntp)
 
 int issue_get_source_datum(crny_module_t *ntp)
 {
-	struct sfptpd_ntpclient_peer *peer = &ntp->next_state.peer_info.peers[ntp->query_src_idx];
+	struct sfptpd_ntpclient_peer *peer = &ntp->next_state.peer_info.peers[ntp->query.src_idx];
 
 	memset(peer, '\0', sizeof *peer);
+	peer->smoothed_offset = NAN;
+	peer->smoothed_root_dispersion = NAN;
 	chrony_req_initialize(&ntp->crny_comm.req, CRNY_REQ_SOURCE_DATA_ITEM);
-	*((int32_t *) &ntp->crny_comm.req.cmd2) = htonl(ntp->query_src_idx);
+	*((int32_t *) &ntp->crny_comm.req.cmd2) = htonl(ntp->query.src_idx);
 
 	return issue_request(ntp);
 }
@@ -1150,17 +1158,16 @@ int issue_get_source_datum(crny_module_t *ntp)
 int handle_get_source_datum(crny_module_t *ntp)
 {
 	int rc;
-	struct crny_addr *ip_addr;
 	struct crny_comm *comm = &ntp->crny_comm;
 	struct crny_cmd_request *req = &comm->req;
 	struct crny_cmd_response *reply = &comm->resp;
 	struct ntp_state *next_state = &ntp->next_state;
-	struct sfptpd_ntpclient_peer *peer = &next_state->peer_info.peers[ntp->query_src_idx];
+	struct sfptpd_ntpclient_peer *peer = &next_state->peer_info.peers[ntp->query.src_idx];
 
 	rc = check_reply(req, reply, CRNY_RESP_SOURCE_DATA_ITEM);
 	if (rc != 0) {
 		DBG_L6("crny: get-peer%d-info: invalid reply, %s\n",
-		       ntp->query_src_idx, strerror(errno));
+		       ntp->query.src_idx, strerror(errno));
 		return ENOENT;
 	}
 
@@ -1170,14 +1177,55 @@ int handle_get_source_datum(crny_module_t *ntp)
 	enum crny_src_mode_code mode = ntohs(src_data->mode);
 
 	DBG_L6("crny: get-peer%d-info: mode %d state %d\n",
-	       ntp->query_src_idx, mode, state);
+	       ntp->query.src_idx, mode, state);
 
 	peer->selected = (state == CRNY_STATE_SYSPEER);
 	peer->shortlist = (state == CRNY_STATE_CANDIDATE);
 	peer->self = (mode == CRNY_SRC_MODE_REF);
 
-	if (mode == CRNY_SRC_MODE_REF) {
-		DBG_L6("crny: get-peer%d-info: source is a reference clock\n", ntp->query_src_idx);
+	/* Copy chrony address specifier for later ntp_data query */
+	ntp->query.src_addr = src_data->ip_addr;
+	ntp->query.src_mode = mode;
+	return 0;
+}
+
+int issue_get_source_stats(crny_module_t *ntp)
+{
+	struct sfptpd_ntpclient_peer *peer = &ntp->next_state.peer_info.peers[ntp->query.src_idx];
+
+	memset(peer, '\0', sizeof *peer);
+	chrony_req_initialize(&ntp->crny_comm.req, CRNY_REQ_SOURCE_STATS);
+	*((int32_t *) &ntp->crny_comm.req.cmd2) = htonl(ntp->query.src_idx);
+
+	return issue_request(ntp);
+}
+
+int handle_get_source_stats(crny_module_t *ntp)
+{
+	int rc;
+	struct crny_addr *ip_addr;
+	struct crny_comm *comm = &ntp->crny_comm;
+	struct crny_cmd_request *req = &comm->req;
+	struct crny_cmd_response *reply = &comm->resp;
+	struct ntp_state *next_state = &ntp->next_state;
+	struct sfptpd_ntpclient_peer *peer = &next_state->peer_info.peers[ntp->query.src_idx];
+	struct crny_sourcestats *answer = (struct crny_sourcestats *)(&reply->data);
+
+	rc = check_reply(req, reply, CRNY_RESP_SOURCE_STATS);
+	if (rc != 0) {
+		DBG_L6("crny: get-peer%d-info: invalid reply, %s\n",
+		       ntp->query.src_idx, strerror(errno));
+		return ENOENT;
+	}
+
+	peer->smoothed_offset = sfptpd_crny_tofloat(ntohl(answer->offset_f)) * 1.0e9;
+	peer->smoothed_root_dispersion = sfptpd_crny_tofloat(ntohl(answer->offset_error_f)) * 1.0e9;
+
+	DBG_L6("crny: get-peer%d-info: smoothed_offset %Lf smoothed_root_dispersion %Lf\n",
+	       ntp->query.src_idx, peer->smoothed_offset, peer->smoothed_root_dispersion);
+
+	if (ntp->query.src_mode == CRNY_SRC_MODE_REF) {
+		DBG_L6("crny: get-peer%d-info: source is a reference clock\n", ntp->query.src_idx);
 		/* No peer information will be avaliable via NTPDATA request */
 		return ENOENT;
 	}
@@ -1188,9 +1236,9 @@ int handle_get_source_datum(crny_module_t *ntp)
 	/* Specify which record we want ntpdata to fetch by giving it
 	   the ip address of the peer.
 	   Copy directly from reply into request. */
-	ip_addr = &src_data->ip_addr;
+	ip_addr = &ntp->query.src_addr;
 	if (ip_addr->addr_family == 0) {
-		DBG_L6("crny: get-peer%d-info: address family unspecified in tracking reply.\n", ntp->query_src_idx);
+		DBG_L6("crny: get-peer%d-info: address family unspecified in tracking reply.\n", ntp->query.src_idx);
 		return ENOENT;
 	}
 	memcpy(&ntp->crny_comm.req.cmd2, ip_addr, sizeof(*ip_addr));
@@ -1211,13 +1259,13 @@ int handle_get_ntp_datum(crny_module_t *ntp)
 	struct crny_cmd_request *req = &comm->req;
 	struct crny_cmd_response *reply = &comm->resp;
 	struct ntp_state *next_state = &ntp->next_state;
-	struct sfptpd_ntpclient_peer *peer = &next_state->peer_info.peers[ntp->query_src_idx];
+	struct sfptpd_ntpclient_peer *peer = &next_state->peer_info.peers[ntp->query.src_idx];
 
 	struct crny_ntpdata *answer = (struct crny_ntpdata *)(&reply->data);
 	rc = check_reply(req, reply, CRNY_RESP_NTP_DATA);
 	if (rc != 0) {
 		DBG_L6("crny: get-chrony-peer%d-info: invalid reply, %s\n",
-		       ntp->query_src_idx, strerror(errno));
+		       ntp->query.src_idx, strerror(errno));
 	} else {
 		sfptpd_crny_addr_to_sockaddr(&peer->remote_address,
 					     &peer->remote_address_len,
@@ -1277,7 +1325,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 	bool disconnect = false;
 	struct sfptpd_timespec time_now, time_left;
 	struct ntp_state *next_state = &ntp->next_state;
-	enum ntp_query_state next_query_state = ntp->query_state;
+	enum ntp_query_state next_query_state = ntp->query.state;
 
 	assert(ntp != NULL);
 
@@ -1294,9 +1342,9 @@ static bool crny_state_machine(crny_module_t *ntp,
 	}
 
 	if (event == NTP_QUERY_EVENT_TICK &&
-	    ntp->query_state != NTP_QUERY_STATE_CONNECT &&
-	    ntp->query_state != NTP_QUERY_STATE_SLEEP_DISCONNECTED &&
-	    ntp->query_state != NTP_QUERY_STATE_SLEEP_CONNECTED) {
+	    ntp->query.state != NTP_QUERY_STATE_CONNECT &&
+	    ntp->query.state != NTP_QUERY_STATE_SLEEP_DISCONNECTED &&
+	    ntp->query.state != NTP_QUERY_STATE_SLEEP_CONNECTED) {
 		struct sfptpd_timespec now;
 
 		(void)sfclock_gettime(CLOCK_MONOTONIC, &now);
@@ -1304,7 +1352,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 			event = NTP_QUERY_EVENT_REPLY_TIMEOUT;
 	}
 
-	switch (ntp->query_state) {
+	switch (ntp->query.state) {
 	case NTP_QUERY_STATE_CONNECT:
 		rc = crny_connect(ntp);
 		if (rc == 0) {
@@ -1352,7 +1400,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 		if (event == NTP_QUERY_EVENT_TRAFFIC) {
 			rc = handle_get_source_count(ntp);
 			if (next_state->peer_info.num_peers > 0) {
-				ntp->query_src_idx = 0;
+				ntp->query.src_idx = 0;
 				if (issue_get_source_datum(ntp) != 0)
 					disconnect = true;
 				else
@@ -1369,7 +1417,27 @@ static bool crny_state_machine(crny_module_t *ntp,
 		if (event ==  NTP_QUERY_EVENT_TRAFFIC) {
 			rc = handle_get_source_datum(ntp);
 			if (rc == ENOENT) {
-				if (++ntp->query_src_idx == next_state->peer_info.num_peers) {
+				if (++ntp->query.src_idx == next_state->peer_info.num_peers) {
+					crny_parse_state(next_state, 0, next_state->offset_unsafe);
+					update = true;
+					sfptpd_ntpclient_print_peers(&next_state->peer_info, MODULE);
+					next_query_state = NTP_QUERY_STATE_SLEEP_CONNECTED;
+				} else if (issue_get_source_datum(ntp) != 0)
+					disconnect = true;
+			} else if (issue_get_source_stats(ntp) != 0)
+				disconnect = true;
+			else
+				next_query_state = NTP_QUERY_STATE_SOURCE_STATS;
+		} else if (event == NTP_QUERY_EVENT_REPLY_TIMEOUT) {
+			next_query_state = NTP_QUERY_STATE_SLEEP_CONNECTED;
+		}
+		break;
+
+	case NTP_QUERY_STATE_SOURCE_STATS:
+		if (event ==  NTP_QUERY_EVENT_TRAFFIC) {
+			rc = handle_get_source_stats(ntp);
+			if (rc == ENOENT) {
+				if (++ntp->query.src_idx == next_state->peer_info.num_peers) {
 					crny_parse_state(next_state, 0, next_state->offset_unsafe);
 					update = true;
 					sfptpd_ntpclient_print_peers(&next_state->peer_info, MODULE);
@@ -1388,7 +1456,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 	case NTP_QUERY_STATE_NTP_DATUM:
 		if (event == NTP_QUERY_EVENT_TRAFFIC) {
 			rc = handle_get_ntp_datum(ntp);
-			if (++ntp->query_src_idx == next_state->peer_info.num_peers) {
+			if (++ntp->query.src_idx == next_state->peer_info.num_peers) {
 				crny_parse_state(next_state, 0, next_state->offset_unsafe);
 				update = true;
 				sfptpd_ntpclient_print_peers(&next_state->peer_info, MODULE);
@@ -1445,7 +1513,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 
 finish:
 	DBG_L6("crny: state %s --%s--> %s (%s)\n",
-	       query_state_names[ntp->query_state],
+	       query_state_names[ntp->query.state],
 	       query_event_names[event],
 	       query_state_names[next_query_state],
 	       update ? "update" : "no update");
@@ -1453,7 +1521,7 @@ finish:
 	if (ntp->next_state.state != ntp->state.state)
 		update = true;
 
-	ntp->query_state = next_query_state;
+	ntp->query.state = next_query_state;
 	return update;
 }
 
@@ -2137,7 +2205,7 @@ static void ntp_on_run(crny_module_t *ntp)
 
 	/* Determine the time when we should next poll the NTP daemon */
 	(void)sfclock_gettime(CLOCK_MONOTONIC, &ntp->next_poll_time);
-	ntp->query_state = NTP_QUERY_STATE_SLEEP_DISCONNECTED;
+	ntp->query.state = NTP_QUERY_STATE_SLEEP_DISCONNECTED;
 	ntp->state.offset_unsafe = false;
 
 	rc = EOPNOTSUPP;
