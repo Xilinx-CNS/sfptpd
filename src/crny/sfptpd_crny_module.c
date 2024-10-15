@@ -546,7 +546,6 @@ static void ntp_convergence_init(crny_module_t *ntp)
 	sfptpd_stats_convergence_set_max_offset(&ntp->convergence, threshold);
 }
 
-
 static bool ntp_convergence_update(crny_module_t *ntp, struct ntp_state *new_state)
 {
 	struct sfptpd_timespec time;
@@ -580,7 +579,7 @@ static bool ntp_convergence_update(crny_module_t *ntp, struct ntp_state *new_sta
 		 * from master */
 		new_state->synchronized = sfptpd_stats_convergence_update(&ntp->convergence,
 									  time.sec,
-									  peer->offset);
+									  sfptpd_ntpclient_offset(peer));
 	}
 
 	return new_state->synchronized != ntp->state.synchronized;
@@ -656,7 +655,8 @@ void crny_stats_update(crny_module_t *ntp)
 		assert(ntp->state.selected_peer_idx < ntp->state.peer_info.num_peers);
 		peer = &ntp->state.peer_info.peers[ntp->state.selected_peer_idx];
 		/* Offset, frequency correction, one-way-delay */
-		sfptpd_stats_collection_update_range(stats, NTP_STATS_ID_OFFSET, peer->offset,
+		sfptpd_stats_collection_update_range(stats, NTP_STATS_ID_OFFSET,
+						     sfptpd_ntpclient_offset(peer),
 						     ntp->state.offset_timestamp, true);
 	} else {
 		struct sfptpd_timespec now;
@@ -742,8 +742,8 @@ void crny_parse_state(struct ntp_state *state, int rc, bool offset_unsafe)
 		peer = &state->peer_info.peers[state->selected_peer_idx];
 
 		state->state = SYNC_MODULE_STATE_SLAVE;
-		state->offset_from_master = peer->offset;
-		state->root_dispersion = peer->root_dispersion;
+		state->offset_from_master = sfptpd_ntpclient_offset(peer);
+		state->root_dispersion = sfptpd_ntpclient_error(peer);
 		state->stratum = peer->stratum;
 	} else {
 		state->state = candidates?
@@ -2012,7 +2012,8 @@ static void ntp_on_save_state(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 			SFPTPD_CONFIG_GET_NAME(ntp->config),
 			sfptpd_clock_get_long_name(clock),
 			crny_state_text(ntp->state.state, 0),
-			alarms, constraints, flags, peer->offset,
+			alarms, constraints, flags,
+			sfptpd_ntpclient_offset(peer),
 			ntp->state.synchronized,
 			host,
 			ntp->state.peer_info.num_peers,
@@ -2092,7 +2093,7 @@ static void ntp_on_write_topology(crny_module_t *ntp, sfptpd_sync_module_msg_t *
 		sfptpd_log_topology_write_field(stream, true, "%s", host);
 		sfptpd_log_topology_write_1to1_connector(stream, false, true,
 							 SFPTPD_FORMAT_TOPOLOGY_FLOAT,
-							 peer->offset);
+							 sfptpd_ntpclient_offset(peer));
 		break;
 
 	default:

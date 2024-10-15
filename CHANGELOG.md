@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Issue SWPTP-1506
+  - chrony: use smoothed offset from chrony not last NTP sample
 - Issue SWPTP-1531
   - freerun: fix resolution of bond when VLAN specified
 
