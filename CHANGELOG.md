@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 (c) Copyright 2012-2024 Advanced Micro Devices, Inc.
 
+## [Unreleased]
+
+### Fixed
+
+- Issue SWPTP-1531
+  - freerun: fix resolution of bond when VLAN specified
+
 ## [3.8.0.1005] - 2024-10-10 [Feature Release]
 
 ### Added

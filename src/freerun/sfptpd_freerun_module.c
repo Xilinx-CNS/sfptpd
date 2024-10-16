@@ -344,6 +344,9 @@ struct phy_search_result freerun_find_physical_link(freerun_module_t *fr,
 			 link->if_name, candidate.link->if_name);
 	}
 
+	/* Use VLAN-resolved link as new starting point */
+	link = candidate.link;
+
 	/* Do a depth-first search of tree from this logical interface,
 	 * trying the physical interfaces we come across. */
 	for (row = 0; row < fr->link_table.count; row++) {
