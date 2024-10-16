@@ -154,7 +154,7 @@ use cases:
 Copyright
 ---------
 
-Please see [LICENSE](LICENSE) included in this distribution for terms of use.
+Please see the LICENSE file included in this distribution for terms of use.
 
 sfptpd is provided under a BSD 3-clause license.
 
