@@ -193,6 +193,9 @@ struct sfptpd_interface {
 
 	/* A copy of the link table object, not necessarily current */
 	struct sfptpd_link link;
+
+	/* Saved hardware timestamping state for suspend */
+	struct hwtstamp_config saved_ts_conf;
 };
 
 
@@ -398,7 +401,7 @@ static struct utsname sysinfo = { .release = "uname-failed" };
  ****************************************************************************/
 
 static inline void interface_lock(void) {
-	int rc = pthread_mutex_lock(sfptpd_interface_lock);
+	int rc = sfptpd_interface_lock == NULL ? 0 : pthread_mutex_lock(sfptpd_interface_lock);
 	if (rc != 0) {
 		CRITICAL("interface: could not acquire hardware state lock\n");
 		exit(1);
@@ -407,7 +410,7 @@ static inline void interface_lock(void) {
 
 
 static inline void interface_unlock(void) {
-	int rc = pthread_mutex_unlock(sfptpd_interface_lock);
+	int rc = sfptpd_interface_lock == NULL ? 0 : pthread_mutex_unlock(sfptpd_interface_lock);
 	if (rc != 0) {
 		CRITICAL("interface: could not release hardware state lock\n");
 		exit(1);
@@ -756,7 +759,7 @@ static int interface_get_versions(struct sfptpd_interface *interface)
 }
 
 
-static void interface_get_ts_info(struct sfptpd_interface *interface)
+static void interface_populate_ts_info(struct sfptpd_interface *interface)
 {
 	int rc = 0;
 
@@ -1091,7 +1094,7 @@ static int interface_init(const struct sfptpd_link *link, const char *sysfs_dir,
 		ret = rc;
 
 	/* Get the timestamping capabilities of the interface */
-	interface_get_ts_info(interface);
+	interface_populate_ts_info(interface);
 
 	/* Check whether the driver supports the EFX ioctl */
 	interface_check_efx_support(interface);
@@ -1740,6 +1743,23 @@ void sfptpd_interface_get_clock_device_idx(const struct sfptpd_interface *interf
 }
 
 
+void sfptpd_interface_get_ts_info(const struct sfptpd_interface *interface,
+				  struct ethtool_ts_info *ts_info)
+{
+	assert(interface != NULL);
+	assert(ts_info != NULL);
+
+	if (!interface_get_canonical_with_lock((struct sfptpd_interface **) &interface)) {
+		memset(ts_info, '\0', sizeof *ts_info);
+		return;
+	}
+
+	assert(interface->magic == SFPTPD_INTERFACE_MAGIC);
+	*ts_info = interface->ts_info;
+	interface_unlock();
+}
+
+
 int sfptpd_interface_phc_unavailable(struct sfptpd_interface *interface)
 {
 	int device_idx;
@@ -2247,5 +2267,124 @@ int sfptpd_interface_driver_stats_reset(struct sfptpd_interface *interface)
 	return ret;
 }
 
+
+int sfptpd_interface_reassign_to_nic(int from_phc, int to_phc)
+{
+	struct sfptpd_db_query_result q;
+	struct sfptpd_interface *intf;
+	struct sfptpd_interface *nic;
+	int my_false = 0;
+	int rc = 0;
+	int i;
+
+	interface_lock();
+
+	nic = FIND_ANY(INTF_KEY_CLOCK, &to_phc,
+		       INTF_KEY_DELETED, &my_false,
+		       SFPTPD_DB_SEL_END);
+	if (nic == NULL) {
+		ERROR("interface: could not find nic with phc %d\n", to_phc);
+		rc = ENODEV;
+		goto finish;
+	}
+
+	q = sfptpd_db_table_query(sfptpd_interface_table,
+				  INTF_KEY_CLOCK, &from_phc,
+				  INTF_KEY_DELETED, &my_false,
+				  SFPTPD_DB_SEL_END);
+
+	for (i = 0; i < q.num_records; i++) {
+		intf = *((struct sfptpd_interface **) q.record_ptrs[i]);
+		assert(intf->magic == SFPTPD_INTERFACE_MAGIC);
+		intf->nic_id = nic->nic_id;
+		intf->ts_info = nic->ts_info;
+		intf->clock = nic->clock;
+		intf->clock_supports_phc = nic->clock_supports_phc;
+		intf->driver_supports_efx = nic->driver_supports_efx;
+		INFO("interface: reassigned %s to nic id %d\n",
+		     intf->name, nic->nic_id);
+	}
+
+	q.free(&q);
+
+finish:
+	interface_unlock();
+	return rc;
+}
+
+
+int sfptpd_interface_hw_timestamping_suspend(struct sfptpd_db_query_result *q,
+					     int for_phc)
+{
+	struct hwtstamp_config req;
+	struct sfptpd_interface *intf;
+	int my_false = 0;
+	int rc = 0;
+	int i;
+
+	assert(q);
+	assert(for_phc >= 0);
+
+	interface_lock();
+
+	*q = sfptpd_db_table_query(sfptpd_interface_table,
+				   INTF_KEY_CLOCK, &for_phc,
+				   INTF_KEY_DELETED, &my_false,
+				   SFPTPD_DB_SEL_END);
+
+	for (i = 0; i < q->num_records; i++) {
+		intf = *((struct sfptpd_interface **) q->record_ptrs[i]);
+		assert(intf->magic == SFPTPD_INTERFACE_MAGIC);
+
+		rc = sfptpd_interface_ioctl(intf, SIOCGHWTSTAMP, &intf->saved_ts_conf);
+		if (rc != 0) {
+			ERROR("interface %s: could not get timestamping config for suspend, %s\n",
+			     intf->name, strerror(rc));
+			q->free(q);
+			goto fail;
+		}
+	}
+
+	for (i = 0; i < q->num_records; i++) {
+		intf = *((struct sfptpd_interface **) q->record_ptrs[i]);
+		memset(&req, 0, sizeof req);
+		req.tx_type = HWTSTAMP_TX_OFF;
+		req.rx_filter = HWTSTAMP_FILTER_NONE;
+		sfptpd_interface_ioctl(intf, SIOCSHWTSTAMP, &req);
+		INFO("interface %s: suspended hardware timestamping\n",
+		     intf->name);
+	}
+
+fail:
+	interface_unlock();
+	return rc;
+}
+
+int sfptpd_interface_hw_timestamping_restore(struct sfptpd_db_query_result *q)
+{
+	struct sfptpd_interface *intf;
+	int rc2 = 0;
+	int rc;
+	int i;
+
+	assert(q);
+	interface_lock();
+	for (i = 0; i < q->num_records; i++) {
+		intf = *((struct sfptpd_interface **) q->record_ptrs[i]);
+		assert(intf->magic == SFPTPD_INTERFACE_MAGIC);
+		rc = sfptpd_interface_ioctl(intf, SIOCSHWTSTAMP, &intf->saved_ts_conf);
+		if (rc != 0) {
+			ERROR("interface %s: failed to restore hw timestamping setting, %s\n",
+			      intf->name, strerror(rc));
+			rc2 = rc;
+		} else {
+			INFO("interface %s: restored hardware timestamping setting\n",
+			     intf->name);
+		}
+	}
+	interface_unlock();
+	q->free(q);
+	return rc2;
+}
 
 /* fin */

@@ -3,6 +3,7 @@
 
 /usr/sbin/sfptpd
 /usr/sbin/sfptpdctl
+/usr/sbin/tstool
 /usr/libexec/sfptpd/sfptpd_priv_helper
 /lib/systemd/system/sfptpd.service
 /etc/sfptpd.conf
