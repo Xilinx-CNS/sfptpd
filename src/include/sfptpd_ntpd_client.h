@@ -83,6 +83,8 @@ struct sfptpd_ntpclient_peer {
 	bool self;
 	long double offset;
 	long double root_dispersion;
+	long double smoothed_offset;
+	long double smoothed_root_dispersion;
 };
 
 /** Structure to return information about the peers of the NTP daemon.
@@ -188,5 +190,25 @@ sfptpd_ntpclient_get_features(struct sfptpd_ntpclient *container);
  */
 void sfptpd_ntpclient_print_peers(struct sfptpd_ntpclient_peer_info *peer_info,
 				  const char *subsystem);
+
+/* Get best estimate of offset to NTP peer
+ * @param peer the peer info object
+ * @return the offset in ns
+ */
+static inline sfptpd_time_t sfptpd_ntpclient_offset(struct sfptpd_ntpclient_peer *peer)
+{
+	return isnormal(peer->smoothed_offset) ? peer->smoothed_offset : peer->offset;
+}
+
+
+/* Get best estimate of error for NTP peer
+ * @param peer the peer info object
+ * @return the offset in ns
+ */
+static inline sfptpd_time_t sfptpd_ntpclient_error(struct sfptpd_ntpclient_peer *peer)
+{
+	return isnormal(peer->smoothed_root_dispersion) ? peer->smoothed_root_dispersion : peer->root_dispersion;
+}
+
 
 #endif /* _SFPTPD_NTPD_CLIENT_H */

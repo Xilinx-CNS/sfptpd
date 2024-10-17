@@ -1407,6 +1407,8 @@ static int mode7_get_peer_info(struct sfptpd_ntpclient_state *ntpclient,
 		peer->candidate = (summary[i].hmode == MODE_CLIENT);
 		peer->self = ((summary[i].flags & INFO_FLAG_REFCLOCK) != 0);
 		peer->offset = offset;
+		peer->smoothed_offset = NAN;
+		peer->smoothed_root_dispersion = NAN;
 	}
 
 	/* For each peer, get the peer stats and info */
