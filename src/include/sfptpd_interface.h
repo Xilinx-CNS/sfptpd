@@ -154,6 +154,13 @@ sfptpd_interface_class_t sfptpd_interface_get_class(struct sfptpd_interface *int
  */
 sfptpd_interface_ts_caps_t sfptpd_interface_ptp_caps(struct sfptpd_interface *interface);
 
+/** Gets ethtool ts_info structure for interface
+ * @param interface Pointer to interface instance
+ * @return Timestamp information structure
+ */
+void sfptpd_interface_get_ts_info(const struct sfptpd_interface *interface,
+				  struct ethtool_ts_info *ts_info);
+
 /** Checks if the interface has hardware PTP support
  * @param interface Pointer to interface instance
  * @return Boolean indicating whether PTP is supported
@@ -315,5 +322,26 @@ int sfptpd_interface_driver_stats_reset(struct sfptpd_interface *interface);
  * @param trace_level the level of trace
  */
 void sfptpd_interface_diagnostics(int trace_level);
+
+/** Reassign interface to another one
+ * @param from_phc phc index of interface to change
+ * @param to_phc phc index to use
+ * @return 0 on success, else errno
+ */
+int sfptpd_interface_reassign_to_nic(int from_phc, int to_phc);
+
+/** Suspend hardware timestamping, saving old setting
+ * @param q pointer to location to store affected interface list
+ * @param for_phc clock id whose interfaces to suspend
+ * @return 0 on success, else errno
+ */
+int sfptpd_interface_hw_timestamping_suspend(struct sfptpd_db_query_result *q,
+					     int for_phc);
+
+/** Restore suspend hardware timestamping from saved config
+ * @param q pointer to location with affected interface list
+ * @return 0 on success, else errno
+ */
+int sfptpd_interface_hw_timestamping_restore(struct sfptpd_db_query_result *q);
 
 #endif /* _SFPTPD_INTERFACE_H */

@@ -70,6 +70,7 @@ touch %{buildroot}%{_localstatedir}/lib/%{name}/{config,interfaces,sync-instance
 %files
 %attr(755, root, root) %{_sbindir}/sfptpd
 %attr(755, root, root) %{_sbindir}/sfptpdctl
+%attr(755, root, root) %{_sbindir}/tstool
 %attr(755, root, root) %{_libexecdir}/%{name}/sfptpd_priv_helper
 %attr(755, root, root) %{_sysconfdir}/init.d/sfptpd
 %attr(644, root, root) %config(noreplace) %{_sysconfdir}/sfptpd.conf
@@ -85,6 +86,7 @@ touch %{buildroot}%{_localstatedir}/lib/%{name}/{config,interfaces,sync-instance
 %doc %{_pkgdocdir}/examples/sfptpd_json_parse.html
 %{_mandir}/man8/sfptpd.8*
 %{_mandir}/man8/sfptpdctl.8*
+%{_mandir}/man8/tstool.8*
 %dir %{_localstatedir}/lib/%{name}
 %ghost %{_localstatedir}/lib/%{name}/config
 %ghost %{_localstatedir}/lib/%{name}/interfaces
