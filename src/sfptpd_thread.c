@@ -1135,9 +1135,9 @@ int sfptpd_msg_send(sfptpd_msg_hdr_t *msg, struct sfptpd_thread *recipient,
 
 	rc = queue_send(&recipient->queue_general, msg);
 
-	SFPTPD_MSG_TRACE("msg %p send %d reply %d rc %d\n", msg,
+	SFPTPD_MSG_TRACE("msg %p send %d reply %d rc %d id 0x%x\n", msg,
 			recipient->queue_general.pipe.fds[PIPE_WRITE_IDX],
-			reply_fd, rc);
+			reply_fd, rc, id);
 
 	/* If we failed to send the message, clear the reply queue, and send
 	 * the message back to its free queue. */
@@ -1175,9 +1175,9 @@ int sfptpd_msg_send_wait(sfptpd_msg_hdr_t *msg,
 
 	rc = queue_send(&recipient->queue_general, msg);
 
-	SFPTPD_MSG_TRACE("msg %p send %d reply %d wait rc %d\n", msg,
+	SFPTPD_MSG_TRACE("msg %p send %d reply %d wait rc %d 0x%x\n", msg,
 			recipient->queue_general.pipe.fds[PIPE_WRITE_IDX],
-			reply_fd, rc);
+			reply_fd, rc, id);
 
 	if (rc == 0) {
 		rc = queue_receive(&self->queue_wait_reply, &reply, true);
