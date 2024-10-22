@@ -1255,7 +1255,7 @@ static const char *thread_get_name(void)
 	if ((self != NULL) && (self->magic == SFPTPD_THREAD_MAGIC))
 		return self->name;
 
-	return "null";
+	return "(global)";
 }
 
 
