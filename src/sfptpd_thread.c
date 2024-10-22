@@ -811,13 +811,14 @@ fail1:
 }
 
 
-static void event_destroy(struct sfptpd_event *event)
+static void event_destroy(struct sfptpd_thread *thread,
+			  struct sfptpd_event *event)
 {
 	assert(event != NULL);
 	assert(event->magic == SFPTPD_EVENT_MAGIC);
 
 	DBG_L3("thread %s %s %d: destroyed\n",
-	       thread_get_name(),
+	       thread->name,
 	       thread_event_type(event->type), event->id);
 
 	/* Close the timer handle and free the memory */
@@ -866,7 +867,7 @@ static int thread_event_create(unsigned int event_id,
 		ERROR("thread %s: failed to add %s %u fd %d to epoll, %s\n",
 		      self->name, type,
 		      event.data.fd, strerror(errno));
-		event_destroy(source);
+		event_destroy(self, source);
 		return errno;
 	}
 
@@ -909,7 +910,8 @@ static int timer_start(struct sfptpd_event *timer, bool periodic,
 }
 
 
-static int timer_stop(struct sfptpd_event *timer)
+static int timer_stop(struct sfptpd_thread *thread,
+		      struct sfptpd_event *timer)
 {
 	struct itimerspec timer_spec;
 
@@ -924,7 +926,7 @@ static int timer_stop(struct sfptpd_event *timer)
 
 	if (timerfd_settime(timer->fd, 0, &timer_spec, NULL) < 0) {
 		ERROR("thread %s timer %d: failed to stop timer, %s\n",
-		      thread_get_name(), timer->id, strerror(errno));
+		      thread->name, timer->id, strerror(errno));
 		return errno;
 	}
 
@@ -1600,8 +1602,8 @@ static int thread_destroy(struct sfptpd_thread *thread)
 
 		/* Stop and destroy the timer */
 		if (event->type == THREAD_EVENT_TIMER)
-			timer_stop(event);
-		event_destroy(event);
+			timer_stop(thread, event);
+		event_destroy(thread, event);
 	}
 
 	/* If signal handling has been configured for this thread, free the
@@ -2103,7 +2105,7 @@ int sfptpd_thread_timer_stop(sfptpd_event_id_t timer_id)
 	timer = thread_event_find_by_id(timer_id);
 	rc = thread_event_check_type(timer, THREAD_EVENT_TIMER);
 	if (!rc)
-		rc = timer_stop(timer);
+		rc = timer_stop(thread_self(), timer);
 	return rc;
 }
 
