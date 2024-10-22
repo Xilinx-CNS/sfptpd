@@ -202,4 +202,8 @@ int sfptpd_ht_get_num_entries(struct sfptpd_hash_table *table);
  */
 int sfptpd_find_running_programs(struct sfptpd_prog *others);
 
+/** Log a backtrace of the current thread.
+ */
+void sfptpd_debug_backtrace(void);
+
 #endif /* _SFPTPD_MISC_H */

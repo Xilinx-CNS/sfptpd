@@ -1175,7 +1175,7 @@ int sfptpd_msg_send_wait(sfptpd_msg_hdr_t *msg,
 
 	rc = queue_send(&recipient->queue_general, msg);
 
-	SFPTPD_MSG_TRACE("msg %p send %d reply %d wait rc %d 0x%x\n", msg,
+	SFPTPD_MSG_TRACE("msg %p send %d reply %d wait rc %d id 0x%x\n", msg,
 			recipient->queue_general.pipe.fds[PIPE_WRITE_IDX],
 			reply_fd, rc, id);
 
@@ -1995,6 +1995,9 @@ int sfptpd_thread_error(int exit_errno)
 struct sfptpd_thread *sfptpd_thread_self(void)
 {
 	struct sfptpd_thread *self = thread_self();
+
+	if (self == NULL)
+		sfptpd_debug_backtrace();
 
 	assert(self != NULL);
 	return self;
