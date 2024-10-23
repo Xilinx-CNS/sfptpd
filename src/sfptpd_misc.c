@@ -21,6 +21,7 @@
 #include <fts.h>
 #include <fnmatch.h>
 #include <linux/taskstats.h>
+#include <execinfo.h>
 
 #include "sfptpd_misc.h"
 #include "sfptpd_logging.h"
@@ -188,6 +189,29 @@ void sfptpd_local_strftime(char *s, size_t max, const char *format, const sfptpd
 	} else {
 		snprintf(s, max, "(invalid-time)");
 	}
+}
+
+
+void sfptpd_debug_backtrace(void)
+{
+#define BACKTRACE_SIZE 128
+	void **buffer = malloc(BACKTRACE_SIZE * sizeof(void *));
+	char **strings;
+	int len;
+
+	if (!buffer)
+		return;
+
+	len = backtrace(buffer, BACKTRACE_SIZE);
+	strings = backtrace_symbols(buffer, len);
+	if (strings) {
+		while(--len >= 1) {
+			TRACE_L3("frame %d: %s\n", len, strings[len]);
+		}
+		free(strings);
+	}
+
+	free(buffer);
 }
 
 

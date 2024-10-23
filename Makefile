@@ -70,6 +70,11 @@ STATIC_LIBRARIES :=
 TARGETS :=
 MKDIR = mkdir -p
 
+ifdef DEBUG
+# Enable symbolic backtraces
+LDFLAGS += -rdynamic
+endif
+
 # Build directory
 BUILD_DIR = build
 
