@@ -1237,7 +1237,7 @@ int sfptpd_ntpclient_mode7_create(struct sfptpd_ntpclient_state **ntpclient,
 	/* Initialise other members */
 	new->legacy_mode = 0;
 	new->request_pkt_size = ntp_legacy_pkt_sizes[new->legacy_mode];
-	sfptpd_time_from_s(&new->timeout, 1);
+	sfptpd_time_from_ns(&new->timeout, SFPTPD_NTP_MODE7_TIMEOUT_NS);
 
 	/* If we have a key, copy it */
 	if (key_value != NULL)
