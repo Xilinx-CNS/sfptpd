@@ -16,6 +16,9 @@
 /** Maximum number of peers supported */
 #define SFPTPD_NTP_PEERS_MAX (32)
 
+/** Timeout for mode 7 queries */
+#define SFPTPD_NTP_MODE7_TIMEOUT_NS 300000000LL
+
 /* Forward declare NTP client structure */
 struct sfptpd_ntpclient;
 
