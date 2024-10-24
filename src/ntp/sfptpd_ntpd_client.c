@@ -71,7 +71,9 @@ void sfptpd_ntpclient_print_peers(struct sfptpd_ntpclient_peer_info *peer_info,
 	char remote_host[NI_MAXHOST];
 	char local_host[NI_MAXHOST];
 	struct sfptpd_ntpclient_peer *peer;
-	for (int i = 0; i < peer_info->num_peers; i++)
+	int i;
+
+	for (i = 0; i < peer_info->num_peers; i++)
 	{
 		peer = &peer_info->peers[i];
 		remote_host[0]	= '\0';

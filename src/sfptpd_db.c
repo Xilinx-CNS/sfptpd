@@ -769,8 +769,9 @@ static int query_compare_fn(const void *raw_rec_a, const void *raw_rec_b, void *
 	const void *const *rec_a = raw_rec_a, *const *rec_b = raw_rec_b;
 	struct query_fn_context *context = raw_context;
 	int cmp = 0;
+	int key;
 
-	for (int key = 0; key < context->selection.sort_count; key++) {
+	for (key = 0; key < context->selection.sort_count; key++) {
 		int sort_field_idx = context->selection.sort_fields[key];
 		struct sfptpd_db_field *sort_field = &context->table->def->fields[sort_field_idx];
 
@@ -885,8 +886,9 @@ void sfptpd_db_table_foreach_impl(struct sfptpd_db_table *table,
 		/* With search or sort constraints we call the query function first
 		 * and operate directly on record pointers */
 		struct sfptpd_db_query_result result = table_query(table, &selection);
+		int i;
 
-		for (int i = 0; i < result.num_records; i++)
+		for (i = 0; i < result.num_records; i++)
 			fn(result.record_ptrs[i], context);
 
 		result.free(&result);
@@ -1090,8 +1092,10 @@ void sfptpd_db_table_dump_impl(int trace_level,
 	/* Print rule */
 	i = 0;
 	for (col = cols; col < col_end; col++) {
+		int j;
+
 		str[i++] = (col == cols) ? '|' : '+';
-		for (int j = 0; j < col->width + 2; j++)
+		for (j = 0; j < col->width + 2; j++)
 			str[i++] = '-';
 	}
 	str[i++] = '|';

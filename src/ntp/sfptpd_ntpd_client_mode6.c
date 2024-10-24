@@ -612,6 +612,7 @@ static int mode6_response(struct sfptpd_ntpclient_state *ntpclient,
 	size_t num_frags;
 	size_t frag_idx;
 	unsigned char *read_ptr;
+	int i;
 
 	assert(ntpclient != NULL);
 	assert(resp_status != NULL);
@@ -785,7 +786,7 @@ static int mode6_response(struct sfptpd_ntpclient_state *ntpclient,
 			continue;
 		}
 		/* Move all later fragments +1 index to make room for new fragment */
-		for (int i = num_frags; i > frag_idx; i--) {
+		for (i = num_frags; i > frag_idx; i--) {
 			offsets[i] = offsets[i-1];
 			counts[i] = counts[i-1];
 		}

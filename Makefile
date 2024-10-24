@@ -64,6 +64,7 @@ CFLAGS += -MMD -MP -Wall -Werror -Wundef -Wstrict-prototypes \
 #	 -DSFPTPD_BUILDTIME_CHECKS
 
 ARFLAGS = rcs
+CFLAGS += $(CFLAGS_APPEND)
 LDFLAGS +=
 LDLIBS = -lm -lrt -lpthread -lmnl $(CONDITIONAL_LIBS)
 STATIC_LIBRARIES :=
