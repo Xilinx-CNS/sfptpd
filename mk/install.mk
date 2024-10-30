@@ -26,15 +26,13 @@ SBINDIR ?= sbin
 
 ifneq (,$(wildcard /etc/debian_version))
 DEFAULT_DEFAULTSDIR := default
-DEFAULT_UNITPREFIX =
 else
 DEFAULT_DEFAULTSDIR := sysconfig
-DEFAULT_UNITPREFIX = $(prefix)
 endif
 
 # Installation variables
 INST_SBINDIR ?= $(DESTDIR)$(prefix)/$(SBINDIR)
-INST_UNITDIR ?= $(DESTDIR)$(DEFAULT_UNITPREFIX)/lib/systemd/system
+INST_UNITDIR ?= $(DESTDIR)$(prefix)/lib/systemd/system
 INST_CONFDIR ?= $(DESTDIR)$(prefix)/etc
 INST_DOCDIR ?= $(DESTDIR)$(prefix)/share/doc
 INST_MANDIR ?= $(DESTDIR)$(prefix)/share/man
