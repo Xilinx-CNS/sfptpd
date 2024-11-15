@@ -257,12 +257,12 @@ static const sfptpd_config_option_t config_general_options[] =
 		parse_assume_one_phc_per_nic,
 		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_ASSUME_ONE_PHC_PER_NIC)},
 	{"avoid_efx_ioctl", "<off | on>",
-		"Specify whether to avoid private SIOCEFX ioctl for Solarflare "
-		"adapters where possible",
+		"Specify whether to avoid private SIOCEFX ioctl for Solarflare adapters. "
+		"This prevents use of the sync flag via Onload",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
 		parse_avoid_efx_ioctl,
 		.dfl = SFPTPD_CONFIG_DFL_BOOL(false),
-		.hidden = true},
+		},
 	{"phc_diff_methods", "<sys-offset-precise | efx | pps | sys-offset-ext | sys-offset | read-time>*",
 		"Define the list of PHC diff methods used",
 		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,

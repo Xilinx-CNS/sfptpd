@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Add `avoid_efx_ioctl` option to avoid sfc proprietary ioctl(). (SWPTP-1535)
+  - This prevents setting of the sync flags optionally used by Onload.
+
 ### Fixed
 
 - Issue SWPTP-1506
