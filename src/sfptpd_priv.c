@@ -206,12 +206,12 @@ static int sfptpd_priv_rpc(struct sfptpd_priv_state *state,
 	return num_fds;
 }
 
-static bool priv_sync(struct sfptpd_priv_state *state)
+static int priv_sync(struct sfptpd_priv_state *state)
 {
 	struct sfptpd_priv_req_msg req = { .req = SFPTPD_PRIV_REQ_SYNC };
 	struct sfptpd_priv_resp_msg resp = { 0 };
 
-	return sfptpd_priv_rpc(state, &req, &resp, NULL) == 0;
+	return sfptpd_priv_rpc(state, &req, &resp, NULL);
 }
 
 
@@ -307,10 +307,10 @@ int sfptpd_priv_start_helper(struct sfptpd_config *config, int *pid)
 			return -rc;
 		}
 
-		if (!priv_sync(state)) {
+		if ((rc = priv_sync(state)) < 0) {
 			sfptpd_priv_stop_helper();
 			CRITICAL("could not start privileged helper\n");
-			return -ESHUTDOWN;
+			return rc;
 		} else {
 			TRACE_L3("priv: started helper\n");
 		}

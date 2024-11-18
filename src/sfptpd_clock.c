@@ -801,7 +801,7 @@ static int renew_clock(struct sfptpd_clock *clock)
 		/* Set the primary interface for the clock and get the PHC
 		 * supported flag and device index. */
 		clock->u.nic.primary_if = primary;
-		clock->u.nic.supports_sync_status_reporting = true;
+		clock->u.nic.supports_sync_status_reporting = !clock->cfg_avoid_efx;
 		clock->u.nic.device_idx = phc_idx;
 		clock->u.nic.supports_efx = supports_efx;
 
@@ -2219,8 +2219,7 @@ int sfptpd_clock_set_sync_status(struct sfptpd_clock *clock, bool in_sync,
 		goto finish;
 	}
 
-	/* Update the sync status via a private IOCTL.
-	   Ignore clock->cfg_avoid_efx because there is no alternative mechanism. */
+	/* Update the sync status via a private IOCTL unless inhibited. */
 	memset(&sfc_req, 0, sizeof(sfc_req));
 	sfc_req.cmd = EFX_TS_SET_SYNC_STATUS;
 	sfc_req.u.ts_set_sync_status.in_sync = in_sync? 1: 0;

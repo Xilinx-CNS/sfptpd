@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Add `avoid_efx_ioctl` option to avoid sfc proprietary ioctl(). (SWPTP-1535)
+  - This prevents setting of the sync flags optionally used by Onload.
+
 ### Fixed
 
 - Issue SWPTP-1506
@@ -36,7 +41,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - To enable, see [example](config/ptp_slave_lacp.cfg).
 - Show unicast/multicast delay response flags in state file. (SWPTP-807)
 - Get transmit timestamps via epoll to avoid blocking PTP thread. (SWPTP-831)
-- Add interpolated config of patterns for clock names and ids. (SWPTP-997)
 - Ethtool queries conducted over netlink on supported kernels. (SWPTP-1304)
 - IP address of parent clock added to topology files (SWPTP-1312)
 - Add option to configure state file and stats log update rates. (SWPTP-1326)

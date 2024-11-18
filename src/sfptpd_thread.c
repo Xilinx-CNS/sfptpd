@@ -201,6 +201,9 @@ struct sfptpd_thread_lib
 	/* Key used for storing per-thread context */
 	pthread_key_t key;
 
+	/* Key is valid */
+	bool key_valid;
+
 	/* Used to restore signal mask when signal library exits */
 	sigset_t original_signal_set;
 
@@ -1232,8 +1235,19 @@ int sfptpd_msg_reply(sfptpd_msg_hdr_t *msg)
 
 struct sfptpd_thread *thread_self(void)
 {
-	struct sfptpd_thread *self
-		= (struct sfptpd_thread *)pthread_getspecific(sfptpd_thread_lib.key);
+	struct sfptpd_thread *self;
+
+	/* If the key has not been created, pthread_getspecific() returns
+	 * an undefined value. */
+	if (!sfptpd_thread_lib.key_valid)
+		return NULL;
+
+	self = (struct sfptpd_thread *)pthread_getspecific(sfptpd_thread_lib.key);
+
+	if (self != NULL && self->magic != SFPTPD_THREAD_MAGIC) {
+		CRITICAL("thread: thread state check failed\n");
+		sfptpd_debug_backtrace();
+	}
 
 	assert(self == NULL || self->magic == SFPTPD_THREAD_MAGIC);
 	return self;
@@ -1242,20 +1256,17 @@ struct sfptpd_thread *thread_self(void)
 
 static const char *thread_get_name(void)
 {
-	struct sfptpd_thread *self
-		= (struct sfptpd_thread *)pthread_getspecific(sfptpd_thread_lib.key);
+	struct sfptpd_thread *self = NULL;
 
-	/* This function is used to get the thread name when logging trace
-	 * messages. Normally if self is not null then the magic value
-	 * should be correct but there is one scenario there this is not the
-	 * case. During the library initialisation, the global message pool
-	 * is created from outside of an sfptpd thread context and may use
-	 * this function to output trace messages. The value of
-	 * pthread_getspecific() will be undefined in this case. */
+	/* If the key has not been created, pthread_getspecific() returns
+	 * an undefined value. */
+	if (sfptpd_thread_lib.key_valid)
+		self = (struct sfptpd_thread *)pthread_getspecific(sfptpd_thread_lib.key);
+
 	if ((self != NULL) && (self->magic == SFPTPD_THREAD_MAGIC))
 		return self->name;
-
-	return "(global)";
+	else
+		return "(global)";
 }
 
 
@@ -1846,7 +1857,7 @@ int sfptpd_threading_initialise(unsigned int num_global_msgs,
 	sfptpd_thread_lib.zombie_list = NULL;
 	sfptpd_thread_lib.zombie_policy = zombie_policy;
 
-	/* Create a pthread key to allow each thread to store it's message
+	/* Create a pthread key to allow each thread to store its message
 	 * threading context */
 	rc = pthread_key_create(&sfptpd_thread_lib.key, NULL);
 	if (rc != 0) {
@@ -1854,6 +1865,7 @@ int sfptpd_threading_initialise(unsigned int num_global_msgs,
 			 strerror(rc));
 		return rc;
 	}
+	sfptpd_thread_lib.key_valid = true;
 
 	/* Create the global message pool */
 	rc = sfptpd_thread_alloc_msg_pool(SFPTPD_MSG_POOL_GLOBAL,
@@ -1907,6 +1919,7 @@ void sfptpd_threading_shutdown(void)
 	/* Destroy key before pool so that thread_get_name doesn't
 	 * reference freed memory */
 	(void)pthread_key_delete(sfptpd_thread_lib.key);
+	sfptpd_thread_lib.key_valid = false;
 	pool_destroy(&sfptpd_thread_lib.global_msg_pool);
 	pool_destroy(&sfptpd_thread_lib.rt_stats_msg_pool);
 	(void)pthread_sigmask(SIG_SETMASK, &sfptpd_thread_lib.original_signal_set, NULL);
