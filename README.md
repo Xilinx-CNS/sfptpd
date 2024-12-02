@@ -79,8 +79,19 @@ network ports on a single adapter. Some NICs, however, present separate and
 _apparently_ independent PHC devices for each network port which actually
 represent the same underlying physical clock.
 
-When using third party NICs affected by this issue the recommended mitigation
+#### Workaround 1: list clocks explicitly
+
+When using third party NICs affected by this issue, the recommended mitigation
 is to list explicitly the NIC clocks to be disciplined with `clock_list`.
+
+#### Workaround 2: clock deduplication
+
+An experimental option, `phc_dedup on` will identify duplicate PHC devices
+for a single underlying clock and retain only one which has effective control.
+This is achieved via a test that involes temporarily adjusting the relevant
+NIC clocks, so should not be done while those interfaces are in use by
+applications for timestamping (hardware timestamping will be disabled
+globally during this calibration period to enforce this).
 
 ## Footnotes
 

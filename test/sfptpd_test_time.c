@@ -79,6 +79,7 @@ enum test_op {
 	OP_IS_ZERO,
 	OP_IS_GE,
 	OP_NORMALISE,
+	OP_THRESHOLD,
 	/* Stack management */
 	OP_POP,
 	OP_DUP,
@@ -151,6 +152,7 @@ const struct oper operations[] = {
 	[OP_ZERO_OUT]	= { OPF_API, 1,  0, "ZERO_OUT" },
 	[OP_NEG]	= { OPF_API, 1,  0, "NEG" },
 	[OP_CMP]	= { OPF_API, 2, -1, "CMP" },
+	[OP_THRESHOLD]	= { OPF_API, 3, -2, "THRESHOLD" },
 	[OP_IS_ZERO]	= { OPF_API, 1,  0, "IS_ZERO" },
 	[OP_IS_GE]	= { OPF_API, 2, -1, "IS_GE" },
 	[OP_NORMALISE]	= { OPF_API, 1,  0, "NORMALISE" },
@@ -513,6 +515,33 @@ static struct test_details tests[] =
 		{ OP_LIT_F, { .f = 999971107L - 1000000000L }},
 		{ OP_TST_EQ },
 		{ OP_END }}, "SWPTP-1448: directed test for PPS regression"},
+	{ 17, {
+		{ OP_INIT, { .iii = { 1L, 0, 0 }}},
+		{ OP_INIT, { .iii = { 2L, 0, 0 }}},
+		{ OP_INIT, { .iii = { 0L, 500000000U, 0 }}},
+		{ OP_THRESHOLD },
+		{ OP_TST_FALSE },
+		{ OP_INIT, { .iii = { 1L, 0, 0 }}},
+		{ OP_INIT, { .iii = { 1L, 500000000U, 0 }}},
+		{ OP_INIT, { .iii = { 0L, 500000000U, 0 }}},
+		{ OP_THRESHOLD },
+		{ OP_TST_TRUE },
+		{ OP_INIT, { .iii = { -1L, 0, 0 }}},
+		{ OP_INIT, { .iii = { -2L, 0, 0 }}},
+		{ OP_INIT, { .iii = { 0L, 500000000U, 0 }}},
+		{ OP_THRESHOLD },
+		{ OP_TST_FALSE },
+		{ OP_INIT, { .iii = { -1L, 0, 0 }}},
+		{ OP_INIT, { .iii = { -1L, 500000000U, 0 }}},
+		{ OP_INIT, { .iii = { 0L, 500000000U, 0 }}},
+		{ OP_THRESHOLD },
+		{ OP_TST_TRUE },
+		{ OP_INIT, { .iii = { -1L, 0, 0 }}},
+		{ OP_INIT, { .iii = { -2L, 999999999U, 0xFFFFFFFFU }}},
+		{ OP_INIT, { .iii = { 0L, 500000000U, 0 }}},
+		{ OP_THRESHOLD },
+		{ OP_TST_TRUE },
+		{ OP_END }}, "Threshold equality test" },
 };
 
 static void print_stack(const struct test_val *stack, int sp)
@@ -603,6 +632,7 @@ static enum result run_test(const struct test_details *test, mem_t *mem,
 		struct test_val *s0 = &stack[sp];
 		struct test_val *s1 = &stack[sp-1];
 		struct test_val *s2 = &stack[sp-2];
+		struct test_val *s3 = &stack[sp-3];
 
 		/* Integrity checks */
 		assert(pc < MAX_INSTRS);
@@ -791,6 +821,20 @@ static enum result run_test(const struct test_details *test, mem_t *mem,
 				return bad_type();
 			}
 			s2->type = TYPE_I;
+			break;
+		case OP_THRESHOLD:
+			if (check_type(s2, s1->type))
+				return R_INTERR;
+			if (check_type(s3, s1->type))
+				return R_INTERR;
+			switch (s1->type) {
+			case TYPE_T:
+				s3->b = sfptpd_time_equal_within(&s3->t, &s2->t, &s1->t);
+				break;
+			default:
+				return bad_type();
+			}
+			s3->type = TYPE_B;
 			break;
 		case OP_IS_ZERO:
 			if (check_type(s1, TYPE_T))

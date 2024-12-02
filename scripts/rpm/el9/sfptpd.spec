@@ -85,6 +85,7 @@ make fast_test
 %files
 %{_sbindir}/sfptpd
 %{_sbindir}/sfptpdctl
+%{_sbindir}/tstool
 %{_libexecdir}/%{name}/sfptpd_priv_helper
 %{_unitdir}/sfptpd.service
 %config(noreplace) %{_sysconfdir}/sfptpd.conf
@@ -99,6 +100,7 @@ make fast_test
 %doc %{_pkgdocdir}/examples/sfptpd_json_parse.html
 %{_mandir}/man8/sfptpd.8*
 %{_mandir}/man8/sfptpdctl.8*
+%{_mandir}/man8/tstool.8*
 %dir %attr(-,sfptpd,sfptpd) %{_localstatedir}/lib/%{name}
 %ghost %attr(-,sfptpd,sfptpd) %{_localstatedir}/lib/%{name}/config
 %ghost %attr(-,sfptpd,sfptpd) %{_localstatedir}/lib/%{name}/interfaces

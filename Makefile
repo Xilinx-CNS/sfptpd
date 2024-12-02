@@ -133,7 +133,7 @@ $(BUILD_DIR)/%.service: scripts/systemd/%.service $(BUILD_DIR)
 	sed s,/etc/sysconfig,$(patsubst $(DESTDIR)%,%,$(INST_DEFAULTSDIR)),g < $< > $@
 
 .PHONY: install
-install: sfptpd sfptpdctl sfptpd_priv_helper $(addprefix $(BUILD_DIR)/,sfptpd.service)
+install: sfptpd sfptpdctl sfptpd_priv_helper tstool $(addprefix $(BUILD_DIR)/,sfptpd.service)
 	install -d $(INST_PKGDOCDIR)/config
 	install -d $(INST_PKGDOCDIR)/examples
 	install -d $(INST_PKGLICENSEDIR)
@@ -142,6 +142,7 @@ install: sfptpd sfptpdctl sfptpd_priv_helper $(addprefix $(BUILD_DIR)/,sfptpd.se
 	install -d $(INST_MANDIR)/man8
 	install -m 755 -p -D $(BUILD_DIR)/sfptpd $(INST_SBINDIR)/sfptpd
 	install -m 755 -p -D $(BUILD_DIR)/sfptpdctl $(INST_SBINDIR)/sfptpdctl
+	install -m 755 -p -D $(BUILD_DIR)/tstool $(INST_SBINDIR)/tstool
 	[ -n "$(filter sfptpmon,$(INST_OMIT))" ] || install -m 755 -p -D scripts/sfptpmon $(INST_SBINDIR)/sfptpmon
 	install -m 644 -p -D scripts/sfptpd.env $(INST_DEFAULTSDIR)/sfptpd
 	[ -z "$(filter systemd,$(INST_INITS))" ] || install -m 644 -p -D $(BUILD_DIR)/sfptpd.service $(INST_UNITDIR)/sfptpd.service
@@ -160,6 +161,7 @@ install: sfptpd sfptpdctl sfptpd_priv_helper $(addprefix $(BUILD_DIR)/,sfptpd.se
 	install -m 755 -p -t $(INST_PKGLIBEXECDIR) $(BUILD_DIR)/sfptpd_priv_helper
 	install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/sfptpd.8)
 	install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/sfptpdctl.8)
+	install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/tstool.8)
 	[ -n "$(filter sfptpmon,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/sfptpmon.8)
 
 .PHONY: uninstall

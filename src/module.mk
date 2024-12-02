@@ -49,6 +49,9 @@ EXEC_SRCS_$(d) := sfptpd_main.c
 
 EXEC_$(d) := sfptpd
 
+dir := $(d)/tstool
+include $(dir)/module.mk
+
 include mk/executable.mk
 
 include mk/popd.mk
