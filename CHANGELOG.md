@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-(c) Copyright 2012-2024 Advanced Micro Devices, Inc.
+(c) Copyright 2012-2025 Advanced Micro Devices, Inc.
 
 ## [Unreleased]
 
@@ -19,6 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - chrony: use smoothed offset from chrony not last NTP sample
 - Issue SWPTP-1531
   - freerun: fix resolution of bond when VLAN specified
+- Xilinx-CNS/sfptpd#17
+  - fix crash recording that clock step has happened when a NIC has gone away
 
 ## [3.8.0.1005] - 2024-10-10 [Feature Release]
 
