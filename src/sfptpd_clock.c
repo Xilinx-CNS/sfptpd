@@ -1119,7 +1119,7 @@ static void clock_record_step(void)
 		assert(clock->magic == SFPTPD_CLOCK_MAGIC);
 		if (!clock->deleted &&
 		    clock->type != SFPTPD_CLOCK_TYPE_SYSTEM &&
-		    clock->u.nic.phc)
+		    clock->u.nic.phc != NULL)
 			sfptpd_phc_record_step(clock->u.nic.phc);
 	}
 	clock_unlock();
