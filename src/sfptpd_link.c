@@ -65,8 +65,15 @@ const char *sfptpd_link_xmit_hash_policy(const struct sfptpd_link *link)
 	switch (link->bond.bond_mode) {
 	case SFPTPD_BOND_MODE_LACP:
 		switch (link->bond.xmit_hash_policy) {
+		case BOND_XMIT_POLICY_LAYER2:
+			return "l2";
+		case BOND_XMIT_POLICY_LAYER23:
+			return "l2+3";
 		case BOND_XMIT_POLICY_LAYER34:
 			return "l3+4";
+		case BOND_XMIT_POLICY_SFPTPD_UNKNOWN_HASH:
+			return "hash";
+		case BOND_XMIT_POLICY_SFPTPD_UNKNOWN:
 		default:
 			return "other";
 		}

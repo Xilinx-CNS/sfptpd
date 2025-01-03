@@ -477,7 +477,7 @@ MNL_VALIDATE_CB(link_attr_info_vlan, IFLA_VLAN_MAX, EXPECTED(
 static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr *nh)
 {
 	struct ifinfomsg *ifm;
-	struct sfptpd_link data = { 0 };
+	struct sfptpd_link data = { 0, .bond.xmit_hash_policy = BOND_XMIT_POLICY_SFPTPD_UNKNOWN };
 	struct sfptpd_link *link = &data;
 	struct nlattr *table[IFLA_MAX + 1] = { 0 };
 	struct nlattr *nested[IFLA_INFO_MAX + 1] = { 0 };
@@ -894,6 +894,25 @@ static void team_opt_apply_activeport(struct link_db *db, void *value,
 	}
 }
 
+static void team_opt_apply_lb_tx_method(struct link_db *db, void *value,
+					int team_ifindex, int port_ifindex,
+					enum sfptpd_link_event event)
+{
+	int row;
+
+	for (row = 0; row < db->table.count; row++) {
+		struct sfptpd_link *link = db->table.rows + row;
+
+		if (db->table.rows[row].if_index == team_ifindex) {
+			if (event != SFPTPD_LINK_DOWN) {
+				if (!strcmp((char *) value, "hash"))
+					link->bond.xmit_hash_policy = BOND_XMIT_POLICY_SFPTPD_UNKNOWN_HASH;
+			}
+			break;
+		}
+	}
+}
+
 /* Interesting teaming options */
 struct {
 	char* name;
@@ -903,6 +922,7 @@ struct {
 } team_options[] = {
 	{"mode", team_opt_apply_mode},
 	{"activeport", team_opt_apply_activeport},
+	{"lb_tx_method", team_opt_apply_lb_tx_method},
 };
 #define CP_TEAM_OPTION_MAX (sizeof(team_options) / sizeof(team_options[0]))
 
