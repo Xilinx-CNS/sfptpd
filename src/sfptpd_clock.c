@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2022 Xilinx, Inc. */
+/* (c) Copyright 2012-2025 Xilinx, Inc. */
 
 /**
  * @file   sfptpd_clock.c
@@ -1095,7 +1095,8 @@ static void clock_record_step(void)
 	clock_lock();
 	for (clock = sfptpd_clock_list_head; clock != NULL; clock = clock->next) {
 		assert(clock->magic == SFPTPD_CLOCK_MAGIC);
-		if (clock->type != SFPTPD_CLOCK_TYPE_SYSTEM &&
+		if (!clock->deleted &&
+		    clock->type != SFPTPD_CLOCK_TYPE_SYSTEM &&
 		    clock->u.nic.phc != NULL)
 			sfptpd_phc_record_step(clock->u.nic.phc);
 	}
