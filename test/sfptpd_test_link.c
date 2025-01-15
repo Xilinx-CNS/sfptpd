@@ -55,11 +55,12 @@ static int test_link(void)
 	#define MAX_EVENTS 10
 	struct epoll_event ev = {};
 	struct epoll_event events[MAX_EVENTS];
+	int fds[SFPTPD_NETLINK_MAX_FDS];
+	int num_fds;
 	struct sfptpd_nl_state *nl_state;
 	int epollfd;
 	int nfds;
 	int rc = 0;
-	int fd;
 	int i;
 	int consumers = 1;
 	const struct sfptpd_link_table *table;
@@ -74,19 +75,15 @@ static int test_link(void)
 		return 1;
 	}
 
-	i = 0;
-	do {
-		fd = sfptpd_netlink_get_fd(nl_state, &i);
-		if (fd == -1)
-			break;
-
+	num_fds = sfptpd_netlink_get_fds(nl_state, fds);
+	for (i = 0; i < num_fds; i++) {
 		ev.events = EPOLLIN;
-		ev.data.fd = fd;
-		if (epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev) == -1) {
+		ev.data.fd = fds[i];
+		if (epoll_ctl(epollfd, EPOLL_CTL_ADD, fds[i], &ev) == -1) {
 			ERROR("link: epoll_ctl: netlink fd, %s\n", strerror(errno));
 			return 1;
 		}
-	} while (fd != -1);
+	}
 
 	sfptpd_netlink_scan(nl_state);
 

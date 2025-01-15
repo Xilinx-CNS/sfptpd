@@ -44,6 +44,7 @@
 #include "sfptpd_netlink.h"
 #include "sfptpd_multicast.h"
 #include "sfptpd_clockfeed.h"
+#include "sfptpd_metrics.h"
 
 
 /****************************************************************************
@@ -259,6 +260,8 @@ struct sfptpd_engine {
 	const struct sfptpd_link_table *link_table;
 	int link_subscribers;
 	int netlink_xoff;
+	int netlink_fds[SFPTPD_NETLINK_MAX_FDS];
+	int netlink_num_fds;
 };
 
 
@@ -1445,24 +1448,28 @@ static void on_leap_second_timer(void *user_context, unsigned int timer_id)
 static int engine_set_netlink_polling(struct sfptpd_engine *engine, bool poll)
 {
 	int rc = 0;
-	int fd;
-	int get_fd_state;
+	int i;
 
-	get_fd_state = 0;
-	do {
-		fd = sfptpd_netlink_get_fd(engine->netlink_state, &get_fd_state);
-		if (fd != -1) {
-			if (poll) {
-				if ((rc = sfptpd_thread_user_fd_add(fd, true, false)))
-					CRITICAL("engine: failed to add netlink socket to thread epoll set, %s\n",
-						 strerror(rc));
-			} else {
-				if ((rc = sfptpd_thread_user_fd_remove(fd)))
-					CRITICAL("engine: failed to remove netlink socket from thread epoll set, %s\n",
-						 strerror(rc));
-			}
+	if (poll) {
+		engine->netlink_num_fds = sfptpd_netlink_get_fds(engine->netlink_state,
+								 engine->netlink_fds);
+	}
+
+	for (i = 0; (rc == 0 || !poll) && i < engine->netlink_num_fds; i++)
+		if (poll) {
+			if ((rc = sfptpd_thread_user_fd_add(engine->netlink_fds[i], true, false)))
+				CRITICAL("engine: failed to add netlink socket to thread epoll set, %s\n",
+					 strerror(rc));
+		} else {
+			if ((rc = sfptpd_thread_user_fd_remove(engine->netlink_fds[i])))
+				CRITICAL("engine: failed to remove netlink socket from thread epoll set, %s\n",
+					 strerror(rc));
+			engine->netlink_fds[i] = -1;
 		}
-	} while (fd != -1 && (rc == 0 || !poll));
+
+	if (!poll) {
+		engine->netlink_num_fds = 0;
+	}
 
 	return rc;
 }
@@ -1584,10 +1591,9 @@ static void engine_handle_new_link_table(struct sfptpd_engine *engine, int versi
 }
 
 
-static void engine_on_user_fds(void *context, unsigned int num_fds,
-			       struct sfptpd_thread_readyfd fd[])
+static void engine_service_netlink(struct sfptpd_engine *engine,
+				   bool coalesce_timer)
 {
-	struct sfptpd_engine *engine = (struct sfptpd_engine *)context;
 	struct sfptpd_timespec interval;
 	int rc;
 
@@ -1609,7 +1615,7 @@ static void engine_on_user_fds(void *context, unsigned int num_fds,
 			TRACE_L5("engine: netlink coalesce timer started\n");
 			engine->netlink_xoff |= NL_XOFF_COALESCE;
 		}
-	} else if (num_fds == 0) {
+	} else if (coalesce_timer) {
 		/* This is how coalesce timer expiry is indicated. */
 
 		TRACE_L5("engine: netlink coalesce timer expired\n");
@@ -1631,6 +1637,28 @@ static void engine_on_user_fds(void *context, unsigned int num_fds,
 }
 
 
+static void engine_on_user_fds(void *context, unsigned int num_fds,
+			       struct sfptpd_thread_readyfd fd[])
+{
+	struct sfptpd_engine *engine = (struct sfptpd_engine *)context;
+	bool netlink;
+	int i, j;
+
+	assert(engine != NULL);
+
+	netlink = false;
+	for (i = 0; i < num_fds; i++)
+		for (j = 0; !netlink && j < engine->netlink_num_fds; j++)
+			if (fd[i].fd == engine->netlink_fds[j])
+				netlink = true;
+
+	if (netlink)
+		engine_service_netlink(engine, false);
+
+	sfptpd_metrics_service_fds(num_fds, fd);
+}
+
+
 static void on_netlink_rescan_timer(void *user_context, unsigned int timer_id)
 {
 	struct sfptpd_engine *engine = (struct sfptpd_engine *)user_context;
@@ -1646,7 +1674,7 @@ static void on_netlink_rescan_timer(void *user_context, unsigned int timer_id)
 
 static void on_netlink_coalesce_timer(void *user_context, unsigned int timer_id)
 {
-	engine_on_user_fds(user_context, 0, NULL);
+	engine_service_netlink((struct sfptpd_engine *) user_context, true);
 }
 
 
@@ -2144,6 +2172,9 @@ static void on_rt_stats_entry(struct sfptpd_engine *engine,
 	else /* This will happen for servos */
 		write_rt_stats_log(&msg->stats.time, &msg->stats);
 
+	/* Send to OpenMetrics reporting buffer */
+	sfptpd_metrics_push_rt_stats(&msg->stats);
+
 	/* Write to json_stats */
 	FILE* stream = sfptpd_log_get_rt_stats_out_stream();
 	if (stream != NULL)
@@ -2232,6 +2263,10 @@ static void engine_on_shutdown(void *context)
 
 	sfptpd_multicast_unsubscribe(SFPTPD_SERVO_MSG_PID_ADJUST);
 	sfptpd_multicast_unsubscribe(SFPTPD_CLOCKFEED_MSG_SYNC_EVENT);
+
+	/* Stop metrics service */
+	sfptpd_metrics_listener_close();
+	sfptpd_metrics_destroy();
 
 	/* Remove clock feeds */
 	clocks = sfptpd_clock_get_active_snapshot(&num_clocks);
@@ -2330,6 +2365,22 @@ static int create_sync_module(struct sfptpd_engine *engine,
 
 fail:
 	free(infos);
+	return rc;
+}
+
+
+static int engine_start_metrics(struct sfptpd_engine *engine)
+{
+	int rc;
+
+	if (!engine->general_config->openmetrics_unix)
+		return 0;
+
+	rc = sfptpd_metrics_init();
+	if (rc != 0)
+		return rc;
+
+	rc = sfptpd_metrics_listener_open(engine->config);
 	return rc;
 }
 
@@ -2530,7 +2581,10 @@ static int engine_on_startup(void *context)
 	/* Write the interfaces file */
 	write_interfaces();
 
-	return 0;
+	/* Start the metrics service */
+	rc = engine_start_metrics(engine);
+	if (rc == 0)
+		return 0;
 
 fail:
 	engine_on_shutdown(context);

@@ -66,11 +66,14 @@ const char *sfptpd_remote_monitor_file = "remote-monitor";
 const char *sfptpd_config_log_file = "config";
 const char *sfptpd_sync_instances_file = "sync-instances";
 
+static const char *rundir_to_interpolate;
+
 enum path_format_id {
 	PATH_FMT_HOSTNAME,
 	PATH_FMT_HOSTID,
 	PATH_FMT_PID,
 	PATH_FMT_CTIME_LOCAL,
+	PATH_FMT_RUNDIR,
 };
 
 static size_t path_interpolate(char *buffer, size_t space, int id, void *context, char opt);
@@ -81,12 +84,14 @@ static size_t path_interpolate_time(char *buffer, size_t space, int id, void *co
  * %P   pid
  * %Cd  creation date, local time (ISO 8601)
  * %Ct  creation date and local time (ISO 8601)
+ * %R   run directory
  */
 const static struct sfptpd_interpolation path_format_specifiers[] = {
 	{ PATH_FMT_HOSTNAME,		'H', false, path_interpolate },
 	{ PATH_FMT_HOSTID,		'I', false, path_interpolate },
 	{ PATH_FMT_PID,			'P', false, path_interpolate },
 	{ PATH_FMT_CTIME_LOCAL,		'C', true,  path_interpolate_time },
+	{ PATH_FMT_RUNDIR,		'R', false, path_interpolate },
 	{ SFPTPD_INTERPOLATORS_END }
 };
 
@@ -142,6 +147,8 @@ static size_t path_interpolate(char *buffer, size_t space, int id, void *context
 		return snprintf(buffer, space, "%lx", gethostid());
 	case PATH_FMT_PID:
 		return snprintf(buffer, space, "%lu", (unsigned long) getpid());
+	case PATH_FMT_RUNDIR:
+		return snprintf(buffer, space, "%s", rundir_to_interpolate);
 	default:
 		return 0;
 	}
@@ -388,6 +395,8 @@ int sfptpd_log_open(struct sfptpd_config *config)
 				    "sync-instances",
 				    ".next.*"
 	};
+
+	rundir_to_interpolate = general_config->run_dir;
 
 	if (state_path == NULL)
 		return errno;

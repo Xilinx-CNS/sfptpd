@@ -394,7 +394,8 @@ static int lock_create(struct sfptpd_config *config, int *lock_fd)
 		return errno;
 	}
 
-	if (chown(lock_filename, gconf->uid, gconf->gid))
+	if (gconf->uid != 0 && gconf->gid != 0 &&
+	    chown(lock_filename, gconf->uid, gconf->gid))
 		WARNING("could not set lock file to uid/gid %d/%d, %s\n",
 			gconf->uid, gconf->gid, strerror(errno));
 
@@ -408,6 +409,49 @@ static void lock_delete(int lock_fd)
 	if (lock_fd != -1) {
 		close(lock_fd);
 		unlink(lock_filename);
+	}
+}
+
+static int rundir_create(struct sfptpd_config *config)
+{
+	sfptpd_config_general_t *gconf;
+	const char *path;
+	int rc;
+
+	assert(config != NULL);
+
+	gconf = sfptpd_general_config_get(config);
+	path = sfptpd_general_config_get(config)->run_dir;
+
+	if (path[0] == '\0')
+		return 0;
+
+	rc = mkdir(path, 0750);
+	if (rc == -1) {
+		rc = errno;
+		if (rc != EEXIST) {
+			WARNING("failed to create run directory %s: %s\n",
+				path, strerror(rc));
+			return rc;
+		}
+	}
+
+	if (gconf->uid != 0 && gconf->gid != 0 &&
+	    chown(path, gconf->uid, gconf->gid))
+		WARNING("could not set run directory to uid/gid %d/%d, %s\n",
+			gconf->uid, gconf->gid, strerror(errno));
+
+	return 0;
+}
+
+
+static void rundir_delete(struct sfptpd_config *config)
+{
+	const char *path = sfptpd_general_config_get(config)->run_dir;
+
+	if (path[0] != '\0') {
+		/* Failure if non-empty or non-existent is ok. */
+		rmdir(path);
 	}
 }
 
@@ -878,10 +922,15 @@ int main(int argc, char **argv)
 	if (rc != 0)
 		goto fail;
 
+	/* Create the run dir */
+	rc = rundir_create(config);
+	if (rc != 0)
+		goto fail;
+
 	/* Create a lock */
 	rc = lock_create(config, &lock_fd);
 	if (rc != 0)
-		goto fail;
+		goto fail2;
 
 	/* Set up logging */
 	rc = sfptpd_log_open(config);
@@ -961,6 +1010,8 @@ exit:
 	sfptpd_control_socket_close();
 	sfptpd_log_close();
 	lock_delete(lock_fd);
+fail2:
+	rundir_delete(config);
 fail:
 	if (rc == ESHUTDOWN)
 		rc = 0;

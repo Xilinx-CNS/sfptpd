@@ -19,6 +19,10 @@ struct sfptpd_nl_state;
  * Structures, Types, Defines
  ****************************************************************************/
 
+/* Maximum number of file descriptors that the netlink module may need to
+ * service. */
+#define SFPTPD_NETLINK_MAX_FDS 3
+
 
 /****************************************************************************
  * Function Prototypes
@@ -60,12 +64,11 @@ void sfptpd_netlink_finish(struct sfptpd_nl_state *state);
 
 /** Enumerate file descriptors from which the netlink client reads.
  * @param state the netlink client context
- * @param get_fd_state pointer to caller-held opaque enumeration state. On first
- *        invocation point to (int) 0.
- * @return a file descriptor to poll or -1 when enumeration complete.
+ * @param fds array to populate with file descriptors, consecutively.
+ * @return number of file descriptors returned.
  */
-int sfptpd_netlink_get_fd(struct sfptpd_nl_state *state,
-			  int *get_fd_state);
+int sfptpd_netlink_get_fds(struct sfptpd_nl_state *state,
+			   int fds[SFPTPD_NETLINK_MAX_FDS]);
 
 /** Get a pointer to a version of a link table. This must only called by
  * legitimate link table consumers. The owner of the netlink client state

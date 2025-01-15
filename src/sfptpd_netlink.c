@@ -122,6 +122,9 @@ enum nl_conn {
 	NL_CONN_MAX
 };
 
+static_assert(NL_CONN_MAX <= SFPTPD_NETLINK_MAX_FDS,
+	      "sufficient space for netlink client fds");
+
 struct sfptpd_nl_state;
 
 struct nl_conn_state {
@@ -1578,23 +1581,19 @@ fail0:
 	return NULL;
 }
 
-int sfptpd_netlink_get_fd(struct sfptpd_nl_state *state,
-			  int *get_fd_state)
+int sfptpd_netlink_get_fds(struct sfptpd_nl_state *state,
+			   int fds[SFPTPD_NETLINK_MAX_FDS])
 {
-	int fd;
+	int count;
 	int i;
 
-	assert(get_fd_state);
-	i = *get_fd_state;
+	assert(state);
 
-	assert(i <= NL_CONN_MAX);
-	if (i == NL_CONN_MAX) {
-		return -1;
-	} else {
-		fd = state->conn[i].fd;
-		*get_fd_state = i + 1;
-		return fd;
-	}
+	count = 0;
+	for (i = 0; i < NL_CONN_MAX; i++)
+		if (state->conn[i].fd != -1)
+			fds[count++] = state->conn[i].fd;
+	return count;
 }
 
 /* Service ready file descriptors for netlink.
@@ -1967,12 +1966,12 @@ const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state
 							  int timeout_ms)
 {
 	int rc;
-	int fd;
-	int get_fd_state;
+	int fds[SFPTPD_NETLINK_MAX_FDS];
 	#define max_events 5
 	struct epoll_event ev = {};
 	struct epoll_event events[max_events];
 	int nfds = 0;
+	int i;
 	int epollfd;
 	const struct sfptpd_link_table *link_table = NULL;
 
@@ -1983,21 +1982,21 @@ const struct sfptpd_link_table *sfptpd_netlink_table_wait(struct sfptpd_nl_state
 		return NULL;
 	}
 
-	get_fd_state = 0;
-	do {
-		fd = sfptpd_netlink_get_fd(state, &get_fd_state);
-		if (fd != -1) {
+	nfds = sfptpd_netlink_get_fds(state, fds);
+	for (i = 0; i < nfds; i++) {
+		if (fds[i] != -1) {
 			ev.events = EPOLLIN;
-			ev.data.fd = fd;
-			if (epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev) == -1) {
+			ev.data.fd = fds[i];
+			if (epoll_ctl(epollfd, EPOLL_CTL_ADD, fds[i], &ev) == -1) {
 				CRITICAL("netlink: failed to set up epoll set, %s\n",
 					 strerror(errno));
 				return NULL;
 			}
 		}
-	} while (fd != -1);
+	}
 
 	DBG_L3("netlink: waiting for link table\n");
+	nfds = 0;
 	while (nfds <= 0) {
 		nfds = epoll_wait(epollfd, events, max_events, timeout_ms);
 		if (nfds < 0) {

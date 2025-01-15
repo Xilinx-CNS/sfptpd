@@ -59,6 +59,10 @@ static int parse_state_path(struct sfptpd_config_section *section, const char *o
 			    unsigned int num_params, const char * const params[]);
 static int parse_control_path(struct sfptpd_config_section *section, const char *option,
 			    unsigned int num_params, const char * const params[]);
+static int parse_metrics_path(struct sfptpd_config_section *section, const char *option,
+			      unsigned int num_params, const char * const params[]);
+static int parse_run_dir(struct sfptpd_config_section *section, const char *option,
+			 unsigned int num_params, const char * const params[]);
 static int parse_sync_interval(struct sfptpd_config_section *section, const char *option,
 			       unsigned int num_params, const char * const params[]);
 static int parse_sync_threshold(struct sfptpd_config_section *section, const char *option,
@@ -129,6 +133,8 @@ static int parse_legacy_clockids(struct sfptpd_config_section *section, const ch
 				  unsigned int num_params, const char * const params[]);
 static int parse_initial_clock_correction(struct sfptpd_config_section *section, const char *option,
 					  unsigned int num_params, const char * const params[]);
+static int parse_openmetrics(struct sfptpd_config_section *section, const char *option,
+			     unsigned int num_params, const char * const params[]);
 
 static int validate_config(struct sfptpd_config_section *section);
 
@@ -195,6 +201,16 @@ static const sfptpd_config_option_t config_general_options[] =
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
 		parse_control_path,
 		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_CONTROL_PATH)},
+	{"metrics_path", "<path>",
+		"Path for Unix domain socket serving OpenMetrics",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_metrics_path,
+		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_METRICS_PATH)},
+	{"run_dir", "<path>",
+		"Path for run directory",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_run_dir,
+		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_RUN_DIR)},
 	{"sync_interval", "NUMBER",
 		"Specifies the interval in 2^NUMBER seconds at which the clocks "
 		"are synchronized to the local reference clock, where NUMBER is "
@@ -391,6 +407,10 @@ static const sfptpd_config_option_t config_general_options[] =
 		"When to apply an initial clock correction to NIC clocks",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_initial_clock_correction,
 		.dfl = "Defaults to always"},
+	{"openmetrics", "<off | unix>",
+		"Whether to serve OpenMetrics exposition",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics,
+		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_OPENMETRICS_UNIX)},
 };
 
 static const sfptpd_config_option_set_t config_general_option_set =
@@ -880,6 +900,32 @@ static int parse_control_path(struct sfptpd_config_section *section, const char 
 }
 
 
+static int parse_metrics_path(struct sfptpd_config_section *section, const char *option,
+			      unsigned int num_params, const char * const params[])
+{
+	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+	assert(num_params == 1);
+
+	sfptpd_strncpy(general->metrics_path, params[0],
+		       sizeof(general->metrics_path));
+
+	return 0;
+}
+
+
+static int parse_run_dir(struct sfptpd_config_section *section, const char *option,
+			 unsigned int num_params, const char * const params[])
+{
+	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+	assert(num_params == 1);
+
+	sfptpd_strncpy(general->run_dir, params[0],
+		       sizeof(general->run_dir));
+
+	return 0;
+}
+
+
 static int parse_sync_interval(struct sfptpd_config_section *section, const char *option,
 			       unsigned int num_params, const char * const params[])
 {
@@ -1003,6 +1049,25 @@ static int parse_initial_clock_correction(struct sfptpd_config_section *section,
 		general->initial_clock_correction = SFPTPD_CLOCK_INITIAL_CORRECTION_ALWAYS;
 	} else if (strcmp(params[0], "if-unset") == 0) {
 		general->initial_clock_correction = SFPTPD_CLOCK_INITIAL_CORRECTION_IF_UNSET;
+	} else {
+		rc = EINVAL;
+	}
+
+	return rc;
+}
+
+static int parse_openmetrics(struct sfptpd_config_section *section, const char *option,
+			     unsigned int num_params, const char * const params[])
+{
+	int rc = 0;
+	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+
+	assert(num_params == 1);
+
+	if (strcmp(params[0], "unix") == 0) {
+		general->openmetrics_unix = true;
+	} else if (strcmp(params[0], "off") == 0) {
+		general->openmetrics_unix = false;
 	} else {
 		rc = EINVAL;
 	}
@@ -1736,6 +1801,8 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		new->trace_level = SFPTPD_DEFAULT_TRACE_LEVEL;
 		sfptpd_strncpy(new->state_path, SFPTPD_DEFAULT_STATE_PATH, sizeof(new->state_path));
 		sfptpd_strncpy(new->control_path, SFPTPD_DEFAULT_CONTROL_PATH, sizeof(new->control_path));
+		sfptpd_strncpy(new->metrics_path, SFPTPD_DEFAULT_METRICS_PATH, sizeof(new->metrics_path));
+		sfptpd_strncpy(new->run_dir, SFPTPD_RUN_DIR, sizeof(new->run_dir));
 
 		new->clocks.sync_interval = SFPTPD_DEFAULT_SYNC_INTERVAL;
 		new->clocks.control = SFPTPD_DEFAULT_CLOCK_CTRL;
@@ -1753,6 +1820,7 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		new->daemon = false;
 		new->lock = true;
 		new->rtc_adjust = SFPTPD_DEFAULT_RTC_ADJUST;
+		new->openmetrics_unix = SFPTPD_DEFAULT_OPENMETRICS_UNIX;
 
 		new->timestamping.all = false;
 		new->timestamping.disable_on_exit = SFPTPD_DEFAULT_DISABLE_ON_EXIT;

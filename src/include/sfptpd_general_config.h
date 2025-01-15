@@ -23,6 +23,8 @@
 #define SFPTPD_DEFAULT_STATS_LOG                   (SFPTPD_STATS_LOG_OFF)
 #define SFPTPD_DEFAULT_STATE_PATH                  SFPTPD_STATE_PATH
 #define SFPTPD_DEFAULT_CONTROL_PATH                SFPTPD_CONTROL_SOCKET_PATH
+#define SFPTPD_DEFAULT_METRICS_PATH                SFPTPD_METRICS_SOCKET_PATH
+#define SFPTPD_DEFAULT_RUN_DIR                     SFPTPD_RUN_DIR
 #define SFPTPD_DEFAULT_TRACE_LEVEL                 0
 #define SFPTPD_DEFAULT_SYNC_INTERVAL               -4
 #define SFPTPD_DEFAULT_CLOCK_CTRL                  (SFPTPD_CLOCK_CTRL_SLEW_AND_STEP)
@@ -41,6 +43,7 @@
 #define SFPTPD_DEFAULT_PHC_DEDUP                   (false)
 #define SFPTPD_DEFAULT_TEST_MODE                   (false)
 #define SFPTPD_DEFAULT_RTC_ADJUST                  (true)
+#define SFPTPD_DEFAULT_OPENMETRICS_UNIX            (true)
 #define SFPTPD_DEFAULT_SELECTION_HOLDOFF_INTERVAL  10
 #define SFPTPD_DEFAULT_NETLINK_RESCAN_INTERVAL     31
 #define SFPTPD_DEFAULT_NETLINK_COALESCE_MS         50
@@ -227,6 +230,7 @@ typedef struct sfptpd_config_general {
 	int num_groups;
 	char state_path[PATH_MAX];
 	char control_path[PATH_MAX];
+	char metrics_path[PATH_MAX];
 	sfptpd_config_timestamping_t timestamping;
 	long double convergence_threshold;
 	long double step_threshold;
@@ -260,6 +264,8 @@ typedef struct sfptpd_config_general {
 	unsigned long declared_sync_modules;
 	uint8_t unique_clockid_bits[8];
 	bool legacy_clockids;
+	char run_dir[PATH_MAX];
+	bool openmetrics_unix;
 } sfptpd_config_general_t;
 
 static_assert(sizeof ((sfptpd_config_general_t *) 0)->declared_sync_modules * 8 >= SFPTPD_CONFIG_CATEGORY_MAX,
