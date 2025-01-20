@@ -15,7 +15,11 @@
  * https://bugzilla.redhat.com/show_bug.cgi?id=1300256 &c.
  * #include <linux/if_bonding.h>
  */
+#define BOND_XMIT_POLICY_LAYER2 0
+#define BOND_XMIT_POLICY_LAYER23 2
 #define BOND_XMIT_POLICY_LAYER34 1
+#define BOND_XMIT_POLICY_SFPTPD_UNKNOWN_HASH 0xFE
+#define BOND_XMIT_POLICY_SFPTPD_UNKNOWN 0xFF
 /* End of workaround */
 
 /****************************************************************************

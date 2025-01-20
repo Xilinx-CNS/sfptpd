@@ -1,7 +1,7 @@
 AMD Solarflare Enhanced PTP Daemon
 ==================================
 
-Version: v3.8.0.1005
+Version: v3.8.1.1000
 
 These release notes relate to official supported binary releases of sfptpd.
 Please see [the changelog](CHANGELOG.md) for a list of changes since earlier
@@ -12,7 +12,7 @@ releases.
 > to operating systems or hardware not listed below as supported, are not
 > supported by AMD and should be considered exclusive to the open source project.
 
-(c) Copyright 2012-2024 Advanced Micro Devices, Inc.
+(c) Copyright 2012-2025 Advanced Micro Devices, Inc.
 
 
 Overview
@@ -41,7 +41,7 @@ The daemon contained in this package supports the following AMD adapters:
    - Alveo(TM) XtremeScale(TM) X3522 low latency network adapter
 
 - Support for non-Solarflare adapters is best effort. Particular attention
-  should be paid to the tendency to advertise an independent physical clock
+  should be paid when some drivers advertise an independent physical clock
   device for each interface when they are in fact the same underlying clock,
   which can be mitigated by listing clocks explicitly.
 
@@ -56,12 +56,12 @@ This package is supported on:
 
 - Red Hat Enterprise Linux 7.9
 - Red Hat Enterprise Linux 8.1 - 8.10
-- Red Hat Enterprise Linux 9.0 - 9.4
+- Red Hat Enterprise Linux 9.0 - 9.5
 - Canonical Ubuntu Server LTS 20.04, 22.04, 24.04
 - Debian 10 "Buster"
 - Debian 11 "Bullseye"
 - Debian 12 "Bookworm"
-- Linux kernels 3.0 - 6.10
+- Linux kernels 3.0 - 6.12
 
 Other and older platforms and non-amd64 architectures may be compatible with
 sfptpd but are not supported by AMD. Please raise issues and patches for
@@ -137,8 +137,9 @@ Advanced notice of possible future changes
 Summary of major new features since v3.7.1.1006
 -----------------------------------------------
 
-For a full list of changes see [the changelog](CHANGELOG.md). These
-include changes of interest to community users building from source.
+For a full list of changes, including fixes since v3.8.0.1005,
+see [the changelog](CHANGELOG.md). These include changes of interest
+to community users building from source.
 
 The following are selected as notable new features for AMD-supported
 use cases:

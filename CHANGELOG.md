@@ -6,14 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 (c) Copyright 2012-2025 Advanced Micro Devices, Inc.
 
-## [Unreleased]
+## Unreleased
 
 ### Added
 
-- Add `phc_dedup` option to identify duplicate PHC devices sharing a single
-  NIC clock and treat as one device. Only relevant to non-Solarflare adapters.
-  (SWPTP-1348)
+- Add `phc_dedup` option to identify duplicate non-Solarflare PHC devices
+  sharing a single NIC clock and treat as one device. (SWPTP-1348)
   - This option requires a calibration step that may take a few seconds.
+- Add hardware clock control and diagnostic utility 'tstool'.
+
+## [3.8.1.x] - Unreleased
+
+### Added
+
 - Add `avoid_efx_ioctl` option to avoid sfc proprietary ioctl(). (SWPTP-1535)
   - This prevents setting of the sync flags optionally used by Onload.
 
@@ -24,7 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Issue SWPTP-1531
   - freerun: fix resolution of bond when VLAN specified
 - Xilinx-CNS/sfptpd#17
-  - fix crash recording that clock step has happened when a NIC has gone away
+  - avoid crash if a clock step occurs when a NIC has gone away
 
 ## [3.8.0.1005] - 2024-10-10 [Feature Release]
 
@@ -85,8 +90,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `gpsd ::1 2947` and set as time of day source.
 - Add Y2038 support when built for 32-bit targets with 64-bit time enabled.
   (Xilinx-CNS/sfptpd#12)
-- Add hardware clock control utility 'tstool'. This is a diagnostic tool
-  whose interface is not guaranteed to be stable.
 
 ### Changed
 

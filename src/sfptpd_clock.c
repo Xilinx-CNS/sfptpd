@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2024 Xilinx, Inc. */
+/* (c) Copyright 2012-2025 Xilinx, Inc. */
 
 /**
  * @file   sfptpd_clock.c
