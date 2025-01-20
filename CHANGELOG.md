@@ -6,12 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 (c) Copyright 2012-2025 Advanced Micro Devices, Inc.
 
-## [3.8.1.1000] - 2025-01-15
+## [3.8.1.1001] - 2025-01-31
 
 ### Added
 
 - Add `avoid_efx_ioctl` option to avoid sfc proprietary ioctl(). (SWPTP-1535)
   - This prevents setting of the sync flags optionally used by Onload.
+
+### Changed
+- Timeout for preferred NTP mode 7 control reduced to 300ms. (SWPTP-1532)
 
 ### Fixed
 
