@@ -478,7 +478,7 @@ static char netbuf_read(struct net_buf *nb, size_t cursor)
 				 cursor : cursor - nb->capacity)];
 }
 
-static void http_copystr_into(struct query_state *q,
+static bool http_copystr_into(struct query_state *q,
 			      char *target,
 			      size_t capacity,
 			      const char *on_error)
@@ -486,10 +486,18 @@ static void http_copystr_into(struct query_state *q,
 	struct net_buf *nb = &q->rx;
 	size_t n1, n2;
 	size_t len = q->http.cursor;
+	bool success = true;
 
 	if (len >= capacity) {
-		http_abort(q, on_error);
-		return;
+		success = false;
+		if (on_error != NULL) {
+			http_abort(q, on_error);
+		} else {
+			assert(capacity > 0);
+			target[0] = '\0';
+		}
+		goto finish;
+		return false;
 	}
 
 	if (nb->rd_ptr + len >= nb->capacity) {
@@ -504,7 +512,9 @@ static void http_copystr_into(struct query_state *q,
 	if (n2)
 		memcpy(target + n1, nb->data, n2);
 	target[len] = '\0';
+finish:
 	http_advance(q, len);
+	return success;
 }
 
 static void http_copydec_into(struct query_state *q,
@@ -627,12 +637,16 @@ static void handle_query_data(struct query_state *q)
 		/* fallthrough */
 	case HP_REQ_HDR_VALUE:
 		if (c == '\r' || c == '\n') {
+			size_t length = http->cursor;
 			http->state = c == '\r' ? HP_REQ_HDR_CR : HP_REQ_HDR_NAME;
-			http_copystr_into(q, http->field_value,
-					  sizeof http->field_value,
-					  "field value too long");
+			if (http_copystr_into(q, http->field_value,
+					       sizeof http->field_value, NULL)) {
+				http->action = HP_REQ_ACT_ON_HEADER;
+			} else {
+				WARNING("metrics: ignoring %s: header of %zd bytes\n",
+					http->field_name, length);
+			}
 			http_advance(q, 1); /* swallow delimiter */
-			http->action = HP_REQ_ACT_ON_HEADER;
 		}
 		break;
 	case HP_REQ_BODY:
