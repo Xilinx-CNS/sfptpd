@@ -35,7 +35,7 @@
 #define OPT_PERSISTENT 0x10000
 #define OPT_INITIAL 0x10001
 
-static const char *opts_short = "hv";
+static const char *opts_short = "+hv";
 static const struct option opts_long[] = {
 	{ "help", 0, NULL, (int) 'h' },
 	{ "verbose", 0, NULL, (int) 'v' },
