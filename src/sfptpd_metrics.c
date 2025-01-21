@@ -131,7 +131,7 @@ struct http {
 	char method_s[16];
 	char target[64];
 	char field_name[40];
-	char field_value[128];
+	char field_value[400];
 	int64_t major_version;
 	int64_t minor_version;
 };
@@ -265,9 +265,18 @@ static int write_all(struct query_state *q, const char* data, ssize_t len)
 {
 	ssize_t ret = 0;
 	ssize_t ptr;
+	int rc;
 
 	for (ptr = 0; ret != -1 && ptr < len; ptr += ret)
 		ret = write(q->fd, data, len - ptr);
+
+	if (ret == -1) {
+		rc = errno;
+		ERROR("metrics: error writing response: %s\n", strerror(rc));
+		return rc;
+	} else {
+		return 0;
+	}
 
 	return ret == -1 ? errno : 0;
 }
@@ -368,6 +377,7 @@ static int sfptpd_metrics_send(struct query_state *q)
 	hdr_sz = asprintf(&hdr,
 			  "Content-Type: %s\r\n"
 			  "Content-Length: %zd\r\n"
+			  "Server: " SFPTPD_MODEL "/" SFPTPD_VERSION_TEXT "\r\n"
 			  "\r\n",
 			  content_type, buf_sz);
 	if (hdr_sz == -1) {
