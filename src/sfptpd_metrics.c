@@ -223,13 +223,13 @@ static sfptpd_time_t metric_float_value(struct sfptpd_sync_instance_rt_stats_ent
 {
 	switch (key) {
 		case STATS_KEY_OFFSET:
-			return entry->offset;
+			return entry->offset / 1000000000.0L;
 		case STATS_KEY_FREQ_ADJ:
 			return entry->freq_adj;
 		case STATS_KEY_OWD:
-			return entry->one_way_delay;
+			return entry->one_way_delay / 1000000000.0L;
 		case STATS_KEY_PPS_OFFSET:
-			return entry->pps_offset;
+			return entry->pps_offset / 1000000000.0L;
 		case STATS_KEY_BAD_PERIOD:
 			return (sfptpd_time_t) entry->bad_period_count;
 		case STATS_KEY_OVERFLOWS:
@@ -340,11 +340,20 @@ static int sfptpd_metrics_send(struct query_state *q)
 		for (m = 0; m < NUM_METRIC_FAMILIES; m++) {
 			const struct openmetrics_family *family = sfptpd_metric_families + m;
 
-			fprintf(stream, "# TYPE %s_%s %s\n", prefix, family->name, metric_type_str(family->type));
+			fprintf(stream, "# TYPE %s_%s%s%s %s\n", prefix, family->name,
+				family->unit ? "_" : "",
+				family->unit ? metric_unit_str(family->unit) : "",
+				metric_type_str(family->type));
 			if (family->unit != OM_U_NONE)
-				fprintf(stream, "# UNIT %s_%s %s\n", prefix, family->name, metric_unit_str(family->unit));
+				fprintf(stream, "# UNIT %s_%s%s%s %s\n", prefix, family->name,
+					family->unit ? "_" : "",
+					family->unit ? metric_unit_str(family->unit) : "",
+					metric_unit_str(family->unit));
 			if (family->help)
-				fprintf(stream, "# HELP %s_%s %s\n", prefix, family->name, family->help);
+				fprintf(stream, "# HELP %s_%s%s%s %s\n", prefix, family->name,
+					family->unit ? "_" : "",
+					family->unit ? metric_unit_str(family->unit) : "",
+					family->help);
 		}
 
 		/* Write exposition */
@@ -358,14 +367,17 @@ static int sfptpd_metrics_send(struct query_state *q)
 				const struct openmetrics_family *family = sfptpd_metric_families + metric->family;
 
 				if (entry->stat_present & (1 << metric->key))
-					fprintf(stream, "%s_%s{instance=\"%s\"} %.12Lf\n",
-						prefix, family->name, entry->instance_name,
+					fprintf(stream, "%s_%s%s%s{instance=\"%s\"} %.12Lf\n",
+						prefix, family->name,
+						family->unit ? "_" : "",
+						family->unit ? metric_unit_str(family->unit) : "",
+						entry->instance_name,
 						metric_float_value(entry, metric->key));
 			}
 		}
 
 		/* End OpenMetrics */
-		fprintf(stream, "#EOF\n");
+		fprintf(stream, "# EOF\n");
 		if (fclose(stream) == EOF) {
 			http_abort(q, "formatting body");
 			rc = errno;
