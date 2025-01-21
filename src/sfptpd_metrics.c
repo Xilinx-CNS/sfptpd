@@ -101,6 +101,7 @@ enum http_parse_st {
 	HP_REQ_HDR_SEP,
 	HP_REQ_HDR_NAME,
 	HP_REQ_HDR_VALUE,
+	HP_REQ_HDR_END,
 	HP_REQ_BODY,
 };
 
@@ -310,6 +311,10 @@ static int http_response(struct query_state *q, int response_code)
 
 	ret = write_all(q, response, len);
 	free(response);
+
+	if (ret != 0)
+		http_abort(q, "sending response code");
+
 	return ret;
 }
 
@@ -326,8 +331,8 @@ static int sfptpd_metrics_send(struct query_state *q)
 	int rc = 0;
 	size_t hdr_sz = 0;
 	size_t buf_sz = 0;
-	int idx;
 	int m;
+	int count = 0;
 
 	if (q->http.method == HTTP_METHOD_GET) {
 		stream = open_memstream(&buf, &buf_sz);
@@ -357,10 +362,12 @@ static int sfptpd_metrics_send(struct query_state *q)
 		}
 
 		/* Write exposition */
-		for (idx = stats->wr_ptr - stats->len;
-		     idx < stats->wr_ptr;
-		     idx++, stats->len--) {
-			struct sfptpd_sync_instance_rt_stats_entry *entry = &stats->entries[idx % RT_STATS_BUFFER_SIZE];
+		while (stats->len) {
+			struct sfptpd_sync_instance_rt_stats_entry *entry;
+
+			entry = stats->entries + stats->wr_ptr - stats->len;
+			if (entry < stats->entries)
+				entry += RT_STATS_BUFFER_SIZE;
 
 			for (m = 0; m < NUM_INSTANCE_METRICS; m++) {
 				const struct instance_scope_metric *metric = sfptpd_instance_metrics + m;
@@ -374,6 +381,9 @@ static int sfptpd_metrics_send(struct query_state *q)
 						entry->instance_name,
 						metric_float_value(entry, metric->key));
 			}
+
+			stats->len--;
+			count++;
 		}
 
 		/* End OpenMetrics */
@@ -413,6 +423,9 @@ static int sfptpd_metrics_send(struct query_state *q)
 			rc = ret;
 		}
 	}
+
+	TRACE_L5("metrics: completed query, writing %d rt stats entries\n",
+		 count);
 
 finish:
 	free(buf);
@@ -458,6 +471,7 @@ static int metrics_handle_connection(int fd)
 	metrics.query.abort = false;
 	if (netbuf_init(&metrics.query.rx))
 		goto fail;
+	assert(metrics.query.fd == -1);
 	metrics.query.fd = fd;
 
 	TRACE_L5("got incoming metrics connection\n");
@@ -625,7 +639,7 @@ static void handle_query_data(struct query_state *q)
 		break;
 	case HP_REQ_HDR_CR:
 		if (c == '\n') {
-			q->http.state = HP_REQ_HDR_NAME;
+			http->state = HP_REQ_HDR_NAME;
 			http_advance(q, 1); /* swallow delimiter */
 		} else {
 			http_abort(q, "expected LF");
@@ -642,12 +656,25 @@ static void handle_query_data(struct query_state *q)
 			http_abort(q, "obs-fold not supported");
 		} else if (c == '\r' || c == '\n') {
 			if (http->cursor == 0) {
-				http->state = HP_REQ_BODY;
-				http->action = HP_REQ_ACT_ON_BODY;
+				if (c == '\r') {
+					http->state = HP_REQ_HDR_END;
+				} else {
+					http->state = HP_REQ_BODY;
+					http->action = HP_REQ_ACT_ON_BODY;
+				}
 			} else {
 				http_abort(q, "missing field value");
 			}
 			http_advance(q, 1); /* swallow delimiter */
+		}
+		break;
+	case HP_REQ_HDR_END:
+		if (c == '\n') {
+			http->state = HP_REQ_BODY;
+			http->action = HP_REQ_ACT_ON_BODY;
+			http_advance(q, 1); /* swallow delimiter */
+		} else {
+			http_abort(q, "expected LF");
 		}
 		break;
 	case HP_REQ_HDR_SEP:
@@ -694,7 +721,8 @@ static void metrics_execute_query(struct query_state *q)
 	    http->method == HTTP_METHOD_HEAD) {
 		if (!strcmp(http->target, "/metrics")) {
 			http_response(q, 200);
-			sfptpd_metrics_send(q);
+			if (!q->abort)
+				sfptpd_metrics_send(q);
 		} else {
 			http_response(q, 404);
 		}
@@ -811,8 +839,11 @@ static void metrics_process_query(struct sfptpd_thread_readyfd *event)
 		q->http.action = HP_REQ_NO_ACTION;
 	} while (q->http.cursor < nb->len);
 
+	if (res == 0)
+		TRACE_L4("metrics: EOF received on connection\n");
+
 	if (q->abort || res == 0) {
-		TRACE_L5("closing the metrics connection\n");
+		TRACE_L5("metrics: closing the connection\n");
 		sfptpd_thread_user_fd_remove(q->fd);
 		if (metrics.listen_fd != -1)
 			sfptpd_thread_user_fd_add(metrics.listen_fd, true, false);
