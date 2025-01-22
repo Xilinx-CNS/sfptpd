@@ -318,6 +318,29 @@ static int http_response(struct query_state *q, int response_code)
 	return ret;
 }
 
+static void write_exemplars(FILE *stream,
+			    const struct openmetrics_family *family,
+			    const char *qualifier, const char *help)
+{
+	fprintf(stream, "# TYPE %s_%s%s%s%s %s\n", prefix, family->name,
+		qualifier ? qualifier : "",
+		family->unit ? "_" : "",
+		family->unit ? metric_unit_str(family->unit) : "",
+		metric_type_str(family->type));
+	if (family->unit != OM_U_NONE)
+		fprintf(stream, "# UNIT %s_%s%s%s%s %s\n", prefix, family->name,
+			qualifier ? qualifier : "",
+			family->unit ? "_" : "",
+			family->unit ? metric_unit_str(family->unit) : "",
+			metric_unit_str(family->unit));
+	if (family->help)
+		fprintf(stream, "# HELP %s_%s%s%s%s %s%s\n", prefix, family->name,
+			qualifier ? qualifier : "",
+			family->unit ? "_" : "",
+			family->unit ? metric_unit_str(family->unit) : "",
+			family->help, help ? help : "");
+}
+
 static int sfptpd_metrics_send(struct query_state *q)
 {
 	const char *content_type = "application/openmetrics-text"
@@ -341,27 +364,38 @@ static int sfptpd_metrics_send(struct query_state *q)
 			return errno;
 		}
 
-		/* Write examplars */
+		/* Write exemplars */
 		for (m = 0; m < NUM_METRIC_FAMILIES; m++) {
 			const struct openmetrics_family *family = sfptpd_metric_families + m;
 
-			fprintf(stream, "# TYPE %s_%s%s%s %s\n", prefix, family->name,
-				family->unit ? "_" : "",
-				family->unit ? metric_unit_str(family->unit) : "",
-				metric_type_str(family->type));
-			if (family->unit != OM_U_NONE)
-				fprintf(stream, "# UNIT %s_%s%s%s %s\n", prefix, family->name,
-					family->unit ? "_" : "",
-					family->unit ? metric_unit_str(family->unit) : "",
-					metric_unit_str(family->unit));
-			if (family->help)
-				fprintf(stream, "# HELP %s_%s%s%s %s\n", prefix, family->name,
-					family->unit ? "_" : "",
-					family->unit ? metric_unit_str(family->unit) : "",
-					family->help);
+			for (int i = 0; i <= 1; i++) {
+				write_exemplars(stream, family,
+						i ? "_snapshot" : NULL,
+						i ? " (snapshot)" : " (rt, timestamped)");
+			}
 		}
 
-		/* Write exposition */
+		/* Write snapshot that the ingestor will timestamp */
+		if (stats->len) {
+			struct sfptpd_sync_instance_rt_stats_entry *entry = stats->entries + stats->wr_ptr - 1;
+			if (entry < stats->entries)
+				entry += RT_STATS_BUFFER_SIZE;
+
+			for (m = 0; m < NUM_INSTANCE_METRICS; m++) {
+				const struct instance_scope_metric *metric = sfptpd_instance_metrics + m;
+				const struct openmetrics_family *family = sfptpd_metric_families + metric->family;
+
+				if (entry->stat_present & (1 << metric->key))
+					fprintf(stream, "%s_%s_snapshot%s%s{instance=\"%s\"} %.12Lf\n",
+						prefix, family->name,
+						family->unit ? "_" : "",
+						family->unit ? metric_unit_str(family->unit) : "",
+						entry->instance_name,
+						metric_float_value(entry, metric->key));
+			}
+		}
+
+		/* Write exposition of RT stats with our timestamp */
 		while (stats->len) {
 			struct sfptpd_sync_instance_rt_stats_entry *entry;
 
@@ -374,12 +408,13 @@ static int sfptpd_metrics_send(struct query_state *q)
 				const struct openmetrics_family *family = sfptpd_metric_families + metric->family;
 
 				if (entry->stat_present & (1 << metric->key))
-					fprintf(stream, "%s_%s%s%s{instance=\"%s\"} %.12Lf\n",
+					fprintf(stream, "%s_%s%s%s{instance=\"%s\"} %.12Lf " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
 						prefix, family->name,
 						family->unit ? "_" : "",
 						family->unit ? metric_unit_str(family->unit) : "",
 						entry->instance_name,
-						metric_float_value(entry, metric->key));
+						metric_float_value(entry, metric->key),
+						SFPTPD_ARGS_SSFTIMESPEC_NS(entry->log_time));
 			}
 
 			stats->len--;
