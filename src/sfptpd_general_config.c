@@ -135,6 +135,8 @@ static int parse_initial_clock_correction(struct sfptpd_config_section *section,
 					  unsigned int num_params, const char * const params[]);
 static int parse_openmetrics(struct sfptpd_config_section *section, const char *option,
 			     unsigned int num_params, const char * const params[]);
+static int parse_openmetrics_rt_stats_buf(struct sfptpd_config_section *section, const char *option,
+					  unsigned int num_params, const char * const params[]);
 
 static int validate_config(struct sfptpd_config_section *section);
 
@@ -411,6 +413,10 @@ static const sfptpd_config_option_t config_general_options[] =
 		"Whether to serve OpenMetrics exposition",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics,
 		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_OPENMETRICS_UNIX)},
+	{"openmetrics_rt_stats_buf", "NUMBER",
+		"NUMBER of real time stats entries to buffer for OpenMetrics",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_rt_stats_buf,
+		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_OPENMETRICS_RT_STATS_BUF)},
 };
 
 static const sfptpd_config_option_set_t config_general_option_set =
@@ -1074,6 +1080,31 @@ static int parse_openmetrics(struct sfptpd_config_section *section, const char *
 
 	return rc;
 }
+
+static int parse_openmetrics_rt_stats_buf(struct sfptpd_config_section *section, const char *option,
+					  unsigned int num_params, const char * const params[])
+{
+	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+	assert(num_params == 1);
+	int tokens, count;
+	const static int minimum = 16;
+
+	tokens = sscanf(params[0], "%i", &count);
+	if (tokens != 1)
+		return EINVAL;
+
+	if (count < minimum) {
+		ERROR("config [%s]: %s must exceed %d\n",
+		      section->name, option, minimum);
+		return ERANGE;
+	}
+
+	general->openmetrics_rt_stats_buf = count;
+
+	return 0;
+}
+
+
 
 static int parse_clock_list(struct sfptpd_config_section *section, const char *option,
 			    unsigned int num_params, const char * const params[])
@@ -1821,6 +1852,7 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		new->lock = true;
 		new->rtc_adjust = SFPTPD_DEFAULT_RTC_ADJUST;
 		new->openmetrics_unix = SFPTPD_DEFAULT_OPENMETRICS_UNIX;
+		new->openmetrics_rt_stats_buf = SFPTPD_DEFAULT_OPENMETRICS_RT_STATS_BUF;
 
 		new->timestamping.all = false;
 		new->timestamping.disable_on_exit = SFPTPD_DEFAULT_DISABLE_ON_EXIT;

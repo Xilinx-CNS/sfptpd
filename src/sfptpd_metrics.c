@@ -71,11 +71,11 @@ struct instance_scope_metric {
 	enum sfptpd_metric_family family;
 };
 
-#define RT_STATS_BUFFER_SIZE 128
 struct rt_stats_buf {
-	struct sfptpd_sync_instance_rt_stats_entry entries[RT_STATS_BUFFER_SIZE];
+	struct sfptpd_sync_instance_rt_stats_entry *entries;
 	int wr_ptr;
 	int len;
+	int sz;
 
 	/* TODO: SWPTP-1547: Add OpenMetrics gauge to report on missed samples */
 	int64_t lost_samples;
@@ -379,7 +379,7 @@ static int sfptpd_metrics_send(struct query_state *q)
 		if (stats->len) {
 			struct sfptpd_sync_instance_rt_stats_entry *entry = stats->entries + stats->wr_ptr - 1;
 			if (entry < stats->entries)
-				entry += RT_STATS_BUFFER_SIZE;
+				entry += stats->sz;
 
 			for (m = 0; m < NUM_INSTANCE_METRICS; m++) {
 				const struct instance_scope_metric *metric = sfptpd_instance_metrics + m;
@@ -401,7 +401,7 @@ static int sfptpd_metrics_send(struct query_state *q)
 
 			entry = stats->entries + stats->wr_ptr - stats->len;
 			if (entry < stats->entries)
-				entry += RT_STATS_BUFFER_SIZE;
+				entry += stats->sz;
 
 			for (m = 0; m < NUM_INSTANCE_METRICS; m++) {
 				const struct instance_scope_metric *metric = sfptpd_instance_metrics + m;
@@ -898,7 +898,11 @@ void sfptpd_metrics_destroy(void)
 		netbuf_free(&metrics.query.rx);
 	}
 
+	if (metrics.rt_stats.entries)
+		free(metrics.rt_stats.entries);
+
 	metrics.initialised = false;
+	metrics.rt_stats.entries = NULL;
 }
 
 int sfptpd_metrics_init(void)
@@ -941,11 +945,11 @@ void sfptpd_metrics_push_rt_stats(struct sfptpd_sync_instance_rt_stats_entry *en
 	stats->entries[stats->wr_ptr] = *entry;
 
 	/* Pointer wraps */
-	if (++stats->wr_ptr == RT_STATS_BUFFER_SIZE)
+	if (++stats->wr_ptr == stats->sz)
 		stats->wr_ptr = 0;
 
 	/* But length saturates */
-	if (stats->len < RT_STATS_BUFFER_SIZE)
+	if (stats->len < stats->sz)
 		stats->len++;
 	else
 		stats->lost_samples++;
@@ -986,6 +990,11 @@ int sfptpd_metrics_listener_open(struct sfptpd_config *config)
 			   general_config->metrics_path);
 	if (sz < 0)
 		return errno;
+
+	if (metrics.rt_stats.entries == NULL) {
+		metrics.rt_stats.sz = general_config->openmetrics_rt_stats_buf;
+		metrics.rt_stats.entries = malloc(metrics.rt_stats.sz * sizeof *metrics.rt_stats.entries);
+	}
 
 	metrics_path = malloc(++sz);
 	if (metrics_path == NULL)

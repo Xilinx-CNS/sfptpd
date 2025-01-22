@@ -44,6 +44,7 @@
 #define SFPTPD_DEFAULT_TEST_MODE                   (false)
 #define SFPTPD_DEFAULT_RTC_ADJUST                  (true)
 #define SFPTPD_DEFAULT_OPENMETRICS_UNIX            (true)
+#define SFPTPD_DEFAULT_OPENMETRICS_RT_STATS_BUF    256
 #define SFPTPD_DEFAULT_SELECTION_HOLDOFF_INTERVAL  10
 #define SFPTPD_DEFAULT_NETLINK_RESCAN_INTERVAL     31
 #define SFPTPD_DEFAULT_NETLINK_COALESCE_MS         50
@@ -266,6 +267,7 @@ typedef struct sfptpd_config_general {
 	bool legacy_clockids;
 	char run_dir[PATH_MAX];
 	bool openmetrics_unix;
+	unsigned int openmetrics_rt_stats_buf;
 } sfptpd_config_general_t;
 
 static_assert(sizeof ((sfptpd_config_general_t *) 0)->declared_sync_modules * 8 >= SFPTPD_CONFIG_CATEGORY_MAX,
