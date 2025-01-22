@@ -1404,7 +1404,8 @@ static void pps_on_pps_error(pps_module_t *pps,
 }
 
 
-static void pps_send_rt_stats_update(pps_module_t *pps, struct sfptpd_log_time time)
+static void pps_send_rt_stats_update(pps_module_t *pps,
+				     const struct sfptpd_timespec *log_time)
 {
 	struct sfptpd_pps_instance *instance;
 
@@ -1413,7 +1414,7 @@ static void pps_send_rt_stats_update(pps_module_t *pps, struct sfptpd_log_time t
 	for (instance = pps->instances; instance != NULL; instance = instance->next) {
 		if (instance->state == SYNC_MODULE_STATE_SLAVE) {
 			sfptpd_engine_post_rt_stats(pps->engine,
-				&time,
+				log_time,
 				SFPTPD_CONFIG_GET_NAME(instance->config),
 				"pps",
 				NULL,
@@ -1552,10 +1553,9 @@ static void pps_on_pps_event(pps_module_t *pps,
 						 &pps->time_of_day.status.offset_from_master);
 
 				/* Send updated stats and clustering input to engine */
-				struct sfptpd_log_time log_time;
-				sfptpd_log_get_time(&log_time);
+				struct sfptpd_timespec log_time = sfptpd_log_timestamp();
 				pps_send_clustering_input(pps, instance);
-				pps_send_rt_stats_update(pps, log_time);
+				pps_send_rt_stats_update(pps, &log_time);
 
 				/* Calculate clustering score */
 				instance->clustering_score =
@@ -1977,7 +1977,7 @@ static void pps_on_log_stats(pps_module_t *pps, sfptpd_sync_module_msg_t *msg)
 	assert(pps != NULL);
 	assert(msg != NULL);
 
-	pps_send_rt_stats_update(pps, msg->u.log_stats_req.time);
+	pps_send_rt_stats_update(pps, &msg->u.log_stats_req.log_time);
 
 	SFPTPD_MSG_FREE(msg);
 }

@@ -14,6 +14,7 @@
 #include <inttypes.h>
 
 #include "sfptpd_misc.h"
+#include "sfptpd_clock.h"
 
 /****************************************************************************
  * Structures, Types, Defines
@@ -347,6 +348,23 @@ int sfptpd_log_file_close(struct sfptpd_log *log);
  * @param time  Pointer to returned time string
  */
 void sfptpd_log_get_time(struct sfptpd_log_time *time);
+
+/** Get the log time
+ * @return The timestamp to use for logs
+ */
+static inline struct sfptpd_timespec sfptpd_log_timestamp(void)
+{
+	struct sfptpd_timespec now;
+
+	sfclock_gettime(CLOCK_REALTIME, &now);
+	return now;
+}
+
+/** Format log time as a string
+ * @param time  Pointer to returned time string
+ * @param timestamp Pointer to the log timestamp
+ */
+void sfptpd_log_format_time(struct sfptpd_log_time *time, const struct sfptpd_timespec *timestamp);
 
 /** Gets the output stream for realtime stats. Don't open/close this.
  * @return Stream pointer. May be NULL if realtime stats are disabled.

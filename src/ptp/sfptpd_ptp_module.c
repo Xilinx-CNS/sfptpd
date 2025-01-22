@@ -327,11 +327,11 @@ static const struct sfptpd_ptp_accuracy_map ptp_accuracy_map[] =
  ****************************************************************************/
 
 static void ptp_send_instance_rt_stats_update(struct sfptpd_engine *engine,
-											  struct sfptpd_ptp_instance *instance,
-											  struct sfptpd_log_time time);
+					      struct sfptpd_ptp_instance *instance,
+					      const struct sfptpd_timespec *log_time);
 
 static void ptp_send_rt_stats_update(struct sfptpd_ptp_module *ptp,
-									 struct sfptpd_log_time time);
+				     const struct sfptpd_timespec *log_time);
 
 /****************************************************************************
  * Internal Functions
@@ -2102,9 +2102,8 @@ static bool ptp_update_instance_state(struct sfptpd_ptp_instance *instance,
 
 	/* Send realtime stats update if anything changed */
 	if (state_changed || bond_changed || instance_changed || offset_changed) {
-		struct sfptpd_log_time time;
-		sfptpd_log_get_time(&time);
-		ptp_send_instance_rt_stats_update(module->engine, instance, time);
+		struct sfptpd_timespec log_time = sfptpd_log_timestamp();
+		ptp_send_instance_rt_stats_update(module->engine, instance, &log_time);
 	}
 
 	/* If the state has changed, send an event to the sync engine and
@@ -2252,7 +2251,7 @@ static bool ptp_is_instance_valid(sfptpd_ptp_module_t *ptp,
 
 static void ptp_send_instance_rt_stats_update(struct sfptpd_engine *engine,
 					      struct sfptpd_ptp_instance *instance,
-					      struct sfptpd_log_time time)
+					      const struct sfptpd_timespec *log_time)
 {
 	uint8_t *parent_id, *gm_id;
 	sfptpd_time_t ofm_ns, owd_ns;
@@ -2276,7 +2275,7 @@ static void ptp_send_instance_rt_stats_update(struct sfptpd_engine *engine,
 			sfptpd_stats_pps_t pps_stats;
 			ptp_log_pps_stats(engine, instance, &pps_stats);
 
-			sfptpd_engine_post_rt_stats(engine, &time,
+			sfptpd_engine_post_rt_stats(engine, log_time,
 				SFPTPD_CONFIG_GET_NAME(instance->config),
 				"gm", NULL, instance->ptpd_port_private->clock,
 				(instance->ctrl_flags & SYNC_MODULE_SELECTED),
@@ -2298,7 +2297,7 @@ static void ptp_send_instance_rt_stats_update(struct sfptpd_engine *engine,
 				offset_time->sec != 0 ? STATS_KEY_S_TIME : STATS_KEY_END, *offset_time,
 				STATS_KEY_END);
 		} else {
-			sfptpd_engine_post_rt_stats(engine, &time,
+			sfptpd_engine_post_rt_stats(engine, log_time,
 				SFPTPD_CONFIG_GET_NAME(instance->config),
 				"gm", NULL, instance->ptpd_port_private->clock,
 				(instance->ctrl_flags & SYNC_MODULE_SELECTED),
@@ -2322,14 +2321,14 @@ static void ptp_send_instance_rt_stats_update(struct sfptpd_engine *engine,
 
 
 static void ptp_send_rt_stats_update(struct sfptpd_ptp_module *ptp,
-				     struct sfptpd_log_time time)
+				     const struct sfptpd_timespec *log_time)
 {
 	struct sfptpd_ptp_instance *instance;
 
 	assert(ptp != NULL);
 
 	for (instance = ptp_get_first_instance(ptp); instance; instance = ptp_get_next_instance(instance)) {
-		ptp_send_instance_rt_stats_update(ptp->engine, instance, time);
+		ptp_send_instance_rt_stats_update(ptp->engine, instance, log_time);
 	}
 }
 
@@ -2502,7 +2501,7 @@ static void ptp_on_log_stats(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t 
 	assert(ptp != NULL);
 	assert(msg != NULL);
 
-	ptp_send_rt_stats_update(ptp, msg->u.log_stats_req.time);
+	ptp_send_rt_stats_update(ptp, &msg->u.log_stats_req.log_time);
 
 	SFPTPD_MSG_FREE(msg);
 }

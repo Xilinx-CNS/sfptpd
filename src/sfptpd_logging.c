@@ -1078,14 +1078,30 @@ void sfptpd_log_get_time(struct sfptpd_log_time *time)
 	char temp[SFPTPD_LOG_TIME_STR_MAX];
 	struct sfptpd_timespec now;
 	int rc;
-	
+
 	assert(time != NULL);
-	
+
 	sfclock_gettime(CLOCK_REALTIME, &now);
 	sfptpd_local_strftime(temp, sizeof(temp), "%Y-%m-%d %X", &now.sec);
 
 	rc = snprintf(time->time, sizeof(time->time), "%s.%06" PRId32,
 		      temp, now.nsec / 1000);
+	assert(rc < sizeof(time->time));
+}
+
+
+void sfptpd_log_format_time(struct sfptpd_log_time *time,
+			    const struct sfptpd_timespec *timestamp)
+{
+	char temp[SFPTPD_LOG_TIME_STR_MAX];
+	int rc;
+
+	assert(time != NULL);
+
+	sfptpd_local_strftime(temp, sizeof(temp), "%Y-%m-%d %X", &timestamp->sec);
+
+	rc = snprintf(time->time, sizeof(time->time), "%s.%06" PRId32,
+		      temp, timestamp->nsec / 1000);
 	assert(rc < sizeof(time->time));
 }
 

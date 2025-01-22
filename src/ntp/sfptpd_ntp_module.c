@@ -612,7 +612,7 @@ static void ntp_send_instance_status(ntp_module_t *ntp, struct ntp_state *new_st
 }
 
 
-static void ntp_send_rt_stats_update(ntp_module_t *ntp, struct sfptpd_log_time time)
+static void ntp_send_rt_stats_update(ntp_module_t *ntp, const struct sfptpd_timespec *log_time)
 {
 	assert(ntp != NULL);
 
@@ -624,7 +624,7 @@ static void ntp_send_rt_stats_update(ntp_module_t *ntp, struct sfptpd_log_time t
 			ntp->state.sys_info.clock_control_enabled;
 
 		sfptpd_engine_post_rt_stats(ntp->engine,
-		                     &time,
+		                     log_time,
 		                     SFPTPD_CONFIG_GET_NAME(ntp->config),
 		                     "ntp", NULL, sfptpd_clock_get_system_clock(),
 		                     disciplining, false,
@@ -646,9 +646,8 @@ static void ntp_on_offset_id_change(ntp_module_t *ntp, struct ntp_state *new_sta
 	}
 
 	/* Send updated stats (offset) to the engine */
-	struct sfptpd_log_time time;
-	sfptpd_log_get_time(&time);
-	ntp_send_rt_stats_update(ntp, time);
+	struct sfptpd_timespec log_time = sfptpd_log_timestamp();
+	ntp_send_rt_stats_update(ntp, &log_time);
 	ntp_send_clustering_input(ntp);
 }
 
@@ -1077,7 +1076,7 @@ static void ntp_on_log_stats(ntp_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 	assert(ntp != NULL);
 	assert(msg != NULL);
 
-	ntp_send_rt_stats_update(ntp, msg->u.log_stats_req.time);
+	ntp_send_rt_stats_update(ntp, &msg->u.log_stats_req.log_time);
 	ntp_send_clustering_input(ntp);
 
 	SFPTPD_MSG_FREE(msg);

@@ -143,7 +143,7 @@ void sfptpd_engine_test_mode(struct sfptpd_engine *engine,
  * This will send an asynchronous message to the
  * engine thread so is safe to call from another thread context.
  * @param engine  Pointer to engine instance
- * @param time The time received in the log stats request
+ * @param log_time The time received in the log stats request
  * @param instance Name of the instance which is generating the stats
  * @param source Clock source (required if clock_master is null)
  * @param clock_master Master clock, may be null
@@ -153,8 +153,9 @@ void sfptpd_engine_test_mode(struct sfptpd_engine *engine,
  * @param in_sync True if the clocks are in sync
  * @param va_args Pairs of STATS_KEY_x and associated values
  */
-void sfptpd_engine_post_rt_stats(struct sfptpd_engine *engine,
-		struct sfptpd_log_time *time,
+void sfptpd_engine_post_rt_stats(
+		struct sfptpd_engine *engine,
+		const struct sfptpd_timespec *log_time,
 		const char *instance_name,
 		const char *source,
 		const struct sfptpd_clock *clock_master,

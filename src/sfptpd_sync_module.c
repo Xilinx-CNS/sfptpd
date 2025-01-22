@@ -436,7 +436,7 @@ int sfptpd_sync_module_step_clock(struct sfptpd_thread *sync_module,
 
 
 void sfptpd_sync_module_log_stats(struct sfptpd_thread *sync_module,
-				  struct sfptpd_log_time *time)
+				  const struct sfptpd_timespec *log_time)
 {
 	sfptpd_sync_module_msg_t *msg;
 
@@ -449,7 +449,7 @@ void sfptpd_sync_module_log_stats(struct sfptpd_thread *sync_module,
 		return;
 	}
 
-	msg->u.log_stats_req.time = *time;
+	msg->u.log_stats_req.log_time = *log_time;
 	(void)SFPTPD_MSG_SEND(msg, sync_module,
 				   SFPTPD_SYNC_MODULE_MSG_LOG_STATS, false);
 }

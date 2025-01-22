@@ -262,6 +262,12 @@ struct sfptpd_engine {
 	int netlink_xoff;
 	int netlink_fds[SFPTPD_NETLINK_MAX_FDS];
 	int netlink_num_fds;
+
+	/* RT Stats control */
+	struct {
+		struct sfptpd_timespec log_time;
+		struct sfptpd_log_time log_time_text;
+	} rt_stats_last;
 };
 
 
@@ -858,7 +864,7 @@ static int select_sync_instance(struct sfptpd_engine *engine,
 	struct sfptpd_timespec time_last_instance = { 0 };
 	int rc;
 	bool lrc_change;
-	struct sfptpd_log_time log_time;
+	struct sfptpd_timespec log_time;
 
 	assert(engine != NULL);
 	assert(the_new != NULL);
@@ -869,7 +875,7 @@ static int select_sync_instance(struct sfptpd_engine *engine,
 	if (the_new == the_old)
 		return 0;
 
-	sfptpd_log_get_time(&log_time);
+	log_time = sfptpd_log_timestamp();
 
 	/* Is the LRC changing? */
 	lrc_change = (the_new->status.clock != engine->lrc);
@@ -942,18 +948,41 @@ static int select_sync_instance(struct sfptpd_engine *engine,
 }
 
 
-static void write_rt_stats_log(struct sfptpd_log_time *time,
+static const char *render_log_time(struct sfptpd_engine *engine,
+				   struct sfptpd_sync_instance_rt_stats_entry *entry)
+{
+	/* Treat log time within 50us as identical. */
+	static const struct sfptpd_timespec equivalent_time = {
+		.sec = 0,
+		.nsec = 50000,
+		.nsec_frac = 0,
+	};
+
+	if (!sfptpd_time_equal_within(&entry->log_time,
+				      &engine->rt_stats_last.log_time,
+				      &equivalent_time)) {
+		sfptpd_log_format_time(&engine->rt_stats_last.log_time_text,
+				       &entry->log_time);
+		engine->rt_stats_last.log_time = entry->log_time;
+	}
+
+	return engine->rt_stats_last.log_time_text.time;
+}
+
+
+static void write_rt_stats_log(struct sfptpd_engine *engine,
 			       struct sfptpd_sync_instance_rt_stats_entry *entry)
 {
 	char *comma = "";
 
 	assert(entry != NULL);
 
-	sfptpd_log_stats("%s [%s%s%s%s", time->time,
-		       entry->instance_name ? entry->instance_name : "",
-		       entry->instance_name ? ":" : "",
-		       entry->clock_master ? sfptpd_clock_get_short_name(entry->clock_master) : entry->source,
-		       entry->is_blocked ? "-#" : (entry->is_disciplining ? "->" : "--")
+
+	sfptpd_log_stats("%s [%s%s%s%s", render_log_time(engine, entry),
+			 entry->instance_name ? entry->instance_name : "",
+			 entry->instance_name ? ":" : "",
+			 entry->clock_master ? sfptpd_clock_get_short_name(entry->clock_master) : entry->source,
+			 entry->is_blocked ? "-#" : (entry->is_disciplining ? "->" : "--")
 			);
 
 	if (entry->active_intf != NULL)
@@ -1005,7 +1034,8 @@ static void write_rt_stats_log(struct sfptpd_log_time *time,
 }
 
 
-static void write_rt_stats_json(FILE* json_stats_fp,
+static void write_rt_stats_json(struct sfptpd_engine *engine,
+				FILE* json_stats_fp,
 				struct sfptpd_sync_instance_rt_stats_entry *entry)
 {
 	char* comma = "";
@@ -1028,7 +1058,7 @@ static void write_rt_stats_json(FILE* json_stats_fp,
 	LPRINTF(json_stats_fp, "{\"instance\":\"%s\",\"time\":\"%s\","
 		"\"clock-master\":{\"name\":\"%s\"",
 		entry->instance_name ? entry->instance_name : "",
-		entry->time.time, entry->clock_master ?
+		render_log_time(engine, entry), entry->clock_master ?
 			sfptpd_clock_get_long_name(entry->clock_master) : entry->source);
 
 	/* Add clock time */
@@ -1734,13 +1764,12 @@ static void on_synchronize(void *user_context)
 }
 
 void sfptpd_engine_post_rt_stats_simple(struct sfptpd_engine *engine, struct sfptpd_servo *servo){
-	struct sfptpd_log_time logtime;
-	sfptpd_log_get_time(&logtime);
+	struct sfptpd_timespec log_time = sfptpd_log_timestamp();
 
 	struct sfptpd_servo_stats stats = sfptpd_servo_get_stats(servo);
 
 	sfptpd_engine_post_rt_stats(engine,
-					&logtime,
+					&log_time,
 					stats.servo_name,
 					"servo", stats.clock_master, stats.clock_slave,
 					stats.disciplining, stats.blocked, stats.in_sync, stats.alarms,
@@ -1756,7 +1785,7 @@ void sfptpd_engine_post_rt_stats_simple(struct sfptpd_engine *engine, struct sfp
 static void on_log_stats(void *user_context, unsigned int timer_id)
 {
 	struct sfptpd_engine *engine = (struct sfptpd_engine *)user_context;
-	struct sfptpd_log_time time;
+	struct sfptpd_timespec log_time;
 	struct sync_instance_record *instance;
 	int i;
 
@@ -1775,7 +1804,7 @@ static void on_log_stats(void *user_context, unsigned int timer_id)
 	/* We pass the current time into the logging functions
 	 * so that each batch of stats has exactly the same time.
 	 * This allow the output to be processed more easily */
-	sfptpd_log_get_time(&time);
+	log_time = sfptpd_log_timestamp();
 
 	/* Iterate through all the instances and print stats if available */
 	for (i = 0; i < engine->num_sync_instances; i++) {
@@ -1783,7 +1812,8 @@ static void on_log_stats(void *user_context, unsigned int timer_id)
 
 		/* Print any stats present */
 		if (instance->latest_rt_stats.instance_name != NULL) {
-			write_rt_stats_log(&time, &instance->latest_rt_stats);
+			instance->latest_rt_stats.log_time = log_time;
+			write_rt_stats_log(engine, &instance->latest_rt_stats);
 
 			/* If the sync instance is no longer measuring itself
 			 * against remote reference then erase saved stats. */
@@ -2170,7 +2200,7 @@ static void on_rt_stats_entry(struct sfptpd_engine *engine,
 	if (record != NULL)
 		record->latest_rt_stats = msg->stats;
 	else /* This will happen for servos */
-		write_rt_stats_log(&msg->stats.time, &msg->stats);
+		write_rt_stats_log(engine, &msg->stats);
 
 	/* Send to OpenMetrics reporting buffer */
 	sfptpd_metrics_push_rt_stats(&msg->stats);
@@ -2178,7 +2208,7 @@ static void on_rt_stats_entry(struct sfptpd_engine *engine,
 	/* Write to json_stats */
 	FILE* stream = sfptpd_log_get_rt_stats_out_stream();
 	if (stream != NULL)
-		write_rt_stats_json(stream, &msg->stats);
+		write_rt_stats_json(engine, stream, &msg->stats);
 }
 
 
@@ -3057,8 +3087,9 @@ void sfptpd_engine_test_mode(struct sfptpd_engine *engine,
 }
 
 
-void sfptpd_engine_post_rt_stats(struct sfptpd_engine *engine,
-		struct sfptpd_log_time *time,
+void sfptpd_engine_post_rt_stats(
+		struct sfptpd_engine *engine,
+		const struct sfptpd_timespec *log_time,
 		const char *instance_name,
 		const char *source,
 		const struct sfptpd_clock *clock_master,
@@ -3086,7 +3117,7 @@ void sfptpd_engine_post_rt_stats(struct sfptpd_engine *engine,
 	}
 
 	memset(&msg->stats, 0, sizeof(msg->stats));
-	msg->stats.time = *time;
+	msg->stats.log_time = *log_time;
 	msg->stats.instance_name = instance_name;
 	msg->stats.source = source;
 	msg->stats.clock_master = clock_master;

@@ -17,7 +17,7 @@
 /* Realtime stats entry, used for outputting to stdout and/or json file.
  * Fields below the /optional/ header may be omitted by leaving the default
  * values set in rt_stats_msg_init()
- * @time Request time, may be used to group entries
+ * @log_time Request time, may be used to group entries
  * @instance Config instance name
  * @source Instance source
  * @clock_master Instance's master clock
@@ -41,7 +41,7 @@
  * @i_term Current value of PID filter's I term
  */
 struct sfptpd_sync_instance_rt_stats_entry {
-	struct sfptpd_log_time time;
+	struct sfptpd_timespec log_time;
 	const char *instance_name;
 	const char *source;
 	const struct sfptpd_clock *clock_master;

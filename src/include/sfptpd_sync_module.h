@@ -388,7 +388,7 @@ int sfptpd_sync_module_step_clock(struct sfptpd_thread *sync_module,
  * @param sync_module Pointer to sync module
  */
 void sfptpd_sync_module_log_stats(struct sfptpd_thread *sync_module,
-				  struct sfptpd_log_time *time);
+				  const struct sfptpd_timespec *log_time);
 
 /** Save current state of the sync module to file
  * @param sync_module Pointer to sync module
@@ -475,7 +475,7 @@ struct sfptpd_sync_module_step_clock_req {
  */
 #define SFPTPD_SYNC_MODULE_MSG_LOG_STATS SFPTPD_SYNC_MODULE_MSG(3)
 struct sfptpd_sync_module_log_stats_req {
-	struct sfptpd_log_time time;
+	struct sfptpd_timespec log_time;
 };
 
 /** Message to signal to the sync module to save it's state. This message
