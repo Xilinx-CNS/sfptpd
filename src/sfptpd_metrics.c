@@ -452,7 +452,13 @@ static int sfptpd_metrics_send(struct query_state *q)
 						SFPTPD_ARGS_SSFTIMESPEC_NS(entry->log_time));
 			}
 
-			stats->len--;
+			/* Always leave one record left for stateless
+			 * ingestion of current state. Yes this can result in
+			 * repetition; no, they don't mind that. */
+			if (stats->len > 1)
+				stats->len--;
+			else
+				break;
 			count++;
 		}
 
