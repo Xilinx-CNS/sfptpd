@@ -40,6 +40,7 @@
 enum openmetrics_type {
 	OM_T_GAUGE,
 	OM_T_STATESET,
+	OM_T_INFO,
 };
 
 enum openmetrics_unit {
@@ -68,6 +69,7 @@ enum sfptpd_metric_family {
 	OM_F_LOG_TIME,
 	OM_F_ALARMS,
 	OM_F_ALARM,
+	OM_F_ALARMTXT,
 };
 
 struct instance_scope_metric {
@@ -184,6 +186,8 @@ static const struct openmetrics_family sfptpd_metric_families[] = {
 	[ OM_F_IS_DISC  ] = { OM_T_GAUGE, "is_disciplining",
 						      OM_U_NONE,    "0 = comparing, 1 = disciplining" },
 	[ OM_F_ALARMS   ] = { OM_T_GAUGE, "alarms",   OM_U_NONE,    "number of alarms" },
+
+	[ OM_F_ALARMTXT ] = { OM_T_INFO,  "alarmtxt", OM_U_NONE,    "alarm text" },
 
 	[ OM_F_ALARM    ] = { OM_T_STATESET, "alarm",  OM_U_NONE,    "alarm",
 			      .conditional = 1 << SFPTPD_METRICS_OPTION_ALARM_STATESET},
@@ -370,6 +374,7 @@ static int sfptpd_metrics_send(struct query_state *q)
 	size_t buf_sz = 0;
 	int m;
 	int count = 0;
+	char alarm_str[SYNC_MODULE_ALARM_ALL_TEXT_MAX];
 
 	if (q->http.method == HTTP_METHOD_GET) {
 		stream = open_memstream(&buf, &buf_sz);
@@ -417,14 +422,24 @@ static int sfptpd_metrics_send(struct query_state *q)
 
 			if ((family->conditional & ~metrics.flags) == 0) {
 				for (abit = 1; abit != SYNC_MODULE_ALARM_MAX; abit <<= 1) {
-					char buf[60];
-					sfptpd_sync_module_alarms_text(abit, buf, sizeof buf);
+					sfptpd_sync_module_alarms_text(abit, alarm_str, sizeof alarm_str);
 					fprintf(stream, "%s{instance=\"%s\",%s=\"%s\"} %c\n",
 						family->name, entry->instance_name,
 						family->name, buf,
 						entry->alarms & abit ? '1' : '0');
 				}
 			}
+
+			family = sfptpd_metric_families + OM_F_ALARMTXT;
+			sfptpd_sync_module_alarms_text(entry->alarms, alarm_str, sizeof alarm_str);
+			fprintf(stream, "%s{instance=\"%s\",alarms=\"%s\"} 1\n",
+				family->name, entry->instance_name,
+				alarm_str);
+
+			family = sfptpd_metric_families + OM_F_ALARMS;
+			fprintf(stream, "%s{instance=\"%s\"} %d\n",
+				family->name, entry->instance_name,
+				__builtin_popcount(entry->alarms));
 		}
 
 		/* Write exposition of RT stats with our timestamp */
