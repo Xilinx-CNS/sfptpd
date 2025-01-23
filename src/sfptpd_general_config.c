@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2022 Xilinx, Inc. */
+/* (c) Copyright 2012-2025 Advanced Micro Devices, Inc. */
 
 /**
  * @file   sfptpd_general_config.c
@@ -137,6 +137,8 @@ static int parse_openmetrics(struct sfptpd_config_section *section, const char *
 			     unsigned int num_params, const char * const params[]);
 static int parse_openmetrics_rt_stats_buf(struct sfptpd_config_section *section, const char *option,
 					  unsigned int num_params, const char * const params[]);
+static int parse_openmetrics_options(struct sfptpd_config_section *section, const char *option,
+				     unsigned int num_params, const char * const params[]);
 
 static int validate_config(struct sfptpd_config_section *section);
 
@@ -417,6 +419,9 @@ static const sfptpd_config_option_t config_general_options[] =
 		"NUMBER of real time stats entries to buffer for OpenMetrics",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_rt_stats_buf,
 		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_OPENMETRICS_RT_STATS_BUF)},
+	{"openmetrics_options", "[alarm-stateset]",
+		"Set OpenMetrics option flags",
+		~0, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_options},
 };
 
 static const sfptpd_config_option_set_t config_general_option_set =
@@ -1104,6 +1109,26 @@ static int parse_openmetrics_rt_stats_buf(struct sfptpd_config_section *section,
 	return 0;
 }
 
+static int parse_openmetrics_options(struct sfptpd_config_section *section, const char *option,
+				     unsigned int num_params, const char * const params[])
+{
+	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+	enum sfptpd_metrics_option opt;
+
+	while (num_params--) {
+		for (opt = 0;
+		     opt < SFPTPD_METRICS_NUM_OPTIONS &&
+		     strcmp(params[num_params], sfptpd_metrics_option_names[opt]);
+		     opt++);
+		if (opt == SFPTPD_METRICS_NUM_OPTIONS) {
+			ERROR("config [%s]: invalid %s option: %s\n",
+			      section->name, option, params[num_params]);
+			return EINVAL;
+		}
+		general->openmetrics_flags |= (1 << opt);
+	}
+	return 0;
+}
 
 
 static int parse_clock_list(struct sfptpd_config_section *section, const char *option,

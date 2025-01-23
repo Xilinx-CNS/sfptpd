@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2024 Advanced Micro Devices, Inc. */
+/* (c) Copyright 2024-2025 Advanced Micro Devices, Inc. */
 
 #ifndef _SFPTPD_METRICS_H
 #define _SFPTPD_METRICS_H
@@ -17,6 +17,18 @@
 /****************************************************************************
  * Structures, Types, Defines
  ****************************************************************************/
+
+enum sfptpd_metrics_option {
+	SFPTPD_METRICS_OPTION_ALARM_STATESET,
+	SFPTPD_METRICS_NUM_OPTIONS
+};
+
+/* Storage for metrics flags, auto-sized in C23 */
+typedef enum {
+	SFPTPD_METRICS_FLAG_MAX = 1 << (SFPTPD_METRICS_NUM_OPTIONS - 1)
+} sfptpd_metrics_flags_t;
+
+extern const char *sfptpd_metrics_option_names[SFPTPD_METRICS_NUM_OPTIONS];
 
 
 /****************************************************************************

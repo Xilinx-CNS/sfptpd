@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2022 Xilinx, Inc. */
+/* (c) Copyright 2012-2025 Advanced Micro Devices, Inc. */
 
 #ifndef _SFPTPD_GENERAL_CONFIG_H
 #define _SFPTPD_GENERAL_CONFIG_H
@@ -12,6 +12,7 @@
 #include <sfptpd_logging.h>
 #include "sfptpd_bic.h"
 #include "sfptpd_phc.h"
+#include "sfptpd_metrics.h"
 
 
 /****************************************************************************
@@ -45,6 +46,7 @@
 #define SFPTPD_DEFAULT_RTC_ADJUST                  (true)
 #define SFPTPD_DEFAULT_OPENMETRICS_UNIX            (true)
 #define SFPTPD_DEFAULT_OPENMETRICS_RT_STATS_BUF    256
+#define SFPTPD_DEFAULT_OPENMETRICS_FLAGS           0
 #define SFPTPD_DEFAULT_SELECTION_HOLDOFF_INTERVAL  10
 #define SFPTPD_DEFAULT_NETLINK_RESCAN_INTERVAL     31
 #define SFPTPD_DEFAULT_NETLINK_COALESCE_MS         50
@@ -268,6 +270,7 @@ typedef struct sfptpd_config_general {
 	char run_dir[PATH_MAX];
 	bool openmetrics_unix;
 	unsigned int openmetrics_rt_stats_buf;
+	sfptpd_metrics_flags_t openmetrics_flags;
 } sfptpd_config_general_t;
 
 static_assert(sizeof ((sfptpd_config_general_t *) 0)->declared_sync_modules * 8 >= SFPTPD_CONFIG_CATEGORY_MAX,
