@@ -30,6 +30,7 @@
 #include "sfptpd_statistics.h"
 #include "sfptpd_engine.h"
 #include "sfptpd_metrics.h"
+#include "sfptpd_sync_module.h"
 
 
 /****************************************************************************
@@ -38,6 +39,7 @@
 
 enum openmetrics_type {
 	OM_T_GAUGE,
+	OM_T_STATESET,
 };
 
 enum openmetrics_unit {
@@ -64,6 +66,7 @@ enum sfptpd_metric_family {
 	OM_F_S_TIME,
 	OM_F_LOG_TIME,
 	OM_F_ALARMS,
+	OM_F_ALARM,
 };
 
 struct instance_scope_metric {
@@ -175,6 +178,8 @@ static const struct openmetrics_family sfptpd_metric_families[] = {
 	[ OM_F_IS_DISC  ] = { OM_T_GAUGE, "is_disciplining",
 						      OM_U_NONE,    "0 = comparing, 1 = disciplining" },
 	[ OM_F_ALARMS   ] = { OM_T_GAUGE, "alarms",   OM_U_NONE,    "number of alarms" },
+
+	[ OM_F_ALARM    ] = { OM_T_STATESET, "alarm",  OM_U_NONE,    "alarm" },
 };
 #define NUM_METRIC_FAMILIES (sizeof sfptpd_metric_families/sizeof *sfptpd_metric_families)
 
@@ -201,6 +206,8 @@ static const char *metric_type_str(enum openmetrics_type t) {
 	switch (t) {
 	case OM_T_GAUGE:
 		return "gauge";
+	case OM_T_STATESET:
+		return "stateset";
 	default:
 		return "unknown";
 	}
@@ -392,6 +399,17 @@ static int sfptpd_metrics_send(struct query_state *q)
 						family->unit ? metric_unit_str(family->unit) : "",
 						entry->instance_name,
 						metric_float_value(entry, metric->key));
+			}
+
+			const struct openmetrics_family *family = sfptpd_metric_families + OM_F_ALARM;
+			sfptpd_sync_module_alarms_t abit;
+			for (abit = 1; abit != SYNC_MODULE_ALARM_MAX; abit <<= 1) {
+				char buf[60];
+				sfptpd_sync_module_alarms_text(abit, buf, sizeof buf);
+				fprintf(stream, "%s{instance=\"%s\",%s=\"%s\"} %c\n",
+					family->name, entry->instance_name,
+					family->name, buf,
+					entry->alarms & abit ? '1' : '0');
 			}
 		}
 
