@@ -37,6 +37,12 @@
  * Structures, Types
  ****************************************************************************/
 
+/* Support more than one outstanding query because the time series database
+ * may keep their connection open while we may also want to perform one-off
+ * queries for diagnostic purposes. */
+#define MAX_QUERIES 2
+#define QUERIES_MASK ((1 << (MAX_QUERIES)) - 1)
+
 enum openmetrics_type {
 	OM_T_GAUGE,
 	OM_T_STATESET,
@@ -155,8 +161,10 @@ struct metrics_state {
 	struct rt_stats_buf rt_stats;
 	bool initialised;
 	int listen_fd;
-	struct query_state query;
 	sfptpd_metrics_flags_t flags;
+
+	struct query_state query[MAX_QUERIES];
+	unsigned int active_queries; /* bitfield */
 };
 
 
@@ -561,22 +569,33 @@ static int netbuf_init(struct net_buf *nb)
 static int metrics_handle_connection(int fd)
 {
 	int rc = 0;
+	int qi;
+
+	if ((metrics.active_queries ^ QUERIES_MASK) == 0) {
+		ERROR("metrics: too many active queries; discarding\n");
+		goto fail;
+	}
 
 	rc = sfptpd_thread_user_fd_add(fd, true, false);
 	if (rc != 0)
 		goto fail;
 
-	memset(&metrics.query.http, '\0', sizeof metrics.query.http);
-	metrics.query.abort = false;
-	if (netbuf_init(&metrics.query.rx))
+	/* Find first free query slot */
+	qi = __builtin_ctz(~metrics.active_queries);
+
+	memset(&metrics.query[qi].http, '\0', sizeof metrics.query[qi].http);
+	metrics.query[qi].abort = false;
+	if (netbuf_init(&metrics.query[qi].rx))
 		goto fail;
-	assert(metrics.query.fd == -1);
-	metrics.query.fd = fd;
+	metrics.query[qi].fd = fd;
+	metrics.active_queries |= (1 << qi);
 
 	TRACE_L5("got incoming metrics connection\n");
 
-	/* Only one at a time, please! */
-	rc = sfptpd_thread_user_fd_remove(metrics.listen_fd);
+	/* Rate control the backlog handling so we never reach the
+	 * above discard case. */
+	if ((metrics.active_queries ^ QUERIES_MASK) == 0)
+		rc = sfptpd_thread_user_fd_remove(metrics.listen_fd);
 
 	return 0;
 
@@ -840,9 +859,10 @@ static void resolve_http_method(struct http *h)
 		h->method = HTTP_METHOD_OTHER;
 }
 
-static void metrics_process_query(struct sfptpd_thread_readyfd *event)
+static void metrics_process_query(struct sfptpd_thread_readyfd *event,
+				  int qi)
 {
-	struct query_state *q = &metrics.query;
+	struct query_state *q = &metrics.query[qi];
 	struct net_buf *nb = &q->rx;
 	struct iovec iov[2];
 	ssize_t res;
@@ -944,10 +964,12 @@ static void metrics_process_query(struct sfptpd_thread_readyfd *event)
 	if (q->abort || res == 0) {
 		TRACE_L5("metrics: closing the connection\n");
 		sfptpd_thread_user_fd_remove(q->fd);
-		if (metrics.listen_fd != -1)
+		if (metrics.listen_fd != -1 &&
+		    (metrics.active_queries ^ QUERIES_MASK) == 0) {
 			sfptpd_thread_user_fd_add(metrics.listen_fd, true, false);
+		}
 		close(q->fd);
-		q->fd = -1;
+		metrics.active_queries &= ~(1 << qi);
 	}
 }
 
@@ -959,7 +981,11 @@ static void metrics_process_query(struct sfptpd_thread_readyfd *event)
 void sfptpd_metrics_destroy(void)
 {
 	if (metrics.initialised) {
-		netbuf_free(&metrics.query.rx);
+		int qi;
+
+		for (qi = 0; qi < MAX_QUERIES; qi++)
+			netbuf_free(&metrics.query[qi].rx);
+		metrics.active_queries = 0;
 	}
 
 	if (metrics.rt_stats.entries)
@@ -973,7 +999,6 @@ int sfptpd_metrics_init(void)
 {
 	memset(&metrics, '\0', sizeof metrics);
 	metrics.listen_fd = -1;
-	metrics.query.fd = -1;
 	metrics.initialised = true;
 
 	return 0;
@@ -983,10 +1008,12 @@ void sfptpd_metrics_service_fds(unsigned int num_fds,
 				struct sfptpd_thread_readyfd events[])
 {
 	struct sfptpd_thread_readyfd *ev;
+	unsigned queries;
+	int qi;
 
 	if (metrics.listen_fd != -1 &&
 	    (ev = get_event_for(num_fds, events, metrics.listen_fd)) &&
-	    metrics.query.fd == -1) {
+	    (metrics.active_queries ^ QUERIES_MASK) != 0) {
 		int fd = accept4(ev->fd, NULL, 0, SOCK_NONBLOCK);
 		if (fd == -1)
 			ERROR("metrics: accept() failed: %s\n", strerror(errno));
@@ -994,9 +1021,15 @@ void sfptpd_metrics_service_fds(unsigned int num_fds,
 			metrics_handle_connection(fd);
 	}
 
-	if (metrics.query.fd != -1 &&
-	    (ev = get_event_for(num_fds, events, metrics.query.fd)))
-		metrics_process_query(ev);
+	queries = metrics.active_queries;
+	for (qi = __builtin_ctz(queries);
+	     __builtin_popcount(queries);
+	     qi = __builtin_ctz(queries &= ~ (1 << qi))) {
+		if ((ev = get_event_for(num_fds, events, metrics.query[qi].fd))) {
+			metrics_process_query(ev, qi);
+			break;
+		}
+	}
 }
 
 void sfptpd_metrics_push_rt_stats(struct sfptpd_sync_instance_rt_stats_entry *entry)
@@ -1021,16 +1054,22 @@ void sfptpd_metrics_push_rt_stats(struct sfptpd_sync_instance_rt_stats_entry *en
 
 void sfptpd_metrics_listener_close(void)
 {
+	unsigned queries;
+	int qi;
+
 	if (metrics.initialised) {
 		if (metrics.listen_fd != -1) {
 			sfptpd_thread_user_fd_remove(metrics.listen_fd);
 			close(metrics.listen_fd);
 			metrics.listen_fd = -1;
 		}
-		if (metrics.query.fd != -1) {
-			sfptpd_thread_user_fd_remove(metrics.query.fd);
-			close(metrics.query.fd);
-			metrics.query.fd = -1;
+		queries = metrics.active_queries;
+		for (qi = __builtin_ctz(queries);
+		     __builtin_popcount(queries);
+		     qi = __builtin_ctz(queries &= ~ (1 << qi))) {
+			sfptpd_thread_user_fd_remove(metrics.query[qi].fd);
+			close(metrics.query[qi].fd);
+			metrics.active_queries &= ~(1 << qi);
 		}
 	}
 }
@@ -1108,7 +1147,7 @@ int sfptpd_metrics_listener_open(struct sfptpd_config *config)
 	if (rc != 0)
 		goto fail;
 
-	rc = listen(metrics.listen_fd, 1);
+	rc = listen(metrics.listen_fd, MAX_QUERIES);
 	if (rc != 0)
 		goto fail;
 
