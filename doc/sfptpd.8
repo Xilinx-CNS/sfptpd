@@ -1,23 +1,24 @@
-.Dd April 09, 2023
-.Os Linux
-.Dt SFPTPD 8 SMM
+.Dd January 24, 2025
+.Os
+.Dt sfptpd 8 SMM
 .Sh NAME
 .Nm sfptpd
 .Nd Solarflare Enhanced PTP Daemon
 .Sh SYNOPSIS
 .Nm
-.Op Fl h
+.Op Fl -help
 .Nm
 .Op Fl -version
 .Nm
 .Op Fl -test-config
 .Nm
 .Op Fl v
-.Op Fl i Ar interface
+.Op Fl i Ar default-interface
+.Op Fl D Ar default-ptp-domain
 .Op Fl f Ar sfptpd.conf
 .Op Fl u Ar user[:group]
-.Op Fl -no-daemon
-.Op Fl -daemon
+.Op Fl p Ns Op priv-helper-path
+.Op Fl -no-daemon | -daemon
 .Op Fl -console
 .Sh DESCRIPTION
 Start the Solarflare Enhanced PTP Daemon to manage the synchronisation of
@@ -26,9 +27,15 @@ PPS time sources and locally-running NTP clients.
 .Pp
 Most of the configuration for sfptpd is provided in an ini-style
 configuration file.
+The aspects of configuration that are made available on the command line
+are either especially helpful for experimental use when testing sfptpd
+or administering a system or are useful for an init system to override
+settings to be compatible with the applicable mode of supervision and logging.
 .Ss Theory of Operation
 .Pp
-A typical sfptpd topology looks as follows, where three network cards with PTP Hardware Clock devices and the system clock are synchronised to a remote time source such as via PTP.
+A typical sfptpd topology looks as follows, where three network cards
+with PTP Hardware Clock devices and the system clock are synchronised to a
+remote time source such as via PTP.
 .Bd -literal
               +---------+
               |remote   | reference clock
@@ -52,16 +59,81 @@ A typical sfptpd topology looks as follows, where three network cards with PTP H
 At startup
 .Nm
 constructs a sync network as shown above.
-The structure of this network adapts through the lifetime of the daemon and is based on the following factors:
+The structure of this network adapts through the lifetime of the daemon
+and is based on the following factors:
 .Bl -bullet
 .It
 The configuration of
 .Sx "SYNC MODULES"
 and sync instances.
 .It
-The daemon's discovery of network interfaces with PTP hardware clock (phc) devices and hotplugging thereof.
+The daemon's discovery of network interfaces with PTP hardware clock (phc)
+devices and hotplugging thereof.
 .It
-The daemon's selection of the best reference clock and therefore local reference clock, based on the configured selection policy.
+The daemon's selection of the best reference clock and therefore local
+reference clock, based on the configured selection policy.
+.El
+.Ss Monitoring
+There are multiple means of monitoring
+.Nm ,
+each suited to different purposes:
+.Bl -bullet
+.It
+.Sy Long term stats .
+Mean, min, max, standard deviation and various counters are stored in
+.Pa /var/lib/sfptpd/stats-*
+files aggregated over the current and last three full periods of minute,
+ten minutes, hour, day and week.
+Always enabled.
+JSON-formatted versions of the same files are also saved.
+.It
+.Sy Stats log .
+Per-second human-readable stats output for each sync relationship,
+controlled by
+.Ql stats_log .
+.It
+.Sy Real time stats .
+Stats emitted for every computed offset sample in JSON lines format to a file
+controlled by
+.Ql json_stats .
+.It
+.Sy PTP event monitoring .
+PTP event monitoring messages defined in IEEE Std 1588-2019 section 16.11
+can be emitted under the control of various
+.Ql mon_*
+options.
+These are likely to be useful in debugging scenarios and do not offer the
+kind of capability useful for generalised sync monitoring.
+The
+.Nm sfptpmon
+script provided with
+.Nm
+is an example of how these messages may be consumed.
+The built-in capability of
+.Nm
+to receive these messages is deprecated in favour of the script and likely
+to be removed in a future version.
+.It
+.Sy NetSync Monitor .
+External monitoring of PTP sync may be achieved with the
+.Sq Reverse PTP
+technique, enabled with the
+.Ql mon_meinberg_netsync
+option.
+.It
+.Sy OpenMetrics stats .
+.Nm
+can directly serve statistics in the
+.Sq OpenMetrics
+exposition format over HTTP.
+This is enabled by default using a Unix socket which can be converted
+to a TCP service using an external tool like
+.Xr socat 1
+or the
+.Xr nginx 8
+web server.
+For example:
+.Dl socat TCP-LISTEN:9979,fork UNIX-CONNECT:/var/run/sfptpd/metrics.sock
 .El
 .Sh SYNC MODULES
 A subsystem within
@@ -83,7 +155,8 @@ sync_module freerun fr1
 Having been declared as above, sync instances may be configured with their own
 configuration section by name.
 Options which are global to a sync module or are to be repeated for each sync
-instance may be specified in a section under the name of the sync module itself.
+instance may be specified in a section under the name of the sync module
+itself.
 For example:
 .Pp
 .Bd -literal
@@ -163,7 +236,7 @@ or
 .Ql clock_readonly
 .
 .Sh FILES
-.Bl -tag -width /etc/sfptpd.conF
+.Bl -tag -width /etc/sfptpd.conf
 .It Pa /etc/sfptpd.conf
 typical configuration file
 .It Pa /var/lib/sfptpd
@@ -173,6 +246,11 @@ statistics and diagnostics
 lock file preventing multiple instances of
 .Nm
 and ptpd running unintentionally.
+.It Pa /var/run/sfptpd/metrics.sock
+stream socket serving OpenMetrics stats over HTTP
+.It Pa /var/run/sfptpd-control-v1.sock
+datagram socket accepting control packets from
+.Nm sfptpdctl
 .El
 .Sh CONFORMING TO
 The PTP sync module implements IEEE Std 1588-2008 and IEEE Std 1588-2019.
@@ -259,7 +337,7 @@ ntp_key 8 MySharedKey
 priority 20
 .Ed
 .Sh AUTHORS
-Xilinx, Inc.
+Advanced Micro Devices, Inc.
 .Nm
 is built around
 .Nm ptpd2
@@ -269,7 +347,9 @@ See
 .Xr ptpd2 8
 for authorship.
 .Sh SEE ALSO
-.Xr sfptpdctl 8 .
+.Xr sfptpdctl 8 ,
+.Xr sfptpmon 8 ,
+.Xr tstool 8 .
 .Pp
 This man page is a basic summary of the operation of
 .Nm
@@ -277,8 +357,8 @@ This man page is a basic summary of the operation of
 A comprehensive summary of available
 .Nm
 configuration stanzas can be generated with:
-.D1 $ sfptpd -h
+.D1 $ sfptpd --help
 Full documentation is available at:
-.Aq https://docs.xilinx.com/r/en-US/ug1602-ptp-user
+.Aq https://docs.amd.com/r/en-US/ug1602-ptp-user
 .Sh COPYRIGHT
-Copyright (c) 2022 Xilinx, Inc.
+Copyright (c) 2022-2025 Advanced Micro Devices, Inc.

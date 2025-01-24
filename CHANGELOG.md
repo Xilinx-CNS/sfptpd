@@ -11,14 +11,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Export stats with OpenMetrics exposition. (SWPTP-1000)
-  - Serves metrics over Unix domain socket.
+  - Serve metrics over Unix domain socket.
   - Control with `openmetrics off` or `openmetrics unix` (default).
+  - Configure real time stats buffer size with `openmetrics_rt_stats_buf`.
   - Example command to proxy to TCP:
     `socat TCP-LISTEN:9979,fork UNIX-CONNECT:/var/run/sfptpd/metrics.sock`
 - Add `phc_dedup` option to identify duplicate non-Solarflare PHC devices
   sharing a single NIC clock and treat as one device. (SWPTP-1348)
   - This option requires a calibration step that may take a few seconds.
-- Add hardware clock control and diagnostic utility 'tstool'.
+- Add hardware clock control and diagnostic utility `tstool`.
 
 ## [3.8.1.x] - Unreleased
 
