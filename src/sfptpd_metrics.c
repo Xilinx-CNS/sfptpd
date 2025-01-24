@@ -71,8 +71,10 @@ enum sfptpd_metric_family {
 	OM_F_ITERM,
 	OM_F_IN_SYNC,
 	OM_F_IS_DISC,
+/*
 	OM_F_M_TIME,
 	OM_F_S_TIME,
+*/
 	OM_F_LOG_TIME,
 	OM_F_ALARMS,
 	OM_F_ALARM,
@@ -186,8 +188,10 @@ static const struct openmetrics_family sfptpd_metric_families[] = {
 	[ OM_F_OWD      ] = { OM_T_GAUGE, "owd",      OM_U_SECONDS, "one way delay" },
 	[ OM_F_PTERM    ] = { OM_T_GAUGE, "pterm",    OM_U_RATIOS,  "p-term" },
 	[ OM_F_ITERM    ] = { OM_T_GAUGE, "iterm",    OM_U_RATIOS,  "i-term" },
+/* These are of questionable value. Just use the offset!
 	[ OM_F_M_TIME   ] = { OM_T_GAUGE, "m_time",   OM_U_SECONDS, "servo master time snapshot" },
 	[ OM_F_S_TIME   ] = { OM_T_GAUGE, "s_time",   OM_U_SECONDS, "servo slave time snapshot" },
+*/
 	[ OM_F_LOG_TIME ] = { OM_T_GAUGE, "last_update",
 						      OM_U_SECONDS, "time sfptpd recorded rt stat" },
 	[ OM_F_IN_SYNC  ] = { OM_T_GAUGE, "in_sync",  OM_U_NONE,    "0 = not in sync, 1 = in sync" },
@@ -195,6 +199,8 @@ static const struct openmetrics_family sfptpd_metric_families[] = {
 						      OM_U_NONE,    "0 = comparing, 1 = disciplining" },
 	[ OM_F_ALARMS   ] = { OM_T_GAUGE, "alarms",   OM_U_NONE,    "number of alarms" },
 	[ OM_F_ALARMTXT ] = { OM_T_INFO,  "alarmtxt", OM_U_NONE,    "alarm text" },
+
+/* This is expensive and hard to use - enable as an option: */
 	[ OM_F_ALARM    ] = { OM_T_STATESET,
 					  "alarm",    OM_U_NONE,    "alarm",
 			      .conditional = 1 << SFPTPD_METRICS_OPTION_ALARM_STATESET},
@@ -456,6 +462,14 @@ static int sfptpd_metrics_send(struct query_state *q)
 			family = sfptpd_metric_families + OM_F_IS_DISC;
 			fprintf(stream, "%s{instance=\"%s\"} %d\n",
 				family->name, entry->instance_name, entry->is_disciplining);
+
+			family = sfptpd_metric_families + OM_F_LOG_TIME;
+			fprintf(stream, "%s%s%s{instance=\"%s\"} " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
+				family->name,
+				family->unit ? "_" : "",
+				family->unit ? metric_unit_str(family->unit) : "",
+				entry->instance_name,
+				SFPTPD_ARGS_SSFTIMESPEC_NS(entry->log_time));
 		}
 
 		/* Write exposition of RT stats with our timestamp */
