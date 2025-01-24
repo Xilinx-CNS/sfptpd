@@ -60,6 +60,7 @@ struct openmetrics_family {
 enum sfptpd_metric_family {
 	OM_F_OFFSET,
 	OM_F_FREQ_ADJ,
+	OM_F_OWD,
 	OM_F_PTERM,
 	OM_F_ITERM,
 	OM_F_IN_SYNC,
@@ -174,22 +175,20 @@ static const char *prefix = "sfptpd";
 static const struct openmetrics_family sfptpd_metric_families[] = {
 	[ OM_F_OFFSET   ] = { OM_T_GAUGE, "offset",   OM_U_SECONDS, "offset from master" },
 	[ OM_F_FREQ_ADJ ] = { OM_T_GAUGE, "freq_adj", OM_U_RATIOS,  "frequency adjustment" },
+	[ OM_F_OWD      ] = { OM_T_GAUGE, "owd",      OM_U_SECONDS, "one way delay" },
 	[ OM_F_PTERM    ] = { OM_T_GAUGE, "pterm",    OM_U_RATIOS,  "p-term" },
 	[ OM_F_ITERM    ] = { OM_T_GAUGE, "iterm",    OM_U_RATIOS,  "i-term" },
 	[ OM_F_M_TIME   ] = { OM_T_GAUGE, "m_time",   OM_U_SECONDS, "servo master time snapshot" },
 	[ OM_F_S_TIME   ] = { OM_T_GAUGE, "s_time",   OM_U_SECONDS, "servo slave time snapshot" },
 	[ OM_F_LOG_TIME ] = { OM_T_GAUGE, "last_update",
 						      OM_U_SECONDS, "time sfptpd recorded rt stat" },
-	/* These metrics are legacy compat for "sfptpd-exporter" (SWPTP-1545).
-         * We should provide alternatives using StateSet (SWPTP-1546). */
 	[ OM_F_IN_SYNC  ] = { OM_T_GAUGE, "in_sync",  OM_U_NONE,    "0 = not in sync, 1 = in sync" },
 	[ OM_F_IS_DISC  ] = { OM_T_GAUGE, "is_disciplining",
 						      OM_U_NONE,    "0 = comparing, 1 = disciplining" },
 	[ OM_F_ALARMS   ] = { OM_T_GAUGE, "alarms",   OM_U_NONE,    "number of alarms" },
-
 	[ OM_F_ALARMTXT ] = { OM_T_INFO,  "alarmtxt", OM_U_NONE,    "alarm text" },
-
-	[ OM_F_ALARM    ] = { OM_T_STATESET, "alarm",  OM_U_NONE,    "alarm",
+	[ OM_F_ALARM    ] = { OM_T_STATESET,
+					  "alarm",    OM_U_NONE,    "alarm",
 			      .conditional = 1 << SFPTPD_METRICS_OPTION_ALARM_STATESET},
 };
 #define NUM_METRIC_FAMILIES (sizeof sfptpd_metric_families/sizeof *sfptpd_metric_families)
@@ -197,6 +196,7 @@ static const struct openmetrics_family sfptpd_metric_families[] = {
 static const struct instance_scope_metric sfptpd_instance_metrics[] = {
 	{ STATS_KEY_OFFSET, OM_F_OFFSET },
 	{ STATS_KEY_FREQ_ADJ, OM_F_FREQ_ADJ },
+	{ STATS_KEY_OWD, OM_F_OWD },
 	{ STATS_KEY_P_TERM, OM_F_PTERM },
 	{ STATS_KEY_I_TERM, OM_F_ITERM },
 };
@@ -440,6 +440,14 @@ static int sfptpd_metrics_send(struct query_state *q)
 			fprintf(stream, "%s{instance=\"%s\"} %d\n",
 				family->name, entry->instance_name,
 				__builtin_popcount(entry->alarms));
+
+			family = sfptpd_metric_families + OM_F_IN_SYNC;
+			fprintf(stream, "%s{instance=\"%s\"} %d\n",
+				family->name, entry->instance_name, entry->is_in_sync);
+
+			family = sfptpd_metric_families + OM_F_IS_DISC;
+			fprintf(stream, "%s{instance=\"%s\"} %d\n",
+				family->name, entry->instance_name, entry->is_disciplining);
 		}
 
 		/* Write exposition of RT stats with our timestamp */
