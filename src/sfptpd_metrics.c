@@ -47,6 +47,7 @@ enum openmetrics_type {
 	OM_T_GAUGE,
 	OM_T_STATESET,
 	OM_T_INFO,
+	OM_T_COUNTER,
 };
 
 enum openmetrics_unit {
@@ -79,6 +80,7 @@ enum sfptpd_metric_family {
 	OM_F_ALARMS,
 	OM_F_ALARM,
 	OM_F_ALARMTXT,
+	OM_F_LOST_RT,
 };
 
 struct instance_scope_metric {
@@ -92,9 +94,7 @@ struct rt_stats_buf {
 	int len;
 	int sz;
 
-	/* TODO: SWPTP-1547: Add OpenMetrics gauge to report on missed samples */
 	int64_t lost_samples;
-	struct timespec lost_samples_timestamp;
 };
 
 static const size_t net_buf_initial_capacity = 256;
@@ -199,6 +199,8 @@ static const struct openmetrics_family sfptpd_metric_families[] = {
 						      OM_U_NONE,    "0 = comparing, 1 = disciplining" },
 	[ OM_F_ALARMS   ] = { OM_T_GAUGE, "alarms",   OM_U_NONE,    "number of alarms" },
 	[ OM_F_ALARMTXT ] = { OM_T_INFO,  "alarmtxt", OM_U_NONE,    "alarm text" },
+	[ OM_F_LOST_RT  ] = { OM_T_COUNTER,
+					  "lost_rt",  OM_U_NONE,    "lost rt stats samples" },
 
 /* This is expensive and hard to use - enable as an option: */
 	[ OM_F_ALARM    ] = { OM_T_STATESET,
@@ -470,6 +472,10 @@ static int sfptpd_metrics_send(struct query_state *q)
 				family->unit ? metric_unit_str(family->unit) : "",
 				entry->instance_name,
 				SFPTPD_ARGS_SSFTIMESPEC_NS(entry->log_time));
+
+			family = sfptpd_metric_families + OM_F_LOST_RT;
+			fprintf(stream, "%s %" PRId64 "\n",
+				family->name, metrics.rt_stats.lost_samples);
 		}
 
 		/* Write exposition of RT stats with our timestamp */
