@@ -101,7 +101,7 @@ struct gps_state {
 	struct sfptpd_timespec offset_timestamp;
 
 	/* Cached log time */
-	struct sfptpd_log_time log_time;
+	struct sfptpd_timespec log_time;
 
 	/* PPS quantisation error */
 	long pps_quant_err_ps;
@@ -504,7 +504,7 @@ int gps_configure_gpsd(struct gps_instance *gps)
 }
 
 static void gps_send_rt_stats_update(struct gps_instance *gps,
-				     struct sfptpd_log_time time,
+				     struct sfptpd_timespec time,
 				     struct gps_state *new_state)
 {
 	if (new_state->state == SYNC_MODULE_STATE_SLAVE) {
@@ -664,7 +664,7 @@ static void gps_on_log_stats(struct gps_module *module, sfptpd_sync_module_msg_t
 	assert(msg != NULL);
 
 	for (gps = module->instances; gps; gps = gps->next) {
-		gps_send_rt_stats_update(gps, msg->u.log_stats_req.time, &gps->state);
+		gps_send_rt_stats_update(gps, msg->u.log_stats_req.log_time, &gps->state);
 		gps_send_clustering_input(gps, &gps->state);
 	}
 
@@ -910,9 +910,8 @@ static void update_state(struct gps_instance *gps)
 
 	if (any_change) {
 		/* Send updated stats (offset) to the engine */
-		struct sfptpd_log_time time;
-		sfptpd_log_get_time(&time);
-		gps_send_rt_stats_update(gps, time, new_state);
+		new_state->log_time = sfptpd_log_timestamp();
+		gps_send_rt_stats_update(gps, new_state->log_time, new_state);
 
 		/* Send clustering input to the engine */
 		gps_send_clustering_input(gps, new_state);
