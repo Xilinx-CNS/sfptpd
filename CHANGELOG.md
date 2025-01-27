@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Serve metrics over Unix domain socket.
   - Control with `openmetrics off` or `openmetrics unix` (default).
   - Configure real time stats buffer size with `openmetrics_rt_stats_buf`.
+  - Specify metrics family prefix with `openmetrics_prefix`.
   - Example command to proxy to TCP:
     `socat TCP-LISTEN:9979,fork UNIX-CONNECT:/var/run/sfptpd/metrics.sock`
 - Add `phc_dedup` option to identify duplicate non-Solarflare PHC devices
