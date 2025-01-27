@@ -165,6 +165,8 @@ struct metrics_state {
 	bool initialised;
 	int listen_fd;
 
+	char *exemplars;
+	size_t exemplars_len;
 	struct query_state query[MAX_QUERIES];
 	unsigned int active_queries; /* bitfield */
 };
@@ -350,9 +352,9 @@ static int http_response(struct query_state *q, int response_code)
 	return ret;
 }
 
-static void write_exemplars(FILE *stream,
-			    const struct openmetrics_family *family,
-			    const char *qualifier, const char *help)
+static void write_exemplar_family(FILE *stream,
+				  const struct openmetrics_family *family,
+				  const char *qualifier, const char *help)
 {
 	const char *prefix = metrics.config->family_prefix;
 
@@ -373,6 +375,41 @@ static void write_exemplars(FILE *stream,
 			family->unit ? "_" : "",
 			family->unit ? metric_unit_str(family->unit) : "",
 			family->help, help ? help : "");
+}
+
+static int write_exemplars(void)
+{
+	size_t buf_sz = 0;
+	char *buf = NULL;
+	FILE *stream;
+	int rc;
+	int m;
+
+	stream = open_memstream(&buf, &buf_sz);
+	if (stream == NULL) {
+		CRITICAL("metrics: could not prepare exemplars, %s", strerror(rc = errno));
+		return rc;
+	}
+
+	/* Write exemplars */
+	for (m = 0; m < NUM_METRIC_FAMILIES; m++) {
+		const struct openmetrics_family *family = sfptpd_metric_families + m;
+
+		if (family->conditional & ~metrics.config->flags)
+			continue;
+
+		for (int i = 0; i <= 1; i++) {
+			write_exemplar_family(stream, family,
+					      i ? "_snapshot" : NULL,
+					      i ? " (snapshot)" : " (rt, timestamped)");
+		}
+	}
+
+	fclose(stream);
+	assert(buf && buf_sz > 0);
+	metrics.exemplars = buf;
+	metrics.exemplars_len = buf_sz;
+	return 0;
 }
 
 static int sfptpd_metrics_send(struct query_state *q)
@@ -398,20 +435,6 @@ static int sfptpd_metrics_send(struct query_state *q)
 		if (stream == NULL) {
 			http_abort(q, "open_memstream");
 			return errno;
-		}
-
-		/* Write exemplars */
-		for (m = 0; m < NUM_METRIC_FAMILIES; m++) {
-			const struct openmetrics_family *family = sfptpd_metric_families + m;
-
-			if (family->conditional & ~metrics.config->flags)
-				continue;
-
-			for (int i = 0; i <= 1; i++) {
-				write_exemplars(stream, family,
-						i ? "_snapshot" : NULL,
-						i ? " (snapshot)" : " (rt, timestamped)");
-			}
 		}
 
 		/* Write snapshot that the ingestor will timestamp */
@@ -529,7 +552,7 @@ static int sfptpd_metrics_send(struct query_state *q)
 			  "Content-Length: %zd\r\n"
 			  "Server: " SFPTPD_MODEL "/" SFPTPD_VERSION_TEXT "\r\n"
 			  "\r\n",
-			  content_type, buf_sz);
+			  content_type, buf_sz + metrics.exemplars_len);
 	if (hdr_sz == -1) {
 		http_abort(q, "formatting header");
 		rc = errno;
@@ -544,10 +567,17 @@ static int sfptpd_metrics_send(struct query_state *q)
 	}
 
 	if (q->http.method == HTTP_METHOD_GET) {
-		/* Output body */
+		/* Output body: exemplars */
+		ret = write_all(q, metrics.exemplars, metrics.exemplars_len);
+		if (ret != 0) {
+			http_abort(q, "writing body: exemplars");
+			rc = ret;
+		}
+
+		/* Output body: stats */
 		ret = write_all(q, buf, buf_sz);
 		if (ret != 0) {
-			http_abort(q, "writing body");
+			http_abort(q, "writing body: stats");
 			rc = ret;
 		}
 	}
@@ -1009,11 +1039,16 @@ void sfptpd_metrics_destroy(void)
 		metrics.active_queries = 0;
 	}
 
+	if (metrics.exemplars)
+		free(metrics.exemplars);
+
 	if (metrics.rt_stats.entries)
 		free(metrics.rt_stats.entries);
 
 	metrics.initialised = false;
 	metrics.rt_stats.entries = NULL;
+	metrics.exemplars = NULL;
+	metrics.exemplars_len = 0;
 }
 
 int sfptpd_metrics_init(void)
@@ -1114,6 +1149,10 @@ int sfptpd_metrics_listener_open(struct sfptpd_config *app_config)
 			   NULL, 0,
 			   general_config->metrics_path);
 	if (sz < 0)
+		return errno;
+
+	rc = write_exemplars();
+	if (rc != 0)
 		return errno;
 
 	if (metrics.rt_stats.entries == NULL) {
