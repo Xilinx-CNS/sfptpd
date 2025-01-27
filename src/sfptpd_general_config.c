@@ -139,6 +139,8 @@ static int parse_openmetrics_rt_stats_buf(struct sfptpd_config_section *section,
 					  unsigned int num_params, const char * const params[]);
 static int parse_openmetrics_options(struct sfptpd_config_section *section, const char *option,
 				     unsigned int num_params, const char * const params[]);
+static int parse_openmetrics_prefix(struct sfptpd_config_section *section, const char *option,
+				    unsigned int num_params, const char * const params[]);
 
 static int validate_config(struct sfptpd_config_section *section);
 
@@ -420,8 +422,12 @@ static const sfptpd_config_option_t config_general_options[] =
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_rt_stats_buf,
 		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_OPENMETRICS_RT_STATS_BUF)},
 	{"openmetrics_options", "[alarm-stateset]",
-		"Set OpenMetrics option flags",
+		"set openmetrics option flags",
 		~0, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_options},
+	{"openmetrics_prefix", "PREFIX",
+		"set prefix string to be prepended to OpenMetrics family names",
+		~0, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_prefix,
+		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_OPENMETRICS_PREFIX)},
 };
 
 static const sfptpd_config_option_set_t config_general_option_set =
@@ -1071,14 +1077,14 @@ static int parse_openmetrics(struct sfptpd_config_section *section, const char *
 			     unsigned int num_params, const char * const params[])
 {
 	int rc = 0;
-	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+	struct sfptpd_config_metrics *metrics = &((sfptpd_config_general_t *)section)->openmetrics;
 
 	assert(num_params == 1);
 
 	if (strcmp(params[0], "unix") == 0) {
-		general->openmetrics_unix = true;
+		metrics->unix = true;
 	} else if (strcmp(params[0], "off") == 0) {
-		general->openmetrics_unix = false;
+		metrics->unix = false;
 	} else {
 		rc = EINVAL;
 	}
@@ -1089,7 +1095,7 @@ static int parse_openmetrics(struct sfptpd_config_section *section, const char *
 static int parse_openmetrics_rt_stats_buf(struct sfptpd_config_section *section, const char *option,
 					  unsigned int num_params, const char * const params[])
 {
-	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+	struct sfptpd_config_metrics *metrics = &((sfptpd_config_general_t *)section)->openmetrics;
 	assert(num_params == 1);
 	int tokens, count;
 	const static int minimum = 16;
@@ -1104,7 +1110,7 @@ static int parse_openmetrics_rt_stats_buf(struct sfptpd_config_section *section,
 		return ERANGE;
 	}
 
-	general->openmetrics_rt_stats_buf = count;
+	metrics->rt_stats_buf = count;
 
 	return 0;
 }
@@ -1112,9 +1118,13 @@ static int parse_openmetrics_rt_stats_buf(struct sfptpd_config_section *section,
 static int parse_openmetrics_options(struct sfptpd_config_section *section, const char *option,
 				     unsigned int num_params, const char * const params[])
 {
-	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+	struct sfptpd_config_metrics *metrics = &((sfptpd_config_general_t *)section)->openmetrics;
 	enum sfptpd_metrics_option opt;
 
+	/* Zero out any defaults */
+	metrics->flags = 0;
+
+	/* Then set specified flags */
 	while (num_params--) {
 		for (opt = 0;
 		     opt < SFPTPD_METRICS_NUM_OPTIONS &&
@@ -1125,11 +1135,22 @@ static int parse_openmetrics_options(struct sfptpd_config_section *section, cons
 			      section->name, option, params[num_params]);
 			return EINVAL;
 		}
-		general->openmetrics_flags |= (1 << opt);
+		metrics->flags |= (1 << opt);
 	}
 	return 0;
 }
 
+static int parse_openmetrics_prefix(struct sfptpd_config_section *section, const char *option,
+				    unsigned int num_params, const char * const params[])
+{
+	struct sfptpd_config_metrics *metrics = &((sfptpd_config_general_t *)section)->openmetrics;
+	assert(num_params == 1);
+
+	sfptpd_strncpy(metrics->family_prefix, params[0],
+		       sizeof(metrics->family_prefix));
+
+	return 0;
+}
 
 static int parse_clock_list(struct sfptpd_config_section *section, const char *option,
 			    unsigned int num_params, const char * const params[])
@@ -1876,8 +1897,9 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		new->daemon = false;
 		new->lock = true;
 		new->rtc_adjust = SFPTPD_DEFAULT_RTC_ADJUST;
-		new->openmetrics_unix = SFPTPD_DEFAULT_OPENMETRICS_UNIX;
-		new->openmetrics_rt_stats_buf = SFPTPD_DEFAULT_OPENMETRICS_RT_STATS_BUF;
+		new->openmetrics.unix = SFPTPD_DEFAULT_OPENMETRICS_UNIX;
+		new->openmetrics.rt_stats_buf = SFPTPD_DEFAULT_OPENMETRICS_RT_STATS_BUF;
+		sfptpd_strncpy(new->openmetrics.family_prefix, SFPTPD_DEFAULT_OPENMETRICS_PREFIX, sizeof(new->openmetrics.family_prefix));
 
 		new->timestamping.all = false;
 		new->timestamping.disable_on_exit = SFPTPD_DEFAULT_DISABLE_ON_EXIT;

@@ -160,10 +160,10 @@ struct query_state {
 };
 
 struct metrics_state {
+	const struct sfptpd_config_metrics *config;
 	struct rt_stats_buf rt_stats;
 	bool initialised;
 	int listen_fd;
-	sfptpd_metrics_flags_t flags;
 
 	struct query_state query[MAX_QUERIES];
 	unsigned int active_queries; /* bitfield */
@@ -179,8 +179,6 @@ struct metrics_state {
 const char *sfptpd_metrics_option_names[SFPTPD_METRICS_NUM_OPTIONS] = {
 	[SFPTPD_METRICS_OPTION_ALARM_STATESET] = "alarm-stateset",
 };
-
-static const char *prefix = "sfptpd";
 
 static const struct openmetrics_family sfptpd_metric_families[] = {
 	[ OM_F_OFFSET   ] = { OM_T_GAUGE, "offset",   OM_U_SECONDS, "offset from master" },
@@ -356,19 +354,21 @@ static void write_exemplars(FILE *stream,
 			    const struct openmetrics_family *family,
 			    const char *qualifier, const char *help)
 {
-	fprintf(stream, "# TYPE %s_%s%s%s%s %s\n", prefix, family->name,
+	const char *prefix = metrics.config->family_prefix;
+
+	fprintf(stream, "# TYPE %s%s%s%s%s %s\n", prefix, family->name,
 		qualifier ? qualifier : "",
 		family->unit ? "_" : "",
 		family->unit ? metric_unit_str(family->unit) : "",
 		metric_type_str(family->type));
 	if (family->unit != OM_U_NONE)
-		fprintf(stream, "# UNIT %s_%s%s%s%s %s\n", prefix, family->name,
+		fprintf(stream, "# UNIT %s%s%s%s%s %s\n", prefix, family->name,
 			qualifier ? qualifier : "",
 			family->unit ? "_" : "",
 			family->unit ? metric_unit_str(family->unit) : "",
 			metric_unit_str(family->unit));
 	if (family->help)
-		fprintf(stream, "# HELP %s_%s%s%s%s %s%s\n", prefix, family->name,
+		fprintf(stream, "# HELP %s%s%s%s%s %s%s\n", prefix, family->name,
 			qualifier ? qualifier : "",
 			family->unit ? "_" : "",
 			family->unit ? metric_unit_str(family->unit) : "",
@@ -381,16 +381,17 @@ static int sfptpd_metrics_send(struct query_state *q)
 				   "; version=1.0.0"
 				   "; charset=utf-8";
 	struct rt_stats_buf *stats = &metrics.rt_stats;
-	FILE *stream;
-	char *hdr = NULL;
-	char *buf = NULL;
-	int ret;
-	int rc = 0;
+	char alarm_str[SYNC_MODULE_ALARM_ALL_TEXT_MAX];
+	const char *prefix = metrics.config->family_prefix;
 	size_t hdr_sz = 0;
 	size_t buf_sz = 0;
-	int m;
+	char *hdr = NULL;
+	char *buf = NULL;
 	int count = 0;
-	char alarm_str[SYNC_MODULE_ALARM_ALL_TEXT_MAX];
+	FILE *stream;
+	int rc = 0;
+	int ret;
+	int m;
 
 	if (q->http.method == HTTP_METHOD_GET) {
 		stream = open_memstream(&buf, &buf_sz);
@@ -403,7 +404,7 @@ static int sfptpd_metrics_send(struct query_state *q)
 		for (m = 0; m < NUM_METRIC_FAMILIES; m++) {
 			const struct openmetrics_family *family = sfptpd_metric_families + m;
 
-			if (family->conditional & ~metrics.flags)
+			if (family->conditional & ~metrics.config->flags)
 				continue;
 
 			for (int i = 0; i <= 1; i++) {
@@ -423,9 +424,9 @@ static int sfptpd_metrics_send(struct query_state *q)
 				const struct instance_scope_metric *metric = sfptpd_instance_metrics + m;
 				const struct openmetrics_family *family = sfptpd_metric_families + metric->family;
 
-				if ((family->conditional & ~metrics.flags) == 0 &&
+				if ((family->conditional & ~metrics.config->flags) == 0 &&
 				    (entry->stat_present & (1 << metric->key)))
-					fprintf(stream, "%s_%s_snapshot%s%s{instance=\"%s\"} %.12Lf\n",
+					fprintf(stream, "%s%s_snapshot%s%s{instance=\"%s\"} %.12Lf\n",
 						prefix, family->name,
 						family->unit ? "_" : "",
 						family->unit ? metric_unit_str(family->unit) : "",
@@ -436,10 +437,10 @@ static int sfptpd_metrics_send(struct query_state *q)
 			const struct openmetrics_family *family = sfptpd_metric_families + OM_F_ALARM;
 			sfptpd_sync_module_alarms_t abit;
 
-			if ((family->conditional & ~metrics.flags) == 0) {
+			if ((family->conditional & ~metrics.config->flags) == 0) {
 				for (abit = 1; abit != SYNC_MODULE_ALARM_MAX; abit <<= 1) {
 					sfptpd_sync_module_alarms_text(abit, alarm_str, sizeof alarm_str);
-					fprintf(stream, "%s{instance=\"%s\",%s=\"%s\"} %c\n",
+					fprintf(stream, "%s%s{instance=\"%s\",%s=\"%s\"} %c\n", prefix,
 						family->name, entry->instance_name,
 						family->name, buf,
 						entry->alarms & abit ? '1' : '0');
@@ -448,33 +449,33 @@ static int sfptpd_metrics_send(struct query_state *q)
 
 			family = sfptpd_metric_families + OM_F_ALARMTXT;
 			sfptpd_sync_module_alarms_text(entry->alarms, alarm_str, sizeof alarm_str);
-			fprintf(stream, "%s{instance=\"%s\",alarms=\"%s\"} 1\n",
+			fprintf(stream, "%s%s{instance=\"%s\",alarms=\"%s\"} 1\n", prefix,
 				family->name, entry->instance_name,
 				alarm_str);
 
 			family = sfptpd_metric_families + OM_F_ALARMS;
-			fprintf(stream, "%s{instance=\"%s\"} %d\n",
+			fprintf(stream, "%s%s{instance=\"%s\"} %d\n", prefix,
 				family->name, entry->instance_name,
 				__builtin_popcount(entry->alarms));
 
 			family = sfptpd_metric_families + OM_F_IN_SYNC;
-			fprintf(stream, "%s{instance=\"%s\"} %d\n",
+			fprintf(stream, "%s%s{instance=\"%s\"} %d\n", prefix,
 				family->name, entry->instance_name, entry->is_in_sync);
 
 			family = sfptpd_metric_families + OM_F_IS_DISC;
-			fprintf(stream, "%s{instance=\"%s\"} %d\n",
+			fprintf(stream, "%s%s{instance=\"%s\"} %d\n", prefix,
 				family->name, entry->instance_name, entry->is_disciplining);
 
 			family = sfptpd_metric_families + OM_F_LOG_TIME;
-			fprintf(stream, "%s%s%s{instance=\"%s\"} " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
-				family->name,
+			fprintf(stream, "%s%s%s%s{instance=\"%s\"} " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
+				prefix, family->name,
 				family->unit ? "_" : "",
 				family->unit ? metric_unit_str(family->unit) : "",
 				entry->instance_name,
 				SFPTPD_ARGS_SSFTIMESPEC_NS(entry->log_time));
 
 			family = sfptpd_metric_families + OM_F_LOST_RT;
-			fprintf(stream, "%s %" PRId64 "\n",
+			fprintf(stream, "%s%s %" PRId64 "\n", prefix,
 				family->name, metrics.rt_stats.lost_samples);
 		}
 
@@ -490,11 +491,11 @@ static int sfptpd_metrics_send(struct query_state *q)
 				const struct instance_scope_metric *metric = sfptpd_instance_metrics + m;
 				const struct openmetrics_family *family = sfptpd_metric_families + metric->family;
 
-				if (family->conditional & ~metrics.flags)
+				if (family->conditional & ~metrics.config->flags)
 					continue;
 
 				if (entry->stat_present & (1 << metric->key))
-					fprintf(stream, "%s_%s%s%s{instance=\"%s\"} %.12Lf " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
+					fprintf(stream, "%s%s%s%s{instance=\"%s\"} %.12Lf " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
 						prefix, family->name,
 						family->unit ? "_" : "",
 						family->unit ? metric_unit_str(family->unit) : "",
@@ -1094,29 +1095,29 @@ void sfptpd_metrics_listener_close(void)
 	}
 }
 
-int sfptpd_metrics_listener_open(struct sfptpd_config *config)
+int sfptpd_metrics_listener_open(struct sfptpd_config *app_config)
 {
 	struct sfptpd_config_general *general_config;
 	struct sockaddr_un addr = {
 		.sun_family = AF_UNIX
 	};
 	char *metrics_path;
-	int flags;
 	size_t sz;
+	int flags;
 	int rc;
 
 	metrics.listen_fd = -1;
 
-	general_config = sfptpd_general_config_get(config);
+	general_config = sfptpd_general_config_get(app_config);
+	metrics.config = &general_config->openmetrics;
 	sz = sfptpd_format(sfptpd_log_get_format_specifiers(), NULL,
 			   NULL, 0,
 			   general_config->metrics_path);
 	if (sz < 0)
 		return errno;
 
-	metrics.flags = general_config->openmetrics_flags;
 	if (metrics.rt_stats.entries == NULL) {
-		metrics.rt_stats.sz = general_config->openmetrics_rt_stats_buf;
+		metrics.rt_stats.sz = metrics.config->rt_stats_buf;
 		metrics.rt_stats.entries = malloc(metrics.rt_stats.sz * sizeof *metrics.rt_stats.entries);
 	}
 

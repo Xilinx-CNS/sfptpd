@@ -47,6 +47,7 @@
 #define SFPTPD_DEFAULT_OPENMETRICS_UNIX            (true)
 #define SFPTPD_DEFAULT_OPENMETRICS_RT_STATS_BUF    256
 #define SFPTPD_DEFAULT_OPENMETRICS_FLAGS           0
+#define SFPTPD_DEFAULT_OPENMETRICS_PREFIX          ""
 #define SFPTPD_DEFAULT_SELECTION_HOLDOFF_INTERVAL  10
 #define SFPTPD_DEFAULT_NETLINK_RESCAN_INTERVAL     31
 #define SFPTPD_DEFAULT_NETLINK_COALESCE_MS         50
@@ -174,6 +175,19 @@ typedef struct sfptpd_config_timestamping {
 	char interfaces[SFPTPD_CONFIG_TOKENS_MAX][SFPTPD_CONFIG_MAC_STRING_MAX];
 } sfptpd_config_timestamping_t;
 
+/** Openmetrics config
+ * @unix: whether to listen on AF_UNIX socket for OpenMetrics queries
+ * @rt_stats_buf: number of entries to store in RT stats circular buffer
+ * @flags: flags for OpenMetrics features
+ * @family_prefix: prefix string for OpenMetrics families
+ */
+struct sfptpd_config_metrics {
+	bool unix;
+	unsigned int rt_stats_buf;
+	sfptpd_metrics_flags_t flags;
+	char family_prefix[32];
+};
+
 /** struct sfptpd_config_general - sfptpd general configuration
  * @hdr: Configuration section common header
  * @config_filename: Path of configuration file
@@ -268,9 +282,7 @@ typedef struct sfptpd_config_general {
 	uint8_t unique_clockid_bits[8];
 	bool legacy_clockids;
 	char run_dir[PATH_MAX];
-	bool openmetrics_unix;
-	unsigned int openmetrics_rt_stats_buf;
-	sfptpd_metrics_flags_t openmetrics_flags;
+	struct sfptpd_config_metrics openmetrics;
 } sfptpd_config_general_t;
 
 static_assert(sizeof ((sfptpd_config_general_t *) 0)->declared_sync_modules * 8 >= SFPTPD_CONFIG_CATEGORY_MAX,

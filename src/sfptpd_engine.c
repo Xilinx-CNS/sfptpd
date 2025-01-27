@@ -2401,9 +2401,10 @@ fail:
 
 static int engine_start_metrics(struct sfptpd_engine *engine)
 {
+	struct sfptpd_config_metrics *openmetrics = &engine->general_config->openmetrics;
 	int rc;
 
-	if (!engine->general_config->openmetrics_unix)
+	if (!openmetrics->unix)
 		return 0;
 
 	rc = sfptpd_metrics_init();
