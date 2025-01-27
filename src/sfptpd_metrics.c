@@ -426,7 +426,7 @@ static int sfptpd_metrics_send(struct query_state *q)
 
 				if ((family->conditional & ~metrics.config->flags) == 0 &&
 				    (entry->stat_present & (1 << metric->key)))
-					fprintf(stream, "%s%s_snapshot%s%s{instance=\"%s\"} %.12Lf\n",
+					fprintf(stream, "%s%s_snapshot%s%s{sync=\"%s\"} %.12Lf\n",
 						prefix, family->name,
 						family->unit ? "_" : "",
 						family->unit ? metric_unit_str(family->unit) : "",
@@ -440,7 +440,7 @@ static int sfptpd_metrics_send(struct query_state *q)
 			if ((family->conditional & ~metrics.config->flags) == 0) {
 				for (abit = 1; abit != SYNC_MODULE_ALARM_MAX; abit <<= 1) {
 					sfptpd_sync_module_alarms_text(abit, alarm_str, sizeof alarm_str);
-					fprintf(stream, "%s%s{instance=\"%s\",%s=\"%s\"} %c\n", prefix,
+					fprintf(stream, "%s%s{sync=\"%s\",%s=\"%s\"} %c\n", prefix,
 						family->name, entry->instance_name,
 						family->name, buf,
 						entry->alarms & abit ? '1' : '0');
@@ -449,25 +449,25 @@ static int sfptpd_metrics_send(struct query_state *q)
 
 			family = sfptpd_metric_families + OM_F_ALARMTXT;
 			sfptpd_sync_module_alarms_text(entry->alarms, alarm_str, sizeof alarm_str);
-			fprintf(stream, "%s%s{instance=\"%s\",alarms=\"%s\"} 1\n", prefix,
+			fprintf(stream, "%s%s{sync=\"%s\",alarms=\"%s\"} 1\n", prefix,
 				family->name, entry->instance_name,
 				alarm_str);
 
 			family = sfptpd_metric_families + OM_F_ALARMS;
-			fprintf(stream, "%s%s{instance=\"%s\"} %d\n", prefix,
+			fprintf(stream, "%s%s{sync=\"%s\"} %d\n", prefix,
 				family->name, entry->instance_name,
 				__builtin_popcount(entry->alarms));
 
 			family = sfptpd_metric_families + OM_F_IN_SYNC;
-			fprintf(stream, "%s%s{instance=\"%s\"} %d\n", prefix,
+			fprintf(stream, "%s%s{sync=\"%s\"} %d\n", prefix,
 				family->name, entry->instance_name, entry->is_in_sync);
 
 			family = sfptpd_metric_families + OM_F_IS_DISC;
-			fprintf(stream, "%s%s{instance=\"%s\"} %d\n", prefix,
+			fprintf(stream, "%s%s{sync=\"%s\"} %d\n", prefix,
 				family->name, entry->instance_name, entry->is_disciplining);
 
 			family = sfptpd_metric_families + OM_F_LOG_TIME;
-			fprintf(stream, "%s%s%s%s{instance=\"%s\"} " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
+			fprintf(stream, "%s%s%s%s{sync=\"%s\"} " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
 				prefix, family->name,
 				family->unit ? "_" : "",
 				family->unit ? metric_unit_str(family->unit) : "",
@@ -495,7 +495,7 @@ static int sfptpd_metrics_send(struct query_state *q)
 					continue;
 
 				if (entry->stat_present & (1 << metric->key))
-					fprintf(stream, "%s%s%s%s{instance=\"%s\"} %.12Lf " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
+					fprintf(stream, "%s%s%s%s{sync=\"%s\"} %.12Lf " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
 						prefix, family->name,
 						family->unit ? "_" : "",
 						family->unit ? metric_unit_str(family->unit) : "",
