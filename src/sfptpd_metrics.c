@@ -171,13 +171,16 @@ struct metrics_state {
 	unsigned int active_queries; /* bitfield */
 };
 
-enum json_format {
+enum stats_format {
 	/* https://jsonlines.org/ */
 	/* https://github.com/ndjson/ndjson-spec */
 	JSON_LINES,
 
 	/* RFC7464 */
 	JSON_SEQ,
+
+	/* Classic sfptpd stats log text */
+	STATS_LOG,
 };
 
 
@@ -190,6 +193,7 @@ enum json_format {
 const char *json_content_type[] = {
 	[JSON_LINES] = "application/x-ndjson",
 	[JSON_SEQ] = "application/json-seq",
+	[STATS_LOG] = "text/plain",
 };
 
 const char *sfptpd_metrics_option_names[SFPTPD_METRICS_NUM_OPTIONS] = {
@@ -620,7 +624,7 @@ finish:
 }
 
 static int sfptpd_rt_stats_send(struct query_state *q, bool peek,
-				enum json_format format)
+				enum stats_format format)
 {
 	struct sfptpd_log_time_cache log_time_cache = { 0 };
 	struct rt_stats_buf *stats = &metrics.rt_stats;
@@ -651,8 +655,10 @@ static int sfptpd_rt_stats_send(struct query_state *q, bool peek,
 			if (format == JSON_SEQ)
 				fputc('\x1e', stream);
 
-			if (sfptpd_log_render_rt_stat_json(&log_time_cache, stream, entry) == -1) {
-				http_abort(q, "rendering json stat");
+			if (format == STATS_LOG)
+				sfptpd_log_render_rt_stat_text(&log_time_cache, stream, entry);
+			else if (sfptpd_log_render_rt_stat_json(&log_time_cache, stream, entry) == -1) {
+				http_abort(q, "rendering stat");
 				rc = errno;
 				goto finish;
 			}
@@ -1032,6 +1038,10 @@ static void metrics_execute_query(struct query_state *q)
 			http_response(q, 200, false);
 			if (!q->abort)
 				sfptpd_rt_stats_send(q, peek, JSON_SEQ);
+		} else if (!strcmp(target, "/rt-stats.txt")) {
+			http_response(q, 200, false);
+			if (!q->abort)
+				sfptpd_rt_stats_send(q, peek, STATS_LOG);
 		} else {
 			http_response(q, 404, true);
 		}

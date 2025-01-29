@@ -128,7 +128,7 @@ struct sfptpd_log_time_cache {
 #ifdef SFPTPD_BUILDTIME_CHECKS
 #define sfptpd_log_message(p, f, ...) printf(f, ##__VA_ARGS__)
 #define sfptpd_log_trace(c, l, f, ...) printf(f, ##__VA_ARGS__)
-#define sfptpd_log_stats(f, ...) printf(f, ##__VA_ARGS__)
+#define sfptpd_log_stats(s, f, ...) fprintf(s, f, ##__VA_ARGS__)
 #define sfptpd_log_write_state(c, i, f, ...) printf(f, ##__VA_ARGS__)
 #define sfptpd_log_topology_write_field(s, n, f, ...) printf(f, ##__VA_ARGS__)
 #endif
@@ -189,9 +189,10 @@ void sfptpd_log_trace(sfptpd_component_id_e component, unsigned int level,
 
 /** Log statistics. If statistics logging is enabled, writes stats to either
  * stdout or to a file.
+ * @param output Output stream
  * @param format Format string followed by a variable list of parameters
  */
-void sfptpd_log_stats(const char *format, ...);
+void sfptpd_log_stats(FILE *output, const char *format, ...);
 
 /** Write state information for a clock. This creates a file in the
  * location SFPTPD_STATE_PATH with the name of the specified clock and the
@@ -415,6 +416,7 @@ const char *sfptpd_log_render_log_time(struct sfptpd_log_time_cache *log_time_ca
  * @entry RT stats entry to render.
  */
 void sfptpd_log_render_rt_stat_text(struct sfptpd_log_time_cache *log_time_cache,
+				    FILE *output,
 				    struct sfptpd_sync_instance_rt_stats_entry *entry);
 
 /** Render RT Stats in JSON format.

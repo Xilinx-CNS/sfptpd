@@ -17,9 +17,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Specify metrics family prefix with `openmetrics_prefix`.
   - Example command to proxy to TCP:
     `socat TCP-LISTEN:9979,fork UNIX-CONNECT:/run/sfptpd/metrics.sock`
-- Export json real time stats over OpenMetrics HTTP socket. (SWPTP-1385)
+- Export real time stats over OpenMetrics HTTP socket. (SWPTP-1385)
   - For JSON Lines, GET /rt-stats.jsonl
   - For JSON Seq, GET /rt-stats.json-seq
+  - For sfptpd stats log text, GET /rt-stats.txt
   - To avoid consuming real time stats, GET /peek/rt-stats.jsonl, etc.
   - e.g. `curl --unix-socket /run/sfptpd/metrics.sock http://_/rt-stats.jsonl`
 - Add `phc_dedup` option to identify duplicate non-Solarflare PHC devices

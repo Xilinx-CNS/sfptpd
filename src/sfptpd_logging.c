@@ -753,7 +753,7 @@ void sfptpd_log_trace(sfptpd_component_id_e component, unsigned int level,
 }
 
 
-void sfptpd_log_stats(const char *format, ...)
+void sfptpd_log_stats(FILE *stream, const char *format, ...)
 {
 	va_list ap;
 
@@ -761,7 +761,7 @@ void sfptpd_log_stats(const char *format, ...)
 
 	if (stats_log != SFPTPD_STATS_LOG_OFF) {
 		va_start(ap, format);
-		vprintf(format, ap);
+		vfprintf(stream, format, ap);
 		va_end(ap);
 	}
 }
@@ -1184,13 +1184,14 @@ const char *sfptpd_log_render_log_time(struct sfptpd_log_time_cache *log_time_ca
 }
 
 void sfptpd_log_render_rt_stat_text(struct sfptpd_log_time_cache *log_time_cache,
+				    FILE *o,
 				    struct sfptpd_sync_instance_rt_stats_entry *entry)
 {
 	char *comma = "";
 
 	assert(entry != NULL);
 
-	sfptpd_log_stats("%s [%s%s%s%s",
+	sfptpd_log_stats(o, "%s [%s%s%s%s",
 			 sfptpd_log_render_log_time(log_time_cache, entry),
 			 entry->instance_name ? entry->instance_name : "",
 			 entry->instance_name ? ":" : "",
@@ -1199,29 +1200,29 @@ void sfptpd_log_render_rt_stat_text(struct sfptpd_log_time_cache *log_time_cache
 			);
 
 	if (entry->active_intf != NULL)
-		sfptpd_log_stats("%s(%s)", sfptpd_clock_get_short_name(entry->clock_slave),
+		sfptpd_log_stats(o, "%s(%s)", sfptpd_clock_get_short_name(entry->clock_slave),
 						 sfptpd_interface_get_name(entry->active_intf));
 	else
-		sfptpd_log_stats("%s", sfptpd_clock_get_long_name(entry->clock_slave));
+		sfptpd_log_stats(o, "%s", sfptpd_clock_get_long_name(entry->clock_slave));
 
-	sfptpd_log_stats("], "); /* To maintain backwards compatibility the comma var is actually useless */
+	sfptpd_log_stats(o, "], "); /* To maintain backwards compatibility the comma var is actually useless */
 
 	#define FLOAT_STATS_OUT(k, v, red) \
 		if (entry->stat_present & (1 << k)) { \
 			if (red) \
-				sfptpd_log_stats("%s%s: " SFPTPD_FORMAT_FLOAT_RED, comma, RT_STATS_KEY_NAMES[k], v); \
+				sfptpd_log_stats(o, "%s%s: " SFPTPD_FORMAT_FLOAT_RED, comma, RT_STATS_KEY_NAMES[k], v); \
 			else \
-				sfptpd_log_stats("%s%s: " SFPTPD_FORMAT_FLOAT, comma, RT_STATS_KEY_NAMES[k], v); \
+				sfptpd_log_stats(o, "%s%s: " SFPTPD_FORMAT_FLOAT, comma, RT_STATS_KEY_NAMES[k], v); \
 			comma = ", "; \
 		}
 	#define INT_STATS_OUT(k, v) \
 		if (entry->stat_present & (1 << k)) { \
-			sfptpd_log_stats("%s%s: %d", comma, RT_STATS_KEY_NAMES[k], v); \
+			sfptpd_log_stats(o, "%s%s: %d", comma, RT_STATS_KEY_NAMES[k], v); \
 			comma = ", "; \
 		}
 	#define EUI64_STATS_OUT(k, v) \
 		if (entry->stat_present & (1 << k)) { \
-			sfptpd_log_stats("%s%s: " SFPTPD_FORMAT_EUI64, comma, RT_STATS_KEY_NAMES[k], \
+			sfptpd_log_stats(o, "%s%s: " SFPTPD_FORMAT_EUI64, comma, RT_STATS_KEY_NAMES[k], \
 						v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]); \
 			comma = ", "; \
 		}
@@ -1230,7 +1231,7 @@ void sfptpd_log_render_rt_stat_text(struct sfptpd_log_time_cache *log_time_cache
 
 	FLOAT_STATS_OUT(STATS_KEY_OFFSET, entry->offset, alarm_red);
 	FLOAT_STATS_OUT(STATS_KEY_FREQ_ADJ, entry->freq_adj, 0);
-	sfptpd_log_stats("%sin-sync: %s", comma, entry->is_in_sync ? "1" : "0");
+	sfptpd_log_stats(o, "%sin-sync: %s", comma, entry->is_in_sync ? "1" : "0");
 	comma = ", ";
 	FLOAT_STATS_OUT(STATS_KEY_OWD, entry->one_way_delay, alarm_red);
 	EUI64_STATS_OUT(STATS_KEY_PARENT_ID, entry->parent_id);
@@ -1243,7 +1244,7 @@ void sfptpd_log_render_rt_stat_text(struct sfptpd_log_time_cache *log_time_cache
 	#undef INT_STATS_OUT
 	#undef EUI64_STATS_OUT
 
-	sfptpd_log_stats("\n");
+	sfptpd_log_stats(o, "\n");
 }
 
 ssize_t sfptpd_log_render_rt_stat_json(struct sfptpd_log_time_cache *log_time_cache,
