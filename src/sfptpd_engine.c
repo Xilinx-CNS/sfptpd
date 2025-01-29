@@ -264,33 +264,8 @@ struct sfptpd_engine {
 	int netlink_num_fds;
 
 	/* RT Stats control */
-	struct {
-		struct sfptpd_timespec log_time;
-		struct sfptpd_log_time log_time_text;
-	} rt_stats_last;
+	struct sfptpd_log_time_cache rt_stats_last;
 };
-
-
-/* Used when serialising text output */
-const char *RT_STATS_KEY_NAMES[] = {
-	[STATS_KEY_OFFSET] = "offset",
-	[STATS_KEY_FREQ_ADJ] = "freq-adj",
-	[STATS_KEY_OWD] = "one-way-delay",
-	[STATS_KEY_PARENT_ID] = "parent-id",
-	[STATS_KEY_GM_ID] = "gm-id",
-	[STATS_KEY_PPS_OFFSET] = "pps-offset",
-	[STATS_KEY_BAD_PERIOD] = "pps-bad-periods",
-	[STATS_KEY_OVERFLOWS] = "pps-overflows",
-	[STATS_KEY_ACTIVE_INTF] = "active-interface",
-	[STATS_KEY_BOND_NAME] = "bond-interface",
-	[STATS_KEY_P_TERM] = "p-term",
-	[STATS_KEY_I_TERM] = "i-term",
-	[STATS_KEY_M_TIME] = "m-time",
-	[STATS_KEY_S_TIME] = "s-time",
-};
-
-static_assert(sizeof(RT_STATS_KEY_NAMES)/sizeof(*RT_STATS_KEY_NAMES) == STATS_KEY_END,
-	      "exactly one name defined for each stat");
 
 
 /****************************************************************************
@@ -948,89 +923,10 @@ static int select_sync_instance(struct sfptpd_engine *engine,
 }
 
 
-static const char *render_log_time(struct sfptpd_engine *engine,
-				   struct sfptpd_sync_instance_rt_stats_entry *entry)
-{
-	/* Treat log time within 50us as identical. */
-	static const struct sfptpd_timespec equivalent_time = {
-		.sec = 0,
-		.nsec = 50000,
-		.nsec_frac = 0,
-	};
-
-	if (!sfptpd_time_equal_within(&entry->log_time,
-				      &engine->rt_stats_last.log_time,
-				      &equivalent_time)) {
-		sfptpd_log_format_time(&engine->rt_stats_last.log_time_text,
-				       &entry->log_time);
-		engine->rt_stats_last.log_time = entry->log_time;
-	}
-
-	return engine->rt_stats_last.log_time_text.time;
-}
-
-
 static void write_rt_stats_log(struct sfptpd_engine *engine,
 			       struct sfptpd_sync_instance_rt_stats_entry *entry)
 {
-	char *comma = "";
-
-	assert(entry != NULL);
-
-
-	sfptpd_log_stats("%s [%s%s%s%s", render_log_time(engine, entry),
-			 entry->instance_name ? entry->instance_name : "",
-			 entry->instance_name ? ":" : "",
-			 entry->clock_master ? sfptpd_clock_get_short_name(entry->clock_master) : entry->source,
-			 entry->is_blocked ? "-#" : (entry->is_disciplining ? "->" : "--")
-			);
-
-	if (entry->active_intf != NULL)
-		sfptpd_log_stats("%s(%s)", sfptpd_clock_get_short_name(entry->clock_slave),
-						 sfptpd_interface_get_name(entry->active_intf));
-	else
-		sfptpd_log_stats("%s", sfptpd_clock_get_long_name(entry->clock_slave));
-
-	sfptpd_log_stats("], "); /* To maintain backwards compatibility the comma var is actually useless */
-
-	#define FLOAT_STATS_OUT(k, v, red) \
-		if (entry->stat_present & (1 << k)) { \
-			if (red) \
-				sfptpd_log_stats("%s%s: " SFPTPD_FORMAT_FLOAT_RED, comma, RT_STATS_KEY_NAMES[k], v); \
-			else \
-				sfptpd_log_stats("%s%s: " SFPTPD_FORMAT_FLOAT, comma, RT_STATS_KEY_NAMES[k], v); \
-			comma = ", "; \
-		}
-	#define INT_STATS_OUT(k, v) \
-		if (entry->stat_present & (1 << k)) { \
-			sfptpd_log_stats("%s%s: %d", comma, RT_STATS_KEY_NAMES[k], v); \
-			comma = ", "; \
-		}
-	#define EUI64_STATS_OUT(k, v) \
-		if (entry->stat_present & (1 << k)) { \
-			sfptpd_log_stats("%s%s: " SFPTPD_FORMAT_EUI64, comma, RT_STATS_KEY_NAMES[k], \
-						v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]); \
-			comma = ", "; \
-		}
-
-	bool alarm_red = sfptpd_log_isatty() && entry->alarms != 0;
-
-	FLOAT_STATS_OUT(STATS_KEY_OFFSET, entry->offset, alarm_red);
-	FLOAT_STATS_OUT(STATS_KEY_FREQ_ADJ, entry->freq_adj, 0);
-	sfptpd_log_stats("%sin-sync: %s", comma, entry->is_in_sync ? "1" : "0");
-	comma = ", ";
-	FLOAT_STATS_OUT(STATS_KEY_OWD, entry->one_way_delay, alarm_red);
-	EUI64_STATS_OUT(STATS_KEY_PARENT_ID, entry->parent_id);
-	EUI64_STATS_OUT(STATS_KEY_GM_ID, entry->gm_id);
-	FLOAT_STATS_OUT(STATS_KEY_PPS_OFFSET, entry->pps_offset, 0);
-	INT_STATS_OUT(STATS_KEY_BAD_PERIOD, entry->bad_period_count);
-	INT_STATS_OUT(STATS_KEY_OVERFLOWS, entry->overflow_count);
-
-	#undef FLOAT_STATS_OUT
-	#undef INT_STATS_OUT
-	#undef EUI64_STATS_OUT
-
-	sfptpd_log_stats("\n");
+	sfptpd_log_render_rt_stat_text(&engine->rt_stats_last, entry);
 }
 
 
@@ -1038,119 +934,14 @@ static void write_rt_stats_json(struct sfptpd_engine *engine,
 				FILE* json_stats_fp,
 				struct sfptpd_sync_instance_rt_stats_entry *entry)
 {
-	char* comma = "";
-	char ftime[24];
-	size_t len = 0;
+	size_t len;
 
 	assert(json_stats_fp != NULL);
 	assert(entry != NULL);
 
-	#define LPRINTF(...) { \
-		int _ret = fprintf(__VA_ARGS__); \
-		if (_ret < 0) { \
-			 TRACE_L4("error writing json stats, %s\n", \
-				  strerror(errno)); \
-			 return; \
-		} \
-		len += _ret; \
-	}
-
-	LPRINTF(json_stats_fp, "{\"instance\":\"%s\",\"time\":\"%s\","
-		"\"clock-master\":{\"name\":\"%s\"",
-		entry->instance_name ? entry->instance_name : "",
-		render_log_time(engine, entry), entry->clock_master ?
-			sfptpd_clock_get_long_name(entry->clock_master) : entry->source);
-
-	/* Add clock time */
-	if (entry->clock_master != NULL) {
-		if (entry->has_m_time) {
-			sfptpd_secs_t secs = entry->time_master.sec;
-			sfptpd_local_strftime(ftime, (sizeof ftime) - 1, "%Y-%m-%d %H:%M:%S", &secs);
-			LPRINTF(json_stats_fp, ",\"time\":\"%s.%09" PRIu32 "\"",
-				ftime, entry->time_master.nsec);
-		}
-
-		/* Extra info about clock interface, mostly useful when using bonds */
-		if (entry->clock_master != sfptpd_clock_get_system_clock())
-			LPRINTF(json_stats_fp, ",\"primary-interface\":\"%s\"",
-				sfptpd_interface_get_name(
-					sfptpd_clock_get_primary_interface(entry->clock_master)));
-	}
-
-	/* Slave clock info */
-	LPRINTF(json_stats_fp, "},\"clock-slave\":{\"name\":\"%s\"",
-		sfptpd_clock_get_long_name(entry->clock_slave));
-	if (entry->has_s_time) {
-		sfptpd_secs_t secs = entry->time_slave.sec;
-		sfptpd_local_strftime(ftime, (sizeof ftime) - 1, "%Y-%m-%d %H:%M:%S", &secs);
-		LPRINTF(json_stats_fp, ",\"time\":\"%s.%09" PRIu32 "\"",
-			ftime, entry->time_slave.nsec);
-	}
-
-	/* Extra info about clock interface, mostly useful when using bonds */
-	if (entry->clock_slave != sfptpd_clock_get_system_clock())
-		 LPRINTF(json_stats_fp, ",\"primary-interface\":\"%s\"",
-				 sfptpd_interface_get_name(
-					 sfptpd_clock_get_primary_interface(entry->clock_slave)));
-
-	LPRINTF(json_stats_fp, "},\"is-disciplining\":%s,\"in-sync\":%s,"
-			       "\"alarms\":[",
-			entry->is_disciplining ? "true" : "false",
-			entry->is_in_sync ? "true" : "false");
-
-	/* Alarms */
-	len += sfptpd_sync_module_alarms_stream(json_stats_fp, entry->alarms, ",");
-
-	LPRINTF(json_stats_fp, "],\"stats\":{");
-
-	/* Print those stats which are present */
-	#define FLOAT_JSON_OUT(k, v) \
-		if (entry->stat_present & (1 << k)) { \
-			LPRINTF(json_stats_fp, "%s\"%s\":%Lf", comma, RT_STATS_KEY_NAMES[k], v); \
-			comma = ","; \
-		}
-	#define INT_JSON_OUT(k, v) \
-		if (entry->stat_present & (1 << k)) { \
-			LPRINTF(json_stats_fp, "%s\"%s\":%d", comma, RT_STATS_KEY_NAMES[k], v); \
-			comma = ","; \
-		}
-	#define STRING_JSON_OUT(k, v) \
-		if (entry->stat_present & (1 << k)) { \
-			LPRINTF(json_stats_fp, "%s\"%s\":\"%s\"", comma, RT_STATS_KEY_NAMES[k], v); \
-			comma = ","; \
-		}
-	#define EUI64_JSON_OUT(k, v) \
-		if (entry->stat_present & (1 << k)) { \
-			LPRINTF(json_stats_fp, "%s\"%s\":\"" SFPTPD_FORMAT_EUI64 "\"", \
-					comma, RT_STATS_KEY_NAMES[k], \
-					v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]); \
-			comma = ","; \
-		}
-
-	FLOAT_JSON_OUT(STATS_KEY_OFFSET, entry->offset);
-	FLOAT_JSON_OUT(STATS_KEY_FREQ_ADJ, entry->freq_adj);
-	FLOAT_JSON_OUT(STATS_KEY_OWD, entry->one_way_delay);
-	EUI64_JSON_OUT(STATS_KEY_PARENT_ID, entry->parent_id);
-	EUI64_JSON_OUT(STATS_KEY_GM_ID, entry->gm_id);
-	STRING_JSON_OUT(STATS_KEY_ACTIVE_INTF, sfptpd_interface_get_name(entry->active_intf));
-	STRING_JSON_OUT(STATS_KEY_BOND_NAME, entry->bond_name);
-	FLOAT_JSON_OUT(STATS_KEY_PPS_OFFSET, entry->pps_offset);
-	INT_JSON_OUT(STATS_KEY_BAD_PERIOD, entry->bad_period_count);
-	INT_JSON_OUT(STATS_KEY_OVERFLOWS, entry->overflow_count);
-	FLOAT_JSON_OUT(STATS_KEY_P_TERM, entry->p_term);
-	FLOAT_JSON_OUT(STATS_KEY_I_TERM, entry->i_term);
-
-	#undef FLOAT_JSON_OUT
-	#undef INT_JSON_OUT
-	#undef STRING_JSON_OUT
-	#undef EUI64_JSON_OUT
-
-	/* Close json object and flush stream */
-	LPRINTF(json_stats_fp, "}}\n");
-
-	#undef LPRINTF
-
-	sfptpd_log_rt_stats_written(len, entry->alarms != 0);
+	len = sfptpd_log_render_rt_stat_json(&engine->rt_stats_last, json_stats_fp, entry);
+	if (len != -1)
+		sfptpd_log_rt_stats_written(len, entry->alarms != 0);
 }
 
 

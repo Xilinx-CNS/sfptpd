@@ -10,7 +10,6 @@
 #include <stdbool.h>
 
 #include "sfptpd_message.h"
-#include "sfptpd_logging.h"
 #include "sfptpd_misc.h"
 #include "sfptpd_test.h"
 #include "sfptpd_constants.h"

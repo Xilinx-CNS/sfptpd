@@ -171,12 +171,26 @@ struct metrics_state {
 	unsigned int active_queries; /* bitfield */
 };
 
+enum json_format {
+	/* https://jsonlines.org/ */
+	/* https://github.com/ndjson/ndjson-spec */
+	JSON_LINES,
+
+	/* RFC7464 */
+	JSON_SEQ,
+};
+
 
 /****************************************************************************
  * Defines & Constants
  ****************************************************************************/
 
 #define PREFIX "metrics: "
+
+const char *json_content_type[] = {
+	[JSON_LINES] = "application/x-ndjson",
+	[JSON_SEQ] = "application/json-seq",
+};
 
 const char *sfptpd_metrics_option_names[SFPTPD_METRICS_NUM_OPTIONS] = {
 	[SFPTPD_METRICS_OPTION_ALARM_STATESET] = "alarm-stateset",
@@ -316,7 +330,20 @@ static int write_all(struct query_state *q, const char* data, ssize_t len)
 	return ret == -1 ? errno : 0;
 }
 
-static int http_response(struct query_state *q, int response_code)
+static int http_end_no_body(struct query_state *q)
+{
+	const char *end_line = "\r\n";
+	ssize_t ret = 0;
+
+	ret = write_all(q, end_line, strlen(end_line));
+
+	if (ret != 0)
+		http_abort(q, "completing query");
+
+	return ret;
+}
+
+static int http_response(struct query_state *q, int response_code, bool end)
 {
 	const char *response_text;
 	char *response;
@@ -345,6 +372,9 @@ static int http_response(struct query_state *q, int response_code)
 
 	ret = write_all(q, response, len);
 	free(response);
+
+	if (end)
+		http_end_no_body(q);
 
 	if (ret != 0)
 		http_abort(q, "sending response code");
@@ -412,7 +442,7 @@ static int write_exemplars(void)
 	return 0;
 }
 
-static int sfptpd_metrics_send(struct query_state *q)
+static int sfptpd_metrics_send(struct query_state *q, bool peek)
 {
 	const char *content_type = "application/openmetrics-text"
 				   "; version=1.0.0"
@@ -424,7 +454,7 @@ static int sfptpd_metrics_send(struct query_state *q)
 	size_t buf_sz = 0;
 	char *hdr = NULL;
 	char *buf = NULL;
-	int count = 0;
+	int count;
 	FILE *stream;
 	int rc = 0;
 	int ret;
@@ -503,10 +533,10 @@ static int sfptpd_metrics_send(struct query_state *q)
 		}
 
 		/* Write exposition of RT stats with our timestamp */
-		while (stats->len) {
+		for (count = 0; count < stats->len; count++) {
 			struct sfptpd_sync_instance_rt_stats_entry *entry;
 
-			entry = stats->entries + stats->wr_ptr - stats->len;
+			entry = stats->entries + stats->wr_ptr - stats->len + count;
 			if (entry < stats->entries)
 				entry += stats->sz;
 
@@ -526,15 +556,6 @@ static int sfptpd_metrics_send(struct query_state *q)
 						metric_float_value(entry, metric->key),
 						SFPTPD_ARGS_SSFTIMESPEC_NS(entry->log_time));
 			}
-
-			/* Always leave one record left for stateless
-			 * ingestion of current state. Yes this can result in
-			 * repetition; no, they don't mind that. */
-			if (stats->len > 1)
-				stats->len--;
-			else
-				break;
-			count++;
 		}
 
 		/* End OpenMetrics */
@@ -580,9 +601,107 @@ static int sfptpd_metrics_send(struct query_state *q)
 			http_abort(q, "writing body: stats");
 			rc = ret;
 		}
+
+		/* Always leave one record left for stateless
+		 * ingestion of current state. Yes this can result in
+		 * repetition; no, they don't mind that. */
+		if (!peek && stats->len != 0) {
+			stats->len = 1;
+			stats->lost_samples = 0;
+		}
 	}
 
 	TRACE_L5("metrics: completed query, writing %d rt stats entries\n",
+		 count);
+
+finish:
+	free(buf);
+	return rc;
+}
+
+static int sfptpd_rt_stats_send(struct query_state *q, bool peek,
+				enum json_format format)
+{
+	struct sfptpd_log_time_cache log_time_cache = { 0 };
+	struct rt_stats_buf *stats = &metrics.rt_stats;
+	size_t hdr_sz = 0;
+	size_t buf_sz = 0;
+	char *hdr = NULL;
+	char *buf = NULL;
+	int count = 0;
+	FILE *stream;
+	int rc = 0;
+	int ret;
+
+	if (q->http.method == HTTP_METHOD_GET) {
+		stream = open_memstream(&buf, &buf_sz);
+		if (stream == NULL) {
+			http_abort(q, "open_memstream");
+			return errno;
+		}
+
+		/* Write exposition of RT stats with our timestamp */
+		for (count = 0; count < stats->len; count++) {
+			struct sfptpd_sync_instance_rt_stats_entry *entry;
+
+			entry = stats->entries + stats->wr_ptr - stats->len + count;
+			if (entry < stats->entries)
+				entry += stats->sz;
+
+			if (format == JSON_SEQ)
+				fputc('\x1e', stream);
+
+			if (sfptpd_log_render_rt_stat_json(&log_time_cache, stream, entry) == -1) {
+				http_abort(q, "rendering json stat");
+				rc = errno;
+				goto finish;
+			}
+		}
+		if (fclose(stream) == EOF) {
+			http_abort(q, "formatting body");
+			rc = errno;
+			goto finish;
+		}
+	}
+
+	/* Output header */
+	hdr_sz = asprintf(&hdr,
+			  "Content-Type: %s; charset=utf-8\r\n"
+			  "Content-Length: %zd\r\n"
+			  "Server: " SFPTPD_MODEL "/" SFPTPD_VERSION_TEXT "\r\n"
+			  "X-Sfptpd-Lost-Samples: %" PRId64 "\r\n"
+			  "\r\n",
+			  json_content_type[format],
+			  buf_sz,
+			  stats->lost_samples);
+	if (hdr_sz == -1) {
+		http_abort(q, "formatting header");
+		rc = errno;
+		goto finish;
+	}
+	ret = write_all(q, hdr, hdr_sz);
+	free(hdr);
+	if (ret != 0) {
+		http_abort(q, "writing header");
+		rc = ret;
+		goto finish;
+	}
+
+	if (q->http.method == HTTP_METHOD_GET) {
+		/* Output body: stats */
+		ret = write_all(q, buf, buf_sz);
+		if (ret != 0) {
+			http_abort(q, "writing body: stats");
+			rc = ret;
+		}
+
+		if (!peek) {
+			stats->len = 0;
+			stats->lost_samples = 0;
+		}
+	}
+
+	TRACE_L5("metrics: completed query, writing %d rt stats entries as JSON\n",
 		 count);
 
 finish:
@@ -880,6 +999,11 @@ static void handle_query_data(struct query_state *q)
 static void metrics_execute_query(struct query_state *q)
 {
 	struct http *http = &q->http;
+	const char *target = http->target;
+
+	/* peek: true if stats should not be consumed from the circular
+	 * buffer when delivered. */
+	bool peek = false;
 
 	TRACE_L4("metrics: got HTTP query: %s %s %s/%" PRId64 ".%" PRId64 "\n",
 	     http->method_s, http->target,
@@ -888,15 +1012,31 @@ static void metrics_execute_query(struct query_state *q)
 
 	if (http->method == HTTP_METHOD_GET ||
 	    http->method == HTTP_METHOD_HEAD) {
-		if (!strcmp(http->target, "/metrics")) {
-			http_response(q, 200);
+		char *s;
+		if (*target &&
+		    (s = strchr(target + 1, '/')) &&
+		    !strncmp(target, "/peek", strlen("/peek"))) {
+			peek = true;
+			target = s;
+		}
+
+		if (!strcmp(target, "/metrics")) {
+			http_response(q, 200, false);
 			if (!q->abort)
-				sfptpd_metrics_send(q);
+				sfptpd_metrics_send(q, peek);
+		} else if (!strcmp(target, "/rt-stats.jsonl")) {
+			http_response(q, 200, false);
+			if (!q->abort)
+				sfptpd_rt_stats_send(q, peek, JSON_LINES);
+		} else if (!strcmp(target, "/rt-stats.json-seq")) {
+			http_response(q, 200, false);
+			if (!q->abort)
+				sfptpd_rt_stats_send(q, peek, JSON_SEQ);
 		} else {
-			http_response(q, 404);
+			http_response(q, 404, true);
 		}
 	} else {
-		http_response(q, 500);
+		http_response(q, 500, true);
 	}
 }
 

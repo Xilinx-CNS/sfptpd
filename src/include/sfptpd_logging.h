@@ -16,6 +16,10 @@
 #include "sfptpd_misc.h"
 #include "sfptpd_clock.h"
 
+
+/* Forward declaration */
+struct sfptpd_sync_instance_rt_stats_entry;
+
 /****************************************************************************
  * Structures, Types, Defines
  ****************************************************************************/
@@ -114,6 +118,10 @@ struct sfptpd_log_time {
 	char time[SFPTPD_LOG_TIME_STR_MAX];
 };
 
+struct sfptpd_log_time_cache {
+	struct sfptpd_timespec log_time;
+	struct sfptpd_log_time log_time_text;
+};
 
 /** Buildtime checks. Turn all functions that do printf-type operations into
  * printf to get compiler checks on the format string and parameter list */
@@ -393,5 +401,30 @@ void sfptpd_log_config_abandon(void);
  * @return format specifiers.
  */
 const struct sfptpd_interpolation *sfptpd_log_get_format_specifiers(void);
+
+/** Render a log time, using cache rendering if very close.
+ * @log_time_cache cache of last rendered log time.
+ * @entry the RT stats entry to render
+ * @return the rendered time text
+ */
+const char *sfptpd_log_render_log_time(struct sfptpd_log_time_cache *log_time_cache,
+				       struct sfptpd_sync_instance_rt_stats_entry *entry);
+
+/** Render RT Stats in text format to stats log.
+ * @log_time_cache cache of last rendered log time.
+ * @entry RT stats entry to render.
+ */
+void sfptpd_log_render_rt_stat_text(struct sfptpd_log_time_cache *log_time_cache,
+				    struct sfptpd_sync_instance_rt_stats_entry *entry);
+
+/** Render RT Stats in JSON format.
+ * @log_time_cache cache of last rendered log time.
+ * @json_stats_fp stream to which to write the rendered JSON.
+ * @entry RT stats entry to render.
+ * @return the number of bytes written or -1 on error.
+ */
+ssize_t sfptpd_log_render_rt_stat_json(struct sfptpd_log_time_cache *log_time_cache,
+				       FILE* json_stats_fp,
+				       struct sfptpd_sync_instance_rt_stats_entry *entry);
 
 #endif /* _SFPTPD_LOGGING_H */

@@ -188,26 +188,6 @@ void sfptpd_engine_clustering_input(struct sfptpd_engine *engine,
 				    sfptpd_time_t offset_from_master,
 				    bool offset_valid);
 
-/** Stats keys for va_args of sfptpd_engine_post_rt_stats function */
-enum sfptpd_rt_stats_key {     /* Type of following argument */
-	STATS_KEY_OFFSET = 0,  /*  sfptpd_time_t             */
-	STATS_KEY_FREQ_ADJ,    /*  sfptpd_time_t             */
-	STATS_KEY_OWD,         /*  sfptpd_time_t             */
-	STATS_KEY_PARENT_ID,   /*  uint8_t [8]               */
-	STATS_KEY_GM_ID,       /*  uint8_t [8]               */
-	STATS_KEY_PPS_OFFSET,  /*  sfptpd_time_t             */
-	STATS_KEY_BAD_PERIOD,  /*  int                       */
-	STATS_KEY_OVERFLOWS,   /*  int                       */
-	STATS_KEY_ACTIVE_INTF, /*  struct sfptpd_interface*  */
-	STATS_KEY_BOND_NAME,   /*  char*                     */
-	STATS_KEY_P_TERM,      /*  long double               */
-	STATS_KEY_I_TERM,      /*  long double               */
-	STATS_KEY_M_TIME,      /*  struct timespec           */
-	STATS_KEY_S_TIME,      /*  struct timespec           */
-	STATS_KEY_END
-};
-
-
 /** Allow logs to rotate, by closing and re-opening them.
  * This function sends an asynchronous message to engine thread to action the
  * request so is safe to call from another thread context.
