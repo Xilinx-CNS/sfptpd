@@ -72,15 +72,14 @@ enum sfptpd_metric_family {
 	OM_F_ITERM,
 	OM_F_IN_SYNC,
 	OM_F_IS_DISC,
-/*
 	OM_F_M_TIME,
 	OM_F_S_TIME,
-*/
 	OM_F_LOG_TIME,
 	OM_F_ALARMS,
 	OM_F_ALARM,
 	OM_F_ALARMTXT,
 	OM_F_LOST_RT,
+	OM_F_SERVO,
 };
 
 struct instance_scope_metric {
@@ -198,6 +197,7 @@ const char *json_content_type[] = {
 
 const char *sfptpd_metrics_option_names[SFPTPD_METRICS_NUM_OPTIONS] = {
 	[SFPTPD_METRICS_OPTION_ALARM_STATESET] = "alarm-stateset",
+	[SFPTPD_METRICS_OPTION_SERVO_TIMES] = "servo-times",
 };
 
 static const struct openmetrics_family sfptpd_metric_families[] = {
@@ -206,10 +206,10 @@ static const struct openmetrics_family sfptpd_metric_families[] = {
 	[ OM_F_OWD      ] = { OM_T_GAUGE, "owd",      OM_U_SECONDS, "one way delay" },
 	[ OM_F_PTERM    ] = { OM_T_GAUGE, "pterm",    OM_U_RATIOS,  "p-term" },
 	[ OM_F_ITERM    ] = { OM_T_GAUGE, "iterm",    OM_U_RATIOS,  "i-term" },
-/* These are of questionable value. Just use the offset!
-	[ OM_F_M_TIME   ] = { OM_T_GAUGE, "m_time",   OM_U_SECONDS, "servo master time snapshot" },
-	[ OM_F_S_TIME   ] = { OM_T_GAUGE, "s_time",   OM_U_SECONDS, "servo slave time snapshot" },
-*/
+	[ OM_F_M_TIME   ] = { OM_T_GAUGE, "m_time",   OM_U_SECONDS, "servo master time snapshot",
+			      .conditional = 1 << SFPTPD_METRICS_OPTION_SERVO_TIMES},
+	[ OM_F_S_TIME   ] = { OM_T_GAUGE, "s_time",   OM_U_SECONDS, "servo slave time snapshot",
+			      .conditional = 1 << SFPTPD_METRICS_OPTION_SERVO_TIMES},
 	[ OM_F_LOG_TIME ] = { OM_T_GAUGE, "last_update",
 						      OM_U_SECONDS, "time sfptpd recorded rt stat" },
 	[ OM_F_IN_SYNC  ] = { OM_T_GAUGE, "in_sync",  OM_U_NONE,    "0 = not in sync, 1 = in sync" },
@@ -219,11 +219,10 @@ static const struct openmetrics_family sfptpd_metric_families[] = {
 	[ OM_F_ALARMTXT ] = { OM_T_INFO,  "alarmtxt", OM_U_NONE,    "alarm text" },
 	[ OM_F_LOST_RT  ] = { OM_T_COUNTER,
 					  "lost_rt",  OM_U_NONE,    "lost rt stats samples" },
-
-/* This is expensive and hard to use - enable as an option: */
 	[ OM_F_ALARM    ] = { OM_T_STATESET,
 					  "alarm",    OM_U_NONE,    "alarm",
 			      .conditional = 1 << SFPTPD_METRICS_OPTION_ALARM_STATESET},
+	[ OM_F_SERVO    ] = { OM_T_INFO,  "servo",    OM_U_NONE,    "information about the servo" },
 };
 #define NUM_METRIC_FAMILIES (sizeof sfptpd_metric_families/sizeof *sfptpd_metric_families)
 
@@ -429,14 +428,15 @@ static int write_exemplars(void)
 	for (m = 0; m < NUM_METRIC_FAMILIES; m++) {
 		const struct openmetrics_family *family = sfptpd_metric_families + m;
 
-		if (family->conditional & ~metrics.config->flags)
-			continue;
+		if (!(family->conditional & ~metrics.config->flags))
+			write_exemplar_family(stream, family, NULL, "");
+	}
+	for (m = 0; m < NUM_INSTANCE_METRICS; m++) {
+		const struct instance_scope_metric *metric = sfptpd_instance_metrics + m;
+		const struct openmetrics_family *family = sfptpd_metric_families + metric->family;
 
-		for (int i = 0; i <= 1; i++) {
-			write_exemplar_family(stream, family,
-					      i ? "_snapshot" : NULL,
-					      i ? " (snapshot)" : " (rt, timestamped)");
-		}
+		if (!(family->conditional & ~metrics.config->flags))
+			write_exemplar_family(stream, family, "_snapshot", " (snapshot)");
 	}
 
 	fclose(stream);
@@ -499,7 +499,7 @@ static int sfptpd_metrics_send(struct query_state *q, bool peek)
 					sfptpd_sync_module_alarms_text(abit, alarm_str, sizeof alarm_str);
 					fprintf(stream, "%s%s{sync=\"%s\",%s=\"%s\"} %c\n", prefix,
 						family->name, entry->instance_name,
-						family->name, buf,
+						family->name, alarm_str,
 						entry->alarms & abit ? '1' : '0');
 				}
 			}
@@ -534,6 +534,34 @@ static int sfptpd_metrics_send(struct query_state *q, bool peek)
 			family = sfptpd_metric_families + OM_F_LOST_RT;
 			fprintf(stream, "%s%s %" PRId64 "\n", prefix,
 				family->name, metrics.rt_stats.lost_samples);
+
+			family = sfptpd_metric_families + OM_F_M_TIME;
+			if ((family->conditional & ~metrics.config->flags && entry->has_m_time) == 0)
+				fprintf(stream, "%s%s{sync=\"%s\"} " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
+					prefix, family->name, entry->instance_name,
+					SFPTPD_ARGS_SSFTIMESPEC_NS(entry->time_master));
+
+			family = sfptpd_metric_families + OM_F_S_TIME;
+			if ((family->conditional & ~metrics.config->flags && entry->has_s_time) == 0)
+				fprintf(stream, "%s%s{sync=\"%s\"} " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
+					prefix, family->name, entry->instance_name,
+					SFPTPD_ARGS_SSFTIMESPEC_NS(entry->time_slave));
+
+
+			family = sfptpd_metric_families + OM_F_SERVO;
+			fprintf(stream, "%s%s_info{sync=\"%s\",clock=\"%s\",desc=\"%s%s%s%s%s%s%s%s%s\"} 1\n",
+				prefix, family->name, entry->instance_name,
+				sfptpd_clock_get_short_name(entry->clock_slave),
+				sfptpd_clock_get_long_name(entry->clock_slave),
+				entry->source ? "\",source=\"" : "",
+				entry->source,
+				entry->clock_master ? "\",master=\"" : "",
+				entry->clock_master ? sfptpd_clock_get_short_name(entry->clock_master) : "",
+				entry->stat_present & (1 << STATS_KEY_ACTIVE_INTF) ? "\",active_intf=\"" : "",
+				entry->stat_present & (1 << STATS_KEY_ACTIVE_INTF) ? sfptpd_interface_get_name(entry->active_intf) : "",
+				entry->stat_present & (1 << STATS_KEY_BOND_NAME) ? "\",bond=\"" : "",
+				entry->stat_present & (1 << STATS_KEY_BOND_NAME) ? entry->bond_name : ""
+				);
 		}
 
 		/* Write exposition of RT stats with our timestamp */
@@ -548,10 +576,8 @@ static int sfptpd_metrics_send(struct query_state *q, bool peek)
 				const struct instance_scope_metric *metric = sfptpd_instance_metrics + m;
 				const struct openmetrics_family *family = sfptpd_metric_families + metric->family;
 
-				if (family->conditional & ~metrics.config->flags)
-					continue;
-
-				if (entry->stat_present & (1 << metric->key))
+				if ((family->conditional & ~metrics.config->flags) == 0 &&
+				    entry->stat_present & (1 << metric->key))
 					fprintf(stream, "%s%s%s%s{sync=\"%s\"} %.12Lf " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
 						prefix, family->name,
 						family->unit ? "_" : "",
