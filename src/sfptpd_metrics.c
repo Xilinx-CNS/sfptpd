@@ -134,6 +134,20 @@ enum http_method {
 	HTTP_METHOD_OTHER,
 	HTTP_METHOD_GET,
 	HTTP_METHOD_HEAD,
+	HTTP_METHOD_CONNECT,
+};
+
+struct http_header {
+	const char *name;
+	char *value;
+	struct http_header *next;
+};
+
+struct http_chunk {
+	char *data;
+	size_t length;
+	struct http_chunk *next;
+	bool alloced;
 };
 
 struct http {
@@ -149,6 +163,14 @@ struct http {
 	char field_value[400];
 	int64_t major_version;
 	int64_t minor_version;
+
+	struct http_header *reply_headers;
+	struct http_chunk *reply_body;
+	struct http_chunk **reply_body_tail;
+	int reply_chunks;
+	size_t reply_length;
+	int response_code;
+	const char *response_text;
 };
 
 struct query_state {
@@ -307,81 +329,262 @@ static struct sfptpd_thread_readyfd *get_event_for(int num_fds,
 	return NULL;
 }
 
+static void http_init_reply(struct http *http)
+{
+	http->reply_headers = NULL;
+	http->reply_body = NULL;
+	http->reply_body_tail = &http->reply_body;
+	http->reply_length = 0;
+	http->reply_chunks = 0;
+	http->response_code = 500;
+	http->response_text = NULL;
+}
+
+static void http_finit_reply(struct http *http)
+{
+	struct http_header *header;
+	struct http_header *header_next;
+	struct http_chunk *chunk;
+	struct http_chunk *chunk_next;
+
+	for (header = http->reply_headers; header; header = header_next) {
+		header_next = header->next;
+		free(header->value);
+		free(header);
+	}
+
+	for (chunk = http->reply_body; chunk; chunk = chunk_next) {
+		chunk_next = chunk->next;
+		if (chunk->alloced)
+			free(chunk->data);
+		free(chunk);
+	}
+
+	/* Now zero out values */
+	http_init_reply(http);
+}
+
 static void http_abort(struct query_state *q, const char *reason)
 {
 	ERROR("metrics: http request abort (%s)\n", reason);
+	http_finit_reply(&q->http);
 	q->abort = true;
 }
 
-static int write_all(struct query_state *q, const char* data, ssize_t len)
+static int writev_all(struct query_state *q, struct iovec *iov, int iovcnt)
 {
 	ssize_t ret = 0;
-	ssize_t ptr;
-	int rc;
 
-	for (ptr = 0; ret != -1 && ptr < len; ptr += ret)
-		ret = write(q->fd, data, len - ptr);
+	while (iovcnt && ret != -1) {
+		if (ret == 0) {
+			ret = writev(q->fd, iov, iovcnt);
+		} else if (ret >= iov->iov_len) {
+			ret -= iov->iov_len;
+			iov++;
+			iovcnt--;
+		} else {
+			iov->iov_base = ((char *) iov->iov_base) + ret;
+			iov->iov_len -= ret;
+		}
+	}
 
 	if (ret == -1) {
-		rc = errno;
-		ERROR("metrics: error writing response: %s\n", strerror(rc));
-		return rc;
+		ret = errno;
+		ERROR("metrics: error writing response: %s\n", strerror(ret));
+		return ret;
 	} else {
 		return 0;
 	}
-
-	return ret == -1 ? errno : 0;
 }
 
-static int http_end_no_body(struct query_state *q)
+static int http_add_header(struct http *http, const char *name, const char *fmt, ...)
 {
-	const char *end_line = "\r\n";
-	ssize_t ret = 0;
+	va_list ap;
+	struct http_header *header;
+	int ret;
 
-	ret = write_all(q, end_line, strlen(end_line));
+	header = calloc(1, sizeof *header);
+	if (header == NULL) {
+		CRITICAL("metrics: allocating http header, %s\n", strerror(ret = errno));
+		goto fail;
+	}
 
-	if (ret != 0)
-		http_abort(q, "completing query");
+	header->name = name;
+	va_start(ap, fmt);
+	ret = vasprintf(&header->value, fmt, ap);
+	va_end(ap);
 
+	if (ret == -1) {
+		CRITICAL("metrics: adding http header, %s\n", strerror(ret = errno));
+		free(header);
+		goto fail;
+	}
+	ret = 0;
+
+	header->next = http->reply_headers;
+	http->reply_headers = header;
+fail:
 	return ret;
 }
 
-static int http_response(struct query_state *q, int response_code, bool end)
+static int http_add_chunk(struct http *http, bool alloced, char *data, size_t length)
 {
-	const char *response_text;
+	struct http_chunk *chunk;
+	int ret = 0;
+
+	chunk = calloc(1, sizeof *chunk);
+	if (chunk == NULL) {
+		CRITICAL("metrics: allocating http chunk, %s\n", strerror(ret = errno));
+		return ret;
+	}
+
+	chunk->data = data;
+	chunk->length = length;
+	chunk->alloced = alloced;
+
+	*http->reply_body_tail = chunk;
+	http->reply_body_tail = &chunk->next;
+	http->reply_length += length;
+	http->reply_chunks++;
+	return ret;
+}
+
+static int http_write_chunk(struct http *http, const char *fmt, ...)
+{
+	va_list ap;
+	char *data;
+	int ret;
+
+	va_start(ap, fmt);
+	ret = vasprintf(&data, fmt, ap);
+	va_end(ap);
+
+	if (ret == -1) {
+		CRITICAL("metrics: writing http reply chunk, %s\n", strerror(ret = errno));
+		return ret;
+	}
+
+	ret = http_add_chunk(http, true, data, ret);
+	if (ret != 0)
+		free(data);
+	return ret;
+}
+
+static int http_response(struct query_state *q)
+{
+	struct http *http = &q->http;
+	struct http_header *header;
+	struct http_chunk *chunk;
 	char *response;
 	ssize_t len;
 	ssize_t ret = 0;
+	FILE *block_stream;
+    char *block = NULL;
+	size_t block_sz = 0;
+	struct iovec *iov = NULL;
+	bool forbidden_body = false;
+	int iovcnt;
+	int i;
 
-	switch (response_code) {
-	case 500:
-		response_text = "Internal Server Error";
-		break;
-	case 404:
-		response_text = "Not Found";
-		break;
-	case 200:
-		response_text = "OK";
-		break;
-	default:
-		response_text = "";
+	if (http->response_text == NULL) {
+		switch (http->response_code) {
+		case 404:
+			http->response_text = "Not Found";
+			break;
+		case 200:
+			http->response_text = "OK";
+			break;
+		case 500:
+		default:
+			http->response_text = "Internal Server Error";
+		}
 	}
 
-	len = asprintf(&response, "HTTP/1.1 %d %s\r\n", response_code, response_text);
+	if (http->reply_length == 0) {
+		char *text_reply = NULL;
+		switch (http->response_code) {
+		case 404:
+			text_reply = "Resource not found\n";
+			break;
+		case 500:
+			text_reply = "Internal server error\n";
+			break;
+		default:
+			break;
+		}
+		if (text_reply) {
+			http_write_chunk(http, text_reply);
+			http_add_header(http, "Content-Type", "text/plain");
+		}
+	}
+
+	len = asprintf(&response, "HTTP/1.1 %d %s\r\n",
+		       http->response_code, http->response_text);
 	if (len == -1) {
 		CRITICAL("formatting HTTP response\n");
-		return errno;
+		response = NULL;
+		goto fail;
 	}
 
-	ret = write_all(q, response, len);
-	free(response);
+	/* RFC7230 3.3.3 */
+	assert(http->method != HTTP_METHOD_CONNECT ||
+	       (http->response_code >= 500 && http->response_code <= 599));
+	if (http->method == HTTP_METHOD_HEAD ||
+	    (http->response_code >= 100 && http->response_code < 199) ||
+	    http->response_code == 204 ||
+	    http->response_code == 304 ||
+	    http->reply_length == 0) {
+		forbidden_body = true;
+		iovcnt = 2;
+	} else {
+		iovcnt = 2 + http->reply_chunks;
+	}
 
-	if (end)
-		http_end_no_body(q);
+	if ((!forbidden_body ||
+	     (http->method == HTTP_METHOD_HEAD && http->reply_length != 0)) &&
+	    http_add_header(http, "Content-Length", "%zd", http->reply_length) != 0)
+		goto fail;
 
+	if ((block_stream = open_memstream(&block, &block_sz)) == NULL) {
+		http_abort(q, "allocating header block");
+		goto fail;
+	}
+	for (header = http->reply_headers; header; header = header->next) {
+		fprintf(block_stream, "%s: %s\r\n", header->name, header->value);
+	}
+	fprintf(block_stream, "\r\n");
+	if (fclose(block_stream) == -1) {
+		http_abort(q, "preparing header block");
+		goto fail;
+	}
+
+	if ((iov = calloc(iovcnt, sizeof *iov)) == NULL) {
+		http_abort(q, "allocating sending iov");
+		goto fail;
+	}
+	iov[0].iov_base = response;
+	iov[0].iov_len = len;
+	iov[1].iov_base = block;
+	iov[1].iov_len = block_sz;
+	chunk = http->reply_body;
+	for (i = 2; i < iovcnt; i++) {
+		assert(chunk);
+		assert(i - 2 < http->reply_chunks);
+		iov[i].iov_base = chunk->data;
+		iov[i].iov_len = chunk->length;
+		chunk = chunk->next;
+	}
+	ret = writev_all(q, iov, iovcnt);
 	if (ret != 0)
 		http_abort(q, "sending response code");
+    free(iov);
 
+fail:
+    free(block);
+	free(response);
+	http_finit_reply(http);
+	if (ret != 0)
+		http_abort(q, "sending reply");
 	return ret;
 }
 
@@ -454,17 +657,15 @@ static int sfptpd_metrics_send(struct query_state *q, bool peek)
 	struct rt_stats_buf *stats = &metrics.rt_stats;
 	char alarm_str[SYNC_MODULE_ALARM_ALL_TEXT_MAX];
 	const char *prefix = metrics.config->family_prefix;
-	size_t hdr_sz = 0;
+	struct http *h = &q->http;
 	size_t buf_sz = 0;
-	char *hdr = NULL;
 	char *buf = NULL;
 	int count;
 	FILE *stream;
 	int rc = 0;
-	int ret;
 	int m;
 
-	if (q->http.method == HTTP_METHOD_GET) {
+	if (h->method == HTTP_METHOD_GET) {
 		stream = open_memstream(&buf, &buf_sz);
 		if (stream == NULL) {
 			http_abort(q, "open_memstream");
@@ -597,53 +798,31 @@ static int sfptpd_metrics_send(struct query_state *q, bool peek)
 		}
 	}
 
-	/* Output header */
-	hdr_sz = asprintf(&hdr,
-			  "Content-Type: %s\r\n"
-			  "Content-Length: %zd\r\n"
-			  "Server: " SFPTPD_MODEL "/" SFPTPD_VERSION_TEXT "\r\n"
-			  "\r\n",
-			  content_type, buf_sz + metrics.exemplars_len);
-	if (hdr_sz == -1) {
-		http_abort(q, "formatting header");
-		rc = errno;
-		goto finish;
-	}
-	ret = write_all(q, hdr, hdr_sz);
-	free(hdr);
-	if (ret != 0) {
-		http_abort(q, "writing header");
-		rc = ret;
+	if ((rc = http_add_header(h, "Content-Type", "%s", content_type))) {
+		http_abort(q, "adding headers");
 		goto finish;
 	}
 
-	if (q->http.method == HTTP_METHOD_GET) {
-		/* Output body: exemplars */
-		ret = write_all(q, metrics.exemplars, metrics.exemplars_len);
-		if (ret != 0) {
-			http_abort(q, "writing body: exemplars");
-			rc = ret;
-		}
+	if (h->method == HTTP_METHOD_GET &&
+	    ((rc = http_add_chunk(h, false, metrics.exemplars, metrics.exemplars_len)) ||
+	     (rc = http_add_chunk(h, true, buf, buf_sz)))) {
+		http_abort(q, "adding body");
+		goto finish;
+	}
+	/* We don't own the buffer anymore so don't free it. */
+	buf = NULL;
 
-		/* Output body: stats */
-		ret = write_all(q, buf, buf_sz);
-		if (ret != 0) {
-			http_abort(q, "writing body: stats");
-			rc = ret;
-		}
-
+	if (h->method == HTTP_METHOD_GET && !peek && stats->len != 0) {
 		/* Always leave one record left for stateless
 		 * ingestion of current state. Yes this can result in
 		 * repetition; no, they don't mind that. */
-		if (!peek && stats->len != 0) {
-			stats->len = 1;
-			stats->lost_samples = 0;
-		}
+		stats->len = 1;
+		stats->lost_samples = 0;
 	}
 
 	TRACE_L5("metrics: completed query, writing %d rt stats entries\n",
 		 count);
-
+	h->response_code = 200;
 finish:
 	free(buf);
 	return rc;
@@ -654,16 +833,14 @@ static int sfptpd_rt_stats_send(struct query_state *q, bool peek,
 {
 	struct sfptpd_log_time_cache log_time_cache = { 0 };
 	struct rt_stats_buf *stats = &metrics.rt_stats;
-	size_t hdr_sz = 0;
+	struct http *h = &q->http;
 	size_t buf_sz = 0;
-	char *hdr = NULL;
 	char *buf = NULL;
 	int count = 0;
 	FILE *stream;
 	int rc = 0;
-	int ret;
 
-	if (q->http.method == HTTP_METHOD_GET) {
+	if (h->method == HTTP_METHOD_GET) {
 		stream = open_memstream(&buf, &buf_sz);
 		if (stream == NULL) {
 			http_abort(q, "open_memstream");
@@ -694,50 +871,25 @@ static int sfptpd_rt_stats_send(struct query_state *q, bool peek,
 			rc = errno;
 			goto finish;
 		}
+		http_add_chunk(h, true, buf, buf_sz);
 	}
 
 	/* Output header */
-	hdr_sz = asprintf(&hdr,
-			  "Content-Type: %s; charset=utf-8\r\n"
-			  "Content-Length: %zd\r\n"
-			  "Server: " SFPTPD_MODEL "/" SFPTPD_VERSION_TEXT "\r\n"
-			  "X-Sfptpd-Lost-Samples: %" PRId64 "\r\n"
-			  "\r\n",
-			  json_content_type[format],
-			  buf_sz,
-			  stats->lost_samples);
-	if (hdr_sz == -1) {
-		http_abort(q, "formatting header");
-		rc = errno;
-		goto finish;
-	}
-	ret = write_all(q, hdr, hdr_sz);
-	free(hdr);
-	if (ret != 0) {
-		http_abort(q, "writing header");
-		rc = ret;
+	if ((rc = http_add_header(h, "Content-Type", "%s; charset=utf-8", json_content_type[format])) ||
+	    (rc = http_add_header(h, "X-Sfptpd-Lost-Samples", "%" PRId64, stats->lost_samples))) {
+		http_abort(q, "adding headers");
 		goto finish;
 	}
 
-	if (q->http.method == HTTP_METHOD_GET) {
-		/* Output body: stats */
-		ret = write_all(q, buf, buf_sz);
-		if (ret != 0) {
-			http_abort(q, "writing body: stats");
-			rc = ret;
-		}
-
-		if (!peek) {
-			stats->len = 0;
-			stats->lost_samples = 0;
-		}
+	if (q->http.method == HTTP_METHOD_GET && !peek) {
+		stats->len = 0;
+		stats->lost_samples = 0;
 	}
 
 	TRACE_L5("metrics: completed query, writing %d rt stats entries as JSON\n",
 		 count);
-
+	h->response_code = 200;
 finish:
-	free(buf);
 	return rc;
 }
 
@@ -786,68 +938,68 @@ static int metrics_handle_connection(int fd)
 	qi = __builtin_ctz(~metrics.active_queries);
 
 	memset(&metrics.query[qi].http, '\0', sizeof metrics.query[qi].http);
-	metrics.query[qi].abort = false;
-	if (netbuf_init(&metrics.query[qi].rx))
-		goto fail;
-	metrics.query[qi].fd = fd;
-	metrics.active_queries |= (1 << qi);
+		metrics.query[qi].abort = false;
+		if (netbuf_init(&metrics.query[qi].rx))
+			goto fail;
+		metrics.query[qi].fd = fd;
+		metrics.active_queries |= (1 << qi);
 
-	TRACE_L5("got incoming metrics connection\n");
+		TRACE_L5("got incoming metrics connection\n");
 
-	/* Rate control the backlog handling so we never reach the
-	 * above discard case. */
-	if ((metrics.active_queries ^ QUERIES_MASK) == 0)
-		rc = sfptpd_thread_user_fd_remove(metrics.listen_fd);
+		/* Rate control the backlog handling so we never reach the
+		 * above discard case. */
+		if ((metrics.active_queries ^ QUERIES_MASK) == 0)
+			rc = sfptpd_thread_user_fd_remove(metrics.listen_fd);
 
-	return 0;
+		return 0;
 
-fail:
-	close(fd);
-	return rc;
-}
+	fail:
+		close(fd);
+		return rc;
+	}
 
-static void netbuf_advance(struct net_buf *nb, size_t amount)
-{
-	assert(amount <= nb->len);
-	nb->rd_ptr += amount;
-	if (nb->rd_ptr > nb->capacity)
-		nb->rd_ptr -= nb->capacity;
-	nb->len -= amount;
-}
+	static void netbuf_advance(struct net_buf *nb, size_t amount)
+	{
+		assert(amount <= nb->len);
+		nb->rd_ptr += amount;
+		if (nb->rd_ptr > nb->capacity)
+			nb->rd_ptr -= nb->capacity;
+		nb->len -= amount;
+	}
 
-static void http_advance(struct query_state *q, size_t amount)
-{
-	netbuf_advance(&q->rx, amount);
-	q->http.cursor -= amount;
-}
+	static void http_advance(struct query_state *q, size_t amount)
+	{
+		netbuf_advance(&q->rx, amount);
+		q->http.cursor -= amount;
+	}
 
-static char netbuf_read(struct net_buf *nb, size_t cursor)
-{
-	/* This should already have been checked. */
-	assert(cursor < nb->len);
+	static char netbuf_read(struct net_buf *nb, size_t cursor)
+	{
+		/* This should already have been checked. */
+		assert(cursor < nb->len);
 
-	if (cursor >= nb->len)
-		return -1;
-	else
-		return nb->data[nb->rd_ptr +
-				((cursor + nb->rd_ptr < nb->capacity) ?
-				 cursor : cursor - nb->capacity)];
-}
+		if (cursor >= nb->len)
+			return -1;
+		else
+			return nb->data[nb->rd_ptr +
+					((cursor + nb->rd_ptr < nb->capacity) ?
+					 cursor : cursor - nb->capacity)];
+	}
 
-static bool http_copystr_into(struct query_state *q,
-			      char *target,
-			      size_t capacity,
-			      const char *on_error)
-{
-	struct net_buf *nb = &q->rx;
-	size_t n1, n2;
-	size_t len = q->http.cursor;
-	bool success = true;
+	static bool http_copystr_into(struct query_state *q,
+				      char *target,
+				      size_t capacity,
+				      const char *on_error)
+	{
+		struct net_buf *nb = &q->rx;
+		size_t n1, n2;
+		size_t len = q->http.cursor;
+		bool success = true;
 
-	if (len >= capacity) {
-		success = false;
-		if (on_error != NULL) {
-			http_abort(q, on_error);
+		if (len >= capacity) {
+			success = false;
+			if (on_error != NULL) {
+				http_abort(q, on_error);
 		} else {
 			assert(capacity > 0);
 			target[0] = '\0';
@@ -1042,6 +1194,9 @@ static void metrics_execute_query(struct query_state *q)
 	     http->protocol,
 	     http->major_version, http->minor_version);
 
+	http_init_reply(http);
+	http_add_header(http, "Server", "%s/%s", SFPTPD_MODEL, SFPTPD_VERSION_TEXT);
+
 	if (http->method == HTTP_METHOD_GET ||
 	    http->method == HTTP_METHOD_HEAD) {
 		char *s;
@@ -1052,28 +1207,19 @@ static void metrics_execute_query(struct query_state *q)
 			target = s;
 		}
 
-		if (!strcmp(target, "/metrics")) {
-			http_response(q, 200, false);
-			if (!q->abort)
-				sfptpd_metrics_send(q, peek);
-		} else if (!strcmp(target, "/rt-stats.jsonl")) {
-			http_response(q, 200, false);
-			if (!q->abort)
-				sfptpd_rt_stats_send(q, peek, JSON_LINES);
-		} else if (!strcmp(target, "/rt-stats.json-seq")) {
-			http_response(q, 200, false);
-			if (!q->abort)
-				sfptpd_rt_stats_send(q, peek, JSON_SEQ);
-		} else if (!strcmp(target, "/rt-stats.txt")) {
-			http_response(q, 200, false);
-			if (!q->abort)
-				sfptpd_rt_stats_send(q, peek, STATS_LOG);
-		} else {
-			http_response(q, 404, true);
-		}
-	} else {
-		http_response(q, 500, true);
+		if (!strcmp(target, "/metrics"))
+			sfptpd_metrics_send(q, peek);
+		else if (!strcmp(target, "/rt-stats.jsonl"))
+			sfptpd_rt_stats_send(q, peek, JSON_LINES);
+		else if (!strcmp(target, "/rt-stats.json-seq"))
+			sfptpd_rt_stats_send(q, peek, JSON_SEQ);
+		else if (!strcmp(target, "/rt-stats.txt"))
+			sfptpd_rt_stats_send(q, peek, STATS_LOG);
+		else
+			http->response_code = 404;
 	}
+
+	http_response(q);
 }
 
 static void resolve_http_method(struct http *h)
@@ -1082,6 +1228,8 @@ static void resolve_http_method(struct http *h)
 		h->method = HTTP_METHOD_GET;
 	else if (!strcmp(h->method_s, "HEAD"))
 		h->method = HTTP_METHOD_HEAD;
+	else if (!strcmp(h->method_s, "CONNECT"))
+		h->method = HTTP_METHOD_CONNECT;
 	else
 		h->method = HTTP_METHOD_OTHER;
 }
