@@ -660,7 +660,7 @@ static int sfptpd_metrics_send(struct query_state *q, bool peek)
 	struct http *h = &q->http;
 	size_t buf_sz = 0;
 	char *buf = NULL;
-	int count;
+	int count = 0;
 	FILE *stream;
 	int rc = 0;
 	int m;
