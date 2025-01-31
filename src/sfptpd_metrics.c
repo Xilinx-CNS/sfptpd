@@ -532,8 +532,7 @@ static int http_response(struct query_state *q)
 	if (http->method == HTTP_METHOD_HEAD ||
 	    (http->response_code >= 100 && http->response_code < 199) ||
 	    http->response_code == 204 ||
-	    http->response_code == 304 ||
-	    http->reply_length == 0) {
+	    http->response_code == 304) {
 		forbidden_body = true;
 		iovcnt = 2;
 	} else {
@@ -871,7 +870,10 @@ static int sfptpd_rt_stats_send(struct query_state *q, bool peek,
 			rc = errno;
 			goto finish;
 		}
-		http_add_chunk(h, true, buf, buf_sz);
+		if (buf_sz)
+			http_add_chunk(h, true, buf, buf_sz);
+		else
+			free(buf);
 	}
 
 	/* Output header */
