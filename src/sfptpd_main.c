@@ -426,7 +426,7 @@ static int rundir_create(struct sfptpd_config *config)
 	if (path[0] == '\0')
 		return 0;
 
-	rc = mkdir(path, 0750);
+	rc = mkdir(path, gconf->run_dir_mode);
 	if (rc == -1) {
 		rc = errno;
 		if (rc != EEXIST) {

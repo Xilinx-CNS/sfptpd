@@ -26,6 +26,8 @@
 #define SFPTPD_DEFAULT_CONTROL_PATH                SFPTPD_CONTROL_SOCKET_PATH
 #define SFPTPD_DEFAULT_METRICS_PATH                SFPTPD_METRICS_SOCKET_PATH
 #define SFPTPD_DEFAULT_RUN_DIR                     SFPTPD_RUN_DIR
+#define SFPTPD_DEFAULT_RUN_DIR_MODE		   0770
+#define SFPTPD_DEFAULT_STATE_DIR_MODE		   0777
 #define SFPTPD_DEFAULT_TRACE_LEVEL                 0
 #define SFPTPD_DEFAULT_SYNC_INTERVAL               -4
 #define SFPTPD_DEFAULT_CLOCK_CTRL                  (SFPTPD_CLOCK_CTRL_SLEW_AND_STEP)
@@ -248,6 +250,8 @@ typedef struct sfptpd_config_general {
 	char state_path[PATH_MAX];
 	char control_path[PATH_MAX];
 	char metrics_path[PATH_MAX];
+	mode_t run_dir_mode;
+	mode_t state_dir_mode;
 	sfptpd_config_timestamping_t timestamping;
 	long double convergence_threshold;
 	long double step_threshold;

@@ -441,7 +441,7 @@ int sfptpd_log_open(struct sfptpd_config *config)
 	}
 
 	/* Make sure that the directory for saved clock state exists */
-	rc_dircreate = (mkdir(state_path, 0777) < 0) ? errno : 0;
+	rc_dircreate = (mkdir(state_path, general_config->state_dir_mode) < 0) ? errno : 0;
 	if (chown(state_path, general_config->uid, general_config->gid))
 		TRACE_L4("could not set state directory ownership, %s\n",
 			 strerror(errno));

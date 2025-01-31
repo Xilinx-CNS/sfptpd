@@ -63,6 +63,8 @@ static int parse_metrics_path(struct sfptpd_config_section *section, const char 
 			      unsigned int num_params, const char * const params[]);
 static int parse_run_dir(struct sfptpd_config_section *section, const char *option,
 			 unsigned int num_params, const char * const params[]);
+static int parse_access_mode(struct sfptpd_config_section *section, const char *option,
+			     unsigned int num_params, const char * const params[]);
 static int parse_sync_interval(struct sfptpd_config_section *section, const char *option,
 			       unsigned int num_params, const char * const params[]);
 static int parse_sync_threshold(struct sfptpd_config_section *section, const char *option,
@@ -217,6 +219,16 @@ static const sfptpd_config_option_t config_general_options[] =
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
 		parse_run_dir,
 		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_RUN_DIR)},
+	{"run_dir_mode", "MODE",
+		"Specifies MODE with which to create run directory, subject to umask",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_access_mode,
+		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_RUN_DIR_MODE)},
+	{"state_dir_mode", "MODE",
+		"Specifies MODE with which to create state directory, subject to umask",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_access_mode,
+		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_STATE_DIR_MODE)},
 	{"sync_interval", "NUMBER",
 		"Specifies the interval in 2^NUMBER seconds at which the clocks "
 		"are synchronized to the local reference clock, where NUMBER is "
@@ -942,6 +954,27 @@ static int parse_run_dir(struct sfptpd_config_section *section, const char *opti
 	return 0;
 }
 
+static int parse_access_mode(struct sfptpd_config_section *section, const char *option,
+			     unsigned int num_params, const char * const params[])
+{
+	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+	assert(num_params == 1);
+	int tokens;
+	int mode;
+
+	tokens = sscanf(params[0], "%o", &mode);
+	if (tokens != 1)
+		return EINVAL;
+
+	if (!strcmp(option, "state_dir_mode"))
+		general->state_dir_mode = mode;
+	else if (!strcmp(option, "run_dir_mode"))
+		general->run_dir_mode = mode;
+	else
+		return EINVAL;
+
+	return 0;
+}
 
 static int parse_sync_interval(struct sfptpd_config_section *section, const char *option,
 			       unsigned int num_params, const char * const params[])
@@ -1456,7 +1489,6 @@ static int parse_trace_level(struct sfptpd_config_section *section, const char *
 	return 0;
 }
 
-
 static int parse_test_mode(struct sfptpd_config_section *section, const char *option,
 			   unsigned int num_params, const char * const params[])
 {
@@ -1880,6 +1912,8 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		sfptpd_strncpy(new->control_path, SFPTPD_DEFAULT_CONTROL_PATH, sizeof(new->control_path));
 		sfptpd_strncpy(new->metrics_path, SFPTPD_DEFAULT_METRICS_PATH, sizeof(new->metrics_path));
 		sfptpd_strncpy(new->run_dir, SFPTPD_RUN_DIR, sizeof(new->run_dir));
+		new->state_dir_mode = SFPTPD_DEFAULT_STATE_DIR_MODE;
+		new->run_dir_mode = SFPTPD_DEFAULT_RUN_DIR_MODE;
 
 		new->clocks.sync_interval = SFPTPD_DEFAULT_SYNC_INTERVAL;
 		new->clocks.control = SFPTPD_DEFAULT_CLOCK_CTRL;
