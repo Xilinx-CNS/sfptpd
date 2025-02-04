@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2024 Advanced Micro Devices, Inc. */
+/* (c) Copyright 2024-2025 Advanced Micro Devices, Inc. */
 
 /**
  * @file   sfptpd_metrics.c
@@ -41,7 +41,7 @@
  * may keep their connection open while we may also want to perform one-off
  * queries for diagnostic purposes. */
 #define MAX_QUERIES 2
-#define QUERIES_MASK ((1 << (MAX_QUERIES)) - 1)
+#define QUERIES_MASK ((((bitfield_t )1) << (MAX_QUERIES)) - 1)
 
 enum openmetrics_type {
 	OM_T_GAUGE,
@@ -173,6 +173,11 @@ struct http {
 	const char *response_text;
 };
 
+struct listener {
+	int fd;
+	struct listener *next;
+};
+
 struct query_state {
 	struct http http;
 	int fd;
@@ -180,16 +185,19 @@ struct query_state {
 	bool abort;
 };
 
+typedef unsigned int bitfield_t;
+typedef signed int bitindex_t;
+
 struct metrics_state {
 	const struct sfptpd_config_metrics *config;
 	struct rt_stats_buf rt_stats;
 	bool initialised;
-	int listen_fd;
+	struct listener *listeners;
 
 	char *exemplars;
 	size_t exemplars_len;
 	struct query_state query[MAX_QUERIES];
-	unsigned int active_queries; /* bitfield */
+	bitfield_t active_queries;
 };
 
 enum stats_format {
@@ -922,12 +930,33 @@ static int netbuf_init(struct net_buf *nb)
 	return 0;
 }
 
+static inline bool queries_busy(void)
+{
+	return (metrics.active_queries ^ QUERIES_MASK) == 0;
+}
+
+static void listeners_xoff(void)
+{
+	struct listener *l;
+
+	for (l = metrics.listeners; l; l = l->next)
+		sfptpd_thread_user_fd_remove(l->fd);
+}
+
+static void listeners_xon(void)
+{
+	struct listener *l;
+
+	for (l = metrics.listeners; l; l = l->next)
+		sfptpd_thread_user_fd_add(l->fd, true, false);
+}
+
 static int metrics_handle_connection(int fd)
 {
 	int rc = 0;
 	int qi;
 
-	if ((metrics.active_queries ^ QUERIES_MASK) == 0) {
+	if (queries_busy()) {
 		ERROR("metrics: too many active queries; discarding\n");
 		goto fail;
 	}
@@ -940,68 +969,67 @@ static int metrics_handle_connection(int fd)
 	qi = __builtin_ctz(~metrics.active_queries);
 
 	memset(&metrics.query[qi].http, '\0', sizeof metrics.query[qi].http);
-		metrics.query[qi].abort = false;
-		if (netbuf_init(&metrics.query[qi].rx))
-			goto fail;
-		metrics.query[qi].fd = fd;
-		metrics.active_queries |= (1 << qi);
+	metrics.query[qi].abort = false;
+	if (netbuf_init(&metrics.query[qi].rx))
+		goto fail;
+	metrics.query[qi].fd = fd;
+	metrics.active_queries |= (1 << qi);
 
-		TRACE_L5("got incoming metrics connection\n");
+	TRACE_L5("got incoming metrics connection\n");
 
-		/* Rate control the backlog handling so we never reach the
-		 * above discard case. */
-		if ((metrics.active_queries ^ QUERIES_MASK) == 0)
-			rc = sfptpd_thread_user_fd_remove(metrics.listen_fd);
+	/* Rate control the backlog handling so we never reach the
+	 * above discard case. */
+	if (queries_busy())
+		listeners_xoff();
+	return 0;
 
-		return 0;
+fail:
+	close(fd);
+	return rc;
+}
 
-	fail:
-		close(fd);
-		return rc;
-	}
+static void netbuf_advance(struct net_buf *nb, size_t amount)
+{
+	assert(amount <= nb->len);
+	nb->rd_ptr += amount;
+	if (nb->rd_ptr > nb->capacity)
+		nb->rd_ptr -= nb->capacity;
+	nb->len -= amount;
+}
 
-	static void netbuf_advance(struct net_buf *nb, size_t amount)
-	{
-		assert(amount <= nb->len);
-		nb->rd_ptr += amount;
-		if (nb->rd_ptr > nb->capacity)
-			nb->rd_ptr -= nb->capacity;
-		nb->len -= amount;
-	}
+static void http_advance(struct query_state *q, size_t amount)
+{
+	netbuf_advance(&q->rx, amount);
+	q->http.cursor -= amount;
+}
 
-	static void http_advance(struct query_state *q, size_t amount)
-	{
-		netbuf_advance(&q->rx, amount);
-		q->http.cursor -= amount;
-	}
+static char netbuf_read(struct net_buf *nb, size_t cursor)
+{
+	/* This should already have been checked. */
+	assert(cursor < nb->len);
 
-	static char netbuf_read(struct net_buf *nb, size_t cursor)
-	{
-		/* This should already have been checked. */
-		assert(cursor < nb->len);
+	if (cursor >= nb->len)
+		return -1;
+	else
+		return nb->data[nb->rd_ptr +
+				((cursor + nb->rd_ptr < nb->capacity) ?
+				 cursor : cursor - nb->capacity)];
+}
 
-		if (cursor >= nb->len)
-			return -1;
-		else
-			return nb->data[nb->rd_ptr +
-					((cursor + nb->rd_ptr < nb->capacity) ?
-					 cursor : cursor - nb->capacity)];
-	}
+static bool http_copystr_into(struct query_state *q,
+			      char *target,
+			      size_t capacity,
+			      const char *on_error)
+{
+	struct net_buf *nb = &q->rx;
+	size_t n1, n2;
+	size_t len = q->http.cursor;
+	bool success = true;
 
-	static bool http_copystr_into(struct query_state *q,
-				      char *target,
-				      size_t capacity,
-				      const char *on_error)
-	{
-		struct net_buf *nb = &q->rx;
-		size_t n1, n2;
-		size_t len = q->http.cursor;
-		bool success = true;
-
-		if (len >= capacity) {
-			success = false;
-			if (on_error != NULL) {
-				http_abort(q, on_error);
+	if (len >= capacity) {
+		success = false;
+		if (on_error != NULL) {
+			http_abort(q, on_error);
 		} else {
 			assert(capacity > 0);
 			target[0] = '\0';
@@ -1341,10 +1369,8 @@ static void metrics_process_query(struct sfptpd_thread_readyfd *event,
 	if (q->abort || res == 0) {
 		TRACE_L5("metrics: closing the connection\n");
 		sfptpd_thread_user_fd_remove(q->fd);
-		if (metrics.listen_fd != -1 &&
-		    (metrics.active_queries ^ QUERIES_MASK) == 0) {
-			sfptpd_thread_user_fd_add(metrics.listen_fd, true, false);
-		}
+		if (queries_busy())
+			listeners_xon();
 		close(q->fd);
 		metrics.active_queries &= ~(1 << qi);
 	}
@@ -1380,7 +1406,6 @@ void sfptpd_metrics_destroy(void)
 int sfptpd_metrics_init(void)
 {
 	memset(&metrics, '\0', sizeof metrics);
-	metrics.listen_fd = -1;
 	metrics.initialised = true;
 
 	return 0;
@@ -1390,17 +1415,19 @@ void sfptpd_metrics_service_fds(unsigned int num_fds,
 				struct sfptpd_thread_readyfd events[])
 {
 	struct sfptpd_thread_readyfd *ev;
+	struct listener *l;
 	unsigned queries;
 	int qi;
 
-	if (metrics.listen_fd != -1 &&
-	    (ev = get_event_for(num_fds, events, metrics.listen_fd)) &&
-	    (metrics.active_queries ^ QUERIES_MASK) != 0) {
-		int fd = accept4(ev->fd, NULL, 0, SOCK_NONBLOCK);
-		if (fd == -1)
-			ERROR("metrics: accept() failed: %s\n", strerror(errno));
-		else
-			metrics_handle_connection(fd);
+	for (l = metrics.listeners; !queries_busy() && l; l = l->next) {
+		if ((ev = get_event_for(num_fds, events, l->fd))) {
+			int fd = accept4(ev->fd, NULL, 0, SOCK_NONBLOCK);
+			if (fd == -1) {
+				ERROR("metrics: accept() failed: %s\n", strerror(errno));
+			} else {
+				metrics_handle_connection(fd);
+			}
+		}
 	}
 
 	queries = metrics.active_queries;
@@ -1418,7 +1445,7 @@ void sfptpd_metrics_push_rt_stats(struct sfptpd_sync_instance_rt_stats_entry *en
 {
 	struct rt_stats_buf *stats = &metrics.rt_stats;
 
-	if (!metrics.initialised || metrics.listen_fd == -1)
+	if (!metrics.initialised || !metrics.listeners)
 		return;
 
 	stats->entries[stats->wr_ptr] = *entry;
@@ -1436,14 +1463,17 @@ void sfptpd_metrics_push_rt_stats(struct sfptpd_sync_instance_rt_stats_entry *en
 
 void sfptpd_metrics_listener_close(void)
 {
+	struct listener *l;
+	struct listener **lnp;
 	unsigned queries;
 	int qi;
 
 	if (metrics.initialised) {
-		if (metrics.listen_fd != -1) {
-			sfptpd_thread_user_fd_remove(metrics.listen_fd);
-			close(metrics.listen_fd);
-			metrics.listen_fd = -1;
+		for (lnp = &metrics.listeners; (l = *lnp);) {
+			lnp = &l->next;
+			sfptpd_thread_user_fd_remove(l->fd);
+			close(l->fd);
+			free(l);
 		}
 		queries = metrics.active_queries;
 		for (qi = __builtin_ctz(queries);
@@ -1456,40 +1486,28 @@ void sfptpd_metrics_listener_close(void)
 	}
 }
 
-int sfptpd_metrics_listener_open(struct sfptpd_config *app_config)
+static int listen_unix(struct sfptpd_config_general *general_config)
 {
-	struct sfptpd_config_general *general_config;
 	struct sockaddr_un addr = {
 		.sun_family = AF_UNIX
 	};
 	char *metrics_path;
 	size_t sz;
-	int flags;
+	int fd = -1;
 	int rc;
 
-	metrics.listen_fd = -1;
-
-	general_config = sfptpd_general_config_get(app_config);
-	metrics.config = &general_config->openmetrics;
+	/* Size-up path */
 	sz = sfptpd_format(sfptpd_log_get_format_specifiers(), NULL,
 			   NULL, 0,
 			   general_config->metrics_path);
 	if (sz < 0)
 		return errno;
 
-	rc = write_exemplars();
-	if (rc != 0)
-		return errno;
-
-	if (metrics.rt_stats.entries == NULL) {
-		metrics.rt_stats.sz = metrics.config->rt_stats_buf;
-		metrics.rt_stats.entries = malloc(metrics.rt_stats.sz * sizeof *metrics.rt_stats.entries);
-	}
-
 	metrics_path = malloc(++sz);
 	if (metrics_path == NULL)
 		return errno;
 
+	/* Format path */
 	rc = sfptpd_format(sfptpd_log_get_format_specifiers(), NULL,
 			   metrics_path, sz,
 			   general_config->metrics_path);
@@ -1508,8 +1526,8 @@ int sfptpd_metrics_listener_open(struct sfptpd_config *app_config)
 	unlink(metrics_path);
 
 	/* Create a Unix domain socket for receiving metrics requests */
-	metrics.listen_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-	if (metrics.listen_fd == -1) {
+	fd = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (fd == -1) {
 		ERROR(PREFIX "couldn't create socket\n");
             rc = -1;
 	        goto fail;
@@ -1517,30 +1535,17 @@ int sfptpd_metrics_listener_open(struct sfptpd_config *app_config)
 
 	/* Set access mode. Be louder because this is explicit config. */
 	if (general_config->metrics_socket_mode != (mode_t) -1 &&
-	    fchmod(metrics.listen_fd, general_config->metrics_socket_mode) == -1)
+	    fchmod(fd, general_config->metrics_socket_mode) == -1)
 		WARNING(PREFIX "could not set socket mode, %s\n",
 			strerror(errno));
 
 	/* Bind to the path in the filesystem. */
-	rc = bind(metrics.listen_fd, (const struct sockaddr *) &addr, sizeof addr);
+	rc = bind(fd, (const struct sockaddr *) &addr, sizeof addr);
 	if (rc == -1) {
 		ERROR(PREFIX "couldn't bind socket to %s\n",
 		      metrics_path);
 	        goto fail;
 	}
-
-	flags = fcntl(metrics.listen_fd, F_GETFL);
-	rc = fcntl(metrics.listen_fd, F_SETFL, flags | O_NONBLOCK);
-	if (rc != 0)
-		goto fail;
-
-	rc = listen(metrics.listen_fd, MAX_QUERIES);
-	if (rc != 0)
-		goto fail;
-
-	rc = sfptpd_thread_user_fd_add(metrics.listen_fd, true, false);
-	if (rc != 0)
-		errno = rc;
 
 fail:
 	/* Up until now, errno-style errors have been collecting in 'errno'
@@ -1550,10 +1555,69 @@ fail:
 
 	/* Tidy up any claimed resources. */
 	free(metrics_path);
-	if (rc != 0 && metrics.listen_fd != -1) {
-		close(metrics.listen_fd);
-		metrics.listen_fd = -1;
+	if (rc != 0 && fd != -1) {
+		close(fd);
+		fd = -1;
 	}
 
-	return metrics.listen_fd == -1 ? rc : 0;
+	return rc == 0 ? fd : -rc;
+}
+
+int sfptpd_metrics_listener_open(struct sfptpd_config *app_config)
+{
+	struct sfptpd_config_general *general_config;
+	struct listener *l = NULL;
+	int flags;
+	int rc;
+	int fd = -1;
+
+	general_config = sfptpd_general_config_get(app_config);
+	metrics.config = &general_config->openmetrics;
+
+	rc = write_exemplars();
+	if (rc != 0)
+		return errno;
+
+	if (metrics.rt_stats.entries == NULL) {
+		metrics.rt_stats.sz = metrics.config->rt_stats_buf;
+		metrics.rt_stats.entries = malloc(metrics.rt_stats.sz * sizeof *metrics.rt_stats.entries);
+	}
+
+	fd = listen_unix(general_config);
+	if (fd < 0) {
+		errno = -fd;
+		rc = -1;
+		goto fail;
+	}
+
+	l = calloc(1, sizeof *l);
+	if (l == NULL)
+		goto fail;
+
+	l->fd = fd;
+	l->next = metrics.listeners;
+	metrics.listeners = l;
+
+	flags = fcntl(fd, F_GETFL);
+	rc = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+	if (rc != 0)
+		goto fail;
+
+	rc = listen(fd, MAX_QUERIES);
+	if (rc != 0)
+		goto fail;
+
+	rc = sfptpd_thread_user_fd_add(fd, true, false);
+
+fail:
+	/* Up until now, errno-style errors have been collecting in 'errno'
+	 * itself. Capture in 'rc'. */
+	if (rc != 0) {
+		rc = errno;
+		free(l);
+		if (fd >= 0)
+			close(fd);
+	}
+
+	return rc;
 }
