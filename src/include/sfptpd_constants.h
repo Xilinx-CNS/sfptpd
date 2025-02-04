@@ -69,7 +69,7 @@
 #define SFPTPD_METRICS_SOCKET_PATH  "%R/metrics.sock"
 
 /** sfptpd run directory */
-#define SFPTPD_RUN_DIR  "/var/run/sfptpd"
+#define SFPTPD_RUN_DIR  "/run/sfptpd"
 
 /** Long-term statistics collection */
 #define SFPTPD_STATS_COLLECTION_INTERVAL (60)

@@ -133,7 +133,7 @@ or the
 .Xr nginx 8
 web server.
 For example:
-.Dl socat TCP-LISTEN:9979,fork UNIX-CONNECT:/var/run/sfptpd/metrics.sock
+.Dl socat TCP-LISTEN:9979,fork UNIX-CONNECT:/run/sfptpd/metrics.sock
 .El
 .Sh SYNC MODULES
 A subsystem within
@@ -242,13 +242,13 @@ typical configuration file
 .It Pa /var/lib/sfptpd
 location of files giving instantaneous sfptpd status, long term
 statistics and diagnostics
-.It Pa /var/run/kernel_clock
+.It Pa /run/kernel_clock
 lock file preventing multiple instances of
 .Nm
 and ptpd running unintentionally.
-.It Pa /var/run/sfptpd/metrics.sock
+.It Pa /run/sfptpd/metrics.sock
 stream socket serving OpenMetrics stats over HTTP
-.It Pa /var/run/sfptpd/control-v1.sock
+.It Pa /run/sfptpd/control-v1.sock
 datagram socket accepting control packets from
 .Nm sfptpdctl
 .El

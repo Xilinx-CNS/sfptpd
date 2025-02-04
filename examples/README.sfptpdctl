@@ -33,7 +33,7 @@ Control Protocol
 
 The client connects to the control server address. The version of the protocol is included in the address. The current version is 1 and the address is:
 
-/var/run/sfptpd/control-v1.sock
+/run/sfptpd/control-v1.sock
 
 The client will only succeed in connecting to the server if it has write permissions to the server socket and the server socket is created using the umask the server process inherited, therefore normally it will be necessary for the client to be run as root.
 

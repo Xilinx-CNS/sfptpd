@@ -69,6 +69,12 @@ RPM_OSVER=el6 make build_srpm
 
 Then invoke `rpmbuild --rebuild` on the generated `el6.src.rpm`
 
+Add the following to the sfptpd config:
+
+```
+run_dir /var/run/sfptpd
+```
+
 ## Building a container image
 
 ```sh

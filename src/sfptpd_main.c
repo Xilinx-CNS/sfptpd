@@ -78,7 +78,7 @@ static int pidfd_open(pid_t pid, unsigned int flags)
  * Local Data
  ****************************************************************************/
 
-static const char *lock_filename = "/var/run/kernel_clock";
+static const char *lock_filename = "/run/kernel_clock";
 static const mode_t lock_mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 
 #ifdef HAVE_CAPS

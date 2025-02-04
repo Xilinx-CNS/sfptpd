@@ -85,7 +85,7 @@ struct crny_sourcestats {
  * Constants
  ****************************************************************************/
 
-#define CRNY_RUN_PATH "/var/run/chrony"
+#define CRNY_RUN_PATH "/run/chrony"
 #define CRNY_CONTROL_SOCKET_PATH CRNY_RUN_PATH "/" "chronyd.sock"
 #define CRNY_CONTROL_CLIENT_FMT CRNY_RUN_PATH "/" "chronyc.%d.sock"
 
