@@ -8,6 +8,6 @@ import socket
 import sys
 
 s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-s.connect('/var/run/sfptpd-control-v1.sock')
+s.connect('/var/run/sfptpd/control-v1.sock')
 s.send(' '.join(sys.argv[1:]).encode())
 s.close()

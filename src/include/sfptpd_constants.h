@@ -63,7 +63,7 @@
 #define SFPTPD_STATE_PATH  "/var/lib/sfptpd"
 
 /** sfptpd control socket path */
-#define SFPTPD_CONTROL_SOCKET_PATH  "/var/run/sfptpd-control-v1.sock"
+#define SFPTPD_CONTROL_SOCKET_PATH  "%R/control-v1.sock"
 
 /** sfptpd metrics socket path */
 #define SFPTPD_METRICS_SOCKET_PATH  "%R/metrics.sock"

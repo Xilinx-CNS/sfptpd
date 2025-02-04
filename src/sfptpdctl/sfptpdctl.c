@@ -21,7 +21,7 @@
  ****************************************************************************/
 
 /** sfptpd control socket path */
-#define SFPTPD_CONTROL_SOCKET_PATH  "/var/run/sfptpd-control-v1.sock"
+#define SFPTPD_CONTROL_SOCKET_PATH  "/var/run/sfptpd/control-v1.sock"
 
 static const char *opts_short = "hs:";
 static const struct option opts_long[] = {
