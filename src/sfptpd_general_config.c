@@ -229,6 +229,16 @@ static const sfptpd_config_option_t config_general_options[] =
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
 		parse_access_mode,
 		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_STATE_DIR_MODE)},
+	{"control_socket_mode", "MODE",
+		"Specifies access MODE to give control socket, subject to umask",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_access_mode,
+		.dfl = "By default, leave as created."},
+	{"metrics_socket_mode", "MODE",
+		"Specifies access MODE to give metrics socket, subject to umask",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_access_mode,
+		.dfl = "By default, leave as created."},
 	{"sync_interval", "NUMBER",
 		"Specifies the interval in 2^NUMBER seconds at which the clocks "
 		"are synchronized to the local reference clock, where NUMBER is "
@@ -970,6 +980,10 @@ static int parse_access_mode(struct sfptpd_config_section *section, const char *
 		general->state_dir_mode = mode;
 	else if (!strcmp(option, "run_dir_mode"))
 		general->run_dir_mode = mode;
+	else if (!strcmp(option, "control_socket_mode"))
+		general->control_socket_mode = mode;
+	else if (!strcmp(option, "metrics_socket_mode"))
+		general->metrics_socket_mode = mode;
 	else
 		return EINVAL;
 
@@ -1914,6 +1928,8 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		sfptpd_strncpy(new->run_dir, SFPTPD_RUN_DIR, sizeof(new->run_dir));
 		new->state_dir_mode = SFPTPD_DEFAULT_STATE_DIR_MODE;
 		new->run_dir_mode = SFPTPD_DEFAULT_RUN_DIR_MODE;
+		new->control_socket_mode = (mode_t) -1;
+		new->metrics_socket_mode = (mode_t) -1;
 
 		new->clocks.sync_interval = SFPTPD_DEFAULT_SYNC_INTERVAL;
 		new->clocks.control = SFPTPD_DEFAULT_CLOCK_CTRL;

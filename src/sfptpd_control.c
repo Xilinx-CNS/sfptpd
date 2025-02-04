@@ -112,6 +112,17 @@ int sfptpd_control_socket_open(struct sfptpd_config *config)
 	        goto fail;
 	}
 
+	/* Set ownership of socket. Defer error to any consequent failure. */
+	if (fchown(control_fd, general_config->uid, general_config->gid))
+		TRACE_L4(PREFIX "could not set socket ownership, %s\n",
+			 strerror(errno));
+
+	/* Set access mode. Be louder because this is explicit config. */
+	if (general_config->control_socket_mode != (mode_t) -1 &&
+	    fchmod(control_fd, general_config->control_socket_mode) == -1)
+		WARNING(PREFIX "could not set socket mode, %s\n",
+			strerror(errno));
+
 	/* Bind to the path in the filesystem. */
 	rc = bind(control_fd, (const struct sockaddr *) &addr, sizeof addr);
 	if (rc == -1) {
@@ -119,11 +130,6 @@ int sfptpd_control_socket_open(struct sfptpd_config *config)
 		      control_path);
 	        goto fail;
 	}
-
-	/* Set ownership of socket. Defer error to any consequent failure. */
-	if (chown(control_path, general_config->uid, general_config->gid))
-		TRACE_L4(PREFIX "could not set socket ownership, %s\n",
-			 strerror(errno));
 
 	return 0;
 fail:

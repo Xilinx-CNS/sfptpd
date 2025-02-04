@@ -252,6 +252,8 @@ typedef struct sfptpd_config_general {
 	char metrics_path[PATH_MAX];
 	mode_t run_dir_mode;
 	mode_t state_dir_mode;
+	mode_t control_socket_mode;
+	mode_t metrics_socket_mode;
 	sfptpd_config_timestamping_t timestamping;
 	long double convergence_threshold;
 	long double step_threshold;
