@@ -1118,6 +1118,26 @@ processPortMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
 		   because there are now guards on the unpacking functions. */
 	}
 
+	/*Spec 9.5.2.2*/
+	isFromSelf = (ptpClock->portIdentity.portNumber == ptpInterface->msgTmpHeader.sourcePortIdentity.portNumber
+		      && !memcmp(ptpInterface->msgTmpHeader.sourcePortIdentity.clockIdentity, ptpClock->portIdentity.clockIdentity, CLOCK_IDENTITY_LENGTH));
+
+	if (isFromSelf && timestampValid &&
+	    ptpInterface->tsMethod == TS_METHOD_SYSTEM) {
+		struct sfptpd_ts_ticket ticket;
+		struct sfptpd_ts_user user;
+
+		ticket = netMatchPacketToTsCache(&ptpInterface->ts_cache,
+						 &user,
+						 ptpInterface->msgIbuf, length);
+		processTxTimestamp(ptpInterface, user, ticket, *timestamp);
+	}
+
+	if (isFromSelf) {
+		/* Looped-back packets need no further processing */
+		return;
+	}
+
 	/*
 	 * Make sure we use the TAI to UTC offset specified if the master is
 	 * sending the UTC_VALID bit.
@@ -1139,26 +1159,6 @@ processPortMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
 	/* Apply UTC offset if appropriate */
 	if (timestampValid)
 		applyUtcOffset(timestamp, rtOpts, ptpClock);
-
-	/*Spec 9.5.2.2*/
-	isFromSelf = (ptpClock->portIdentity.portNumber == ptpInterface->msgTmpHeader.sourcePortIdentity.portNumber
-		      && !memcmp(ptpInterface->msgTmpHeader.sourcePortIdentity.clockIdentity, ptpClock->portIdentity.clockIdentity, CLOCK_IDENTITY_LENGTH));
-
-	if (isFromSelf && timestampValid &&
-	    ptpInterface->tsMethod == TS_METHOD_SYSTEM) {
-		struct sfptpd_ts_ticket ticket;
-		struct sfptpd_ts_user user;
-
-		ticket = netMatchPacketToTsCache(&ptpInterface->ts_cache,
-						 &user,
-						 ptpInterface->msgIbuf, length);
-		processTxTimestamp(ptpInterface, user, ticket, *timestamp);
-	}
-
-	if (isFromSelf) {
-		/* Looped-back packets need no further processing */
-		return;
-	}
 
 	/* subtract the inbound latency adjustment */
 	if (timestampValid && timestamp->sec > 0)
