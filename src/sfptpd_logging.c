@@ -76,6 +76,7 @@ static char state_file_format[PATH_MAX];
 static char state_next_file_format[PATH_MAX];
 static char sfptpd_config_log_tmpfile[] = "/tmp/sfptpd.conf.lexed.XXXXXX";
 static FILE *config_log_tmp = NULL;
+static bool config_log_attempted = false;
 
 static unsigned int trace_levels[SFPTPD_COMPONENT_ID_MAX] =
 {
@@ -868,21 +869,28 @@ void sfptpd_log_get_time(struct sfptpd_log_time *time)
 
 void sfptpd_log_lexed_config(const char *format, ...)
 {
+	const char *error="could not record config copy, %s\n";
 	va_list ap;
 
 	assert(format != NULL);
 
 	va_start(ap, format);
 
-	if (!config_log_tmp) {
+	if (!config_log_tmp && !config_log_attempted) {
 		int log_fd = mkstemp(sfptpd_config_log_tmpfile);
-		assert(log_fd != -1);
-
-		config_log_tmp = fdopen(log_fd, "w");
-		assert(config_log_tmp);
+		if (log_fd == -1) {
+			WARNING(error, strerror(errno));
+		} else {
+			config_log_tmp = fdopen(log_fd, "w");
+			if (config_log_tmp == NULL) {
+				ERROR(error, strerror(errno));
+			}
+		}
+		config_log_attempted = true;
 	}
 
-	vfprintf(config_log_tmp, format, ap);
+	if (config_log_tmp)
+		vfprintf(config_log_tmp, format, ap);
 
 	va_end(ap);
 }
