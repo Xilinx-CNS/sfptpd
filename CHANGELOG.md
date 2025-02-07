@@ -6,7 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 (c) Copyright 2012-2025 Advanced Micro Devices, Inc.
 
-## [3.8.1.1002] - 2025-01-31
+## Unreleased
+
+### Fixed
+
+- Issue SWPTP-1560
+  - Fix potential buffer overflow reading long PPS device 'names' from sysfs
+
+## [3.8.1.1002] - 2025-02-14
 
 ### Added
 
