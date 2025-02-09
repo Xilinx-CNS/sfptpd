@@ -287,8 +287,12 @@ static int phc_configure_pps(struct sfptpd_phc *phc)
 
 	assert(phc != NULL);
 
-	snprintf(phc_name, sizeof(phc_name), SFPTPD_PHC_NAME_FORMAT,
-		 phc->phc_idx);
+	rc = snprintf(phc_name, sizeof(phc_name), SFPTPD_PHC_NAME_FORMAT,
+		      phc->phc_idx);
+	if (rc >= sizeof phc_name)
+		return ENAMETOOLONG;
+	else if (rc < 0)
+		return errno;
 
 	/* Search through the PPS devices looking for the one associated with
 	 * this PHC device. */
@@ -325,7 +329,7 @@ static int phc_configure_pps(struct sfptpd_phc *phc)
 		if (file == NULL) {
 			TRACE_L3("phc: couldn't open %s\n", path);
 		} else {
-			tokens = fscanf(file, "%16s", candidate_name);
+			tokens = fscanf(file, "%15s", candidate_name);
 			(void)fclose(file);
 
 			if ((tokens == 1) && (strcmp(candidate_name, phc_name) == 0)) {
@@ -409,10 +413,19 @@ static int phc_discover_devpps(struct sfptpd_phc *phc,
 
 	assert(phc != NULL);
 
-	snprintf(phc_name, sizeof(phc_name), SFPTPD_PHC_NAME_FORMAT,
-		 phc->phc_idx);
-	snprintf(phc_extname, sizeof(phc_extname), SFPTPD_PHC_EXT_NAME_FORMAT,
-		 phc->phc_idx);
+	rc = snprintf(phc_name, sizeof(phc_name), SFPTPD_PHC_NAME_FORMAT,
+		      phc->phc_idx);
+	if (rc >= sizeof phc_name)
+		return ENAMETOOLONG;
+	else if (rc < 0)
+		return errno;
+
+	rc = snprintf(phc_extname, sizeof(phc_extname), SFPTPD_PHC_EXT_NAME_FORMAT,
+		      phc->phc_idx);
+	if (rc >= sizeof phc_extname)
+		return ENAMETOOLONG;
+	else if (rc < 0)
+		return errno;
 
 	/* Search through the PPS devices looking for the one associated with
 	 * this PHC device. */
@@ -451,7 +464,7 @@ static int phc_discover_devpps(struct sfptpd_phc *phc,
 			if (state == STATE_FOUND_INTPPS)
 				state = STATE_NOTFOUND;
 		} else {
-			tokens = fscanf(file, "%16s", candidate_name);
+			tokens = fscanf(file, "%15s", candidate_name);
 			(void)fclose(file);
 
 			if ((tokens == 1)) {

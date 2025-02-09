@@ -28,7 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - This option requires a calibration step that may take a few seconds.
 - Add hardware clock control and diagnostic utility `tstool`.
 
-## [3.8.1.x] - Unreleased
+## [3.8.1.1003] - 2025-02-14
 
 ### Added
 
@@ -44,8 +44,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - chrony: use smoothed offset from chrony not last NTP sample
 - Issue SWPTP-1531
   - freerun: fix resolution of bond when VLAN specified
+- Issue SWPTP-1559
+  - Avoid double UTC compensation for looped-back Tx software timestamps
+- Issue SWPTP-1560
+  - Fix potential buffer overflow reading long PPS device 'names' from sysfs
+- Issue SWPTP-1561
+  - Avoid bailing out if diagnostic copy of log file cannot be written out
 - Xilinx-CNS/sfptpd#17
-  - avoid crash if a clock step occurs when a NIC has gone away
+  - Avoid crash if a clock step occurs when a NIC has gone away
 
 ## [3.8.0.1005] - 2024-10-10 [Feature Release]
 
