@@ -131,8 +131,11 @@ struct sfptpd_phc {
 	/* Method that is used to sample external PPS input */
 	sfptpd_phc_pps_method_t pps_method;
 
+	/* Path to synthetic PPS device */
+	char *pps_int_dev;
+
 	/* Path to external PPS device */
-	char devpps_path[PATH_MAX];
+	char *pps_ext_dev;
 
 	/* File descriptor for associated external PPS device */
 	int devpps_fd;
@@ -277,87 +280,21 @@ static bool phc_update_smallest_window_diff(struct sfptpd_timespec *window,
 
 static int phc_configure_pps(struct sfptpd_phc *phc)
 {
-	FTS *fts;
-	FTSENT *fts_entry;
-	FILE *file;
-	char * const search_path[] = {SFPTPD_SYSFS_PPS_PATH, NULL};
-	char path[PATH_MAX];
-	char phc_name[16], candidate_name[16];
-	int rc, tokens;
+	int rc;
 
 	assert(phc != NULL);
 
-	rc = snprintf(phc_name, sizeof(phc_name), SFPTPD_PHC_NAME_FORMAT,
-		      phc->phc_idx);
-	if (rc >= sizeof phc_name)
-		return ENAMETOOLONG;
-	else if (rc < 0)
-		return errno;
-
-	/* Search through the PPS devices looking for the one associated with
-	 * this PHC device. */
-	fts = fts_open(search_path, FTS_COMFOLLOW, NULL);
-	if (fts == NULL) {
-		ERROR("phc: failed to open sysfs pps devices directory, %s\n",
-		      strerror(errno));
-		phc->synth_pps_state = PPS_BAD;
-		return errno;
+	if (phc->pps_int_dev == NULL) {
+		TRACE_L3("phc%d: no PPS device to configure\n", phc->phc_idx);
 	}
 
-	fts_entry = fts_read(fts);
-	if (fts_entry == NULL) {
-		ERROR("phc: failed to read sysfs pps directory, %s\n", strerror(errno));
-		rc = errno;
-		goto fail1;
-	}
-
-	fts_entry = fts_children(fts, 0);
-	if (fts_entry == NULL) {
-		ERROR("phc: failed to get sysfs pps directory listing, %s\n",
-		      strerror(errno));
-		rc = errno;
-		goto fail1;
-	}
-
-	/* Iterate through the linked list of files within the directory... */
-	for ( ; fts_entry != NULL; fts_entry = fts_entry->fts_link) {
-		/* Attempt to read the PPS device name file */
-		snprintf(path, sizeof(path), "%s%s/name",
-			 fts_entry->fts_path, fts_entry->fts_name);
-
-		file = fopen(path, "r");
-		if (file == NULL) {
-			TRACE_L3("phc: couldn't open %s\n", path);
-		} else {
-			tokens = fscanf(file, "%15s", candidate_name);
-			(void)fclose(file);
-
-			if ((tokens == 1) && (strcmp(candidate_name, phc_name) == 0)) {
-				TRACE_L3("phc%d: found %s\n",
-					 phc->phc_idx, fts_entry->fts_name);
-				break;
-			}
-		}
-	}
-
-	/* If we didn't find the PPS device, abandon ship */
-	if (fts_entry == NULL) {
-		ERROR("phc%d: failed to find corresponding PPS device\n",
-		      phc->phc_idx);
-		rc = ENOENT;
-		goto fail1;
-	}
-
-	/* Create the path of the PPS device, open the device and enable PPS
-	 * events on the PHC device */
-	snprintf(path, sizeof(path), "/dev/%s", fts_entry->fts_name);
-
-	phc->pps_fd = sfptpd_priv_open_dev(path);
+	/* Open the device and enable PPS events on it */
+	phc->pps_fd = sfptpd_priv_open_dev(phc->pps_int_dev);
 	if (phc->pps_fd < 0) {
 		rc = -phc->pps_fd;
 		phc->pps_fd = -1;
 		ERROR("phc%d: failed to open PPS device %s, %s\n",
-		      phc->phc_idx, path, strerror(errno));
+		      phc->phc_idx, phc->pps_int_dev, strerror(errno));
 		goto fail1;
 	}
 
@@ -376,9 +313,8 @@ static int phc_configure_pps(struct sfptpd_phc *phc)
 	phc->pps_prev.nsec = 0;
 
 	TRACE_L3("phc%d: successfully configured %s\n",
-		 phc->phc_idx, fts_entry->fts_name);
+		 phc->phc_idx, phc->pps_int_dev);
 	phc->synth_pps_state = PPS_INIT;
-	fts_close(fts);
 	return 0;
 
 fail2:
@@ -386,21 +322,21 @@ fail2:
 	phc->pps_fd = -1;
 fail1:
 	phc->synth_pps_state = PPS_BAD;
-	fts_close(fts);
 	return rc;
 }
 
 
-static int phc_discover_devpps(struct sfptpd_phc *phc,
-			       char *path_buf,
-			       size_t path_buf_size)
+static void phc_discover_pps(struct sfptpd_phc *phc)
 {
 	FTS *fts;
 	FTSENT *fts_entry;
 	FILE *file;
 	char * const search_path[] = {SFPTPD_SYSFS_PPS_PATH, NULL};
-	char phc_name[16], candidate_name[16], phc_extname[16];
-	int rc, tokens;
+	char *phc_int_name = NULL;
+	char *phc_ext_name = NULL;
+	char *candidate = NULL;
+	size_t sz = 0;
+	ssize_t len;
 
 	/* The Xilinx sfc net driver provides a second PPS device following
 	   the internal one, named "sfc", so this state machine looks for it. */
@@ -408,24 +344,20 @@ static int phc_discover_devpps(struct sfptpd_phc *phc,
 		STATE_SEARCHING,
 		STATE_FOUND_INTPPS,
 		STATE_FOUND_EXTPPS,
-		STATE_NOTFOUND,
 	} state = STATE_SEARCHING;
 
 	assert(phc != NULL);
 
-	rc = snprintf(phc_name, sizeof(phc_name), SFPTPD_PHC_NAME_FORMAT,
-		      phc->phc_idx);
-	if (rc >= sizeof phc_name)
-		return ENAMETOOLONG;
-	else if (rc < 0)
-		return errno;
-
-	rc = snprintf(phc_extname, sizeof(phc_extname), SFPTPD_PHC_EXT_NAME_FORMAT,
-		      phc->phc_idx);
-	if (rc >= sizeof phc_extname)
-		return ENAMETOOLONG;
-	else if (rc < 0)
-		return errno;
+	if (asprintf(&phc_int_name, SFPTPD_PHC_NAME_FORMAT,
+		     phc->phc_idx) == -1) {
+		phc_int_name = NULL;
+		goto fail0;
+	}
+	if (asprintf(&phc_ext_name, SFPTPD_PHC_EXT_NAME_FORMAT,
+		     phc->phc_idx) == -1) {
+		phc_ext_name = NULL;
+		goto fail0;
+	}
 
 	/* Search through the PPS devices looking for the one associated with
 	 * this PHC device. */
@@ -433,80 +365,97 @@ static int phc_discover_devpps(struct sfptpd_phc *phc,
 	if (fts == NULL) {
 		ERROR("phc: failed to open sysfs pps devices directory, %s\n",
 		      strerror(errno));
-		return errno;
+		goto fail0;
 	}
 
 	fts_entry = fts_read(fts);
 	if (fts_entry == NULL) {
 		ERROR("phc: failed to read sysfs pps directory, %s\n", strerror(errno));
-		rc = errno;
 		goto fail1;
 	}
 
 	fts_entry = fts_children(fts, 0);
 	if (fts_entry == NULL) {
 		TRACE_L5("phc: failed to get sysfs pps directory listing\n");
-		rc = ENOENT;
 		goto fail1;
 	}
 
 	/* Iterate through the linked list of files within the directory... */
-	for ( ; fts_entry != NULL && state != STATE_NOTFOUND;
+	for ( ; fts_entry != NULL &&
+		(phc->pps_int_dev == NULL || phc->pps_ext_dev == NULL);
 	     fts_entry = fts_entry->fts_link) {
+		char *path;
 
 		/* Attempt to read the PPS device name file */
-		snprintf(path_buf, path_buf_size, "%s%s/name",
-			 fts_entry->fts_path, fts_entry->fts_name);
-
-		file = fopen(path_buf, "r");
-		if (file == NULL) {
-			TRACE_L3("phc: couldn't open %s\n", path_buf);
-			if (state == STATE_FOUND_INTPPS)
-				state = STATE_NOTFOUND;
-		} else {
-			tokens = fscanf(file, "%15s", candidate_name);
-			(void)fclose(file);
-
-			if ((tokens == 1)) {
-				if (strcmp(candidate_name, phc_extname) == 0) {
-					state = STATE_FOUND_EXTPPS;
-				} else if (state == STATE_SEARCHING) {
-					if (strcmp(candidate_name, phc_name) == 0)
-						state = STATE_FOUND_INTPPS;
-				} else if (state == STATE_FOUND_INTPPS) {
-					if ((strcmp(candidate_name, "sfc") == 0) ||
-					    (strcmp(candidate_name, "xlnx") == 0)) {
-						state = STATE_FOUND_EXTPPS;
-					}
-				}
-			} else if(state == STATE_FOUND_INTPPS)
-				state = STATE_SEARCHING;
+		len = asprintf(&path, "%s%s/name",
+			       fts_entry->fts_path, fts_entry->fts_name);
+		if (len == -1) {
+			ERROR("phc%d: resolving PPS device info path, %s\n",
+			      phc->phc_idx, strerror(errno));
+			continue;
 		}
-
+		file = fopen(path, "r");
+		if (file == NULL ||
+		    (len = getline(&candidate, &sz, file)) == -1) {
+			WARNING("phc%d: error reading pps name %s, %s\n",
+				phc->phc_idx, fts_entry->fts_name, strerror(errno));
+			if(state == STATE_FOUND_INTPPS)
+				state = STATE_SEARCHING;
+		} else {
+			if (candidate[len - 1] == '\n')
+				candidate[len - 1] = '\0';
+			if (strcmp(candidate, phc_ext_name) == 0) {
+				state = STATE_FOUND_EXTPPS;
+			} else if (state == STATE_SEARCHING &&
+				   strcmp(candidate, phc_int_name) == 0) {
+				if (asprintf(&phc->pps_int_dev, "/dev/%s", fts_entry->fts_name) == -1) {
+					phc->pps_int_dev = NULL;
+					ERROR("phc%d: could not record pps device %s, %s\n",
+					      phc->phc_idx, fts_entry->fts_name, strerror(errno));
+				}
+				state = STATE_FOUND_INTPPS;
+			} else if (state == STATE_FOUND_INTPPS) {
+				if ((strcmp(candidate, "sfc") == 0) ||
+				    (strcmp(candidate, "xlnx") == 0)) {
+					state = STATE_FOUND_EXTPPS;
+				}
+			}
+		}
+		free(path);
+		if (file != NULL)
+			fclose(file);
 		if (state == STATE_FOUND_EXTPPS) {
-			TRACE_L5("phc%d: found %s (\"%s\") for external PPS input\n",
-				 phc->phc_idx, fts_entry->fts_name, candidate_name);
-			break;
+			if (asprintf(&phc->pps_ext_dev, "/dev/%s", fts_entry->fts_name) == -1) {
+				phc->pps_ext_dev = NULL;
+				ERROR("phc%d: could not record pps device %s, %s\n",
+				      phc->phc_idx, fts_entry->fts_name, strerror(errno));
+			}
+			state = STATE_SEARCHING;
 		}
 	}
+	free(candidate);
 
-	/* If we didn't find the PPS device, abandon ship */
-	if (state != STATE_FOUND_EXTPPS) {
+	if (phc->pps_int_dev != NULL) {
+		TRACE_L3("phc%d: discovered related internal PPS device %s\n",
+			 phc->phc_idx, phc->pps_int_dev);
+	} else {
+		TRACE_L6("phc%d: failed to find corresponding internal PPS device\n",
+			 phc->phc_idx);
+	}
+
+	if (phc->pps_ext_dev != NULL) {
+		TRACE_L3("phc%d: discovered related external PPS device %s\n",
+			 phc->phc_idx, phc->pps_ext_dev);
+	} else {
 		TRACE_L6("phc%d: failed to find corresponding external PPS device\n",
 			 phc->phc_idx);
-		rc = ENOENT;
-		goto fail1;
 	}
-
-	/* Create the path of the PPS device */
-	snprintf(path_buf, path_buf_size, "/dev/%s", fts_entry->fts_name);
-
-	fts_close(fts);
-	return 0;
 
 fail1:
 	fts_close(fts);
-	return rc;
+fail0:
+	free(phc_ext_name);
+	free(phc_int_name);
 }
 
 
@@ -518,12 +467,12 @@ static int phc_open_devpps(struct sfptpd_phc *phc)
 	}
 
 	/* Open the PPS device */
-	phc->devpps_fd = sfptpd_priv_open_dev(phc->devpps_path);
+	phc->devpps_fd = sfptpd_priv_open_dev(phc->pps_ext_dev);
 	if (phc->devpps_fd < 0) {
 		int rc = -phc->devpps_fd;
 		phc->devpps_fd = -1;
 		ERROR("phc%d: failed to open external PPS device %s, %s\n",
-		      phc->phc_idx, phc->devpps_path, strerror(rc));
+		      phc->phc_idx, phc->pps_ext_dev, strerror(rc));
 		return rc;
 	}
 
@@ -1026,7 +975,7 @@ static int phc_enable_devpps(struct sfptpd_phc *phc, bool on)
 	else
 		TRACE_L2("phc%d: %s external PPS device: %s\n",
 			 phc->phc_idx, past_participle,
-			 phc->devpps_path);
+			 phc->pps_ext_dev);
 
 	return rc;
 }
@@ -1073,21 +1022,13 @@ static int phc_get_devpps_event(struct sfptpd_phc *phc, struct sfptpd_timespec *
 }
 
 
-static void phc_discover_pps(struct sfptpd_phc *phc)
+static void phc_choose_extpps(struct sfptpd_phc *phc)
 {
 	int i;
 
 	/* Check external time stamp capabilities */
 	TRACE_L2("phc%d: %d external time stamp channels\n",
 		 phc->phc_idx, phc->caps.n_ext_ts);
-
-	/* Discover external PPS device */
-	if (phc_discover_devpps(phc, phc->devpps_path, sizeof phc->devpps_path) == 0) {
-		TRACE_L2("phc%d: discovered related external PPS device %s\n",
-			 phc->phc_idx, phc->devpps_path);
-	} else {
-		phc->devpps_path[0] = '\0';
-	}
 
 	for (i = 0; i < SFPTPD_PPS_METHOD_MAX; i++) {
 		sfptpd_phc_pps_method_t method = phc_pps_methods[i];
@@ -1099,7 +1040,7 @@ static void phc_discover_pps(struct sfptpd_phc *phc)
 			}
 			break;
 		case SFPTPD_PPS_METHOD_DEV_PPS:
-			if (phc->devpps_path[0]) {
+			if (phc->pps_ext_dev) {
 				if (phc_open_devpps(phc) == 0) {
 					phc->pps_method = method;
 					return;
@@ -1192,6 +1133,7 @@ int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc)
 		new->caps.max_adj = timex_max_adj_32bit;
 
 	phc_discover_pps(new);
+	phc_choose_extpps(new);
 
 	*phc = new;
 	return 0;
@@ -1229,6 +1171,8 @@ void sfptpd_phc_close(struct sfptpd_phc *phc)
 	if (phc->phc_fd >= 0)
 		(void)close(phc->phc_fd);
 
+	free(phc->pps_int_dev);
+	free(phc->pps_ext_dev);
 	free(phc);
 }
 
