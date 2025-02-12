@@ -131,8 +131,9 @@ static pthread_mutex_t vmsg_mutex;
 static char freq_correction_file_format[PATH_MAX];
 static char state_file_format[PATH_MAX];
 static char state_next_file_format[PATH_MAX];
-static char sfptpd_config_log_tmpfile[] = "/tmp/sfptpd.conf.lexed.XXXXXX";
-static FILE *config_log_tmp = NULL;
+char *config_log_buf = NULL;
+size_t config_log_bufsz = 0;
+static FILE *config_log_stream = NULL;
 static bool config_log_attempted = false;
 
 /* JSON stats is block-buffered and we ensure lines get written whole. */
@@ -331,22 +332,13 @@ static void log_topology_write_entry(FILE *stream, const char *field,
 }
 
 
-static void log_copy_file(const char *src, const char *dest)
+static void log_write_file(const char *dest, const char *buf, size_t len)
 {
-	FILE *load;
 	FILE *save;
-	char buf[128];
-	char *str;
 	bool error = true;
 
-	assert(dest);
-
 	if ((save = fopen(dest, "w"))) {
-		if ((load = fopen(src, "r"))) {
-			while ((str = fgets(buf, sizeof buf, load)) && fputs(str, save) >= 0);
-			error = ferror(load) || ferror(save);
-			fclose(load);
-		}
+		error = fwrite(buf, len, 1, save) != 1;
 		fclose(save);
 	}
 
@@ -463,16 +455,17 @@ int sfptpd_log_open(struct sfptpd_config *config)
 			state_path, strerror(errno));
 
 	/* Save the lexed config */
-	if (config_log_tmp) {
-		fclose(config_log_tmp);
-		config_log_tmp = NULL;
+	if (config_log_stream) {
+		fclose(config_log_stream);
 		rc = snprintf(path, sizeof path, "%s/%s", state_path,
 			      sfptpd_config_log_file);
 		assert(rc < sizeof path);
-		log_copy_file(sfptpd_config_log_tmpfile, path);
+		log_write_file(path, config_log_buf, config_log_bufsz);
 		if (chown(path, general_config->uid, general_config->gid))
 			TRACE_L4("could not set config copy ownership, %s\n", strerror(errno));
-		unlink(sfptpd_config_log_tmpfile);
+		free(config_log_buf);
+		config_log_buf = NULL;
+		config_log_stream = NULL;
 	}
 
 	/* Delete all state and stats files, interfaces and topology file before we begin */
@@ -1137,31 +1130,27 @@ void sfptpd_log_lexed_config(const char *format, ...)
 
 	va_start(ap, format);
 
-	if (!config_log_tmp && !config_log_attempted) {
-		int log_fd = mkstemp(sfptpd_config_log_tmpfile);
-		if (log_fd == -1) {
+	if (!config_log_stream && !config_log_attempted) {
+		config_log_stream = open_memstream(&config_log_buf, &config_log_bufsz);
+		if (config_log_stream == NULL) {
 			WARNING(error, strerror(errno));
-		} else {
-			config_log_tmp = fdopen(log_fd, "w");
-			if (config_log_tmp == NULL) {
-				ERROR(error, strerror(errno));
-			}
 		}
 		config_log_attempted = true;
 	}
 
-	if (config_log_tmp)
-		vfprintf(config_log_tmp, format, ap);
+	if (config_log_stream)
+		vfprintf(config_log_stream, format, ap);
 
 	va_end(ap);
 }
 
 void sfptpd_log_config_abandon(void)
 {
-	if (config_log_tmp) {
-		fclose(config_log_tmp);
-		unlink(sfptpd_config_log_tmpfile);
-		config_log_tmp = NULL;
+	if (config_log_stream) {
+		fclose(config_log_stream);
+		free(config_log_buf);
+		config_log_buf = NULL;
+		config_log_stream = NULL;
 	}
 }
 
