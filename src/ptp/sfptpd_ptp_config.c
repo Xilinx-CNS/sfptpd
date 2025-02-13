@@ -1106,22 +1106,7 @@ static int parse_mon_monitor_address(struct sfptpd_config_section *section, cons
 {
 	int rc = 0;
 	int i, j;
-	int gai_rc;
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
-	struct addrinfo hints = {
-		.ai_family = ptp->ptpd_intf.transportAF,
-		.ai_socktype = SOCK_DGRAM,
-	};
-	struct addrinfo *result;
-	regex_t rquot;
-	regex_t runquot;
-	regmatch_t matches[4];
-	char *spec = NULL;
-	regoff_t node;
-	regoff_t serv;
-
-	assert(regcomp(&rquot, "^\\[(.*)](:([^:]*))?$", REG_EXTENDED) == 0);
-	assert(regcomp(&runquot, "^([^:]*)(:([^:]*))?$", REG_EXTENDED) == 0);
 
 	j = ptp->ptpd_port.num_monitor_dests;
 	for (i = 0; rc == 0 && i < num_params; i++, j++) {
@@ -1131,47 +1116,19 @@ static int parse_mon_monitor_address(struct sfptpd_config_section *section, cons
 			rc = E2BIG;
 			continue;
 		}
-
-		spec = strdup(params[i]);
-		rc = regexec(&rquot, spec, sizeof matches / sizeof *matches, matches, 0);
-		if (rc != 0)
-			rc = regexec(&runquot, params[i], sizeof matches / sizeof *matches, matches, 0);
-		node = matches[1].rm_so;
-		serv = matches[3].rm_so;
-		if (rc != 0 || node == -1) {
-			ERROR("invalid monitor address: %s\n", params[i]);
-			rc = EINVAL;
-			goto finish;
-		}
-		spec[matches[1].rm_eo] = '\0';
-		if (serv != -1)
-			spec[matches[3].rm_eo] = '\0';
-
-		gai_rc = getaddrinfo(spec + node,
-				     serv == -1 ? NULL : spec + serv,
-				     &hints, &result);
-		if (gai_rc != 0 || result == NULL) {
-			ERROR("monitor address lookup for %s failed, %s\n",
-			      params[i], gai_strerror(gai_rc));
-			rc = EINVAL;
+		rc = sfptpd_config_parse_net_addr(ptp->ptpd_port.monitor_address + j,
+						  params[i], "monitor",
+						  ptp->ptpd_intf.transportAF,
+						  SOCK_DGRAM, false,
+						  "ptp-general");
+		if (rc > 0) {
+			ptp->ptpd_port.monitor_address_len[j] = rc;
+			rc = 0;
 		} else {
-			assert(result->ai_addrlen <= sizeof ptp->ptpd_port.monitor_address);
-			memcpy(ptp->ptpd_port.monitor_address + j,
-			       result->ai_addr, result->ai_addrlen);
-			ptp->ptpd_port.monitor_address_len[j] = result->ai_addrlen;
+			rc = -rc;
 		}
-		if (gai_rc == 0)
-			freeaddrinfo(result);
-		free(spec);
-		spec = NULL;
 	}
 	ptp->ptpd_port.num_monitor_dests = j;
-
-finish:
-	if (spec != NULL)
-		free(spec);
-	regfree(&rquot);
-	regfree(&runquot);
 	return rc;
 }
 
