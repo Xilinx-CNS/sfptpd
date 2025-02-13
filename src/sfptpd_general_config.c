@@ -137,6 +137,8 @@ static int parse_initial_clock_correction(struct sfptpd_config_section *section,
 					  unsigned int num_params, const char * const params[]);
 static int parse_openmetrics(struct sfptpd_config_section *section, const char *option,
 			     unsigned int num_params, const char * const params[]);
+static int parse_openmetrics_tcp(struct sfptpd_config_section *section, const char *option,
+				 unsigned int num_params, const char * const params[]);
 static int parse_openmetrics_rt_stats_buf(struct sfptpd_config_section *section, const char *option,
 					  unsigned int num_params, const char * const params[]);
 static int parse_openmetrics_options(struct sfptpd_config_section *section, const char *option,
@@ -441,6 +443,10 @@ static const sfptpd_config_option_t config_general_options[] =
 		"Whether to serve OpenMetrics exposition",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics,
 		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_OPENMETRICS_UNIX)},
+	{"openmetrics_tcp", "LISTEN-ADDR*",
+		"Addresses to listen on to serve OpenMetrics exposition over TCP",
+		~1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_tcp,
+		.dfl = "Defaults to no TCP listener"},
 	{"openmetrics_rt_stats_buf", "NUMBER",
 		"NUMBER of real time stats entries to buffer for OpenMetrics",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_rt_stats_buf,
@@ -1144,6 +1150,31 @@ static int parse_openmetrics(struct sfptpd_config_section *section, const char *
 	}
 
 	return rc;
+}
+
+static int parse_openmetrics_tcp(struct sfptpd_config_section *section, const char *option,
+				 unsigned int num_params, const char * const params[])
+{
+	struct sfptpd_config_metrics *metrics = &((sfptpd_config_general_t *)section)->openmetrics;
+	int rc = 0;
+	int i;
+
+	metrics->tcp = calloc(num_params, sizeof *metrics->tcp);
+	metrics->num_tcp_addrs = num_params;
+	if (metrics->tcp == NULL)
+		return errno;
+	else
+		metrics->num_tcp_addrs = num_params;
+
+	for (i = 0; i < num_params; i++) {
+		rc = sfptpd_config_parse_net_addr(metrics->tcp + i, params[i],
+						  "metrics",
+						  AF_UNSPEC, SOCK_STREAM, true,
+						  SFPTPD_EXPORTER_PORT);
+		if (rc < 0)
+			return -rc;
+	}
+	return 0;
 }
 
 static int parse_openmetrics_rt_stats_buf(struct sfptpd_config_section *section, const char *option,
@@ -1926,8 +1957,8 @@ static void general_config_destroy(struct sfptpd_config_section *section)
 	assert(section != NULL);
 	assert(section->category == SFPTPD_CONFIG_CATEGORY_GENERAL);
 
-	if (general->groups != NULL)
-		free(general->groups);
+	free(general->groups);
+	free(general->openmetrics.tcp);
 	free(section);
 }
 

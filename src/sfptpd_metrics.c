@@ -181,6 +181,7 @@ struct listener {
 struct query_state {
 	struct http http;
 	int fd;
+	int fd_flags;
 	struct net_buf rx;
 	bool abort;
 };
@@ -1461,20 +1462,27 @@ void sfptpd_metrics_push_rt_stats(struct sfptpd_sync_instance_rt_stats_entry *en
 		stats->lost_samples++;
 }
 
-void sfptpd_metrics_listener_close(void)
+static void close_listeners(void)
 {
 	struct listener *l;
-	struct listener **lnp;
+	struct listener **hd = &metrics.listeners;
+
+	while ((l = *hd)) {
+		*hd = l->next;
+		sfptpd_thread_user_fd_remove(l->fd);
+		close(l->fd);
+		free(l);
+	}
+	metrics.listeners = NULL;
+}
+
+void sfptpd_metrics_listener_close(void)
+{
 	unsigned queries;
 	int qi;
 
 	if (metrics.initialised) {
-		for (lnp = &metrics.listeners; (l = *lnp);) {
-			lnp = &l->next;
-			sfptpd_thread_user_fd_remove(l->fd);
-			close(l->fd);
-			free(l);
-		}
+		close_listeners();
 		queries = metrics.active_queries;
 		for (qi = __builtin_ctz(queries);
 		     __builtin_popcount(queries);
@@ -1484,6 +1492,82 @@ void sfptpd_metrics_listener_close(void)
 			metrics.active_queries &= ~(1 << qi);
 		}
 	}
+}
+
+static int activate_listener(int fd)
+{
+	struct listener *l = NULL;
+	int flags;
+	int rc;
+
+	flags = fcntl(fd, F_GETFL);
+	rc = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+	if (rc != 0) {
+		ERROR("metrics: listener: fcntl: %s\n", strerror(errno));
+		goto fail;
+	}
+	rc = listen(fd, MAX_QUERIES);
+	if (rc != 0) {
+		ERROR("metrics: listener: listen: %s\n", strerror(errno));
+		goto fail;
+	}
+	l = calloc(1, sizeof *l);
+	if (l == NULL) {
+		ERROR("metrics: listener: calloc: %s\n", strerror(errno));
+		goto fail;
+	}
+	rc = sfptpd_thread_user_fd_add(fd, true, false);
+	if (rc != 0) {
+		ERROR("metrics: listener: thread_user_fd_add: %s\n", strerror(rc));
+		errno = rc;
+		goto fail;
+	}
+
+	/* Add listener to list */
+	l->fd = fd;
+	l->next = metrics.listeners;
+	metrics.listeners = l;
+	return 0;
+
+fail:
+	/* Only clean up latest listener - the caller will close
+	 * the ones added to the list already. */
+	free(l);
+	close(fd);
+	return errno;
+}
+
+static int listen_tcp(struct sfptpd_config_general *general_config)
+{
+	struct sfptpd_config_metrics *mconf = &general_config->openmetrics;
+	int fd;
+	int rc;
+	int i;
+
+	for (i = 0; i < mconf->num_tcp_addrs; i++) {
+		struct sockaddr_storage *ss = mconf->tcp + i;
+
+		fd = socket(ss->ss_family,
+			    SOCK_STREAM, 0);
+		if (fd == -1)
+			goto fail;
+
+		rc = bind(fd, (struct sockaddr *) ss, sizeof *ss);
+		if (rc == -1) {
+			ERROR("metrics: listener: bind: %s\n", strerror(errno));
+			goto fail;
+		}
+
+		rc = activate_listener(fd);
+		if (rc != 0)
+			return rc;
+	}
+	return 0;
+fail:
+	/* Only clean up latest listener - the caller will close
+	 * the ones added to the list already. */
+	close(fd);
+	return errno;
 }
 
 static int listen_unix(struct sfptpd_config_general *general_config)
@@ -1516,7 +1600,7 @@ static int listen_unix(struct sfptpd_config_general *general_config)
 
 	if (strlen(metrics_path) >= sizeof addr.sun_path) {
 		errno = ENAMETOOLONG;
-        rc = -1;
+		rc = -1;
 		goto fail;
 	}
 
@@ -1542,11 +1626,12 @@ static int listen_unix(struct sfptpd_config_general *general_config)
 	/* Bind to the path in the filesystem. */
 	rc = bind(fd, (const struct sockaddr *) &addr, sizeof addr);
 	if (rc == -1) {
-		ERROR(PREFIX "couldn't bind socket to %s\n",
-		      metrics_path);
+		ERROR(PREFIX "couldn't bind socket to %s, %s\n",
+		      metrics_path, strerror(errno));
 	        goto fail;
 	}
 
+	return activate_listener(fd);
 fail:
 	/* Up until now, errno-style errors have been collecting in 'errno'
 	 * itself. Capture in 'rc'. */
@@ -1560,16 +1645,13 @@ fail:
 		fd = -1;
 	}
 
-	return rc == 0 ? fd : -rc;
+	return rc;
 }
 
 int sfptpd_metrics_listener_open(struct sfptpd_config *app_config)
 {
 	struct sfptpd_config_general *general_config;
-	struct listener *l = NULL;
-	int flags;
 	int rc;
-	int fd = -1;
 
 	general_config = sfptpd_general_config_get(app_config);
 	metrics.config = &general_config->openmetrics;
@@ -1583,41 +1665,10 @@ int sfptpd_metrics_listener_open(struct sfptpd_config *app_config)
 		metrics.rt_stats.entries = malloc(metrics.rt_stats.sz * sizeof *metrics.rt_stats.entries);
 	}
 
-	fd = listen_unix(general_config);
-	if (fd < 0) {
-		errno = -fd;
-		rc = -1;
-		goto fail;
-	}
-
-	l = calloc(1, sizeof *l);
-	if (l == NULL)
-		goto fail;
-
-	l->fd = fd;
-	l->next = metrics.listeners;
-	metrics.listeners = l;
-
-	flags = fcntl(fd, F_GETFL);
-	rc = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+	rc = listen_unix(general_config);
+	if (rc == 0)
+		rc = listen_tcp(general_config);
 	if (rc != 0)
-		goto fail;
-
-	rc = listen(fd, MAX_QUERIES);
-	if (rc != 0)
-		goto fail;
-
-	rc = sfptpd_thread_user_fd_add(fd, true, false);
-
-fail:
-	/* Up until now, errno-style errors have been collecting in 'errno'
-	 * itself. Capture in 'rc'. */
-	if (rc != 0) {
-		rc = errno;
-		free(l);
-		if (fd >= 0)
-			close(fd);
-	}
-
+		close_listeners();
 	return rc;
 }

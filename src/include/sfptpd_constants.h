@@ -71,6 +71,9 @@
 /** sfptpd run directory */
 #define SFPTPD_RUN_DIR  "/run/sfptpd"
 
+/** default OpenMetrics listener port */
+#define SFPTPD_EXPORTER_PORT "9979"
+
 /** Long-term statistics collection */
 #define SFPTPD_STATS_COLLECTION_INTERVAL (60)
 

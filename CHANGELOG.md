@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Specify metrics family prefix with `openmetrics_prefix`.
   - Example command to proxy to TCP:
     `socat TCP-LISTEN:9979,fork UNIX-CONNECT:/run/sfptpd/metrics.sock`
+  - Or use `openmetrics_tcp localhost:9979` to serve directly over TCP.
 - Export real time stats over OpenMetrics HTTP socket. (SWPTP-1385)
   - For JSON Lines, GET /rt-stats.jsonl
   - For JSON Seq (RFC7464), GET /rt-stats.json-seq

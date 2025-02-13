@@ -126,7 +126,7 @@ option.
 can directly serve statistics in the
 .Sq OpenMetrics
 exposition format over HTTP.
-This is enabled by default using a Unix socket which can be converted
+This can be enabled by default using a Unix socket which can be converted
 to a TCP service using an external tool like
 .Xr socat 1
 or the
@@ -134,6 +134,8 @@ or the
 web server.
 For example:
 .Dl socat TCP-LISTEN:9979,fork UNIX-CONNECT:/run/sfptpd/metrics.sock
+Alternatively, stats can be exported directly over TCP with, for example:
+.Ql openmetrics_tcp 127.0.0.1:9979
 .El
 .Sh SYNC MODULES
 A subsystem within

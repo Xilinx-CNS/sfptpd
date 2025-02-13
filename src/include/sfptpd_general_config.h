@@ -185,6 +185,8 @@ typedef struct sfptpd_config_timestamping {
  * @family_prefix: prefix string for OpenMetrics families
  */
 struct sfptpd_config_metrics {
+	struct sockaddr_storage *tcp;
+	int num_tcp_addrs;
 	bool unix;
 	unsigned int rt_stats_buf;
 	sfptpd_metrics_flags_t flags;
