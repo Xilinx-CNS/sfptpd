@@ -1,7 +1,7 @@
 AMD Solarflare Enhanced PTP Daemon
 ==================================
 
-Version: v3.8.1.1003
+Version: v3.8.1.1004
 
 These release notes relate to official supported binary releases of sfptpd.
 Please see [the changelog](CHANGELOG.md) for a list of changes since earlier
