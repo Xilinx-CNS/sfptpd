@@ -488,7 +488,7 @@ static int http_response(struct query_state *q)
 	ssize_t len;
 	ssize_t ret = 0;
 	FILE *block_stream;
-    char *block = NULL;
+	char *block = NULL;
 	size_t block_sz = 0;
 	struct iovec *iov = NULL;
 	bool forbidden_body = false;
@@ -585,10 +585,10 @@ static int http_response(struct query_state *q)
 	ret = writev_all(q, iov, iovcnt);
 	if (ret != 0)
 		http_abort(q, "sending response code");
-    free(iov);
+	free(iov);
 
 fail:
-    free(block);
+	free(block);
 	free(response);
 	http_finit_reply(http);
 	if (ret != 0)
@@ -974,6 +974,7 @@ static int metrics_handle_connection(int fd)
 	if (netbuf_init(&metrics.query[qi].rx))
 		goto fail;
 	metrics.query[qi].fd = fd;
+	metrics.query[qi].fd_flags = fcntl(fd, F_GETFL);
 	metrics.active_queries |= (1 << qi);
 
 	TRACE_L5("got incoming metrics connection\n");
@@ -1220,6 +1221,9 @@ static void metrics_execute_query(struct query_state *q)
 	 * buffer when delivered. */
 	bool peek = false;
 
+	/* Currently we do writes synchronously */
+	fcntl(q->fd, F_SETFL, q->fd_flags & ~O_NONBLOCK);
+
 	TRACE_L4("metrics: got HTTP query: %s %s %s/%" PRId64 ".%" PRId64 "\n",
 	     http->method_s, http->target,
 	     http->protocol,
@@ -1251,6 +1255,9 @@ static void metrics_execute_query(struct query_state *q)
 	}
 
 	http_response(q);
+
+	/* Restore asynchronous mode */
+	fcntl(q->fd, F_SETFL, q->fd_flags);
 }
 
 static void resolve_http_method(struct http *h)
