@@ -29,6 +29,7 @@
 #include "sfptpd_statistics.h"
 #include "sfptpd_phc.h"
 #include "sfptpd_crny_module.h"
+#include "sfptpd_config_helpers.h"
 
 
 /****************************************************************************

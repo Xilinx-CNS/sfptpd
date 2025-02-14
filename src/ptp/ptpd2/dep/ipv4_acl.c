@@ -39,6 +39,7 @@
 
 #include "../ptpd.h"
 #include "string.h"
+#include "sfptpd_config_helpers.h"
 
 /**
  * strdup + free are used across code using strtok_r, so as to
@@ -66,70 +67,11 @@ static int countTokens(const char* text, const char* delim) {
 
 }
 
-/* Parse a dotted-decimal string into an uint8_t array - return -1 on error */
-static int ipToArray(const char* text, uint8_t dest[], int maxOctets, Boolean isMask)
-{
-
-    char* text_;
-    char* text__;
-    char* subtoken;
-    char* stash = NULL;
-    char* endptr;
-    long octet;
-
-    int count = 0;
-    int result = 0;
-
-    memset(&dest[0], 0, maxOctets * sizeof(uint8_t));
-
-    text_=strdup(text);
-
-    for(text__=text_;;text__=NULL) {
-
-	if(count > maxOctets) {
-	    result = -1;
-	    goto end;
-	}
-
-	subtoken = strtok_r(text__,".",&stash);
-
-	if(subtoken == NULL)
-		goto end;
-
-	errno = 0;
-	octet=strtol(subtoken,&endptr,10);
-	if(errno!=0 || !IN_RANGE(octet,0,255)) {
-	    result = -1;
-	    goto end;
-
-	}
-
-	dest[count++] = (uint8_t)octet;
-
-	/* If we're parsing a mask and an octet is less than 0xFF, whole rest is zeros */
-	if(isMask && octet < 255)
-		goto end;
-    }
-
-    end:
-
-    free(text_);
-    return result;
-
-}
 
 /* Parse a single net mask into an AclEntry */
 static int parseAclEntry(const char* line, AclEntry* acl) {
 
-    int result = 1;
-    char* stash;
-    char* text_;
-    char* token;
-    char* endptr;
-    long octet = 0;
-
-    uint8_t net_octets[4];
-    uint8_t mask_octets[4];
+    struct sfptpd_acl_prefix prefix;
 
     if(line == NULL || acl == NULL)
 	return -1;
@@ -137,58 +79,16 @@ static int parseAclEntry(const char* line, AclEntry* acl) {
     if(countTokens(line,"/") == 0)
 	return -1;
 
-    text_=strdup(line);
+    if (sfptpd_config_parse_net_prefix(&prefix, line, "ptp acl") != 0 ||
+	prefix.af != AF_INET)
+	return -1;
 
-    token=strtok_r(text_,"/",&stash);
-
-    if((countTokens(token,".") > 4) ||
-	(countTokens(token,".") < 1) ||
-	(ipToArray(token,net_octets,4,0) < 0)) {
-	    result=-1;
-	    goto end;
-    }
-
-    acl->network = (net_octets[0] << 24) | (net_octets[1] << 16) | ( net_octets[2] << 8) | net_octets[3];
-
-    token=strtok_r(NULL,"/",&stash);
-
-    if(token == NULL) {
-	acl->netmask=32;
-	acl->bitmask=~0;
-    } else if(countTokens(token,".") == 1) {
-	errno = 0;
-	octet = strtol(token,&endptr,10);
-	if(errno != 0 || !IN_RANGE(octet,0,32)) {
-		result = -1;
-		goto end;
-	}
-
-	if(octet == 0)
-	    acl->bitmask = 0;
-	else
-	    acl->bitmask = ~0 << (32 - octet);
-	acl->netmask = (uint16_t)octet;
-
-    } else if((countTokens(token,".") > 4) ||
-	(ipToArray(token,mask_octets,4,1) < 0)) {
-	    result=-1;
-	    goto end;
-    } else {
-
-	acl->bitmask = (mask_octets[0] << 24) | (mask_octets[1] << 16) | ( mask_octets[2] << 8) | mask_octets[3];
-	uint32_t tmp = acl->bitmask;
-	int count = 0;
-	for(tmp = acl->bitmask;tmp<<count;count++);
-	acl->netmask=count;
-    }
-
-    end:
-    free(text_);
-
+    acl->network = ntohl(prefix.addr.in.s_addr);
+    acl->netmask = prefix.length;
+    acl->bitmask = ~0 << (32 - prefix.length);
     acl->network &= acl->bitmask;
 
-    return result;
-
+    return 1;
 }
 
 

@@ -736,21 +736,4 @@ int sfptpd_config_parse_command_line_pass2(struct sfptpd_config *config,
  */
 int sfptpd_config_parse_file(struct sfptpd_config *config);
 
-/** Parse network address.
- * @param ss         Destination
- * @param context    Context to use for log messages
- * @param af         Addressing family or AF_UNSPEC
- * @param socketype  The socket type, e.g. SOCK_DGRAM
- * @param passive    true for listening sockets, else false
- * @param def_serv   string for default port to use
- * @return address length or -errno
- */
-int sfptpd_config_parse_net_addr(struct sockaddr_storage *ss,
-				 const char *addr,
-				 const char *context,
-				 int af,
-				 int socktype,
-				 bool passive,
-				 const char *def_serv);
-
 #endif /* _SFPTPD_CONFIG_H */

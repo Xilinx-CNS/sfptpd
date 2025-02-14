@@ -21,6 +21,7 @@
 #include "sfptpd_ptp_module.h"
 #include "sfptpd_logging.h"
 #include "sfptpd_config.h"
+#include "sfptpd_config_helpers.h"
 #include "ptpd_lib.h"
 #include "sfptpd_lacp.h"
 
