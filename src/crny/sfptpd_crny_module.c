@@ -1191,9 +1191,6 @@ int handle_get_source_datum(crny_module_t *ntp)
 
 int issue_get_source_stats(crny_module_t *ntp)
 {
-	struct sfptpd_ntpclient_peer *peer = &ntp->next_state.peer_info.peers[ntp->query.src_idx];
-
-	memset(peer, '\0', sizeof *peer);
 	chrony_req_initialize(&ntp->crny_comm.req, CRNY_REQ_SOURCE_STATS);
 	*((int32_t *) &ntp->crny_comm.req.cmd2) = htonl(ntp->query.src_idx);
 

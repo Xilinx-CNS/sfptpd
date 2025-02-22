@@ -28,7 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - This option requires a calibration step that may take a few seconds.
 - Add hardware clock control and diagnostic utility `tstool`.
 
-## [3.8.1.1003] - 2025-02-14
+## [3.8.1.1004] - 2025-02-14
 
 ### Added
 
