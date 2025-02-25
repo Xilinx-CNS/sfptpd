@@ -153,18 +153,12 @@ void ptpd_config_intf_initialise(struct ptpd_intf_config *config)
 	config->dscpValue = 0;
 	config->ttl = PTPD_DEFAULT_TTL;
 
-	config->timingAclEnabled = FALSE;
-	config->managementAclEnabled = FALSE;
-	config->monitoringAclEnabled = FALSE;
-	config->timingAclAllowText[0] = '\0';
-	config->timingAclDenyText[0] = '\0';
-	config->managementAclAllowText[0] = '\0';
-	config->managementAclDenyText[0] = '\0';
-	config->monitoringAclAllowText[0] = '\0';
-	config->monitoringAclDenyText[0] = '\0';
-	config->timingAclOrder = PTPD_ACL_ALLOW_DENY;
-	config->managementAclOrder = PTPD_ACL_ALLOW_DENY;
-	config->monitoringAclOrder = PTPD_ACL_ALLOW_DENY;
+	config->timing_acl.name = "timing";
+	config->management_acl.name = "management";
+	config->monitoring_acl.name = "monitoring";
+	config->timing_acl.order = SFPTPD_ACL_ALLOW_ALL;
+	config->management_acl.order = SFPTPD_ACL_ALLOW_ALL;
+	config->monitoring_acl.order = SFPTPD_ACL_ALLOW_ALL;
 
 	config->displayPackets = FALSE;
 	config->transportAF = AF_INET;
@@ -365,6 +359,11 @@ void ptpd_interface_destroy(struct ptpd_intf_context *ptpd_if)
 	struct ptpd_intf_context **ptr;
 
 	assert(ptpd_if);
+
+	/* Free ACLs */
+	sfptpd_acl_free(&ptpd_if->ifOpts.timing_acl);
+	sfptpd_acl_free(&ptpd_if->ifOpts.management_acl);
+	sfptpd_acl_free(&ptpd_if->ifOpts.monitoring_acl);
 
 	/* Destroy error queue message buffer */
 	if (ptpd_if->msgEbuf.msg_iov)

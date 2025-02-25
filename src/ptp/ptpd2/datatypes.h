@@ -15,6 +15,7 @@
 
 
 #include <stdio.h>
+#include "sfptpd_acl.h"
 #include "sfptpd_constants.h"
 #include "sfptpd_statistics.h"
 #include "sfptpd_filter.h"
@@ -431,19 +432,10 @@ typedef struct ptpd_intf_config {
 
 	int use_lacp_bypass;
 
-	/* Access list settings */
-	Boolean timingAclEnabled;
-	Boolean managementAclEnabled;
-	Boolean monitoringAclEnabled;
-	char timingAclAllowText[PATH_MAX];
-	char timingAclDenyText[PATH_MAX];
-	char managementAclAllowText[PATH_MAX];
-	char managementAclDenyText[PATH_MAX];
-	char monitoringAclAllowText[PATH_MAX];
-	char monitoringAclDenyText[PATH_MAX];
-	PtpdAclOrder timingAclOrder;
-	PtpdAclOrder managementAclOrder;
-	PtpdAclOrder monitoringAclOrder;
+	/* Access lists */
+	struct sfptpd_acl timing_acl;
+	struct sfptpd_acl management_acl;
+	struct sfptpd_acl monitoring_acl;
 
 	char user_description[PTPD_MGMT_USER_DESCRIPTION_MAX + 1];
 } InterfaceOpts;
@@ -711,10 +703,6 @@ struct ptpd_transport {
 	/* used for tracking the last TTL set */
 	int ttlGeneral;
 	int ttlEvent;
-
-	Ipv4AccessList *timingAcl;
-	Ipv4AccessList *managementAcl;
-	Ipv4AccessList *monitoringAcl;
 };
 
 /**

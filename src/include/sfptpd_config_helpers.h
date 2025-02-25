@@ -11,20 +11,12 @@
 
 #include <sfptpd_interface.h>
 #include <sfptpd_logging.h>
+#include <sfptpd_acl.h>
 
 
 /****************************************************************************
  * Types and Defines
  ****************************************************************************/
-
-struct sfptpd_acl_prefix {
-	int af;
-	int length;
-	union {
-		struct in_addr in;
-		struct in6_addr in6;
-	} addr;
-};
 
 
 /****************************************************************************

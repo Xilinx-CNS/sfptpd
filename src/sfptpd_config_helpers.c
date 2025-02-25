@@ -101,21 +101,21 @@ int sfptpd_config_parse_net_prefix(struct sfptpd_acl_prefix *buf,
 	regoff_t prefix;
 	regoff_t length;
 	int rc = 0;
+	int af;
 
 	assert(regcomp(&r6, "^([[:xdigit:]:.]+)(/([[:digit:]]+))?$", REG_EXTENDED) == 0);
 	assert(regcomp(&r4, "^([[:digit:].]+)(/([[:digit:]]+))?$", REG_EXTENDED) == 0);
 
-	buf->af = AF_INET;
-	rc = regexec(&r6, spec, sizeof matches / sizeof *matches, matches, 0);
-	if (rc != 0)
-		rc = regexec(&r4, spec, sizeof matches / sizeof *matches, matches, 0);
-	else
-		buf->af = AF_INET6;
+	af = AF_INET;
+	rc = regexec(&r4, spec, sizeof matches / sizeof *matches, matches, 0);
+	if (rc != 0) {
+		af = AF_INET6;
+		rc = regexec(&r6, spec, sizeof matches / sizeof *matches, matches, 0);
+	}
 	prefix = matches[1].rm_so;
 	length = matches[3].rm_so;
 	if (rc != 0 || prefix == -1 || spec[prefix] == '\0') {
 		ERROR("invalid %s prefix: %s\n", context, addr);
-		buf->af = AF_UNSPEC;
 		rc = EINVAL;
 		goto finish;
 	}
@@ -123,19 +123,31 @@ int sfptpd_config_parse_net_prefix(struct sfptpd_acl_prefix *buf,
 	if (length != -1)
 		spec[matches[3].rm_eo] = '\0';
 
-	rc = inet_pton(buf->af, spec + prefix, &buf->addr);
+	if (af == AF_INET6) {
+		*buf = (struct sfptpd_acl_prefix) { 0 };
+		rc = inet_pton(af, spec + prefix, buf->in6.s6_addr);
+	} else {
+		assert(af == AF_INET);
+		*buf = sfptpd_acl_v6mapped_prefix;
+		rc = inet_pton(af, spec + prefix, buf->in6.s6_addr + 12);
+	}
+
 	if (rc == 0 && errno == 0)
 		errno = EDESTADDRREQ;
 	if (rc < 1) {
 		ERROR("%s address parsing for %s failed, %s\n",
 		      context, addr, strerror(errno));
-		buf->af = AF_UNSPEC;
 		rc = errno;
 	} else if (length != -1 && spec[length] != '\0') {
-		buf->length = strtoul(spec + length, NULL, 10);
+		buf->length += strtoul(spec + length, NULL, 10);
+		rc = 0;
 	} else {
-		buf->length = buf->af == AF_INET6 ? 128 : 32;
+		buf->length = 128;
+		rc = 0;
 	}
+
+	if (rc == 0)
+		sfptpd_acl_normalise_prefix(buf);
 
 finish:
 	free(spec);

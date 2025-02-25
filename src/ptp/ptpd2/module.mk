@@ -13,7 +13,6 @@ LIB_SRCS_$(d) := arith.c \
 	protocol.c \
 	ptpd_lib.c \
 	foreign.c \
-	dep/ipv4_acl.c \
 	dep/msg.c \
 	dep/net.c \
 	dep/servo.c \

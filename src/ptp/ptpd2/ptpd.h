@@ -59,13 +59,13 @@
 
 #include "constants.h"
 #include "limits.h"
-#include "dep/ipv4_acl.h"
 #include "dep/constants_dep.h"
 #include "dep/datatypes_dep.h"
 #include "ieee1588_types.h"
 #include "datatypes.h"
 #include "dep/ptpd_dep.h"
 
+#include "sfptpd_acl.h"
 #include "sfptpd_interface.h"
 #include "sfptpd_clock.h"
 #include "sfptpd_logging.h"

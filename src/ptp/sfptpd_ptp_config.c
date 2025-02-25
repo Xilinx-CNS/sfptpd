@@ -514,38 +514,15 @@ static int parse_ptp_mgmt_msgs(struct sfptpd_config_section *section, const char
 	return rc;
 }
 
-static int parse_ptp_acl_list(char *acl, unsigned int acl_size, const char *option_text,
-			      unsigned int num_params, const char * const params[])
-{
-	int len;
-	assert(acl != NULL);
-	assert(option_text != NULL);
-	assert(params != NULL);
-
-	len = 0;
-	acl[0] = '\0';
-
-	for ( ; num_params > 0; num_params--, params++) {
-		len += snprintf(acl + len, acl_size - len, "%s ", params[0]);
-		if (len > acl_size) {
-			ERROR("ACL %s list too long. Have \"%s\" but still %d tokens to add\n",
-			      option_text, acl, num_params);
-			return E2BIG;
-		}
-	}
-
-	return 0;
-}
-
 static int parse_ptp_timing_acl_allow(struct sfptpd_config_section *section, const char *option,
 				       unsigned int num_params, const char * const params[])
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params >= 1);
-	ptp->ptpd_intf.timingAclEnabled = TRUE;
-	return parse_ptp_acl_list(ptp->ptpd_intf.timingAclAllowText,
-				  sizeof(ptp->ptpd_intf.timingAclAllowText),
-				  "timing allow", num_params, params);
+	if (ptp->ptpd_intf.timing_acl.order == SFPTPD_ACL_ALLOW_ALL)
+		ptp->ptpd_intf.timing_acl.order = SFPTPD_ACL_ALLOW_DENY;
+	return sfptpd_acl_table_create(&ptp->ptpd_intf.timing_acl.allow,
+				       "timing allow", num_params, params);
 }
 
 static int parse_ptp_timing_acl_deny(struct sfptpd_config_section *section, const char *option,
@@ -553,10 +530,10 @@ static int parse_ptp_timing_acl_deny(struct sfptpd_config_section *section, cons
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params >= 1);
-	ptp->ptpd_intf.timingAclEnabled = TRUE;
-	return parse_ptp_acl_list(ptp->ptpd_intf.timingAclDenyText,
-				  sizeof(ptp->ptpd_intf.timingAclDenyText),
-				  "timing deny", num_params, params);
+	if (ptp->ptpd_intf.timing_acl.order == SFPTPD_ACL_ALLOW_ALL)
+		ptp->ptpd_intf.timing_acl.order = SFPTPD_ACL_ALLOW_DENY;
+	return sfptpd_acl_table_create(&ptp->ptpd_intf.timing_acl.deny,
+				       "timing deny", num_params, params);
 }
 
 static int parse_ptp_mgmt_acl_allow(struct sfptpd_config_section *section, const char *option,
@@ -564,10 +541,10 @@ static int parse_ptp_mgmt_acl_allow(struct sfptpd_config_section *section, const
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params >= 1);
-	ptp->ptpd_intf.managementAclEnabled = TRUE;
-	return parse_ptp_acl_list(ptp->ptpd_intf.managementAclAllowText,
-				  sizeof(ptp->ptpd_intf.managementAclAllowText),
-				  "management allow", num_params, params);
+	if (ptp->ptpd_intf.management_acl.order == SFPTPD_ACL_ALLOW_ALL)
+		ptp->ptpd_intf.management_acl.order = SFPTPD_ACL_ALLOW_DENY;
+	return sfptpd_acl_table_create(&ptp->ptpd_intf.management_acl.allow,
+				       "management allow", num_params, params);
 }
 
 static int parse_ptp_mgmt_acl_deny(struct sfptpd_config_section *section, const char *option,
@@ -575,10 +552,10 @@ static int parse_ptp_mgmt_acl_deny(struct sfptpd_config_section *section, const 
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params >= 1);
-	ptp->ptpd_intf.managementAclEnabled = TRUE;
-	return parse_ptp_acl_list(ptp->ptpd_intf.managementAclDenyText,
-				  sizeof(ptp->ptpd_intf.managementAclDenyText),
-				  "management deny", num_params, params);
+	if (ptp->ptpd_intf.management_acl.order == SFPTPD_ACL_ALLOW_ALL)
+		ptp->ptpd_intf.management_acl.order = SFPTPD_ACL_ALLOW_DENY;
+	return sfptpd_acl_table_create(&ptp->ptpd_intf.management_acl.deny,
+				       "management deny", num_params, params);
 }
 
 static int parse_ptp_mon_acl_allow(struct sfptpd_config_section *section, const char *option,
@@ -586,10 +563,10 @@ static int parse_ptp_mon_acl_allow(struct sfptpd_config_section *section, const 
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params >= 1);
-	ptp->ptpd_intf.monitoringAclEnabled = TRUE;
-	return parse_ptp_acl_list(ptp->ptpd_intf.monitoringAclAllowText,
-				  sizeof(ptp->ptpd_intf.monitoringAclAllowText),
-				  "monitoring allow", num_params, params);
+	if (ptp->ptpd_intf.monitoring_acl.order == SFPTPD_ACL_ALLOW_ALL)
+		ptp->ptpd_intf.monitoring_acl.order = SFPTPD_ACL_ALLOW_DENY;
+	return sfptpd_acl_table_create(&ptp->ptpd_intf.monitoring_acl.allow,
+				       "monitoring allow", num_params, params);
 }
 
 static int parse_ptp_mon_acl_deny(struct sfptpd_config_section *section, const char *option,
@@ -597,32 +574,25 @@ static int parse_ptp_mon_acl_deny(struct sfptpd_config_section *section, const c
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params >= 1);
-	ptp->ptpd_intf.monitoringAclEnabled = TRUE;
-	return parse_ptp_acl_list(ptp->ptpd_intf.monitoringAclDenyText,
-				  sizeof(ptp->ptpd_intf.monitoringAclDenyText),
-				  "monitoring deny", num_params, params);
+	if (ptp->ptpd_intf.monitoring_acl.order == SFPTPD_ACL_ALLOW_ALL)
+		ptp->ptpd_intf.monitoring_acl.order = SFPTPD_ACL_ALLOW_DENY;
+	return sfptpd_acl_table_create(&ptp->ptpd_intf.monitoring_acl.deny,
+				       "monitoring deny", num_params, params);
 }
 
-static int parse_ptp_acl_order(PtpdAclOrder *order, const char *option_text,
+static int parse_ptp_acl_order(enum sfptpd_acl_order *order, const char *option_text,
 			       const char *param)
 {
 	int rc = 0;
-	const char *deprecated_fmt = "ptp %s acl: deprecated alias %s treated as %s\n";
 
 	assert(order != NULL);
 	assert(option_text != NULL);
 	assert(param != NULL);
 
 	if (strcmp(param, "allow-deny") == 0) {
-		*order = PTPD_ACL_ALLOW_DENY;
+		*order = SFPTPD_ACL_ALLOW_DENY;
 	} else if (strcmp(param, "deny-allow") == 0) {
-		*order = PTPD_ACL_DENY_ALLOW;
-	} else if (strcmp(param, "permit-deny") == 0) {
-		WARNING(deprecated_fmt, option_text, param, "deny-allow");
-		*order = PTPD_ACL_DENY_ALLOW;
-	} else if (strcmp(param, "deny-permit") == 0) {
-		WARNING(deprecated_fmt, option_text, param, "allow-deny");
-		*order = PTPD_ACL_ALLOW_DENY;
+		*order = SFPTPD_ACL_DENY_ALLOW;
 	} else {
 		rc = EINVAL;
 	}
@@ -635,7 +605,7 @@ static int parse_ptp_timing_acl_order(struct sfptpd_config_section *section, con
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
-	return parse_ptp_acl_order(&ptp->ptpd_intf.timingAclOrder,
+	return parse_ptp_acl_order(&ptp->ptpd_intf.timing_acl.order,
 				   "timing", params[0]);
 }
 
@@ -644,7 +614,7 @@ static int parse_ptp_mgmt_acl_order(struct sfptpd_config_section *section, const
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
-	return parse_ptp_acl_order(&ptp->ptpd_intf.managementAclOrder,
+	return parse_ptp_acl_order(&ptp->ptpd_intf.management_acl.order,
 				   "management", params[0]);
 }
 
@@ -653,8 +623,7 @@ static int parse_ptp_mon_acl_order(struct sfptpd_config_section *section, const 
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
-	ptp->ptpd_intf.monitoringAclEnabled = TRUE;
-	return parse_ptp_acl_order(&ptp->ptpd_intf.monitoringAclOrder,
+	return parse_ptp_acl_order(&ptp->ptpd_intf.monitoring_acl.order,
 				   "monitoring", params[0]);
 }
 

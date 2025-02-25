@@ -864,42 +864,38 @@ isFromCurrentParent(const PtpClock *ptpClock, const MsgHeader* header)
 }
 
 static bool checkACL(enum ptpd_acl_type acl_type,
-		     struct in_addr address,
-		     const char *name,
+		     struct sockaddr *sa,
 		     PtpInterface *ptpInterface,
 		     InterfaceOpts *ifOpts,
 		     acl_bitmap_t *checked,
 		     acl_bitmap_t *passed) {
 
-	Ipv4AccessList *acl = NULL;
+	struct sfptpd_acl *acl = NULL;
+	char str[INET6_ADDRSTRLEN];
+	struct in6_addr addr;
 	bool pass = false;
 
-	if ((*checked & acl_type) != 0) {
+	if ((*checked & acl_type) != 0)
 		return ((*passed & acl_type) ? true : false);
-	}
 
 	switch (acl_type) {
 	case PTPD_ACL_MANAGEMENT:
-		acl = ptpInterface->transport.managementAcl;
-		if (!ifOpts->managementAclEnabled) {
-			pass = true;
-			goto result;
-		}
+		acl = &ifOpts->management_acl;
 		break;
 	case PTPD_ACL_TIMING:
-		acl = ptpInterface->transport.timingAcl;
-		if (!ifOpts->timingAclEnabled) {
-			pass = true;
-			goto result;
-		}
+		acl = &ifOpts->timing_acl;
 		break;
 	case PTPD_ACL_MONITORING:
-		acl = ptpInterface->transport.monitoringAcl;
-		if (!ifOpts->monitoringAclEnabled) {
-			pass = true;
-			goto result;
-		}
+		acl = &ifOpts->monitoring_acl;
 		break;
+	}
+
+	/* Short cuts */
+	if (acl->order == SFPTPD_ACL_ALLOW_ALL) {
+		pass = true;
+		goto result;
+	} else if (acl->order == SFPTPD_ACL_DENY_ALL) {
+		goto result;
 	}
 
 	if (acl == NULL) {
@@ -908,33 +904,31 @@ static bool checkACL(enum ptpd_acl_type acl_type,
 		return false;
 	}
 
-	if (!matchIpv4AccessList(acl, ntohl(address.s_addr))) {
-		if (name == NULL) {
-			DBG("ACL type %d denied message from %s\n", acl_type, inet_ntoa(address));
-		} else {
-			DBG("ACL dropped %s from %s\n", inet_ntoa(address));
-		}
+	if (sa->sa_family == AF_INET) {
+		addr = sfptpd_acl_map_v4_addr(((struct sockaddr_in *) sa)->sin_addr);
+	} else if (sa->sa_family == AF_INET6) {
+		addr = ((struct sockaddr_in6 *) sa)->sin6_addr;
 	} else {
-		if (name == NULL) {
-			DBG("ACL type %d accepted message from %s\n", acl_type, inet_ntoa(address));
-		} else {
-			DBG2("ACL accepted %s from %s\n", inet_ntoa(address));
-		}
 		pass = true;
+		goto result;
 	}
 
- result:
+	pass = sfptpd_acl_match(acl, &addr);
+	DBG("ACL %s %s message from %s\n", acl->name,
+	    pass ? "accepted" : "denied",
+	    inet_ntop(AF_INET6, &addr, str, sizeof str));
+
+result:
 	*checked |= acl_type;
-	if (pass) {
+	if (pass)
 		*passed |= acl_type;
-	}
 
 	return pass;
 }
 
 
 static bool checkACLmask(acl_bitmap_t mask,
-			 struct in_addr address,
+			 struct sockaddr *address,
 			 PtpInterface *ptpInterface,
 			 InterfaceOpts *ifOpts,
 			 acl_bitmap_t *checked,
@@ -948,7 +942,6 @@ static bool checkACLmask(acl_bitmap_t mask,
 		if (bit != 0) {
 			if (!checkACL(bit,
 				      address,
-				      NULL,
 				      ptpInterface,
 				      ifOpts,
 				      checked,
@@ -994,7 +987,6 @@ processMessage(InterfaceOpts *ifOpts, PtpInterface *ptpInterface, struct sfptpd_
 				&ptpInterface->transport.interfaceAddr,
 				ptpInterface->transport.interfaceAddrLen)) {
 
-		struct sockaddr_in *in = ((struct sockaddr_in *) &ptpInterface->transport.lastRecvAddr);
 		ptpInterface->transport.lastRecvHost[0] = '\0';
 		getnameinfo((struct sockaddr *) &ptpInterface->transport.lastRecvAddr,
 			    ptpInterface->transport.lastRecvAddrLen,
@@ -1003,15 +995,15 @@ processMessage(InterfaceOpts *ifOpts, PtpInterface *ptpInterface, struct sfptpd_
 			    NULL, 0, NI_NUMERICHOST);
 
 		if (ptpInterface->msgTmpHeader.messageType == PTPD_MSG_MANAGEMENT) {
-			if (!checkACL(PTPD_ACL_MANAGEMENT, in->sin_addr,
-				      "management message",
+			if (!checkACL(PTPD_ACL_MANAGEMENT,
+				      (struct sockaddr *) &ptpInterface->transport.lastRecvAddr,
 				      ptpInterface, ifOpts, &acls_checked, &acls_passed)) {
 				ptpInterface->counters.aclManagementDiscardedMessages++;
 				return;
 			}
-	        } else if (ifOpts->timingAclEnabled) {
-			if (!checkACL(PTPD_ACL_TIMING, in->sin_addr,
-				      "timing message",
+	        } else {
+			if (!checkACL(PTPD_ACL_TIMING,
+				      (struct sockaddr *) &ptpInterface->transport.lastRecvAddr,
 				      ptpInterface, ifOpts, &acls_checked, &acls_passed)) {
 				ptpInterface->counters.aclTimingDiscardedMessages++;
 				return;
@@ -1343,12 +1335,10 @@ processTLVs(RunTimeOpts *rtOpts, PtpClock *ptpClock, int payload_offset,
 		}
 
 		if (handler != NULL) {
-			struct sockaddr_in *in;
 			bool pass;
 
-			in = (struct sockaddr_in *) &ptpInterface->transport.lastRecvAddr;
-
-			pass = checkACLmask(handler->required_acl_types_mask, in->sin_addr,
+			pass = checkACLmask(handler->required_acl_types_mask,
+					    (struct sockaddr *) &ptpInterface->transport.lastRecvAddr,
 					    ptpInterface, &ptpInterface->ifOpts,
 					    &acls_checked, &acls_passed);
 			if (pass) {

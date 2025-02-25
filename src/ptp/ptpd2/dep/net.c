@@ -588,10 +588,6 @@ netShutdown(struct ptpd_transport *transport)
 		close(transport->monitoringSock);
 	transport->monitoringSock = -1;
 
-	freeIpv4AccessList(&transport->timingAcl);
-	freeIpv4AccessList(&transport->managementAcl);
-	freeIpv4AccessList(&transport->monitoringAcl);
-
 	destroyBondSocks(transport);
 
 	return TRUE;
@@ -1977,33 +1973,6 @@ netInit(struct ptpd_transport * transport, InterfaceOpts * ifOpts, PtpInterface 
 	loopback_multicast = (ptpInterface->tsMethod == TS_METHOD_SYSTEM);
 	if (!netSetMulticastLoopback(transport, loopback_multicast, ifOpts->transportAF))
 		return FALSE;
-
-	/* Compile ACLs */
-	if (ifOpts->timingAclEnabled &&
-	    ifOpts->transportAF == AF_INET) {
-		freeIpv4AccessList(&transport->timingAcl);
-		transport->timingAcl =
-			createIpv4AccessList(ifOpts->timingAclAllowText,
-					     ifOpts->timingAclDenyText,
-					     ifOpts->timingAclOrder);
-	}
-
-	if (ifOpts->managementAclEnabled &&
-	    ifOpts->transportAF == AF_INET) {
-		freeIpv4AccessList(&transport->managementAcl);
-		transport->managementAcl =
-			createIpv4AccessList(ifOpts->managementAclAllowText,
-					     ifOpts->managementAclDenyText,
-					     ifOpts->managementAclOrder);
-	}
-
-	if (ifOpts->monitoringAclEnabled) {
-		freeIpv4AccessList(&transport->monitoringAcl);
-		transport->monitoringAcl =
-			createIpv4AccessList(ifOpts->monitoringAclAllowText,
-					     ifOpts->monitoringAclDenyText,
-					     ifOpts->monitoringAclOrder);
-	}
 
 	if (ifOpts->use_lacp_bypass & SFPTPD_BOND_BYPASS_USE_SOCKPOOL)
 		probeBondSocks(transport);
