@@ -421,7 +421,7 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 				servo->offset_from_master_ns = diff_ns;
 			}
 
-			sfptpd_engine_post_rt_stats_simple(engine, servo);
+			sfptpd_engine_post_rt_stats_simple(engine, NULL, servo);
 
 			sfptpd_clock_stats_record_epoch_alarm(servo->slave, 1);
 			WARNING("%s: reference clock %s near epoch\n", servo->servo_name,
@@ -458,7 +458,7 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 		if (!SYNC_MODULE_ALARM_TEST(servo->alarms, CLOCK_NEAR_EPOCH)) {
 			SYNC_MODULE_ALARM_SET(servo->alarms, CLOCK_NEAR_EPOCH);
 
-			sfptpd_engine_post_rt_stats_simple(engine, servo);
+			sfptpd_engine_post_rt_stats_simple(engine, NULL, servo);
 
 			sfptpd_clock_stats_record_epoch_alarm(servo->slave, 1);
 			WARNING("%s: slave clock %s near epoch\n", servo->servo_name,

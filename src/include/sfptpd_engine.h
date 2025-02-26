@@ -170,9 +170,11 @@ void sfptpd_engine_post_rt_stats(
  * This will send an asynchronous message to the
  * engine thread so is safe to call from another thread context.
  * @param engine  Pointer to engine instance
- * @param servo The time received in the log stats request
+ * @param log_time The time received in the log stats request
+ * @param servo The servo
  */
 void sfptpd_engine_post_rt_stats_simple(struct sfptpd_engine *engine, 
+					struct sfptpd_timespec *log_time,
 					struct sfptpd_servo *servo);
 
 /** Post clustering determination inputs to the engine.

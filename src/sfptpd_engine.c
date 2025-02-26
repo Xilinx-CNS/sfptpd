@@ -1554,23 +1554,31 @@ static void on_synchronize(void *user_context)
 	}
 }
 
-void sfptpd_engine_post_rt_stats_simple(struct sfptpd_engine *engine, struct sfptpd_servo *servo){
-	struct sfptpd_timespec log_time = sfptpd_log_timestamp();
+void sfptpd_engine_post_rt_stats_simple(struct sfptpd_engine *engine,
+					struct sfptpd_timespec *log_time,
+					struct sfptpd_servo *servo)
+{
 
+	struct sfptpd_timespec t;
 	struct sfptpd_servo_stats stats = sfptpd_servo_get_stats(servo);
 
+	if (log_time == NULL) {
+		t = sfptpd_log_timestamp();
+		log_time = &t;
+	}
+
 	sfptpd_engine_post_rt_stats(engine,
-					&log_time,
-					stats.servo_name,
-					"servo", stats.clock_master, stats.clock_slave,
-					stats.disciplining, stats.blocked, stats.in_sync, stats.alarms,
-					STATS_KEY_FREQ_ADJ, stats.freq_adj,
-					STATS_KEY_P_TERM, stats.p_term,
-					STATS_KEY_I_TERM, stats.i_term,
-					STATS_KEY_OFFSET, stats.offset,
-					STATS_KEY_M_TIME, stats.time_master,
-					STATS_KEY_S_TIME, stats.time_slave,
-					STATS_KEY_END);
+				    log_time,
+				    stats.servo_name,
+				    "servo", stats.clock_master, stats.clock_slave,
+				    stats.disciplining, stats.blocked, stats.in_sync, stats.alarms,
+				    STATS_KEY_FREQ_ADJ, stats.freq_adj,
+				    STATS_KEY_P_TERM, stats.p_term,
+				    STATS_KEY_I_TERM, stats.i_term,
+				    STATS_KEY_OFFSET, stats.offset,
+				    STATS_KEY_M_TIME, stats.time_master,
+				    STATS_KEY_S_TIME, stats.time_slave,
+				    STATS_KEY_END);
 }
 
 static void on_log_stats(void *user_context, unsigned int timer_id)
@@ -1616,7 +1624,9 @@ static void on_log_stats(void *user_context, unsigned int timer_id)
 
 	/* For each of the servos, dump stats */
 	for (i = 0; i < engine->active_servos; i++) {
-		sfptpd_engine_post_rt_stats_simple(engine, engine->servos[i]);
+		sfptpd_engine_post_rt_stats_simple(engine,
+						   &log_time,
+						   engine->servos[i]);
 
 		/* Update NIC clock with the current sync status */
 		sfptpd_servo_update_sync_status(engine->servos[i]);
