@@ -2900,8 +2900,14 @@ void sfptpd_engine_post_rt_stats(
 
 	va_list ap;
 	const uint8_t *ptr_eui64;
-	struct rt_stats_msg *msg = (struct rt_stats_msg*)sfptpd_msg_alloc(
-		SFPTPD_MSG_POOL_RT_STATS, false);
+	struct rt_stats_msg local;
+	struct rt_stats_msg *msg;
+
+	if (sfptpd_thread_self() == engine->thread) {
+		msg = &local;
+	} else {
+		msg = (struct rt_stats_msg*) sfptpd_msg_alloc(SFPTPD_MSG_POOL_RT_STATS, false);
+	}
 
 	if (msg == NULL) {
 		SFPTPD_MSG_LOG_ALLOC_FAILED("rt_stats");
@@ -2991,8 +2997,11 @@ void sfptpd_engine_post_rt_stats(
 	}
 	va_end(ap);
 
-	(void)SFPTPD_MSG_SEND(msg, engine->thread,
-			      ENGINE_MSG_RT_STATS_ENTRY, false);
+	if (msg == &local)
+		on_rt_stats_entry(engine, msg);
+	else
+		(void)SFPTPD_MSG_SEND(msg, engine->thread,
+				      ENGINE_MSG_RT_STATS_ENTRY, false);
 }
 
 
