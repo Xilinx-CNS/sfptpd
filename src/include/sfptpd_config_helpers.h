@@ -52,4 +52,12 @@ int sfptpd_config_parse_net_prefix(struct sfptpd_acl_prefix *buf,
 				   const char *addr,
 				   const char *context);
 
+/** Parse ACL order.
+ * @param order        Destination for decoded order
+ * @param param        The text to parse
+ * return 0 or errno on error.
+ */
+int sfptpd_config_parse_acl_order(enum sfptpd_acl_order *order,
+				  const char *param);
+
 #endif /* _SFPTPD_CONFIG_HELPERS_H */

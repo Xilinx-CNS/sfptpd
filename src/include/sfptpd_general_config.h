@@ -12,6 +12,7 @@
 #include <sfptpd_logging.h>
 #include "sfptpd_bic.h"
 #include "sfptpd_phc.h"
+#include "sfptpd_acl.h"
 #include "sfptpd_metrics.h"
 
 
@@ -186,6 +187,7 @@ typedef struct sfptpd_config_timestamping {
  */
 struct sfptpd_config_metrics {
 	struct sockaddr_storage *tcp;
+	struct sfptpd_acl acl;
 	int num_tcp_addrs;
 	bool unix;
 	unsigned int rt_stats_buf;

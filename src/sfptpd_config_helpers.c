@@ -156,4 +156,24 @@ finish:
 	return rc;
 }
 
+int sfptpd_config_parse_acl_order(enum sfptpd_acl_order *order,
+				  const char *param)
+{
+	int rc = 0;
+
+	assert(order != NULL);
+	assert(param != NULL);
+
+	if (strcmp(param, "allow-deny") == 0) {
+		*order = SFPTPD_ACL_ALLOW_DENY;
+	} else if (strcmp(param, "deny-allow") == 0) {
+		*order = SFPTPD_ACL_DENY_ALLOW;
+	} else {
+		rc = EINVAL;
+	}
+
+	return rc;
+}
+
+
 /* fin */

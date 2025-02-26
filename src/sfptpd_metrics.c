@@ -22,6 +22,7 @@
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <sys/un.h>
+#include <arpa/inet.h>
 
 #include "sfptpd_config.h"
 #include "sfptpd_general_config.h"
@@ -954,6 +955,11 @@ static void listeners_xon(void)
 
 static int metrics_handle_connection(int fd)
 {
+	struct sockaddr_storage peer;
+	socklen_t peer_len = sizeof peer;
+	char str[INET6_ADDRSTRLEN] = "<>";
+	struct in6_addr addr;
+	bool pass = false;
 	int rc = 0;
 	int qi;
 
@@ -961,6 +967,32 @@ static int metrics_handle_connection(int fd)
 		ERROR("metrics: too many active queries; discarding\n");
 		goto fail;
 	}
+
+	rc = getpeername(fd, (struct sockaddr *) &peer, &peer_len);
+	if (rc != 0) {
+		ERROR("metrics: getpeername: %s\n", strerror(errno));
+		goto fail;
+	}
+
+	if (peer.ss_family == AF_INET) {
+		addr = sfptpd_acl_map_v4_addr(((struct sockaddr_in *) &peer)->sin_addr);
+	} else if (peer.ss_family == AF_INET6) {
+		addr = ((struct sockaddr_in6 *) &peer)->sin6_addr;
+	} else {
+		pass = true;
+	}
+
+	if (!pass) {
+		inet_ntop(AF_INET6, &addr, str, sizeof str);
+		pass = sfptpd_acl_match(&metrics.config->acl, &addr);
+	}
+
+	TRACE_LX(pass ? 5 : 3,
+		 "metrics: incoming connection %s from %s\n",
+		 pass ? "accepted" : "denied", str);
+
+	if (!pass)
+		goto fail;
 
 	rc = sfptpd_thread_user_fd_add(fd, true, false);
 	if (rc != 0)
@@ -976,8 +1008,6 @@ static int metrics_handle_connection(int fd)
 	metrics.query[qi].fd = fd;
 	metrics.query[qi].fd_flags = fcntl(fd, F_GETFL);
 	metrics.active_queries |= (1 << qi);
-
-	TRACE_L5("got incoming metrics connection\n");
 
 	/* Rate control the backlog handling so we never reach the
 	 * above discard case. */

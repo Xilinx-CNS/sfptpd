@@ -580,33 +580,13 @@ static int parse_ptp_mon_acl_deny(struct sfptpd_config_section *section, const c
 				       "monitoring deny", num_params, params);
 }
 
-static int parse_ptp_acl_order(enum sfptpd_acl_order *order, const char *option_text,
-			       const char *param)
-{
-	int rc = 0;
-
-	assert(order != NULL);
-	assert(option_text != NULL);
-	assert(param != NULL);
-
-	if (strcmp(param, "allow-deny") == 0) {
-		*order = SFPTPD_ACL_ALLOW_DENY;
-	} else if (strcmp(param, "deny-allow") == 0) {
-		*order = SFPTPD_ACL_DENY_ALLOW;
-	} else {
-		rc = EINVAL;
-	}
-
-	return rc;
-}
-
 static int parse_ptp_timing_acl_order(struct sfptpd_config_section *section, const char *option,
 				      unsigned int num_params, const char * const params[])
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
-	return parse_ptp_acl_order(&ptp->ptpd_intf.timing_acl.order,
-				   "timing", params[0]);
+	return sfptpd_config_parse_acl_order(&ptp->ptpd_intf.timing_acl.order,
+					     params[0]);
 }
 
 static int parse_ptp_mgmt_acl_order(struct sfptpd_config_section *section, const char *option,
@@ -614,8 +594,8 @@ static int parse_ptp_mgmt_acl_order(struct sfptpd_config_section *section, const
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
-	return parse_ptp_acl_order(&ptp->ptpd_intf.management_acl.order,
-				   "management", params[0]);
+	return sfptpd_config_parse_acl_order(&ptp->ptpd_intf.management_acl.order,
+					     params[0]);
 }
 
 static int parse_ptp_mon_acl_order(struct sfptpd_config_section *section, const char *option,
@@ -623,8 +603,8 @@ static int parse_ptp_mon_acl_order(struct sfptpd_config_section *section, const 
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
-	return parse_ptp_acl_order(&ptp->ptpd_intf.monitoring_acl.order,
-				   "monitoring", params[0]);
+	return sfptpd_config_parse_acl_order(&ptp->ptpd_intf.monitoring_acl.order,
+					     params[0]);
 }
 
 static int parse_mon_meinberg_netsync(struct sfptpd_config_section *section, const char *option,

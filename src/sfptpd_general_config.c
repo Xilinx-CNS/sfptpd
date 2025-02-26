@@ -146,6 +146,12 @@ static int parse_openmetrics_options(struct sfptpd_config_section *section, cons
 				     unsigned int num_params, const char * const params[]);
 static int parse_openmetrics_prefix(struct sfptpd_config_section *section, const char *option,
 				    unsigned int num_params, const char * const params[]);
+static int parse_openmetrics_acl_allow(struct sfptpd_config_section *section, const char *option,
+				       unsigned int num_params, const char * const params[]);
+static int parse_openmetrics_acl_deny(struct sfptpd_config_section *section, const char *option,
+				      unsigned int num_params, const char * const params[]);
+static int parse_openmetrics_acl_order(struct sfptpd_config_section *section, const char *option,
+				       unsigned int num_params, const char * const params[]);
 static int parse_servo_log_all_samples(struct sfptpd_config_section *section, const char *option,
 				       unsigned int num_params, const char * const params[]);
 
@@ -459,6 +465,22 @@ static const sfptpd_config_option_t config_general_options[] =
 		"set prefix string to be prepended to OpenMetrics family names",
 		~0, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_prefix,
 		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_OPENMETRICS_PREFIX)},
+	{"openmetrics_acl_allow", "<ip-address-list>",
+		"Access control allow list for metrics connections. The format "
+		"is a series of network prefixes in a.b.c.d/x notation where "
+		"a.b.c.d is the subnet and x is the prefix length. For single "
+		"IP addresses, 32 or 128 should be specified for the length.",
+		~1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_openmetrics_acl_allow},
+	{"openmetrics_acl_deny", "<ip-address-list>",
+		"Access control deny list for metrics connections.",
+		~1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_openmetrics_acl_deny},
+	{"openmetrics_acl_order", "<allow-deny | deny-allow>",
+		"Access control list evaluation order for metrics connections. "
+		"Default allow-deny.",
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_openmetrics_acl_order},
 	{"servo_log_all_samples", "<off | on>",
 		"Specify whether to log every sample from secondary servos",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
@@ -1238,6 +1260,43 @@ static int parse_openmetrics_prefix(struct sfptpd_config_section *section, const
 	return 0;
 }
 
+static int parse_openmetrics_acl_allow(struct sfptpd_config_section *section, const char *option,
+				       unsigned int num_params, const char * const params[])
+{
+	struct sfptpd_config_metrics *metrics = &((sfptpd_config_general_t *)section)->openmetrics;
+
+	assert(num_params >= 1);
+
+	if (metrics->acl.order == SFPTPD_ACL_ALLOW_ALL)
+		metrics->acl.order = SFPTPD_ACL_ALLOW_DENY;
+
+	return sfptpd_acl_table_create(&metrics->acl.allow,
+				       "metrics allow", num_params, params);
+}
+
+static int parse_openmetrics_acl_deny(struct sfptpd_config_section *section, const char *option,
+				      unsigned int num_params, const char * const params[])
+{
+	struct sfptpd_config_metrics *metrics = &((sfptpd_config_general_t *)section)->openmetrics;
+
+	assert(num_params >= 1);
+
+	if (metrics->acl.order == SFPTPD_ACL_ALLOW_ALL)
+		metrics->acl.order = SFPTPD_ACL_ALLOW_DENY;
+
+	return sfptpd_acl_table_create(&metrics->acl.deny,
+				       "metrics deny", num_params, params);
+}
+
+static int parse_openmetrics_acl_order(struct sfptpd_config_section *section, const char *option,
+				       unsigned int num_params, const char * const params[])
+{
+	struct sfptpd_config_metrics *metrics = &((sfptpd_config_general_t *)section)->openmetrics;
+
+	assert(num_params == 1);
+	return sfptpd_config_parse_acl_order(&metrics->acl.order, params[0]);
+}
+
 static int parse_clock_list(struct sfptpd_config_section *section, const char *option,
 			    unsigned int num_params, const char * const params[])
 {
@@ -1960,6 +2019,7 @@ static void general_config_destroy(struct sfptpd_config_section *section)
 
 	free(general->groups);
 	free(general->openmetrics.tcp);
+	sfptpd_acl_free(&general->openmetrics.acl);
 	free(section);
 }
 
@@ -2016,6 +2076,7 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		new->rtc_adjust = SFPTPD_DEFAULT_RTC_ADJUST;
 		new->openmetrics.unix = SFPTPD_DEFAULT_OPENMETRICS_UNIX;
 		new->openmetrics.rt_stats_buf = SFPTPD_DEFAULT_OPENMETRICS_RT_STATS_BUF;
+		new->openmetrics.acl.order = SFPTPD_ACL_ALLOW_ALL;
 		sfptpd_strncpy(new->openmetrics.family_prefix, SFPTPD_DEFAULT_OPENMETRICS_PREFIX, sizeof(new->openmetrics.family_prefix));
 
 		new->timestamping.all = false;
