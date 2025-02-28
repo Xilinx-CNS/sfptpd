@@ -151,7 +151,7 @@ void sfptpd_engine_test_mode(struct sfptpd_engine *engine,
  * @param disciplining True if master is disciplining slave clock
  * @param blocked True if master is blocked from disciplining slave clock
  * @param in_sync True if the clocks are in sync
- * @param va_args Pairs of STATS_KEY_x and associated values
+ * @param ... Pairs of STATS_KEY_x and associated values
  */
 void sfptpd_engine_post_rt_stats(
 		struct sfptpd_engine *engine,
@@ -175,7 +175,7 @@ void sfptpd_engine_post_rt_stats(
  */
 void sfptpd_engine_post_rt_stats_simple(struct sfptpd_engine *engine, 
 					struct sfptpd_timespec *log_time,
-					struct sfptpd_servo *servo);
+					int servo_index);
 
 /** Post clustering determination inputs to the engine.
  * This will send an asynchronous message to the

@@ -150,7 +150,6 @@ typedef struct engine_msg {
 static_assert(sizeof(engine_msg_t) < SFPTPD_SIZE_GLOBAL_MSGS,
 	      "message fits into global pool entry");
 
-
 /* Message to carry realtime stats entry.
  * These will be allocated from a different pool as the messages above.
  * @hdr Standard message header
@@ -253,6 +252,7 @@ struct sfptpd_engine {
 	/* Set of local clock servos used to slave clocks to the LRC */
 	struct sfptpd_servo **servos;
 	sfptpd_sync_module_alarms_t *servo_prev_alarms;
+	struct rt_stats_msg *servo_last_stats;
 
 	/* Netlink state */
 	struct sfptpd_nl_state *netlink_state;
@@ -463,6 +463,10 @@ static void destroy_servos(struct sfptpd_engine *engine)
 		free(engine->servo_prev_alarms);
 		engine->servo_prev_alarms = NULL;
 	}
+	if (engine->servo_last_stats != NULL) {
+		free(engine->servo_last_stats);
+		engine->servo_last_stats = NULL;
+	}
 
 	engine->total_servos = 0;
 	engine->active_servos = 0;
@@ -490,6 +494,8 @@ static int create_servos(struct sfptpd_engine *engine, struct sfptpd_config *con
 								sizeof(void *));
 		engine->servo_prev_alarms = (sfptpd_sync_module_alarms_t *)calloc(engine->total_servos,
 									          sizeof(sfptpd_sync_module_alarms_t));
+		engine->servo_last_stats = (struct rt_stats_msg *)calloc(engine->total_servos,
+									 sizeof(struct rt_stats_msg));
 		if (engine->servos == NULL) {
 			CRITICAL("failed to allocate servos\n");
 			return ENOMEM;
@@ -1551,23 +1557,187 @@ static void on_synchronize(void *user_context)
 				engine->servo_prev_alarms[i] = alarms;
 			}
 		}
+
+		/* Generate per-sample real-time stats */
+		if (engine->general_config->servo_log_all_samples) {
+			struct sfptpd_timespec log_time;
+
+			log_time = sfptpd_log_timestamp();
+			for (i = 0; i < engine->active_servos; i++) {
+				sfptpd_engine_post_rt_stats_simple(engine,
+								   &log_time, i);
+			}
+		}
 	}
+}
+
+static void vsfptpd_engine_pack_rt_stats(
+		struct rt_stats_msg *msg,
+		struct sfptpd_engine *engine,
+		const struct sfptpd_timespec *log_time,
+		const char *instance_name,
+		const char *source,
+		const struct sfptpd_clock *clock_master,
+		const struct sfptpd_clock *clock_slave,
+		bool disciplining,
+		bool blocked,
+		bool in_sync,
+		sfptpd_sync_module_alarms_t alarms,
+		va_list ap)
+{
+	assert(msg != NULL);
+	assert(engine != NULL);
+	assert(time != NULL);
+	assert(instance_name != NULL);
+	assert(source != NULL || clock_master != NULL);
+	assert(clock_slave != NULL);
+
+	const uint8_t *ptr_eui64;
+
+	memset(&msg->stats, 0, sizeof(msg->stats));
+	msg->stats.log_time = *log_time;
+	msg->stats.instance_name = instance_name;
+	msg->stats.source = source;
+	msg->stats.clock_master = clock_master;
+	msg->stats.clock_slave = clock_slave;
+	msg->stats.is_disciplining = disciplining;
+	msg->stats.is_blocked = blocked;
+	msg->stats.is_in_sync = in_sync;
+	msg->stats.alarms = alarms;
+	msg->stats.stat_present = 0;
+
+	while (true) {
+		int key = va_arg(ap, int);
+
+		if (key == STATS_KEY_END)
+			break;
+		assert(key < STATS_KEY_END);
+
+		switch (key) {
+		case STATS_KEY_OFFSET:
+			msg->stats.offset = va_arg(ap, sfptpd_time_t);
+			break;
+		case STATS_KEY_FREQ_ADJ:
+			msg->stats.freq_adj = va_arg(ap, sfptpd_time_t);
+			break;
+		case STATS_KEY_OWD:
+			msg->stats.one_way_delay = va_arg(ap, sfptpd_time_t);
+			break;
+		case STATS_KEY_PARENT_ID:
+			ptr_eui64 = va_arg(ap, uint8_t *);
+			if (ptr_eui64 == NULL)
+				continue;
+			memcpy(msg->stats.parent_id, ptr_eui64, sizeof msg->stats.parent_id);
+			break;
+		case STATS_KEY_GM_ID:
+			ptr_eui64 = va_arg(ap, uint8_t *);
+			if (ptr_eui64 == NULL)
+				continue;
+			memcpy(msg->stats.gm_id, ptr_eui64, sizeof msg->stats.gm_id);
+			break;
+		case STATS_KEY_PPS_OFFSET:
+			msg->stats.pps_offset = va_arg(ap, sfptpd_time_t);
+			break;
+		case STATS_KEY_BAD_PERIOD:
+			msg->stats.bad_period_count = va_arg(ap, int);
+			break;
+		case STATS_KEY_OVERFLOWS:
+			msg->stats.overflow_count = va_arg(ap, int);
+			break;
+		case STATS_KEY_ACTIVE_INTF:
+			msg->stats.active_intf = va_arg(ap, struct sfptpd_interface *);
+			if (msg->stats.active_intf == NULL)
+				continue;
+			break;
+		case STATS_KEY_BOND_NAME:
+			msg->stats.bond_name = va_arg(ap, char *);
+			if (msg->stats.bond_name == NULL)
+				continue;
+			break;
+		case STATS_KEY_P_TERM:
+			msg->stats.p_term = va_arg(ap, long double);
+			break;
+		case STATS_KEY_I_TERM:
+			msg->stats.i_term = va_arg(ap, long double);
+			break;
+		case STATS_KEY_M_TIME:
+			msg->stats.time_master = va_arg(ap, struct sfptpd_timespec);
+			msg->stats.has_m_time = true;
+			break;
+		case STATS_KEY_S_TIME:
+			msg->stats.time_slave = va_arg(ap, struct sfptpd_timespec);
+			msg->stats.has_s_time = true;
+			break;
+		default:
+			CRITICAL("sfptpd_engine_post_rt_stats: unknown key given (%d)\n", key);
+		}
+
+		msg->stats.stat_present |= (1 << key);
+	}
+}
+
+static void sfptpd_engine_pack_rt_stats(
+		struct rt_stats_msg *msg,
+		struct sfptpd_engine *engine,
+		const struct sfptpd_timespec *log_time,
+		const char *instance_name,
+		const char *source,
+		const struct sfptpd_clock *clock_master,
+		const struct sfptpd_clock *clock_slave,
+		bool disciplining,
+		bool blocked,
+		bool in_sync,
+		sfptpd_sync_module_alarms_t alarms, ...)
+{
+	va_list ap;
+
+	va_start(ap, alarms);
+	vsfptpd_engine_pack_rt_stats(msg, engine, log_time, instance_name,
+				     source, clock_master, clock_slave,
+				     disciplining, blocked, in_sync, alarms, ap);
+	va_end(ap);
+}
+
+static void on_rt_stats_entry(struct sfptpd_engine *engine,
+			      struct rt_stats_msg *msg)
+{
+	assert(engine != NULL);
+	assert(engine->general_config != NULL);
+	assert(msg != NULL);
+
+	/* Store latest stats */
+	struct sync_instance_record *record;
+	record = get_sync_instance_record_by_name(engine, msg->stats.instance_name);
+	if (record != NULL)
+		record->latest_rt_stats = msg->stats;
+
+	/* Send to OpenMetrics reporting buffer */
+	sfptpd_metrics_push_rt_stats(&msg->stats);
+
+	/* Write to json_stats */
+	FILE* stream = sfptpd_log_get_rt_stats_out_stream();
+	if (stream != NULL)
+		write_rt_stats_json(engine, stream, &msg->stats);
 }
 
 void sfptpd_engine_post_rt_stats_simple(struct sfptpd_engine *engine,
 					struct sfptpd_timespec *log_time,
-					struct sfptpd_servo *servo)
+					int servo_i)
 {
 
-	struct sfptpd_timespec t;
+	struct sfptpd_servo *servo = engine->servos[servo_i];
 	struct sfptpd_servo_stats stats = sfptpd_servo_get_stats(servo);
+	struct rt_stats_msg *msg = engine->servo_last_stats + servo_i;
+	struct sfptpd_timespec t;
+
+	assert(sfptpd_thread_self() == engine->thread);
 
 	if (log_time == NULL) {
 		t = sfptpd_log_timestamp();
 		log_time = &t;
 	}
 
-	sfptpd_engine_post_rt_stats(engine,
+	sfptpd_engine_pack_rt_stats(msg, engine,
 				    log_time,
 				    stats.servo_name,
 				    "servo", stats.clock_master, stats.clock_slave,
@@ -1579,6 +1749,8 @@ void sfptpd_engine_post_rt_stats_simple(struct sfptpd_engine *engine,
 				    STATS_KEY_M_TIME, stats.time_master,
 				    STATS_KEY_S_TIME, stats.time_slave,
 				    STATS_KEY_END);
+
+	on_rt_stats_entry(engine, msg);
 }
 
 static void on_log_stats(void *user_context, unsigned int timer_id)
@@ -1624,9 +1796,14 @@ static void on_log_stats(void *user_context, unsigned int timer_id)
 
 	/* For each of the servos, dump stats */
 	for (i = 0; i < engine->active_servos; i++) {
-		sfptpd_engine_post_rt_stats_simple(engine,
-						   &log_time,
-						   engine->servos[i]);
+		if (!engine->general_config->servo_log_all_samples) {
+			sfptpd_engine_post_rt_stats_simple(engine,
+							   &log_time, i);
+		}
+		if (engine->servo_last_stats[i].stats.instance_name != NULL) {
+			write_rt_stats_log(engine, &engine->servo_last_stats[i].stats);
+			engine->servo_last_stats[i].stats.instance_name = NULL;
+		}
 
 		/* Update NIC clock with the current sync status */
 		sfptpd_servo_update_sync_status(engine->servos[i]);
@@ -1985,31 +2162,6 @@ static void on_configure_test_mode(struct sfptpd_engine *engine,
 					    msg->u.configure_test_mode.params[1],
 					    msg->u.configure_test_mode.params[2]);
 	}
-}
-
-
-static void on_rt_stats_entry(struct sfptpd_engine *engine,
-			      struct rt_stats_msg *msg)
-{
-	assert(engine != NULL);
-	assert(engine->general_config != NULL);
-	assert(msg != NULL);
-
-	/* Store latest stats */
-	struct sync_instance_record *record;
-	record = get_sync_instance_record_by_name(engine, msg->stats.instance_name);
-	if (record != NULL)
-		record->latest_rt_stats = msg->stats;
-	else /* This will happen for servos */
-		write_rt_stats_log(engine, &msg->stats);
-
-	/* Send to OpenMetrics reporting buffer */
-	sfptpd_metrics_push_rt_stats(&msg->stats);
-
-	/* Write to json_stats */
-	FILE* stream = sfptpd_log_get_rt_stats_out_stream();
-	if (stream != NULL)
-		write_rt_stats_json(engine, stream, &msg->stats);
 }
 
 
@@ -2903,115 +3055,24 @@ void sfptpd_engine_post_rt_stats(
 		...)
 {
 	assert(engine != NULL);
-	assert(time != NULL);
-	assert(instance_name != NULL);
-	assert(source != NULL || clock_master != NULL);
-	assert(clock_slave != NULL);
 
 	va_list ap;
-	const uint8_t *ptr_eui64;
-	struct rt_stats_msg local;
 	struct rt_stats_msg *msg;
 
-	if (sfptpd_thread_self() == engine->thread) {
-		msg = &local;
-	} else {
-		msg = (struct rt_stats_msg*) sfptpd_msg_alloc(SFPTPD_MSG_POOL_RT_STATS, false);
-	}
-
+	msg = (struct rt_stats_msg*) sfptpd_msg_alloc(SFPTPD_MSG_POOL_RT_STATS, false);
 	if (msg == NULL) {
 		SFPTPD_MSG_LOG_ALLOC_FAILED("rt_stats");
 		return;
 	}
 
-	memset(&msg->stats, 0, sizeof(msg->stats));
-	msg->stats.log_time = *log_time;
-	msg->stats.instance_name = instance_name;
-	msg->stats.source = source;
-	msg->stats.clock_master = clock_master;
-	msg->stats.clock_slave = clock_slave;
-	msg->stats.is_disciplining = disciplining;
-	msg->stats.is_blocked = blocked;
-	msg->stats.is_in_sync = in_sync;
-	msg->stats.alarms = alarms;
-	msg->stats.stat_present = 0;
-
 	va_start(ap, alarms);
-	while (true) {
-		int key = va_arg(ap, int);
-
-		if (key == STATS_KEY_END)
-			break;
-		assert(key < STATS_KEY_END);
-
-		switch (key) {
-		case STATS_KEY_OFFSET:
-			msg->stats.offset = va_arg(ap, sfptpd_time_t);
-			break;
-		case STATS_KEY_FREQ_ADJ:
-			msg->stats.freq_adj = va_arg(ap, sfptpd_time_t);
-			break;
-		case STATS_KEY_OWD:
-			msg->stats.one_way_delay = va_arg(ap, sfptpd_time_t);
-			break;
-		case STATS_KEY_PARENT_ID:
-			ptr_eui64 = va_arg(ap, uint8_t *);
-			if (ptr_eui64 == NULL)
-				continue;
-			memcpy(msg->stats.parent_id, ptr_eui64, sizeof msg->stats.parent_id);
-			break;
-		case STATS_KEY_GM_ID:
-			ptr_eui64 = va_arg(ap, uint8_t *);
-			if (ptr_eui64 == NULL)
-				continue;
-			memcpy(msg->stats.gm_id, ptr_eui64, sizeof msg->stats.gm_id);
-			break;
-		case STATS_KEY_PPS_OFFSET:
-			msg->stats.pps_offset = va_arg(ap, sfptpd_time_t);
-			break;
-		case STATS_KEY_BAD_PERIOD:
-			msg->stats.bad_period_count = va_arg(ap, int);
-			break;
-		case STATS_KEY_OVERFLOWS:
-			msg->stats.overflow_count = va_arg(ap, int);
-			break;
-		case STATS_KEY_ACTIVE_INTF:
-			msg->stats.active_intf = va_arg(ap, struct sfptpd_interface *);
-			if (msg->stats.active_intf == NULL)
-				continue;
-			break;
-		case STATS_KEY_BOND_NAME:
-			msg->stats.bond_name = va_arg(ap, char *);
-			if (msg->stats.bond_name == NULL)
-				continue;
-			break;
-		case STATS_KEY_P_TERM:
-			msg->stats.p_term = va_arg(ap, long double);
-			break;
-		case STATS_KEY_I_TERM:
-			msg->stats.i_term = va_arg(ap, long double);
-			break;
-		case STATS_KEY_M_TIME:
-			msg->stats.time_master = va_arg(ap, struct sfptpd_timespec);
-			msg->stats.has_m_time = true;
-			break;
-		case STATS_KEY_S_TIME:
-			msg->stats.time_slave = va_arg(ap, struct sfptpd_timespec);
-			msg->stats.has_s_time = true;
-			break;
-		default:
-			CRITICAL("sfptpd_engine_post_rt_stats: unknown key given (%d)\n", key);
-		}
-
-		msg->stats.stat_present |= (1 << key);
-	}
+	vsfptpd_engine_pack_rt_stats(msg, engine, log_time, instance_name,
+				     source, clock_master, clock_slave,
+				     disciplining, blocked, in_sync, alarms, ap);
 	va_end(ap);
 
-	if (msg == &local)
-		on_rt_stats_entry(engine, msg);
-	else
-		(void)SFPTPD_MSG_SEND(msg, engine->thread,
-				      ENGINE_MSG_RT_STATS_ENTRY, false);
+	(void)SFPTPD_MSG_SEND(msg, engine->thread,
+			      ENGINE_MSG_RT_STATS_ENTRY, false);
 }
 
 

@@ -61,6 +61,7 @@
 #define SFPTPD_DEFAULT_CLOCK_HWID_FMT		   "%C:"
 #define SFPTPD_DEFAULT_CLOCK_FNAM_FMT		   "%C:"
 #define SFPTPD_DEFAULT_UNIQUE_CLOCKID_BITS         "00:00"
+#define SFPTPD_DEFAULT_SERVO_LOG_ALL_SAMPLES	   (false)
 
 /** Statistics logging interval in seconds */
 #define SFPTPD_DEFAULT_STATISTICS_LOGGING_INTERVAL 1
@@ -289,6 +290,7 @@ typedef struct sfptpd_config_general {
 	bool legacy_clockids;
 	char run_dir[PATH_MAX];
 	struct sfptpd_config_metrics openmetrics;
+	bool servo_log_all_samples;
 } sfptpd_config_general_t;
 
 static_assert(sizeof ((sfptpd_config_general_t *) 0)->declared_sync_modules * 8 >= SFPTPD_CONFIG_CATEGORY_MAX,

@@ -143,6 +143,8 @@ static int parse_openmetrics_options(struct sfptpd_config_section *section, cons
 				     unsigned int num_params, const char * const params[]);
 static int parse_openmetrics_prefix(struct sfptpd_config_section *section, const char *option,
 				    unsigned int num_params, const char * const params[]);
+static int parse_servo_log_all_samples(struct sfptpd_config_section *section, const char *option,
+				       unsigned int num_params, const char * const params[]);
 
 static int validate_config(struct sfptpd_config_section *section);
 
@@ -450,6 +452,11 @@ static const sfptpd_config_option_t config_general_options[] =
 		"set prefix string to be prepended to OpenMetrics family names",
 		~0, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_prefix,
 		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_OPENMETRICS_PREFIX)},
+	{"servo_log_all_samples", "<off | on>",
+		"Specify whether to log every sample from secondary servos",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_servo_log_all_samples,
+		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_SERVO_LOG_ALL_SAMPLES)},
 };
 
 static const sfptpd_config_option_set_t config_general_option_set =
@@ -1853,6 +1860,24 @@ static int parse_legacy_clockids(struct sfptpd_config_section *section, const ch
 }
 
 
+static int parse_servo_log_all_samples(struct sfptpd_config_section *section, const char *option,
+				       unsigned int num_params, const char * const params[])
+{
+	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+	assert(num_params == 1);
+
+	if (strcmp(params[0], "off") == 0) {
+		general->servo_log_all_samples = false;
+	} else if (strcmp(params[0], "on") == 0) {
+		general->servo_log_all_samples = true;
+	} else {
+		return EINVAL;
+	}
+
+	return 0;
+}
+
+
 static int validate_config(struct sfptpd_config_section *general)
 {
 	struct sfptpd_config *config = general->config;
@@ -1991,6 +2016,8 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		sfptpd_strncpy(new->clocks.format_fnam, SFPTPD_DEFAULT_CLOCK_FNAM_FMT, sizeof new->clocks.format_fnam);
 		new->legacy_clockids = false;
 		new->declared_sync_modules = 0;
+
+		new->servo_log_all_samples = SFPTPD_DEFAULT_SERVO_LOG_ALL_SAMPLES;
 	}
 
 	sfptpd_config_section_init(&new->hdr, general_config_create,

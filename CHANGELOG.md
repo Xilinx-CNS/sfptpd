@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   sharing a single NIC clock and treat as one device. (SWPTP-1348)
   - This option requires a calibration step that may take a few seconds.
 - Add configurable run, state, control and metrics access modes. (SWPTP-1551)
+- Add `servo_log_all_samples` option. (SWPTP-1566)
 - Add hardware clock control and diagnostic utility `tstool`.
 
 ### Changed
