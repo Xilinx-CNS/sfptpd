@@ -280,7 +280,7 @@ enum clock_format_id {
 	CLOCK_FMT_HW_ID_NO_SEP,
 };
 
-static size_t clock_interpolate(char *buffer, size_t space, int id, void *context, char opt);
+static ssize_t clock_interpolate(char *buffer, size_t space, int id, void *context, char opt);
 
 /* %P   phc device index
  * %I   interface list, separated by '/'
@@ -319,7 +319,7 @@ static inline void clock_unlock(void)
 }
 
 
-static size_t clock_interpolate(char *buffer, size_t space, int id, void *context, char opt)
+static ssize_t clock_interpolate(char *buffer, size_t space, int id, void *context, char opt)
 {
 	const struct sfptpd_clock *clock = (const struct sfptpd_clock *) context;
 	const sfptpd_clock_id_t hw_id = clock->hw_id;
@@ -851,7 +851,8 @@ static int renew_clock(struct sfptpd_clock *clock)
 			}
 		}
 
-		/* Write out the long clock name. */
+		/* Write out the long clock name.
+		 * Oversized names are truncated but this is not serious. */
 		sfptpd_format(clock_format_specifiers, clock, clock->long_name,
 			      sizeof clock->long_name, general_config->clocks.format_long);
 

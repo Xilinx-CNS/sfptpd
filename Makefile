@@ -44,7 +44,7 @@ CONDITIONAL_DEFS += $(shell $(call if_header_then,onload/extensions.h,-DHAVE_ONL
 endif
 
 ### Unit testing
-FAST_TESTS = bic hash stats config link time
+FAST_TESTS = bic hash stats config link time format
 TEST_CMD = valgrind --track-origins=yes --error-exitcode=1 build/sfptpd_test
 
 # Include installation and packaging helper
