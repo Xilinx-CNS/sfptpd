@@ -136,6 +136,7 @@ int main(int argc, char **argv)
 	register_unit_test("fmds", sfptpd_test_fmds);
 	register_unit_test("link", sfptpd_test_link);
 	register_unit_test("time", sfptpd_test_time);
+	register_unit_test("format", sfptpd_test_format);
 
 	/* Get default seed */
 	gettimeofday(&tod, NULL);

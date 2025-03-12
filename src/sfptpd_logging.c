@@ -76,8 +76,8 @@ enum path_format_id {
 	PATH_FMT_RUNDIR,
 };
 
-static size_t path_interpolate(char *buffer, size_t space, int id, void *context, char opt);
-static size_t path_interpolate_time(char *buffer, size_t space, int id, void *context, char opt);
+static ssize_t path_interpolate(char *buffer, size_t space, int id, void *context, char opt);
+static ssize_t path_interpolate_time(char *buffer, size_t space, int id, void *context, char opt);
 
 /* %H   hostname
  * %I   hostid
@@ -152,7 +152,7 @@ static unsigned int trace_levels[SFPTPD_COMPONENT_ID_MAX] =
  * Local Functions
  ****************************************************************************/
 
-static size_t path_interpolate(char *buffer, size_t space, int id, void *context, char opt)
+static ssize_t path_interpolate(char *buffer, size_t space, int id, void *context, char opt)
 {
 	assert(buffer != NULL || space == 0);
 
@@ -177,7 +177,7 @@ static size_t path_interpolate(char *buffer, size_t space, int id, void *context
 	}
 }
 
-static size_t path_interpolate_time(char *buffer, size_t space, int id, void *context, char opt)
+static ssize_t path_interpolate_time(char *buffer, size_t space, int id, void *context, char opt)
 {
 	assert(buffer != NULL || space == 0);
 

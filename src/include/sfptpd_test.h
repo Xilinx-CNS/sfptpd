@@ -126,6 +126,7 @@ int sfptpd_test_bic(void);
 int sfptpd_test_fmds(void);
 int sfptpd_test_link(void);
 int sfptpd_test_time(void);
+int sfptpd_test_format(void);
 
 
 #endif /* _SFPTPD_TEST_H */

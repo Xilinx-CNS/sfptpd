@@ -34,6 +34,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Default control socket moved to /run/sfptpd/control-v1.sock (SWPTP-1551)
 
+### Fixed
+
+- Issue SWPTP-1569
+  - Avoid aborting when a clock name would exceed 63 characters.
+
 ## [3.8.1.1004] - 2025-02-14
 
 ### Added

@@ -504,19 +504,23 @@ int sfptpd_ht_get_num_entries(struct sfptpd_hash_table *table)
  * String formatting functions
  ****************************************************************************/
 
-size_t sfptpd_format(const struct sfptpd_interpolation *interpolators, void *context,
-		     char *buffer, size_t space, const char *format)
+ssize_t sfptpd_format(const struct sfptpd_interpolation *interpolators, void *context,
+		      char *buffer, size_t space, const char *format)
 {
 	const struct sfptpd_interpolation *spec;
-	enum { IDLE, FMT, xUNDERFLOW, ERROR } state = IDLE;
+	enum { IDLE, FMT } state = IDLE;
+	const char *f = format;
 	ssize_t ret = 0;
-	size_t len = 0;
+	ssize_t len = 0;
 	char c;
 
 	assert(format != NULL);
 	assert(buffer != NULL || space == 0);
 
-	while ((c = *format++))
+	errno = EINVAL;
+	while ((c = *format++)) {
+		char opt;
+
 		switch (state) {
 		case IDLE:
 			if (c == '%') {
@@ -528,50 +532,72 @@ size_t sfptpd_format(const struct sfptpd_interpolation *interpolators, void *con
 			}
 			break;
 		case FMT:
+			/* Handle quoted '%' */
 			if (c == '%') {
 				if (buffer && len + 1 < space)
 					buffer[len] = c;
 				len++;
+				state = IDLE;
+				break;
 			}
-			else for (spec = interpolators; spec->id != SFPTPD_INTERPOLATORS_END; spec++)
-				if (c == spec->specifier) {
-					char opt = '\0';
-					assert(spec->writer);
-					if (spec->has_opt) {
-						if (*format == '\0')
-							state = xUNDERFLOW;
-						opt = *format++;
-					}
-					ret = spec->writer(buffer ? buffer + len : NULL,
-							   space != 0 ? space - len : 0,
-							   spec->id, context, opt);
-					if (ret < 0) {
-						state = ERROR;
-						break;
-					}
-					len += ret;
-					assert(space == 0 || len < space);
-					break;
+
+			/* Look up interpolator */
+			for (spec = interpolators;
+			     (spec->id != SFPTPD_INTERPOLATORS_END &&
+			      c != spec->specifier);
+			     spec++);
+
+			/* Error in invalid specifier */
+			if (spec->id == SFPTPD_INTERPOLATORS_END) {
+				ERROR("format: unknown interpolator '%c'\n", c);
+				ret = -1;
+				goto error;
+			}
+			assert(spec->writer);
+
+			/* Handle option character following specifier */
+			opt = '\0';
+			if (spec->has_opt) {
+				opt = *format++;
+				if (opt == '\0') {
+					ERROR("format: missing option from "
+					      "interpolator at end of format "
+					      "string: %s\n", f);
+					ret = -1;
+					goto error;
 				}
+			}
+
+			/* Invoke interpolator */
+			ret = spec->writer(buffer ? buffer + len : NULL,
+					   space != 0 ? space - len : 0,
+					   spec->id, context, opt);
+			if (ret < 0) {
+				goto error;
+			}
+			len += ret;
 			state = IDLE;
 			break;
-		case xUNDERFLOW:
-		case ERROR:
-			goto error;
 		}
+	}
 
 error:
-	if (state != IDLE && ret != -1) {
-		errno = E2BIG;
+	if (state != IDLE && ret != -1)
 		ret = -1;
+
+	if (buffer && space > 0) {
+		if (len < space)
+			buffer[len] = '\0';
+		else
+			buffer[space-1] = '\0';
 	}
 
-	if (buffer) {
-		assert(len < space);
-		buffer[len] = '\0';
+	if (ret >= 0) {
+		errno = 0;
+		return len;
+	} else {
+		return -1;
 	}
-
-	return ret < 0 ? -1 : len;
 }
 
 

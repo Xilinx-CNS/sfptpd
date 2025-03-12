@@ -5,9 +5,11 @@
 #define _SFPTPD_MISC_H
 
 #include <time.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include <sys/types.h>
 #include <linux/taskstats.h>
 
 #include "sfptpd_time.h"
@@ -21,7 +23,7 @@
  * Structures and Types
  ****************************************************************************/
 
-typedef size_t (*sfptpd_interpolator_t)(char *buffer, size_t space, int id, void *context, char opt);
+typedef ssize_t (*sfptpd_interpolator_t)(char *buffer, size_t space, int id, void *context, char opt);
 
 struct sfptpd_interpolation {
 	int id;
@@ -105,8 +107,8 @@ struct sfptpd_prog {
  * @param format the application-specific %-format to be interpolated
  * @return The number of bytes written or that would be written as per snprintf
  */
-size_t sfptpd_format(const struct sfptpd_interpolation *interpolators, void *context,
-		     char *buffer, size_t space, const char *format);
+ssize_t sfptpd_format(const struct sfptpd_interpolation *interpolators, void *context,
+		      char *buffer, size_t space, const char *format);
 
 /** Safe version of strncpy. Places 0 termination at last character
  * @param dest Destination buffer
