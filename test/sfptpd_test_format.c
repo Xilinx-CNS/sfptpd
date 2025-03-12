@@ -141,7 +141,7 @@ static int test_format (const char *title,
 		*buf ='\0';
 
 		len2 = sfptpd_format(interpolators, test_cases[i].object, buf, len + 1, test_cases[i].format);
-		if (len2 < 0 && (e == errno) != test_cases[i].error) {
+		if (len2 < 0 && (e = errno) != test_cases[i].error) {
 			printf("%s: test %d: got error formatting string:\n rc = %s\n errno = %s\n expected = %s\n",
 			       title, i, strerror(-len), strerror(e), strerror(test_cases[i].error));
 			failures++;
