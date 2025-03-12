@@ -215,6 +215,7 @@ struct sfptpd_clock {
 	char hw_id_string[SFPTPD_CLOCK_HW_ID_STRING_SIZE];
 	char fname_string[SFPTPD_CLOCK_HW_ID_STRING_SIZE];
 	sfptpd_clock_id_t hw_id;
+	int num_intfs;
 
 	/* Indicates whether clock should be disciplined */
 	bool discipline;
@@ -295,22 +296,32 @@ const struct sfptpd_clock_id SFPTPD_CLOCK_ID_UNINITIALISED = {
 enum clock_format_id {
 	CLOCK_FMT_PHC_INDEX,
 	CLOCK_FMT_INTFS,
+	CLOCK_FMT_NUM_INTFS,
 	CLOCK_FMT_HW_ID,
 	CLOCK_FMT_HW_ID_NO_SEP,
+	CLOCK_FMT_PRI_INTF,
+	CLOCK_FMT_PRI_INTF_MAC,
 };
 
 static ssize_t clock_interpolate(char *buffer, size_t space, int id, void *context, char opt);
+static ssize_t pri_intf_interpolate(char *buffer, size_t space, int id, void *context, char opt);
 
 /* %P   phc device index
  * %I   interface list, separated by '/'
+ * %n   number of interfaces
  * %Cx  clock id with separator 'x'
  * %D   clock id with no separator
+ * %i   primary interface name
+ * %m   primary interface MAC address
  */
 static struct sfptpd_interpolation clock_format_specifiers[] = {
 	{ CLOCK_FMT_PHC_INDEX,       'P', false, clock_interpolate },
 	{ CLOCK_FMT_INTFS,           'I', false, clock_interpolate },
+	{ CLOCK_FMT_NUM_INTFS,       'n', false, clock_interpolate },
 	{ CLOCK_FMT_HW_ID,           'C', true,  clock_interpolate },
 	{ CLOCK_FMT_HW_ID_NO_SEP,    'D', false, clock_interpolate },
+	{ CLOCK_FMT_PRI_INTF,        'i', false, pri_intf_interpolate },
+	{ CLOCK_FMT_PRI_INTF_MAC,    'm', false, pri_intf_interpolate },
 	{ SFPTPD_INTERPOLATORS_END }
 };
 
@@ -351,6 +362,8 @@ static ssize_t clock_interpolate(char *buffer, size_t space, int id, void *conte
 		return snprintf(buffer, space, "%d", clock->u.nic.device_idx);
 	case CLOCK_FMT_INTFS:
 		return snprintf(buffer, space, "%s", clock->intfs_list);
+	case CLOCK_FMT_NUM_INTFS:
+		return snprintf(buffer, space, "%d", clock->num_intfs);
 	case CLOCK_FMT_HW_ID:
 		return snprintf(buffer, space, SFPTPD_FORMAT_EUI64_SEP,
 				hw_id.id[0], hw_id.id[1], opt, hw_id.id[2], hw_id.id[3], opt,
@@ -364,6 +377,26 @@ static ssize_t clock_interpolate(char *buffer, size_t space, int id, void *conte
 	}
 }
 
+static ssize_t pri_intf_interpolate(char *buffer, size_t space, int id, void *context, char opt)
+{
+	const struct sfptpd_clock *clock = (const struct sfptpd_clock *) context;
+	struct sfptpd_interface *intf = clock->u.nic.primary_if;
+
+	assert(clock != NULL);
+	assert(buffer != NULL || space == 0);
+
+	if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM)
+		return 0;
+
+	switch (id) {
+	case CLOCK_FMT_PRI_INTF:
+		return snprintf(buffer, space, "%s", sfptpd_interface_get_name(intf));
+	case CLOCK_FMT_PRI_INTF_MAC:
+		return snprintf(buffer, space, "%s", sfptpd_interface_get_mac_string(intf));
+	default:
+		return 0;
+	}
+}
 
 static void clock_dump_header(const char *title, int trace_level)
 {
@@ -855,6 +888,7 @@ static int renew_clock(struct sfptpd_clock *clock)
 		}
 
 		/* Create the interfaces list typically used in the long clock name. */
+		clock->num_intfs = 1;
 		name_len = snprintf(clock->intfs_list, sizeof(clock->intfs_list),
 				    "%s", sfptpd_interface_get_name(clock->u.nic.primary_if));
 		if (name_len > sizeof(clock->intfs_list)) name_len = sizeof(clock->intfs_list);
@@ -869,6 +903,7 @@ static int renew_clock(struct sfptpd_clock *clock)
 						     sfptpd_interface_get_name(interface));
 				if (name_len > sizeof(clock->intfs_list))
 					name_len = sizeof(clock->intfs_list);
+				clock->num_intfs++;
 			}
 		}
 
