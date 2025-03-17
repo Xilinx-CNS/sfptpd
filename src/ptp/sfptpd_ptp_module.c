@@ -3761,21 +3761,16 @@ static void ptp_intf_aggregate_instance_requirements(struct sfptpd_ptp_intf *int
 	assert(interface);
 
 	instance = interface->instance_list;
+	intf_config = &interface->representative_config->ptpd_intf;
+	intf_config->multicast_needed = false;
 
-	if (instance != NULL) {
-		assert(instance->config);
-		
-		intf_config = &instance->config->ptpd_intf;
-		intf_config->multicast_needed = false;
+	for (instance = interface->instance_list; instance; instance = instance->next) {
+		PortCommunicationCapabilities *caps = &instance->config->ptpd_port.comm_caps;
 
-		do {
-			PortCommunicationCapabilities *caps = &instance->config->ptpd_port.comm_caps;
-			if (caps->syncCapabilities & PTPD_COMM_MULTICAST_CAPABLE ||
-			    caps->delayRespCapabilities & PTPD_COMM_MULTICAST_CAPABLE) {
-				intf_config->multicast_needed = true;
-			}
-			instance = instance->next;
-		} while (instance);
+		if (caps->syncCapabilities & PTPD_COMM_MULTICAST_CAPABLE ||
+		    caps->delayRespCapabilities & PTPD_COMM_MULTICAST_CAPABLE) {
+			intf_config->multicast_needed = true;
+		}
 	}
 }
 
