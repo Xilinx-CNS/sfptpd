@@ -11,13 +11,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Export stats with OpenMetrics exposition. (SWPTP-1000)
-  - Serve metrics over Unix domain socket.
-  - Control with `openmetrics off` or `openmetrics unix` (default).
+  - Exported by default over Unix socket (`openmetrics_unix off` to disable).
+  - Exported over TCP if configured with `openmetrics_tcp <listen-addr>*`.
   - Configure real time stats buffer size with `openmetrics_rt_stats_buf`.
   - Specify metrics family prefix with `openmetrics_prefix`.
-  - Example command to proxy to TCP:
-    `socat TCP-LISTEN:9979,fork UNIX-CONNECT:/run/sfptpd/metrics.sock`
-  - Or use `openmetrics_tcp localhost:9979` to serve directly over TCP.
 - Export real time stats over OpenMetrics HTTP socket. (SWPTP-1385)
   - For JSON Lines, GET /rt-stats.jsonl
   - For JSON Seq (RFC7464), GET /rt-stats.json-seq

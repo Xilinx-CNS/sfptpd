@@ -136,7 +136,7 @@ static int parse_legacy_clockids(struct sfptpd_config_section *section, const ch
 				  unsigned int num_params, const char * const params[]);
 static int parse_initial_clock_correction(struct sfptpd_config_section *section, const char *option,
 					  unsigned int num_params, const char * const params[]);
-static int parse_openmetrics(struct sfptpd_config_section *section, const char *option,
+static int parse_openmetrics_unix(struct sfptpd_config_section *section, const char *option,
 			     unsigned int num_params, const char * const params[]);
 static int parse_openmetrics_tcp(struct sfptpd_config_section *section, const char *option,
 				 unsigned int num_params, const char * const params[]);
@@ -446,9 +446,9 @@ static const sfptpd_config_option_t config_general_options[] =
 		"When to apply an initial clock correction to NIC clocks",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_initial_clock_correction,
 		.dfl = "Defaults to always"},
-	{"openmetrics", "<off | unix>",
-		"Whether to serve OpenMetrics exposition",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics,
+	{"openmetrics_unix", "<off | on>",
+		"Whether to serve OpenMetrics exposition over socket in filesystem",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_unix,
 		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_OPENMETRICS_UNIX)},
 	{"openmetrics_tcp", "LISTEN-ADDR*",
 		"Addresses to listen on to serve OpenMetrics exposition over TCP",
@@ -1156,7 +1156,7 @@ static int parse_initial_clock_correction(struct sfptpd_config_section *section,
 	return rc;
 }
 
-static int parse_openmetrics(struct sfptpd_config_section *section, const char *option,
+static int parse_openmetrics_unix(struct sfptpd_config_section *section, const char *option,
 			     unsigned int num_params, const char * const params[])
 {
 	int rc = 0;
@@ -1164,7 +1164,7 @@ static int parse_openmetrics(struct sfptpd_config_section *section, const char *
 
 	assert(num_params == 1);
 
-	if (strcmp(params[0], "unix") == 0) {
+	if (strcmp(params[0], "on") == 0) {
 		metrics->unix = true;
 	} else if (strcmp(params[0], "off") == 0) {
 		metrics->unix = false;
