@@ -1515,11 +1515,6 @@ int sfptpd_metrics_listener_open(struct sfptpd_config *app_config)
 	        goto fail;
 	}
 
-	/* Set ownership of socket. Defer error to any consequent failure. */
-	if (fchown(metrics.listen_fd, general_config->uid, general_config->gid))
-		TRACE_L4(PREFIX "could not set socket ownership, %s\n",
-			 strerror(errno));
-
 	/* Set access mode. Be louder because this is explicit config. */
 	if (general_config->metrics_socket_mode != (mode_t) -1 &&
 	    fchmod(metrics.listen_fd, general_config->metrics_socket_mode) == -1)
