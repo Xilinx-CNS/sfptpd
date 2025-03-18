@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Add `phc_dedup` option to identify duplicate non-Solarflare PHC devices
   sharing a single NIC clock and treat as one device. (SWPTP-1348)
   - This option requires a calibration step that may take a few seconds.
+- Add `trace_level all <n>` option or `most` omitting `threading`. (SWPTP-1421)
 - Add configurable run, state, control and metrics access modes. (SWPTP-1551)
 - Add `servo_log_all_samples` option. (SWPTP-1566)
 - Add new clock display format interpolators. (SWPTP-1569)

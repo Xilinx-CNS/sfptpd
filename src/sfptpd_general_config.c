@@ -339,7 +339,7 @@ static const sfptpd_config_option_t config_general_options[] =
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_pid_filter_ki,
 		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_SERVO_K_INTEGRAL)},
-	{"trace_level", "[<general | threading | bic | netlink | ntp | servo | clocks>] NUMBER",
+	{"trace_level", "[<general | threading | bic | netlink | ntp | servo | clocks | most | all>] NUMBER",
 		"Specifies a module (of 'general' if omitted) trace level from 0 (none) to 6 (excessive)",
 		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
 		parse_trace_level,
@@ -1487,6 +1487,9 @@ static int parse_trace_level(struct sfptpd_config_section *section, const char *
 		if (tokens != 1)
 			return EINVAL;
 
+		if (strcmp(module_name, "all") == 0)
+			general->threading_trace_level = trace_level;
+
 		if (strcmp(module_name, "general") == 0)
 			general->trace_level = trace_level;
 		else if (strcmp(module_name, "threading") == 0)
@@ -1501,7 +1504,14 @@ static int parse_trace_level(struct sfptpd_config_section *section, const char *
 			general->servo_trace_level = trace_level;
 		else if (strcmp(module_name, "clocks") == 0)
 			general->clocks_trace_level = trace_level;
-		else {
+		else if (strcmp(module_name, "most") == 0 || strcmp(module_name, "all") == 0) {
+			general->trace_level = trace_level;
+			general->bic_trace_level = trace_level;
+			general->netlink_trace_level = trace_level;
+			general->ntp_trace_level = trace_level;
+			general->servo_trace_level = trace_level;
+			general->clocks_trace_level = trace_level;
+		} else {
 			ERROR("Unknown <module> argument for `trace_level`: '%s'\n", module_name);
 			return EINVAL;
 		}
