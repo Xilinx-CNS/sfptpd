@@ -36,9 +36,6 @@ typedef struct sfptpd_ntp_module_config {
 
 	/** Key Value for communication with NTP daemon */
 	char key_value[SFPTPD_NTP_KEY_MAX];
-
-	/** Optional path for script to provid chronyd clock control */
-	char chronyd_script[PATH_MAX];
 } sfptpd_ntp_module_config_t;
 
 /** Forward structure declarations */

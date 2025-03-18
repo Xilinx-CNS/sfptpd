@@ -351,6 +351,7 @@ static int parse_control_script(struct sfptpd_config_section *section,
 {
 	sfptpd_crny_module_config_t *ntp = (sfptpd_crny_module_config_t *)section;
 	regex_t legacy_path;
+	int rc = 0;
 
 	assert(num_params == 1);
 
@@ -359,23 +360,25 @@ static int parse_control_script(struct sfptpd_config_section *section,
 		return EBADMSG;
 
 	if (regexec(&legacy_path, params[0], 0, NULL, 0) == 0) {
-		sfptpd_strncpy(ntp->chronyd_script,
-			       SFPTPD_CRNY_DEFAULT_CONTROL_SCRIPT,
-			       sizeof ntp->chronyd_script);
+		ntp->chronyd_script = strdup(SFPTPD_CRNY_DEFAULT_CONTROL_SCRIPT);
 		WARNING("crny: legacy chronyd_script path \"%s\" replaced with "
 			"\"%s\"; please update configuration.\n",
 			params[0], ntp->chronyd_script);
 	} else {
-		sfptpd_strncpy(ntp->chronyd_script, params[0],
-			       sizeof ntp->chronyd_script);
+		ntp->chronyd_script = strdup(params[0]);
 	}
 
 	regfree(&legacy_path);
 
-	/* Implicitly enable clock control. */
-	ntp->clock_control = true;
+	if (ntp->chronyd_script == NULL) {
+		rc = errno;
+		CRITICAL("crny: could not copy control script path, %s\n", strerror(rc));
+	} else {
+		/* Implicitly enable clock control. */
+		ntp->clock_control = true;
+	}
 
-	return 0;
+	return rc;
 }
 
 
@@ -418,7 +421,7 @@ static int crny_validate_config(struct sfptpd_config_section *section)
 	assert(ntp != NULL);
 
 	if (ntp->clock_control &&
-	    ntp->chronyd_script[0] != '\0' &&
+	    ntp->chronyd_script != NULL &&
 	    access(ntp->chronyd_script, X_OK) != 0) {
 		rc = errno;
 		CFG_ERROR(section, "chronyd clock control requested but "
@@ -1727,7 +1730,7 @@ static int do_clock_control(crny_module_t *ntp,
 		crny_close_socket(ntp);
 	}
 
-	if (ntp->config->chronyd_script[0]) {
+	if (ntp->config->chronyd_script != NULL) {
 		len = strlen(ntp->config->chronyd_script);
 		total = len + strlen(action) + 1;
 		command = calloc(1, total);
@@ -2456,8 +2459,12 @@ static const struct sfptpd_thread_ops ntp_thread_ops =
 
 static void ntp_config_destroy(struct sfptpd_config_section *section)
 {
+	sfptpd_crny_module_config_t *ntp = (sfptpd_crny_module_config_t *)section;
+
 	assert(section != NULL);
 	assert(section->category == SFPTPD_CONFIG_CATEGORY_CRNY);
+
+	free(ntp->chronyd_script);
 	free(section);
 }
 

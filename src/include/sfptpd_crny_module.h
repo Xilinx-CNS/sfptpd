@@ -40,7 +40,7 @@ typedef struct sfptpd_crny_module_config {
 	bool clock_control;
 
 	/** Path for script to provide chronyd clock control */
-	char chronyd_script[PATH_MAX];
+	char *chronyd_script;
 } sfptpd_crny_module_config_t;
 
 /** Forward structure declarations */
