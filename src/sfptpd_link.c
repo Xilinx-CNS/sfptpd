@@ -27,17 +27,17 @@
  ****************************************************************************/
 
 static const char *sfptpd_link_type_names[] = {
-	"phys",
-	"vlan",
-	"bond",
-	"team",
-	"bridge",
-	"macvlan",
-	"ipvlan",
-	"veth",
-	"dummy",
-	"tunnel",
-	"other",
+	[SFPTPD_LINK_PHYSICAL] = "phys",
+	[SFPTPD_LINK_VLAN]     = "vlan",
+	[SFPTPD_LINK_BOND]     = "bond",
+	[SFPTPD_LINK_TEAM]     = "team",
+	[SFPTPD_LINK_BRIDGE]   = "bridge",
+	[SFPTPD_LINK_MACVLAN]  = "macvlan",
+	[SFPTPD_LINK_IPVLAN]   = "ipvlan",
+	[SFPTPD_LINK_VETH]     = "veth",
+	[SFPTPD_LINK_DUMMY]    = "dummy",
+	[SFPTPD_LINK_TUNNEL]   = "tunnel",
+	[SFPTPD_LINK_OTHER]    = "other",
 };
 
 
