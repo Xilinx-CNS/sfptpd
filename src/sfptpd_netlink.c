@@ -534,7 +534,7 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 				link->type = SFPTPD_LINK_BOND;
 			else if (!strcmp(kind, "veth"))
 				link->type = SFPTPD_LINK_VETH;
-			else if (!strcmp(kind, "bridge"))
+			else if (!strcmp(kind, "bridge") || !strcmp(kind, "openvswitch"))
 				link->type = SFPTPD_LINK_BRIDGE;
 			else if (!strcmp(kind, "tun") || !strcmp(kind, "tap") ||
 				 !strcmp(kind, "vxlan") || !strcmp(kind, "gretap") ||
