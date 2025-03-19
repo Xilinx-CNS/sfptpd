@@ -35,10 +35,11 @@
 #define OPT_PERSISTENT 0x10000
 #define OPT_INITIAL 0x10001
 
-static const char *opts_short = "+hv";
+static const char *opts_short = "+hvf:";
 static const struct option opts_long[] = {
 	{ "help", 0, NULL, (int) 'h' },
 	{ "verbose", 0, NULL, (int) 'v' },
+	{ "config-file", 1, NULL, (int) 'f' },
 	{ "persistent", 0, NULL, OPT_PERSISTENT },
 	{ "initial", 0, NULL, OPT_INITIAL },
 	{ NULL, 0, NULL, 0 }
@@ -269,6 +270,7 @@ static void usage(FILE *stream)
 		"  OPTIONS\n"
 		"        --persistent            Use sfptpd persistent frequency adjustment\n"
 		"        --initial               Perform sfptpd initial clock correction\n"
+		"    -f, --config-file=FILE      Configure from FILE, or stdin if '-'\n"
 		"    -h, --help                  Show usage\n"
 		"    -v, --verbose               Be verbose\n\n"
 		"  CLOCK SUBSYSTEM\n"
@@ -570,6 +572,9 @@ int main(int argc, char *argv[])
 	/* Handle command line arguments */
 	while ((opt = getopt_long(argc, argv, opts_short, opts_long, &index)) != -1) {
 		switch (opt) {
+		case 'f':
+			sfptpd_config_set_config_file(config, optarg);
+			break;
 		case 'h':
 			usage(stdout);
 			goto fail;
@@ -595,6 +600,11 @@ int main(int argc, char *argv[])
 		usage(stderr);
 		goto fail;
 	}
+
+	/* Parse the configuration file */
+	rc = sfptpd_config_parse_file(config);
+	if (rc != 0)
+		goto fail;
 
 	if (do_init() != 0)
 		goto fail;
