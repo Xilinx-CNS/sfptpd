@@ -115,6 +115,7 @@ enum clock_command_e {
 	CLOCK_CMD_SET_TO,
 	CLOCK_CMD_DIFF,
 	CLOCK_CMD_DEDUP,
+	CLOCK_CMD_SET_SYNC,
 	CLOCK_CMD_INVALID
 };
 
@@ -146,15 +147,16 @@ static struct sfptpd_nl_state *netlink = NULL;
 static const struct sfptpd_link_table *initial_link_table = NULL;
 
 static const struct clock_command clock_cmds[] = {
-	{ CLOCK_CMD_LIST,    "list",    0 },
-	{ CLOCK_CMD_INFO,    "info",    1 },
-	{ CLOCK_CMD_GET,     "get",     1 },
-	{ CLOCK_CMD_STEP,    "step",    1 },
-	{ CLOCK_CMD_SLEW,    "slew",    1 },
-	{ CLOCK_CMD_SET_TO,  "set_to",  2 },
-	{ CLOCK_CMD_DIFF,    "diff",    2 },
-	{ CLOCK_CMD_DEDUP,   "dedup",   0 },
-	{ CLOCK_CMD_INVALID, "INVALID", 0 },
+	{ CLOCK_CMD_LIST,     "list",     0 },
+	{ CLOCK_CMD_INFO,     "info",     1 },
+	{ CLOCK_CMD_GET,      "get",      1 },
+	{ CLOCK_CMD_STEP,     "step",     1 },
+	{ CLOCK_CMD_SLEW,     "slew",     1 },
+	{ CLOCK_CMD_SET_TO,   "set_to",   2 },
+	{ CLOCK_CMD_DIFF,     "diff",     2 },
+	{ CLOCK_CMD_DEDUP,    "dedup",    0 },
+	{ CLOCK_CMD_SET_SYNC, "set_sync", 1 },
+	{ CLOCK_CMD_INVALID,  "INVALID",  0 },
 };
 
 static const struct intf_command intf_cmds[] = {
@@ -281,6 +283,7 @@ static void usage(FILE *stream)
 		"    clock slew CLOCK PPB        Adjust clock frequency\n"
 		"    clock set_to CLOCK1 CLOCK2  CLOCK1 := CLOCK2\n"
 		"    clock diff CLOCK1 CLOCK2    CLOCK1 - CLOCK2\n"
+		"    clock set_sync CLOCK TIMEO  Set CLOCK sync flag for TIMEO seconds\n"
 		"    clock dedup                 Deduplicate shared phc devices\n\n"
 		"      CLOCK := <phcN> | <ethN> | system\n\n"
 		"  INTERFACE SUBSYSTEM\n"
@@ -304,7 +307,7 @@ static int clock_command(int argc, char *argv[])
 	size_t num_clocks;
 	sfptpd_time_t freq_adj;
 	sfptpd_time_t tick_len;
-	sfptpd_time_t f;
+	sfptpd_time_t f = 0.0L;
 	int tokens;
 	int rc = 0;
 	int i;
@@ -400,6 +403,15 @@ static int clock_command(int argc, char *argv[])
 		break;
 	case CLOCK_CMD_SET_TO:
 		rc = sfptpd_clock_set_time(clocks[0], clocks[1], NULL, false);
+		break;
+	case CLOCK_CMD_SET_SYNC:
+		if (argc > 1 + cmd->clock_args)
+			tokens = sscanf(argv[1 + cmd->clock_args], "%Lf", &f);
+		else
+			f = SFPTPD_STATS_CONVERGENCE_MIN_PERIOD_DEFAULT;
+		rc = sfptpd_clock_set_sync_status(clocks[0],
+						  f ? 1 : 0,
+						  f ? f : 0);
 		break;
 	case CLOCK_CMD_DEDUP:
 		rc = sfptpd_clock_deduplicate();
