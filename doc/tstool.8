@@ -9,6 +9,7 @@
 .Op Fl -help
 .Nm
 .Op Fl -verbose | v
+.Op Fl -config-file Pa file | Fl f Pa file
 .Op Fl -persistent
 .Op Fl -initial
 .Ar command ...
@@ -18,6 +19,17 @@ Examine and adjust PTP Hardware Clock devices, system clock and interface timest
 This utility uses the mechanisms available to sfptpd to manipulate precision clocks on the system.
 .Pp
 Clocks may be specified by phc number, interface name or 'system'.
+.Pp
+A configuration file in the same format as used by
+.Xr sfptpd 8
+may be supplied.
+Any settings in the configuration file will take precedence over the command line options.
+Note that this behaviour differs from
+.Nm sfptpd
+which performs a second pass of the command line arguments after interpreting the config file.
+The config file is useful for expressing options like
+.Ql phc_diff_methods
+for defining the preferred clock comparison methods to use.
 .Ss Commands
 .Bl -item -compact
 .It
