@@ -1,4 +1,4 @@
-sfptpd (3.8.0.1005) UNRELEASED; urgency=medium
+sfptpd (3.9.0-1~local1) UNRELEASED; urgency=medium
 
   * Upstream's Debian package for sfptpd; see CHANGELOG.md for real changelog.
 
