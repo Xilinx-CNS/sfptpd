@@ -1114,7 +1114,7 @@ static int interface_init(const struct sfptpd_link *link, const char *sysfs_dir,
 			 interface->pci_vendor_id,
 			 interface->pci_device_id,
 			 (interface->class == SFPTPD_INTERFACE_SFC ||
-			  interface->class == SFPTPD_INTERFACE_XNET) ? " (Xilinx)" : "",
+			  interface->class == SFPTPD_INTERFACE_XNET) ? " (AMD Solarflare)" : "",
 			 interface->bus_addr);
 	if (interface->driver[0] != '\0')
 		TRACE_L3("interface %s: %s %s, fw %s\n",
