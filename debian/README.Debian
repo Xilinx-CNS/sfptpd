@@ -23,4 +23,6 @@ After configuring sfptpd's /etc/sfptpd.conf file, using the examples in
 /usr/share/doc/sfptpd/config for guidance, run commands appropriate to
 the init system to enable and start, e.g. systemctl enable sfptpd
 
+Copyright (c) 2024 Advanced Micro Devices, Inc.
+
  -- AMD NIC Support <support-nic@amd.com>  Tue, 17 Sep 2024 18:21:00 +0100

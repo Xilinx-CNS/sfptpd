@@ -1,16 +1,13 @@
 AMD Solarflare Enhanced PTP Daemon
 ==================================
 
-Version: v3.8.1.1004
+Version: v3.9.0.1000
 
-These release notes relate to official supported binary releases of sfptpd.
-Please see [the changelog](CHANGELOG.md) for a list of changes since earlier
-releases.
+These are the release notes for sfptpd on AMD Solarflare adaptors.
 
-> [!NOTE]
-> Features listed in the changelog that require building from source or relate
-> to operating systems or hardware not listed below as supported, are not
-> supported by AMD and should be considered exclusive to the open source project.
+The full list of changes since earlier versions, including changes relating
+to unsupported adapters and use cases available using the sfptpd source code
+is available in [the changelog](CHANGELOG.md).
 
 (c) Copyright 2012-2025 Advanced Micro Devices, Inc.
 
@@ -61,7 +58,7 @@ This package is supported on:
 - Debian 10 "Buster"
 - Debian 11 "Bullseye"
 - Debian 12 "Bookworm"
-- Linux kernels 3.0 - 6.12
+- Linux kernels 3.0 - 6.13
 
 Other and older platforms and non-amd64 architectures may be compatible with
 sfptpd but are not supported by AMD. Please raise issues and patches for
@@ -92,9 +89,9 @@ Known Issues
 ------------
 
 - Issue SWNETLINUX-78
-   - If the firmware is upgraded using sfupdate while sfptpd is running, sfptpd
-     will stop working. AMD recommends that sfptpd is stopped prior to
-     performing a firmware upgrade on an adapter.
+   - If the firmware is upgraded using sfupdate while sfptpd is running,
+     transmit timestamping can stop working correctly. AMD recommends that
+     sfptpd is stopped prior to performing a firmware upgrade on an adapter.
 
 - Issue SWNETLINUX-4466
    - With affected driver versions PPS is not functional unless timestamping
@@ -130,26 +127,19 @@ Advanced notice of possible future changes
   The built-in receiver for PTP event monitoring messages (`remote_monitor`)
   has been replaced by the 'sfptpmon' script in the `sfptpd-python3` package.
   The built-in receiver may be disabled in a future feature release. (Note
-  that the current version of the script only supports unicast signalling
-  on RHEL7, not multicast. Unicast signalling is recommended.)
+  that when used on RHEL7, the current version of the script only supports
+  unicast signalling, not multicast. Unicast signalling is recommended.)
 
 
-Summary of major new features since v3.7.1.1006
------------------------------------------------
+Summary of major new features since v3.8.x
+------------------------------------------
 
-For a full list of changes, including fixes since v3.8.0.1005,
-see [the changelog](CHANGELOG.md). These include changes of interest
-to community users building from source.
+For a full list of changes, see the changelog.
 
-The following are selected as notable new features for AMD-supported
-use cases:
+The following major new features are provided in v3.9.x:
 
-- LACP PTP support extended to dual boundary clock solutions. (SWPTP-738)
-- Timestamp handling enhanced to improve daemon performance. (SWPTP-831)
-- Configurable filename patterns for multi-host config deployment. (SWPTP-649)
-- New scheme for handling clock comparisons enhances performance. (SWPTP-1386)
-- Debian package now available for Debian and Ubuntu. (SWPTP-1446)
-- Privileged helper allows all features while running not as root. (SWPTP-1479)
+- JSON or OpenMetrics stats exported over TCP or Unix socket. (SWPTP-1000)
+- tstool utility provided to perform diagnostic operations on NIC clocks.
 
 
 Copyright

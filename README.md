@@ -1,19 +1,20 @@
-# Solarflare Enhanced PTP Daemon
+# AMD Solarflare Enhanced PTP Daemon
 
 The sfptpd service synchronises local clocks together with multiple PTP and PPS
 sources in one integrated application with high quality timestamp filtering and
 supports LACP and active-backup bonds with and without VLANs. The default and
 Enterprise PTP profiles are supported.
 
-Instantaneous and long term statistics for monitoring along with support for
-'NetSync Monitor' and standard PTP event monitoring support compliance.
+Instantaneous and long term statistics along with support for 'NetSync
+Monitor', a built-in OpenMetrics exporter and standard PTP event monitoring are
+available to support integrating with monitoring solutions.
 
 Integration is provided to work with NTP sources via `ntpsec`, `ntpd` and
 subject to limitations, `chronyd`. The daemon works on Linux systems for 3.0
 kernels and later.
 
 See [the changelog](CHANGELOG.md) for recent additions to sfptpd.  The current
-stable branch is [v3_8](https://github.com/Xilinx-CNS/sfptpd/tree/v3_8).
+stable branch is [v3_9](https://github.com/Xilinx-CNS/sfptpd/tree/v3_9).
 
 For a **quick start** (operating PTP on bond0, domain 100), see
 [one line docker example](/INSTALL.md#running-a-pre-built-container-image).
@@ -97,7 +98,7 @@ globally during this calibration period to enforce this).
 
 ```
 SPDX-License-Identifier: BSD-3-Clause
-SPDX-FileCopyrightText: (c) Copyright 2013-2024 Advanced Micro Devices, Inc.
+SPDX-FileCopyrightText: (c) Copyright 2013-2025 Advanced Micro Devices, Inc.
 ```
 
 This software is licensed as BSD-3-Clause AND BSD-2-Clause AND NTP AND ISC.

@@ -1,5 +1,6 @@
 sfptpd (3.9.0-1~local1) UNRELEASED; urgency=medium
 
   * Upstream's Debian package for sfptpd; see CHANGELOG.md for real changelog.
+  * Copyright (c) 2024, Advanced Micro Devices, Inc.
 
  -- AMD NIC Support <support-nic@amd.com>  Thu,  3 Oct 2024 11:00:00 +0000

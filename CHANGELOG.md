@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 (c) Copyright 2012-2025 Advanced Micro Devices, Inc.
 
-## Unreleased
+## [3.9.0.1000] - 2025-04-15
 
 ### Added
 
@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Add `phc_dedup` option to identify duplicate non-Solarflare PHC devices
   sharing a single NIC clock and treat as one device. (SWPTP-1348)
   - This option requires a calibration step that may take a few seconds.
+  - This is an experimental feature.
 - Add `trace_level all <n>` option or `most` omitting `threading`. (SWPTP-1421)
 - Extend PTP ACLs to cover IPv6 addresses. (SWPTP-1536).
 - Add configurable run, state, control and metrics access modes. (SWPTP-1551)
