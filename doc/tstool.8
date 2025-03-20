@@ -1,4 +1,4 @@
-.Dd July 13, 2024
+.Dd March 20, 2025
 .Os
 .Dt tstool 8
 .Sh NAME
@@ -30,57 +30,74 @@ which performs a second pass of the command line arguments after interpreting th
 The config file is useful for expressing options like
 .Ql phc_diff_methods
 for defining the preferred clock comparison methods to use.
+.Pp
+Note that trace is output from internal operations as if they were run by
+.Nm sfptpd .
+To suppress this,
+specify
+.Ql trace_level all 0
+in a configuration file.
 .Ss Commands
-.Bl -item -compact
-.It
-.Nm clock
-list
-.It
-.Nm clock
-info
+.Bl -tag interface
+.It Nm clock list
+List clocks.
+.It Nm clock info Ar clock
+Show information about
+.Ar clock .
+.It Nm clock get Ar clock
+Read the time from
+.Ar clock .
+.It Nm clock step Ar clock Ar offset
+Step
 .Ar clock
-.It
-.Nm clock
-get
-.Ar clock
-.It
-.Nm clock
-step
-.Ar clock
+by
 .Ar offset
-.It
-.Nm clock
-slew
+seconds.
+.It Nm clock slew Ar clock Ar ppb
+Slew
 .Ar clock
+by
 .Ar ppb
-.It
-.Nm clock
-set_to
+parts per billion.
+.It Nm clock set_to Ar clock1 Ar clock2
+Set
 .Ar clock1
-.Ar clock2
-.It
-.Nm clock
-diff
+to
+.Ar clock2 .
+.It Nm clock diff Ar clock1 Ar clock2
+Report offset in seconds by which
 .Ar clock1
-.Ar clock2
-.It
-.Nm clock
-set_sync
+is in advance of
+.Ar clock2 .
+.It Nm clock set_sync Ar clock Op Ar timeout
+Set the sync status flag of supported clocks to indicate that
 .Ar clock
-.Op Ar timeout
-.It
-.Nm interface
-list
-.It
-.Nm interface
-info
-.Ar interface
-.It
-.Nm interface
-set_ts
-.Ar interface
-.Ar tx-type
-.Ar rx-filter
+is in sync,
+expiring this flag after
+.Ar timeout
+seconds if not renewed.
+Specify a
+.Ar timeout
+of
+.Li 0
+to clear the sync flag.
+The default timeout of
+.Li 60
+seconds is used if the
+.Ar timeout
+argument is omitted.
+.It Nm clock dedup
+Deduplicate clock devices by working out which ones share the same underlying
+physical clock.
+.It Nm interface list
+List available physical interfaces suitable for PTP.
+.It Nm interface info Ar interface
+Show information about a physical interface.
+.It Nm interface set_ts Ar interface Ar tx-type Ar rx-filter
+Set timestamping modes for an interface.
+Use
+.Nm interface info
+to see what values are available to set for a given interface.
 .El
 .Sh BUGS
 Please raise bug reports at:
@@ -96,4 +113,4 @@ Advanced Micro Devices, Inc.
 Full documentation is available at:
 .Aq https://docs.amd.com/r/en-US/ug1602-ptp-user
 .Sh COPYRIGHT
-Copyright (c) 2024 Advanced Micro Devices, Inc.
+Copyright (c) 2024-2025 Advanced Micro Devices, Inc.
