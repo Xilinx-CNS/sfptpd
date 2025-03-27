@@ -9,7 +9,7 @@
 # invoke with an interpreter command, e.g. 'python3'.
 #
 # SPDX-License-Identifier: BSD-3-Clause
-# (c) Copyright 2012-2023 Xilinx, Inc.
+# Copyright (c) 2012-2023, Advanced Micro Devices, Inc.
 #
 # Usage: python3 monitoring_console.py <remote-monitor.jsonl>
 #

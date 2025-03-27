@@ -9,7 +9,7 @@ The full list of changes since earlier versions, including changes relating
 to unsupported adapters and use cases available using the sfptpd source code
 is available in [the changelog](CHANGELOG.md).
 
-(c) Copyright 2012-2025 Advanced Micro Devices, Inc.
+Copyright (c) 2012-2025, Advanced Micro Devices, Inc.
 
 
 Overview
@@ -71,7 +71,7 @@ Documentation
 
 For detailed instructions on how to use the sfptpd with AMD Solarflare adapters
 please refer to the "Enhanced PTP User Guide" (UG1602) available from
-<https://docs.xilinx.com/r/en-US/ug1602-ptp-user>
+<https://docs.amd.com/r/en-US/ug1602-ptp-user>
 
 
 Support
@@ -96,7 +96,7 @@ Known Issues
 - Issue SWNETLINUX-4466
    - With affected driver versions PPS is not functional unless timestamping
      is enabled on the relevant interface. For more details see:
-     <https://support.xilinx.com/s/article/000033083>
+     <https://adaptivesupport.amd.com/s/article/000033083>
 
 - Issue SWNETLINUX-5126
    - With affected driver verions (e.g. v5.3.16.1004, released November 2023),
@@ -104,7 +104,7 @@ Known Issues
      an sfc net driver crash in the kernel. 7000-series devices are out of
      support by AMD Solarflare including with sfptpd. Other devices are
      unaffected. For more details see:
-     <https://support.xilinx.com/s/article/000036427>
+     <https://adaptivesupport.amd.com/s/article/000036427>
 
 
 Advanced notice of possible future changes

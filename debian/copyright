@@ -45,7 +45,7 @@ Files: src/ntp/sfptpd_ntpd_client_mode?.c
 Copyright: 2014-2023 Advanced Micro Devices, Inc.
  2011-2015 Network Time Foundation
  1992-2015 University of Delaware
-License: NTP and BSD-2-Clause
+License: NTP and BSD-3-Clause
 
 License: BSD-3-Clause
  Redistribution and use in source and binary forms, with or without

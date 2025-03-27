@@ -1,5 +1,9 @@
-/* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2012-2019 Xilinx, Inc. */
+/* SPDX-License-Identifier: BSD-3-Clause AND NTP */
+/* Copyright (c) 2014-2024 Advanced Micro Devices, Inc.
+ * Copyright (c) 2011-2015 Network Time Foundation
+ * Copyright (c) 1992-2015 University of Delaware
+ * This file is adapted from ntp-4.2.6p5.
+ */
 
 /**
  * @file   sfptpd_ntpd_mode7_client.c

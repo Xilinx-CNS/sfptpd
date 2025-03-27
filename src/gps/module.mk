@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# (c) Copyright 2012-2023 Xilinx, Inc.
+# Copyright (c) 2023, Advanced Micro Devices, Inc.
 
-# Chrony Sync Module Makefile
+# GPS Sync Module Makefile
 
 include mk/pushd.mk
 

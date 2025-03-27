@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# (c) Copyright 2019-2023 Xilinx, Inc.
+# Copyright (c) 2019-2023, Advanced Micro Devices, Inc.
 
 [Unit]
-Description=Solarflare Enhanced PTP Daemon
+Description=AMD Solarflare Enhanced PTP Daemon
 Documentation=man:sfptpd(8)
-Documentation=https://docs.xilinx.com/r/en-US/ug1602-ptp-user
+Documentation=https://docs.amd.com/r/en-US/ug1602-ptp-user
 After=network-online.target
 
 # systemd-timesyncd is incompatible with sfptpd because it offers no

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# (c) Copyright 2012-2024 Xilinx, Inc.
+# Copyright (c) 2012-2024, Advanced Micro Devices, Inc.
 
 # Top-level makefile for sfptpd
 

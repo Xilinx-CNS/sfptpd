@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
-/* (c) Copyright 2012-2023 Xilinx, Inc. */
-/* (c) Copyright prior contributors */
+/* Copyright (c) 2012-2025, Advanced Micro Devices, Inc. */
+/* Copyright (c) ptpd2 authors: see PTPD2_COPYRIGHT */
 
 /**
  * @file   ptpd.h
@@ -10,13 +10,8 @@
  * @version 2.0
  * @date   Fri Aug 27 10:22:19 2010
  *
- * @section implementation Implementation
- * PTTdV2 is not a full implementation of 1588 - 2008 standard.
- * It is implemented only with use of Transparent Clock and Peer delay
- * mechanism, according to 802.1AS requierements.
- *
  * This header file includes all others headers.
- * It defines functions which are not dependant of the operating system.
+ * It defines functions which are not dependent on the operating system.
  */
 
 #ifndef PTPD_H_

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* (c) Copyright 2016-2023 Xilinx, Inc. */
+/* Copyright (c) 2016-2023, Advanced Micro Devices, Inc. */
 
 /**
  * @file   sfptpd_netlink.c
