@@ -2478,7 +2478,7 @@ static int engine_on_startup(void *context)
 		sfptpd_sync_instance_status_t sync_instance_status = { 0 };
 
 		if (sync_instance->info.handle == NULL)
-			goto fail; /* Happens if startup failed, e.g. due to bug74320. */
+			goto fail; /* Happens if startup failed. */
 
 		/* Set initial clustering scores to configured default */
 		sync_instance_status.clustering_score =

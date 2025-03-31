@@ -3908,8 +3908,10 @@ static int ptp_on_startup(void *context)
 	return 0;
 
 fail:
-	ptp_destroy_instances(ptp);
+	sfptpd_multicast_unsubscribe(SFPTPD_APP_MSG_DUMP_TABLES);
+	sfptpd_multicast_unsubscribe(SFPTPD_SERVO_MSG_PID_ADJUST);
 
+	/* Let other shutdown cleanup operations be run from ptp_create_module */
 	return rc;
 }
 
@@ -4018,7 +4020,8 @@ static void ptp_on_shutdown(void *context)
 
 	/* Delete the ptpd structures. At this point (after ptp_destroy_instances()
 	 * above) there should only be the global context left to free. */
-	ptpd_destroy(ptp->ptpd_global_private);
+	if (ptp->ptpd_global_private)
+		ptpd_destroy(ptp->ptpd_global_private);
 
 	/* Free copy of link table */
 	sfptpd_link_table_free_copy(&ptp->link_table);

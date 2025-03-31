@@ -2045,6 +2045,7 @@ const char *sfptpd_thread_get_name(struct sfptpd_thread *thread)
 	if (thread->magic == SFPTPD_ZOMBIE_MAGIC) {
 		WARNING("zombie thread %p (%s) referenced\n",
 			thread, thread->name);
+		sfptpd_debug_backtrace();
 	}
 
 	return thread->name;
