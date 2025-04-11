@@ -7,10 +7,13 @@ export DEB_CFLAGS_MAINT_APPEND  = -Wall
 export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 
 %:
-	prefix=/usr INST_INITS="systemd" INST_OMIT="c-examples changelog" dh $@ --with python3,sysuser,runit
+	prefix=/usr INST_INITS="systemd" INST_OMIT="c-examples changelog" dh $@ --with python3,runit
 
 override_dh_auto_test:
 	make fast_test
+
+execute_after_dh_installsystemd:
+	dh_installsysusers
 
 override_dh_installchangelogs:
 	dh_installchangelogs CHANGELOG.md

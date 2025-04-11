@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2022-2025 Advanced Micro Devices, Inc.
+
+u _sfptpd - "AMD Solarflare Enhanced PTP Daemon" /var/lib/sfptpd

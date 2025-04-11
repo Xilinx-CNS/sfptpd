@@ -6,13 +6,13 @@ Section: net
 Priority: optional
 Maintainer: AMD NIC Support <support-nic@amd.com>
 Build-Depends:
- debhelper-compat (= 12),
+ debhelper-compat (= 13),
+ debhelper (>= 13.3.3~),
  libmnl-dev,
  libcap-dev,
  python3,
  dh-python,
- dh-sysuser,
- dh-runit,
+ dh-runit
 Standards-Version: 4.6.0
 Homepage: https://github.com/Xilinx-CNS/sfptpd
 Rules-Requires-Root: no
