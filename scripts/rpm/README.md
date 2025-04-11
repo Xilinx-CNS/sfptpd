@@ -9,7 +9,8 @@ make build_srpm
 This script uses the build system's default rpm macro value for `%{dist}` to
 choose which spec file to use for the target. If RPMs are alien to the build
 host, the appropriate match is imprecise or if cross-building, this value
-needs to be overridden, e.g.
+needs to be overridden. For example, to build on and for RHEL 10, which does
+not yet have a distinct spec file, use:
 
 ```sh
 RPM_OSVER=el9 make build_srpm

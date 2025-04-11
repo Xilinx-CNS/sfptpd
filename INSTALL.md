@@ -4,53 +4,24 @@ The sfptpd daemon can be built by `make all` and used from the `build`
 directory without installation. This page offers some examples of how sfptpd
 can be installed or packaged in various scenarios.
 
-(c) Copyright 2022-2024 Advanced Micro Devices, Inc.
+(c) Copyright 2022-2025 Advanced Micro Devices, Inc.
 
-## For most recent distributions
-
-```sh
-sudo make prefix=/usr install
-```
-
-## With no Python 3
-
-```sh
-sudo make prefix=/usr INST_OMIT=sfptpmon install
-```
-
-## With sysv or compatible init systems
-
-Init scripts are no longer installed by the `make install` target or shipped
-as examples. However, the following options are available.
-
-1. A modern init script is provided to Debian standards as
-   `debian/sfptpd.init` and this is included in packages for Debian and
-   derivatives.
-2. A legacy generic init script suitable for any init-based distribution is
-   available as `scripts/rpm/el6/sfptpd.init` but this is not maintained.
-
-Users of other distributions are encouraged to define and contribute up-to-date
-startup scripts and packaging definitions suitable for their preferred init
-system.
-
-## Default operation
-
-Installs to /usr/local
+## Default operation, installing to `/usr/local`
 
 ```sh
 sudo make install
+```
+
+## Install to `/usr`
+
+```sh
+sudo make prefix=/usr install
 ```
 
 ## Build a debian package
 
 ```sh
 debuild -i -us -uc -b
-```
-
-## Into a container image
-
-```sh
-make DESTDIR=../staging INST_INITS= install
 ```
 
 ## Building a source RPM
@@ -60,6 +31,12 @@ make build_srpm
 ```
 
 Read more about [RPM builds](scripts/rpm/README.md).
+
+## Into a container image
+
+```sh
+make DESTDIR=../staging INST_INITS= install
+```
 
 ## Build an RPM for EL6 on EL7 build host
 
@@ -122,3 +99,20 @@ tstool interface set_ts ens1f0 on all
 
 Note that the sfptpd running within a container cannot communicate with
 chronyd, so chronyd must be disabled.
+
+## With no Python 3
+
+```sh
+sudo make prefix=/usr INST_OMIT=sfptpmon install
+```
+
+## Service definitions and non-systemd systems
+
+Service startup scripts and definitions are usually short enough that it is
+best to devise one for the system at hand rather than using a generic one but
+the following service definitions are available in this repository:
+
+- [systemd unit](scripts/systemd/sfptpd.service)
+- [Debian-standard init script](debian/sfptpd.init)
+- [Debian-standard runit service directory](scripts/runit)
+- [RHEL 6-standard init script](scripts/rpm/el6/sfptpd.init)
