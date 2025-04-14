@@ -94,7 +94,7 @@ jobs:
 
   deb:
     name: debian packages
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: sfptpd_checkout
         uses: actions/checkout@v4
@@ -109,7 +109,7 @@ jobs:
         run: |
           debuild -i -us -uc -b
           SFPTPD_VERSION=$(scripts/sfptpd_versioning read)
-          SFPTPD_STAGING=sfptpd-${SFPTPD_VERSION}-ubu20.04
+          SFPTPD_STAGING=sfptpd-${SFPTPD_VERSION}-ubuntu
           mkdir DEB
           cp ../*deb DEB
           printf "SFPTPD_VERSION=$SFPTPD_VERSION" >> "$GITHUB_ENV"
