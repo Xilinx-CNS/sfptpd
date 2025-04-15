@@ -32,8 +32,10 @@
  * Constant
  ****************************************************************************/
 
-#define OPT_PERSISTENT 0x10000
-#define OPT_INITIAL 0x10001
+#define OPT_PERSISTENT  0x10000
+#define OPT_INITIAL     0x10001
+#define OPT_ENABLE_EFX  0x10002
+#define OPT_DISABLE_EFX 0x10003
 
 static const char *opts_short = "+hvf:";
 static const struct option opts_long[] = {
@@ -42,6 +44,8 @@ static const struct option opts_long[] = {
 	{ "config-file", 1, NULL, (int) 'f' },
 	{ "persistent", 0, NULL, OPT_PERSISTENT },
 	{ "initial", 0, NULL, OPT_INITIAL },
+	{ "enable-efx", 0, NULL, OPT_ENABLE_EFX },
+	{ "disable-efx", 0, NULL, OPT_DISABLE_EFX },
 	{ NULL, 0, NULL, 0 }
 };
 
@@ -274,7 +278,10 @@ static void usage(FILE *stream)
 		"        --initial               Perform sfptpd initial clock correction\n"
 		"    -f, --config-file=FILE      Configure from FILE, or stdin if '-'\n"
 		"    -h, --help                  Show usage\n"
-		"    -v, --verbose               Be verbose\n\n"
+		"    -v, --verbose               Be verbose\n"
+		"        --enable-efx            Enable SIOCEFX sfc private ioctl calls (the default)\n"
+		"        --disable-efx           Disable SIOCEFX sfc private ioctl calls\n"
+		"\n"
 		"  CLOCK SUBSYSTEM\n"
 		"    clock list                  List clocks\n"
 		"    clock info CLOCK            Show clock information\n"
@@ -580,6 +587,7 @@ int main(int argc, char *argv[])
 	gconf->timestamping.disable_on_exit = false;
 	gconf->clocks.persistent_correction = false;
 	gconf->clocks.no_initial_correction = true;
+	gconf->avoid_efx = false;
 
 	/* Handle command line arguments */
 	while ((opt = getopt_long(argc, argv, opts_short, opts_long, &index)) != -1) {
@@ -600,6 +608,12 @@ int main(int argc, char *argv[])
 			break;
 		case OPT_INITIAL:
 			gconf->clocks.no_initial_correction = false;
+			break;
+		case OPT_ENABLE_EFX:
+			gconf->avoid_efx = false;
+			break;
+		case OPT_DISABLE_EFX:
+			gconf->avoid_efx = true;
 			break;
 		default:
 			fprintf(stderr, "unexpected option: %s\n", argv[optind]);
