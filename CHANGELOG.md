@@ -30,7 +30,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Add configurable run, state, control and metrics access modes. (SWPTP-1551)
 - Add `servo_log_all_samples` option. (SWPTP-1566)
 - Add new clock display format interpolators. (SWPTP-1569)
-- Support an openvswitch interface like a regular bridge. (SWPTP-1571)
 - Add hardware clock control and diagnostic utility `tstool`.
 
 ### Changed
