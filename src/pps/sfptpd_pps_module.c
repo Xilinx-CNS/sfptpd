@@ -2335,6 +2335,7 @@ static int pps_on_startup(void *context)
 
 fail:
 	pps_destroy_instances(pps);
+	sfptpd_multicast_unsubscribe(SFPTPD_SERVO_MSG_PID_ADJUST);
 	return rc;
 }
 
