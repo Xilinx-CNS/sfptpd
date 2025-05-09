@@ -6,6 +6,7 @@
 
 #include "sfptpd_config.h"
 #include "sfptpd_time.h"
+#include "sfptpd_phc.h"
 
 
 /****************************************************************************
@@ -40,6 +41,12 @@ typedef struct sfptpd_pps_module_config {
 
 	/* Textual name of interface that PPS should use */
 	char interface_name[IF_NAMESIZE];
+
+	/* Pin index */
+	int pin;
+
+	/* Function */
+	enum sfptpd_phc_pin_func function;
 
 	/* Priority of this instance */
 	unsigned int priority;

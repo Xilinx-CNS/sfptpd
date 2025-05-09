@@ -38,6 +38,12 @@ typedef enum {
 	SFPTPD_PPS_METHOD_MAX
 } sfptpd_phc_pps_method_t;
 
+enum sfptpd_phc_pin_func {
+	SFPTPD_PPS_FUNC_NONE,
+	SFPTPD_PPS_FUNC_PPS_IN,
+	SFPTPD_PPS_FUNC_PPS_OUT,
+	SFPTPD_PPS_FUNC_MAX
+};
 
 /* Forward declaration of PHC context */
 struct sfptpd_phc;
@@ -52,6 +58,7 @@ extern const enum sfptpd_phc_diff_method sfptpd_default_phc_diff_methods[SFPTPD_
 extern const char *sfptpd_phc_pps_method_text[];
 extern const sfptpd_phc_pps_method_t sfptpd_default_pps_method[SFPTPD_PPS_METHOD_MAX + 1];
 
+extern const char *sfptpd_phc_pin_func_text[];
 
 /****************************************************************************
  * Function Prototypes
@@ -103,12 +110,13 @@ int sfptpd_phc_get_clk_compare_interval(struct sfptpd_phc *phc);
  */
 int sfptpd_phc_compare_to_sys_clk(struct sfptpd_phc *phc, struct sfptpd_timespec *diff);
 
-/** Enable or disable the external PPS input events
+/** Control PPS pin
  * @param phc Handle of the PHC device
- * @param bool True to enable; false to disable
+ * @param pin Pin index
+ * @param function Pin function
  * @return 0 on success or an errno otherwise
  */
-int sfptpd_phc_enable_pps(struct sfptpd_phc *phc, bool on);
+int sfptpd_phc_control_pps(struct sfptpd_phc *phc, int pin, enum sfptpd_phc_pin_func func);
 
 
 /** Get any PPS fd needed for polling
@@ -175,5 +183,8 @@ void sfptpd_phc_define_diff_method(struct sfptpd_phc *phc,
 				   enum sfptpd_phc_diff_method method,
 				   sfptpd_phc_diff_fn implementation,
 				   void *state);
+
+const char *sfptpd_phc_pin_func_to_text(enum sfptpd_phc_pin_func index);
+enum sfptpd_phc_pin_func sfptpd_phc_pin_func_from_text(const char *text);
 
 #endif /* _SFPTPD_PHC_H */

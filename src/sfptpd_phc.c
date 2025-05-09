@@ -215,16 +215,48 @@ const sfptpd_phc_pps_method_t sfptpd_default_pps_method[SFPTPD_PPS_METHOD_MAX + 
 	SFPTPD_PPS_METHOD_MAX
 };
 
-
 /* PPS methods order. */
 static sfptpd_phc_pps_method_t phc_pps_methods[SFPTPD_PPS_METHOD_MAX + 1] = {
 	SFPTPD_PPS_METHOD_MAX
+};
+
+const char *sfptpd_phc_pin_func_text[] = {
+	"none",
+	"pps-in",
+	"pps-out",
 };
 
 
 /****************************************************************************
  * Internal Functions
  ****************************************************************************/
+
+int phc_pin_func_to_linux(enum sfptpd_phc_pin_func ours)
+{
+	switch (ours) {
+	case SFPTPD_PPS_FUNC_PPS_IN:
+		return PTP_PF_EXTTS;
+	case SFPTPD_PPS_FUNC_PPS_OUT:
+		return PTP_PF_PEROUT;
+	case SFPTPD_PPS_FUNC_NONE:
+	default:
+		return PTP_PF_NONE;
+	}
+}
+
+enum sfptpd_phc_pin_func phc_pin_func_from_linux(int theirs)
+{
+	switch (theirs) {
+	case PTP_PF_EXTTS:
+		return SFPTPD_PPS_FUNC_PPS_IN;
+	case PTP_PF_PEROUT:
+		return SFPTPD_PPS_FUNC_PPS_OUT;
+	case PTP_PF_NONE:
+		return SFPTPD_PPS_FUNC_NONE;
+	default:
+		return SFPTPD_PPS_FUNC_MAX;
+	}
+}
 
 static inline int phc_gettime(clockid_t clk_id, struct sfptpd_timespec *sfts)
 {
@@ -865,54 +897,68 @@ diff_method_selected:
 }
 
 
-static int phc_enable_devptp(struct sfptpd_phc *phc, bool on)
+static int phc_control_devptp(struct sfptpd_phc *phc,
+			      int pin,
+			      enum sfptpd_phc_pin_func func)
 {
 	struct ptp_extts_request req = { 0 };
-	const char *indicative = on ? "enable" : "disable";
-	const char *past_participle = on ? "enabled" : "disabled";
-	const int pin = 0;
+	const int channel = 0;
 	int rc = 0;
 
 	assert(phc != NULL);
 
-	if (phc->caps.n_ext_ts == 0) {
-		TRACE_L2("phc%d: no external time stamp channel available to %s\n",
-		phc->phc_idx, indicative);
+	if (func == SFPTPD_PPS_FUNC_PPS_IN &&
+	    phc->caps.n_ext_ts <= channel) {
+		TRACE_L2("phc%d: no external timestamping channel %d available\n",
+		phc->phc_idx, channel);
 		return ENOTSUP;
 	}
 
 #ifdef PTP_PIN_SETFUNC
-	if (on) {
-		struct ptp_pin_desc pin_conf = { "" };
-
-		pin_conf.index = 0;
-		pin_conf.func = 1; /* external timestamp */
-		pin_conf.chan = 0;
-		rc = ioctl(phc->phc_fd, PTP_PIN_SETFUNC, &pin_conf);
-
-		if (rc != 0) {
-			rc = errno;
-			ERROR("phc%d: could not set pin function: %s\n",
-			      phc->phc_idx, strerror(rc));
-		} else {
-			TRACE_L2("phc%d: set pin %d to function %d (external timestamp)\n",
-				 phc->phc_idx, pin_conf.index, pin_conf.func);
-		}
+	if (phc->caps.n_pins <= pin) {
+		TRACE_L2("phc%d: no pin %d available to configure\n",
+		phc->phc_idx, pin);
+		return ENOTSUP;
 	}
-#endif
 
-	req.index = pin;
-	req.flags = on ? (PTP_ENABLE_FEATURE | PTP_RISING_EDGE) : 0;
-	rc = ioctl(phc->phc_fd, PTP_EXTTS_REQUEST, &req);
+	struct ptp_pin_desc pin_conf = { "" };
+
+	pin_conf.index = pin;
+	pin_conf.func = phc_pin_func_to_linux(func);
+	pin_conf.chan = channel;
+	rc = ioctl(phc->phc_fd, PTP_PIN_SETFUNC, &pin_conf);
 
 	if (rc != 0) {
 		rc = errno;
-		ERROR("phc%d: could not %s PPS via PHC: %s\n",
-		      phc->phc_idx, indicative, strerror(rc));
-		return rc;
+		ERROR("phc%d: could not set pin function: %s\n",
+		      phc->phc_idx, strerror(rc));
 	} else {
-		TRACE_L2("phc%d: %s external time stamp channel %d\n",
-			 phc->phc_idx, past_participle, pin);
+		TRACE_L2("phc%d: set pin %d to function %d (%s)\n",
+			 phc->phc_idx, pin_conf.index, pin_conf.func,
+			 sfptpd_phc_pin_func_to_text(func));
+	}
+#endif
+
+	if (func == SFPTPD_PPS_FUNC_PPS_IN || (
+#ifndef PTP_PIN_SETFUNC
+	     true &&
+#else
+	     phc->caps.n_pins == 1 &&
+#endif
+	     channel < phc->caps.n_ext_ts)) {
+		/* Always enable the PPS_IN when needed; only disable it if
+		   we are sure we might not be disabling a channel in use on
+		   another pin, since we don't yet track all channels/pins. */
+		req.index = channel;
+		req.flags = func == SFPTPD_PPS_FUNC_PPS_IN ? (PTP_ENABLE_FEATURE | PTP_RISING_EDGE) : 0;
+		rc = ioctl(phc->phc_fd, PTP_EXTTS_REQUEST, &req);
+		if (rc != 0) {
+			rc = errno;
+			ERROR("phc%d: could not enable/disable PPS on external "
+			      "timestamping channel %d: %s\n",
+			      phc->phc_idx, channel, strerror(rc));
+			return rc;
+		}
 	}
 
 	return rc;
@@ -922,7 +968,7 @@ static int phc_enable_devptp(struct sfptpd_phc *phc, bool on)
 static int phc_get_devptp_event(struct sfptpd_phc *phc, struct sfptpd_timespec *timestamp)
 {
 	struct ptp_extts_event event;
-	const int pin = 0;
+	const int channel = 0;
 	int rc;
 
 	assert(phc != NULL);
@@ -935,12 +981,12 @@ static int phc_get_devptp_event(struct sfptpd_phc *phc, struct sfptpd_timespec *
 			ERROR("phc%d: could not read event: %s\n",
 			      phc->phc_idx, strerror(errno));
 			return errno;
-		} else if (event.index == pin) {
+		} else if (event.index == channel) {
 			TRACE_L5("phc%d: external timestamp at %lld.%09u\n",
 				 phc->phc_idx, event.t.sec, event.t.nsec);
 			sfptpd_time_init(timestamp, event.t.sec, event.t.nsec, 0);
 		}
-	} while (event.index != pin);
+	} while (event.index != channel);
 	return 0;
 }
 
@@ -1054,6 +1100,29 @@ static void phc_choose_extpps(struct sfptpd_phc *phc)
 	}
 }
 
+static void phc_list_pins(struct sfptpd_phc *phc)
+{
+	int pin;
+	int rc;
+
+	for (pin = 0; pin < phc->caps.n_pins; pin++) {
+		struct ptp_pin_desc pin_conf = { "" };
+
+		pin_conf.index = pin;
+#ifdef PTP_PIN_GETFUNC
+		rc = ioctl(phc->phc_fd, PTP_PIN_GETFUNC, &pin_conf);
+#else
+		rc = EOPNOTSUPP;
+#endif
+		if (rc == 0) {
+			TRACE_L2("phc%c: pin %d is set to %s, channel %d\n",
+				 phc->phc_idx, pin,
+				 sfptpd_phc_pin_func_to_text(phc_pin_func_from_linux(pin_conf.func)),
+				 pin_conf.chan);
+		}
+	}
+}
+
 
 /****************************************************************************
  * Public Functions
@@ -1096,6 +1165,7 @@ int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc)
 
 	new->diff_method_index = SFPTPD_DIFF_METHOD_MAX;
 	new->pps_method = SFPTPD_PPS_METHOD_MAX;
+	/* new->pps_ext_pin = SFPTPD_PIN_EFX; */
 
 	/* Open the PHC device */
 	snprintf(path, sizeof(path), SFPTPD_PHC_DEVICE_FORMAT, phc_index);
@@ -1132,6 +1202,7 @@ int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc)
 	if (sizeof(long) == 4)
 		new->caps.max_adj = timex_max_adj_32bit;
 
+	phc_list_pins(new);
 	phc_discover_pps(new);
 	phc_choose_extpps(new);
 
@@ -1328,14 +1399,16 @@ int sfptpd_phc_set_pps_methods(sfptpd_phc_pps_method_t *new_order)
 }
 
 
-int sfptpd_phc_enable_pps(struct sfptpd_phc *phc, bool on)
+int sfptpd_phc_control_pps(struct sfptpd_phc *phc, int pin, enum sfptpd_phc_pin_func func)
 {
+	bool on = func == SFPTPD_PPS_FUNC_PPS_IN;
+
 	assert(phc != NULL);
 	assert(phc->pps_method <= SFPTPD_PPS_METHOD_MAX);
 
 	switch (phc->pps_method) {
 	case SFPTPD_PPS_METHOD_DEV_PTP:
-		return phc_enable_devptp(phc, on);
+		return phc_control_devptp(phc, pin, func);
 
 	case SFPTPD_PPS_METHOD_DEV_PPS:
 		return phc_enable_devpps(phc, on);
@@ -1402,5 +1475,25 @@ void sfptpd_phc_define_diff_method(struct sfptpd_phc *phc,
 	phc->diff_method_defs[method].diff_fn = implementation;
 }
 
+
+const char *sfptpd_phc_pin_func_to_text(enum sfptpd_phc_pin_func index)
+{
+	assert(index < SFPTPD_PPS_FUNC_MAX);
+
+	if (index >= SFPTPD_PPS_FUNC_MAX)
+		return "(invalid)";
+	else
+		return sfptpd_phc_pin_func_text[index];
+}
+
+enum sfptpd_phc_pin_func sfptpd_phc_pin_func_from_text(const char *text)
+{
+	enum sfptpd_phc_pin_func func = 0;
+
+	for (func = 0; func < SFPTPD_PPS_FUNC_MAX; func++)
+		if (strcmp(text, sfptpd_phc_pin_func_text[func]) == 0)
+			break;
+	return func;
+}
 
 /* fin */

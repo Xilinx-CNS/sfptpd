@@ -276,6 +276,30 @@ static int parse_pps_delay(struct sfptpd_config_section *section, const char *op
 	return 0;
 }
 
+static int parse_pin(struct sfptpd_config_section *section, const char *option,
+		     unsigned int num_params, const char * const params[])
+{
+	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
+	int tokens, pin;
+	assert(num_params == 1);
+
+	tokens = sscanf(params[0], "%d", &pin);
+	if (tokens != 1)
+		return EINVAL;
+
+	pps->pin = pin;
+	return 0;
+}
+
+static int parse_function(struct sfptpd_config_section *section, const char *option,
+			  unsigned int num_params, const char * const params[])
+{
+	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
+	assert(num_params == 1);
+
+	pps->function = sfptpd_phc_pin_func_from_text(params[0]);
+	return pps->function == SFPTPD_PPS_FUNC_MAX ? EINVAL : 0;
+}
 
 static int parse_priority(struct sfptpd_config_section *section, const char *option,
 			  unsigned int num_params, const char * const params[])
@@ -573,9 +597,19 @@ static int parse_fir_filter_size(struct sfptpd_config_section *section, const ch
 static const sfptpd_config_option_t pps_config_options[] =
 {
 	{"interface", "interface-name",
-		"Specifies the name of the interface that PPS should use",
+		"Specifies the interface name for the clock that PPS should use",
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_interface},
+	{"pin", "<NUMBER>",
+		"Programmable pin number of the PPS clock to use",
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_pin,
+                .dfl = SFPTPD_CONFIG_DFL(0)},
+	{"function", "<pps-in|pps-out|none>",
+		"Function to assign to the pin",
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_function,
+                .dfl = "pps-in"},
 	{"priority", "<NUMBER>",
 		"Relative priority of sync module instance. Smaller values have higher "
 		"priority. The default " STRINGIFY(SFPTPD_DEFAULT_PRIORITY) ".",
@@ -681,9 +715,9 @@ const char *pps_state_text(sfptpd_sync_module_state_t state, unsigned int alarms
 	static const char *states_text[SYNC_MODULE_STATE_MAX] = {
 		"pps-listening",	/* SYNC_MODULE_STATE_LISTENING */
 		"pps-slave",		/* SYNC_MODULE_STATE_SLAVE */
-		"pps-faulty",		/* SYNC_MODULE_STATE_MASTER */
+		"pps-master",		/* SYNC_MODULE_STATE_MASTER */
 		"pps-faulty",		/* SYNC_MODULE_STATE_PASSIVE */
-		"pps-faulty",		/* SYNC_MODULE_STATE_DISABLED */
+		"pps-disabled",		/* SYNC_MODULE_STATE_DISABLED */
 		"pps-faulty",		/* SYNC_MODULE_STATE_FAULTY */
 		"pps-faulty",		/* SYNC_MODULE_STATE_SELECTION */
 	};
@@ -881,13 +915,16 @@ static void pps_servo_update(pps_module_t *pps,
 }
 
 
-static struct sfptpd_pps_instance *pps_find_instance_by_clock(pps_module_t *pps,
-							      struct sfptpd_clock *clock) {
+static struct sfptpd_pps_instance *pps_find_instance_by_pin(pps_module_t *pps,
+							    struct sfptpd_clock *clock,
+							    int pin) {
 	struct sfptpd_pps_instance *instance;
 
 	/* Walk linked list, looking for the clock */
 	for (instance = pps->instances;
-	     instance && instance->clock != clock;
+	     instance &&
+	     (instance->clock != clock ||
+	      instance->config->pin != pin);
 	     instance = instance->next);
 
 	return instance;
@@ -930,7 +967,7 @@ static void pps_destroy_instance(pps_module_t *pps,
 
 	/* Disable PPS events in the driver */
 	if (instance->clock != NULL) {
-		(void)sfptpd_clock_pps_disable(instance->clock);
+		(void)sfptpd_clock_pps_configure(instance->clock, instance->config->pin, SFPTPD_PPS_FUNC_NONE);
 		instance->clock = NULL;
 	}
 
@@ -1055,15 +1092,54 @@ static int pps_drain_events(pps_module_t *pps, struct sfptpd_pps_instance *insta
 	return rc;
 }
 
-
 static int pps_configure_clock(pps_module_t *pps,
-			       struct sfptpd_pps_instance *instance,
-			       struct sfptpd_pps_module_config *config)
+			       struct sfptpd_pps_instance *instance)
+{
+	struct sfptpd_clock *clock = instance->clock;
+	struct sfptpd_config_general *general_config = sfptpd_general_config_get(SFPTPD_CONFIG_TOP_LEVEL(instance->config));
+	long double freq_correction_ppb;
+	int rc;
+
+	/* Check that the clock is specified in the list of clocks to be
+	 * disciplined */
+	if (!sfptpd_clock_get_discipline(clock)) {
+		ERROR("pps %s: clock %s is not configured to be disciplined\n",
+		      SFPTPD_CONFIG_GET_NAME(instance->config), sfptpd_clock_get_long_name(clock));
+		if (general_config->ignore_critical[SFPTPD_CRITICAL_NO_PTP_CLOCK])
+			NOTICE("ptp: ignoring critical error by configuration\n");
+		else {
+			NOTICE("configure \"ignore_critical: no-ptp-clock\" to allow sfptpd to start in spite of this condition\n");
+			return EPERM;
+		}
+	}
+
+	/* Get the current frequency correction and the maximum permitted 
+	 * frequency adjustment for this clock */
+	freq_correction_ppb = sfptpd_clock_get_freq_correction(clock);
+	instance->freq_adjust_max = sfptpd_clock_get_max_frequency_adjustment(clock);
+
+	/* Configure the PID filter max integral term to match the max frequency
+	 * adjust of the slave clock */
+	sfptpd_pid_filter_set_i_term_max(&instance->pid_filter, instance->freq_adjust_max);
+
+	/* Set the clock frequency to the default value */
+	rc = sfptpd_clock_adjust_frequency(clock, freq_correction_ppb);
+	if (rc != 0) {
+		WARNING("pps %s: failed to adjust frequency of clock %s, error %s\n",
+			SFPTPD_CONFIG_GET_NAME(instance->config),
+			sfptpd_clock_get_long_name(clock), strerror(rc));
+	}
+
+	return rc;
+}
+
+static int pps_configure_pin(pps_module_t *pps,
+			     struct sfptpd_pps_instance *instance,
+			     struct sfptpd_pps_module_config *config)
 {
 	struct sfptpd_clock *clock;
 	struct sfptpd_interface *interface;
 	struct sfptpd_pps_instance *other_instance;
-	long double freq_correction_ppb;
 	struct sfptpd_config_general *general_config;
 	int rc;
 
@@ -1104,58 +1180,33 @@ static int pps_configure_clock(pps_module_t *pps,
 	       (clock != sfptpd_clock_get_system_clock()));
 
 	/* Check if the clock is in use in another instance */
-	other_instance = pps_find_instance_by_clock(pps, clock);
+	other_instance = pps_find_instance_by_pin(pps, clock, config->pin);
 	if (other_instance) {
-		ERROR("pps %s: clock on nic %s is already in use for instance %s\n",
+		ERROR("pps %s: pin %d of clock on nic %s is already in use for instance %s\n",
 		      SFPTPD_CONFIG_GET_NAME(config),
+		      config->pin,
 		      config->interface_name,
 		      other_instance->config->hdr.name);
 		return EBUSY;
 	}
 
-	/* Check that the clock is specified in the list of clocks to be
-	 * disciplined */
-	if (!sfptpd_clock_get_discipline(clock)) {
-		ERROR("pps %s: clock %s is not configured to be disciplined\n",
-		      SFPTPD_CONFIG_GET_NAME(config), sfptpd_clock_get_long_name(clock));
-		if (general_config->ignore_critical[SFPTPD_CRITICAL_NO_PTP_CLOCK])
-			NOTICE("ptp: ignoring critical error by configuration\n");
-		else {
-			NOTICE("configure \"ignore_critical: no-ptp-clock\" to allow sfptpd to start in spite of this condition\n");
-			return EPERM;
-		}
-	}
-
 	INFO("pps %s: local reference clock is %s\n",
 	     SFPTPD_CONFIG_GET_NAME(config), sfptpd_clock_get_long_name(clock));
 
-	/* Get the current frequency correction and the maximum permitted 
-	 * frequency adjustment for this clock */
-	freq_correction_ppb = sfptpd_clock_get_freq_correction(clock);
-	instance->freq_adjust_max = sfptpd_clock_get_max_frequency_adjustment(clock);
+	/* Store the clock */
+	instance->clock = clock;
 
-	/* Configure the PID filter max integral term to match the max frequency
-	 * adjust of the slave clock */
-	sfptpd_pid_filter_set_i_term_max(&instance->pid_filter, instance->freq_adjust_max);
-
-	/* Set the clock frequency to the default value */
-	rc = sfptpd_clock_adjust_frequency(clock, freq_correction_ppb);
-	if (rc != 0) {
-		WARNING("pps %s: failed to adjust frequency of clock %s, error %s\n",
-			SFPTPD_CONFIG_GET_NAME(config),
-			sfptpd_clock_get_long_name(clock), strerror(rc));
-		return rc;
+	if (config->function == SFPTPD_PPS_FUNC_PPS_IN) {
+		rc = pps_configure_clock(pps, instance);
+		if (rc != 0)
+			return rc;
 	}
 
-	/* To make sure the firmware is in a good state, disable then enable
-	 * the PPS events */
-	(void)sfptpd_clock_pps_disable(clock);
-
 	/* Enable PPS events in the driver */
-	rc = sfptpd_clock_pps_enable(clock);
+	rc = sfptpd_clock_pps_configure(clock, config->pin, config->function);
 	if (rc != 0) {
-		ERROR("pps %s: failed to enable PPS input for interface %s, %s\n",
-		      SFPTPD_CONFIG_GET_NAME(config),
+		ERROR("pps %s: failed to configure PPS pin %d for interface %s, %s\n",
+		      SFPTPD_CONFIG_GET_NAME(config), config->pin,
 		      config->interface_name, strerror(rc));
 		return EIO;
 	}
@@ -1163,9 +1214,6 @@ static int pps_configure_clock(pps_module_t *pps,
 	/* Get a clock feed */
 	sfptpd_clockfeed_subscribe(sfptpd_engine_get_clockfeed(pps->engine),
 				   clock, &instance->feed);
-
-	/* Store the clock */
-	instance->clock = clock;
 
 	return 0;
 }
@@ -1808,6 +1856,9 @@ static void pps_on_timer(void *user_context, unsigned int id)
 
 	for(instance = pps->instances; instance != NULL; instance = instance->next) {
 
+		if (instance->config->function != SFPTPD_PPS_FUNC_PPS_IN)
+			continue;
+
 		/* If the PPS pulse check timer hasn't started yet, start it. */
 		if (!instance->instance_has_started) {
 			instance->instance_has_started = true;
@@ -2006,6 +2057,8 @@ static void pps_on_save_state(pps_module_t *pps, sfptpd_sync_module_msg_t *msg)
 				"alarms: %s\n"
 				"control-flags: %s\n"
 				"interface: %s\n"
+				"pin: %d\n"
+				"function: %s\n"
 				"offset-from-master: " SFPTPD_FORMAT_FLOAT "\n"
 				"freq-adjustment-ppb: " SFPTPD_FORMAT_FLOAT "\n"
 				"in-sync: %d\n"
@@ -2018,6 +2071,8 @@ static void pps_on_save_state(pps_module_t *pps, sfptpd_sync_module_msg_t *msg)
 				pps_state_text(instance->state, instance->alarms),
 				alarms, flags,
 				instance->config->interface_name,
+				instance->config->pin,
+				sfptpd_phc_pin_func_to_text(instance->config->function),
 				instance->offset_from_master_ns,
 				instance->freq_adjust_ppb,
 				instance->synchronized,
@@ -2034,6 +2089,8 @@ static void pps_on_save_state(pps_module_t *pps, sfptpd_sync_module_msg_t *msg)
 				"alarms: %s\n"
 				"control-flags: %s\n"
 				"interface: %s\n"
+				"pin: %d\n"
+				"function: %s\n"
 				"freq-adjustment-ppb: " SFPTPD_FORMAT_FLOAT "\n",
 				SFPTPD_CONFIG_GET_NAME(instance->config),
 				sfptpd_clock_get_long_name(instance->clock),
@@ -2041,6 +2098,8 @@ static void pps_on_save_state(pps_module_t *pps, sfptpd_sync_module_msg_t *msg)
 				pps_state_text(instance->state, instance->alarms),
 				alarms, flags,
 				instance->config->interface_name,
+				instance->config->pin,
+				sfptpd_phc_pin_func_to_text(instance->config->function),
 				instance->freq_adjust_ppb);
 		}
 
@@ -2216,7 +2275,7 @@ static int pps_start_instance(pps_module_t *pps,
 	}
 
 	/* Determine and configure the clock */
-	rc = pps_configure_clock(pps, instance, config);
+	rc = pps_configure_pin(pps, instance, config);
 	if (rc != 0) {
 		CRITICAL("pps %s: failed to configure local reference clock\n",
 			 SFPTPD_CONFIG_GET_NAME(instance->config));
@@ -2229,6 +2288,20 @@ static int pps_start_instance(pps_module_t *pps,
 
 	/* Reset PPS statistics */
 	sfptpd_stats_reset_pps_statistics(sfptpd_clock_get_primary_interface(instance->clock));
+
+	/* Handle function */
+	switch (instance->config->function) {
+	case SFPTPD_PPS_FUNC_PPS_IN:
+		break;
+	case SFPTPD_PPS_FUNC_PPS_OUT:
+		instance->state = SYNC_MODULE_STATE_MASTER;
+		break;
+	case SFPTPD_PPS_FUNC_NONE:
+		instance->state = SYNC_MODULE_STATE_DISABLED;
+		break;
+	default:
+		instance->state = SYNC_MODULE_STATE_FAULTY;
+	}
 
  fail:
 	return rc;
@@ -2461,6 +2534,8 @@ static struct sfptpd_config_section *pps_config_create(const char *name,
 	} else {
 		/* Set default values for PPS configuration */
 		new->interface_name[0] = '\0';
+		new->pin = 0;
+		new->function = SFPTPD_PPS_FUNC_PPS_IN;
 		new->priority = SFPTPD_DEFAULT_PRIORITY;
 		new->convergence_threshold = 0.0;
 		new->master_clock_class = SFPTPD_PPS_DEFAULT_CLOCK_CLASS;

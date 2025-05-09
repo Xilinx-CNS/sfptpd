@@ -168,6 +168,9 @@ struct sfptpd_clock_nic {
 	 * assumed true until proven otherwise */
 	bool supports_sync_status_reporting;
 
+	/* Indicates whether the clock supports PPS via EFC private ioctl. */
+	sfptpd_ternary supports_efx_pps;
+
 	/* Hardware clock device index. In systems supporting PHC corresponds
 	 * to clock device /dev/ptpX. In older systems, is simply a unique
 	 * identifier for the clock */
@@ -2418,85 +2421,55 @@ int sfptpd_clock_set_sync_status(struct sfptpd_clock *clock, bool in_sync,
 
 /****************************************************************************/
 
-int sfptpd_clock_pps_enable(struct sfptpd_clock *clock)
+int sfptpd_clock_pps_configure(struct sfptpd_clock *clock,
+			       int pin,
+			       enum sfptpd_phc_pin_func function)
 {
 	struct efx_sock_ioctl sfc_req;
-	int rc = 0;
+	int rc = ENOSYS;
 
 	clock_lock();
 
 	assert(clock != NULL);
 	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
 
-	if (clock->u.nic.phc != NULL &&
-	    ((clock->type == SFPTPD_CLOCK_TYPE_NON_SFC && clock->cfg_non_sfc_nics) ||
-	     (clock->type == SFPTPD_CLOCK_TYPE_XNET) ||
-	     (clock->type == SFPTPD_CLOCK_TYPE_SFC &&
-	      (!clock->u.nic.supports_efx || clock->cfg_avoid_efx)))) {
-		rc = sfptpd_phc_enable_pps(clock->u.nic.phc, true);
+	if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM)
 		goto finish;
+
+	if (pin == 0 &&
+	    !clock->cfg_avoid_efx &&
+	    clock->u.nic.supports_efx_pps != T_NO) {
+		int enable = function == SFPTPD_PPS_FUNC_PPS_IN ? 1 : 0;
+
+		/* Enable or disable the PPS input via a private IOCTL */
+		memset(&sfc_req, 0, sizeof(sfc_req));
+		sfc_req.cmd = EFX_TS_ENABLE_HW_PPS;
+		sfc_req.u.pps_enable.enable = enable;
+
+		rc = sfptpd_interface_ioctl(clock->u.nic.primary_if, SIOCEFX, &sfc_req);
+		if (rc == 0) {
+			INFO("clock %s: PPS input %s enabled using legacy SFC ioctl\n",
+			     clock->long_name, enable ? "enabled" : "disabled");
+			clock->u.nic.supports_efx_pps = T_YES;
+			rc = 0;
+			goto finish;
+		} else if (rc == EOPNOTSUPP) {
+			INFO("clock %s: legacy SFC PPS control not available, will use PHC external timestamping control\n",
+			      clock->long_name);
+			clock->u.nic.supports_efx_pps = T_NO;
+		} else {
+			ERROR("clock %s: failed to %s PPS input: %s\n",
+			      clock->long_name, enable ? "enable" : "disable", strerror(rc));
+			goto finish;
+		}
 	}
 
-	if (clock->type != SFPTPD_CLOCK_TYPE_SFC) {
-		rc = ENOSYS;
-		goto finish;
-	}
+	rc = sfptpd_phc_control_pps(clock->u.nic.phc, pin, function);
 
-	/* Enable the PPS input via a private IOCTL */
-	memset(&sfc_req, 0, sizeof(sfc_req));
-	sfc_req.cmd = EFX_TS_ENABLE_HW_PPS;
-	sfc_req.u.pps_enable.enable = 1;
-
-	rc = sfptpd_interface_ioctl(clock->u.nic.primary_if, SIOCEFX, &sfc_req);
-	if (rc == 0) {
-		INFO("clock %s: SFC PPS input enabled\n",
-		     clock->long_name);
-	} else {
-		ERROR("clock %s: failed to enable PPS input: %s\n",
-		      clock->long_name, strerror(rc));
-	}
-
- finish:
+finish:
 	clock_unlock();
 	return rc;
 }
-
-
-int sfptpd_clock_pps_disable(struct sfptpd_clock *clock)
-{
-	struct efx_sock_ioctl sfc_req;
-	int rc = 0;
-
-	clock_lock();
-
-	assert(clock != NULL);
-	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
-
-	if (clock->u.nic.phc != NULL &&
-	    ((clock->type == SFPTPD_CLOCK_TYPE_NON_SFC && clock->cfg_non_sfc_nics) ||
-	     (clock->type == SFPTPD_CLOCK_TYPE_XNET) ||
-	     (clock->type == SFPTPD_CLOCK_TYPE_SFC &&
-	      (!clock->u.nic.supports_efx || clock->cfg_avoid_efx)))) {
-		rc = sfptpd_phc_enable_pps(clock->u.nic.phc, false);
-		goto finish;
-	}
-
-	if (clock->type != SFPTPD_CLOCK_TYPE_SFC) {
-		rc = ENOSYS;
-		goto finish;
-	}
-	
-	/* Disable the PPS input via a private IOCTL */
-	memset(&sfc_req, 0, sizeof(sfc_req));
-	sfc_req.cmd = EFX_TS_ENABLE_HW_PPS;
-	sfc_req.u.pps_enable.enable = 0;
-	(void)sfptpd_interface_ioctl(clock->u.nic.primary_if, SIOCEFX, &sfc_req);
-
- finish:
-	clock_unlock();
-	return rc;
-}
-
 
 void sfptpd_clock_correct_new(struct sfptpd_clock *clock)
 {

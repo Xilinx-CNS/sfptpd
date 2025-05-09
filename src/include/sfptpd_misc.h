@@ -23,6 +23,12 @@
  * Structures and Types
  ****************************************************************************/
 
+typedef enum {
+	T_MAYBE,
+	T_YES,
+	T_NO,
+} sfptpd_ternary;
+
 typedef ssize_t (*sfptpd_interpolator_t)(char *buffer, size_t space, int id, void *context, char opt);
 
 struct sfptpd_interpolation {

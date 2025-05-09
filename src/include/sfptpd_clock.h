@@ -10,6 +10,7 @@
 #include <net/ethernet.h>
 
 #include <sfptpd_time.h>
+#include <sfptpd_phc.h>
 
 /* ANSI/T1.101-1987
  *  Synchronization Interface Standards for Digital Networks */
@@ -435,17 +436,15 @@ int sfptpd_clock_set_sync_status(struct sfptpd_clock *clock, bool in_sync,
 				 unsigned int timeout);
 
 
-/** Enable external PPS input on the NIC associated with the clock
+/** Enable or disable external PPS input on the NIC associated with the clock
  * @param clock Pointer to the clock instance
+ * @param pin Pin to control
+ * @param function Function to apply to the pin
  * @return 0 for success otherwise an errno status code.
  */
-int sfptpd_clock_pps_enable(struct sfptpd_clock *clock);
-
-/** Disable external PPS input the NIC associated with the clock
- * @param clock Pointer to the clock instance
- * @return 0 for success otherwise an errno status code.
- */
-int sfptpd_clock_pps_disable(struct sfptpd_clock *clock);
+int sfptpd_clock_pps_configure(struct sfptpd_clock *clock,
+			       int pin,
+			       enum sfptpd_phc_pin_func function);
 
 /** Get the fd to wait on for PPS events if necessary
  * @param clock pointer to the clock instance
