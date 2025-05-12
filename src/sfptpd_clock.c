@@ -169,7 +169,7 @@ struct sfptpd_clock_nic {
 	bool supports_sync_status_reporting;
 
 	/* Indicates whether the clock supports PPS via EFC private ioctl. */
-	sfptpd_ternary supports_efx_pps;
+	bool supports_efx_pps;
 
 	/* Hardware clock device index. In systems supporting PHC corresponds
 	 * to clock device /dev/ptpX. In older systems, is simply a unique
@@ -890,6 +890,7 @@ static int renew_clock(struct sfptpd_clock *clock)
 		 * supported flag and device index. */
 		clock->u.nic.primary_if = primary;
 		clock->u.nic.supports_sync_status_reporting = !clock->cfg_avoid_efx;
+		clock->u.nic.supports_efx_pps = !clock->cfg_avoid_efx;
 		clock->u.nic.device_idx = phc_idx;
 		clock->u.nic.supports_efx = supports_efx;
 
@@ -2437,8 +2438,7 @@ int sfptpd_clock_pps_configure(struct sfptpd_clock *clock,
 		goto finish;
 
 	if (pin == 0 &&
-	    !clock->cfg_avoid_efx &&
-	    clock->u.nic.supports_efx_pps != T_NO) {
+	    clock->u.nic.supports_efx_pps) {
 		int enable = function == SFPTPD_PPS_FUNC_PPS_IN ? 1 : 0;
 
 		/* Enable or disable the PPS input via a private IOCTL */
@@ -2450,13 +2450,12 @@ int sfptpd_clock_pps_configure(struct sfptpd_clock *clock,
 		if (rc == 0) {
 			INFO("clock %s: PPS input %s enabled using legacy SFC ioctl\n",
 			     clock->long_name, enable ? "enabled" : "disabled");
-			clock->u.nic.supports_efx_pps = T_YES;
 			rc = 0;
 			goto finish;
 		} else if (rc == EOPNOTSUPP) {
 			INFO("clock %s: legacy SFC PPS control not available, will use PHC external timestamping control\n",
 			      clock->long_name);
-			clock->u.nic.supports_efx_pps = T_NO;
+			clock->u.nic.supports_efx_pps = false;
 		} else {
 			ERROR("clock %s: failed to %s PPS input: %s\n",
 			      clock->long_name, enable ? "enable" : "disable", strerror(rc));
