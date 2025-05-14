@@ -220,6 +220,9 @@ struct sfptpd_clock {
 	/* Indicates whether clock should be disciplined */
 	bool discipline;
 
+	/* Indicates whether clock should be observed */
+	bool observe;
+
 	/* Clock cannot be adjusted, only observed */
 	bool read_only;
 
@@ -465,6 +468,7 @@ static int clock_init_common(struct sfptpd_clock *clock,
 	clock->type = type;
 	clock->posix_id = POSIX_ID_NULL;
 	clock->discipline = false;
+	clock->observe = false;
         clock->lrc_been_locked = false;
 
 	/* If the configuration specifies no adjustment of clocks, mark the
@@ -511,7 +515,7 @@ static bool check_clock_in_config(struct sfptpd_clock *clock,
 
 /* Set the clock as readonly if it is appears in clock_readonly in the config file */
 static void configure_clock_readonly(struct sfptpd_clock *clock,
-					struct sfptpd_config_general *cfg, int readonly_index)
+				     struct sfptpd_config_general *cfg, int readonly_index)
 {
         char* cfg_name = cfg->clocks.readonly_clocks[readonly_index];
         if (check_clock_in_config(clock, cfg_name)) {
@@ -529,10 +533,25 @@ static void configure_clock_readonly(struct sfptpd_clock *clock,
 
 /* Set the clock as being disciplined if it appears in clock_list in the config file */
 static int configure_clock_list(struct sfptpd_clock *clock,
-					struct sfptpd_config_general *cfg, int clock_index)
+				struct sfptpd_config_general *cfg, int clock_index)
 {
         char* cfg_name = cfg->clocks.clocks[clock_index];
-        if (!clock->read_only && check_clock_in_config(clock, cfg_name)) {
+
+	if (!check_clock_in_config(clock, cfg_name))
+		return 0;
+
+	if (clock->read_only) {
+		if (cfg->clocks.observe_readonly) {
+			if (!clock->observe) {
+				TRACE_L3("clock %s (%s) will be observed but not disciplined\n",
+					 clock->hw_id_string, clock->long_name);
+				clock->observe = true;
+				cfg->clocks.clock_list_applied[clock_index] = CLOCK_OPTION_APPLIED;
+			} else {
+	                        cfg->clocks.clock_list_applied[clock_index] = CLOCK_OPTION_ALREADY_APPLIED;
+			}
+		}
+	} else {
                 if (!clock->discipline) {
                         if ((clock->type == SFPTPD_CLOCK_TYPE_NON_SFC) &&
                                 !cfg->non_sfc_nics) {
@@ -543,6 +562,7 @@ static int configure_clock_list(struct sfptpd_clock *clock,
                         TRACE_L3("clock %s (%s) will be disciplined\n",
                                         clock->hw_id_string, clock->long_name);
                         clock->discipline = true;
+                        clock->observe = true;
                         cfg->clocks.clock_list_applied[clock_index] = CLOCK_OPTION_APPLIED;
                 } else if (cfg->clocks.clock_list_applied[clock_index] == CLOCK_OPTION_NOT_APPLIED) {
                         cfg->clocks.clock_list_applied[clock_index] = CLOCK_OPTION_ALREADY_APPLIED;
@@ -564,16 +584,27 @@ static int configure_new_clock(struct sfptpd_clock *clock,
 		configure_clock_readonly(clock, cfg, i);
 	}
 
-	if (!clock->read_only && cfg->clocks.discipline_all) {
-		/* If the discipline all config flag is set, mark clock to
-		 * be disciplined */
-		if ((clock->type != SFPTPD_CLOCK_TYPE_NON_SFC) || cfg->non_sfc_nics)
-			clock->discipline = true;
-	} else if (!clock->read_only) {
-		/* See if this clock is in the list of clocks specified to be
-		   disciplined and mark clock accordingly. */
-		for (i = 0; i < cfg->clocks.num_clocks; i++) {
-			rc = configure_clock_list(clock, cfg, i);
+	if (!clock->read_only) {
+		if (cfg->clocks.discipline_all) {
+			/* If the discipline all config flag is set, mark clock to
+			 * be disciplined */
+			if ((clock->type != SFPTPD_CLOCK_TYPE_NON_SFC) || cfg->non_sfc_nics)
+				clock->discipline = true;
+			clock->observe = cfg->clocks.observe_readonly || clock->discipline;
+		} else {
+			/* See if this clock is in the list of clocks specified to be
+			   disciplined and mark clock accordingly. */
+			for (i = 0; i < cfg->clocks.num_clocks; i++) {
+				rc = configure_clock_list(clock, cfg, i);
+			}
+		}
+	} else {
+		if (cfg->clocks.discipline_all) {
+			clock->observe = cfg->clocks.observe_readonly;
+		} else {
+			for (i = 0; i < cfg->clocks.num_clocks; i++) {
+				rc = configure_clock_list(clock, cfg, i);
+			}
 		}
 	}
 
@@ -1606,6 +1637,16 @@ bool sfptpd_clock_get_discipline(struct sfptpd_clock *clock)
 	assert(clock != NULL);
 	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
 	return clock->discipline;
+}
+
+
+/* Not locked because it is an atomic operation. */
+bool sfptpd_clock_get_observe(struct sfptpd_clock *clock)
+{
+	assert(clock != NULL);
+	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
+	assert(clock->observe || !clock->discipline);
+	return clock->observe;
 }
 
 

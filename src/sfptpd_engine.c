@@ -425,7 +425,7 @@ static void reconfigure_servos(struct sfptpd_engine *engine,
 	idx = 0;
 	for (clock_idx = 0; clock_idx < num_active; clock_idx++) {
 		clock = active[clock_idx];
-		if (sfptpd_clock_get_discipline(clock) && (clock != engine->lrc)) {
+		if (sfptpd_clock_get_observe(clock) && (clock != engine->lrc)) {
 			/* We should always have enough servos */
 			assert(idx < engine->total_servos);
 

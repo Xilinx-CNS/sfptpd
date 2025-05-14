@@ -344,6 +344,13 @@ long double sfptpd_clock_get_max_frequency_adjustment(struct sfptpd_clock *clock
  */
 bool sfptpd_clock_get_discipline(struct sfptpd_clock *clock);
 
+/** Get the discipline flag which indicates that a servo should observe
+ * the clock.
+ * @param clock  Pointer to clock instance
+ * @return A boolean indicating if the clock should be observed
+ */
+bool sfptpd_clock_get_observe(struct sfptpd_clock *clock);
+
 /** Adjust the clock instance by the specified offset
  * @param clock  Pointer to clock instance
  * @param offset Offset to be applied in seconds and nanoseconds

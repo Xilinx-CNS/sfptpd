@@ -388,12 +388,18 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 	struct sfptpd_timespec mono;
 	long double slavetime_ns;
 	long double curtime_ns;
+	bool passive;
 	int rc;
 
 	assert(servo != NULL);
 	assert(servo->master != NULL);
 	assert(servo->slave != NULL);
 	assert(mono_time != NULL);
+
+	/* Rather than let the underlying clock operations block a read only
+	 * clock, avoid the log noise (with verbose logging) for this
+	 * deliberate scenario by not calling them. */
+	passive = !sfptpd_clock_get_discipline(servo->slave);
 
 	/* Get the time difference between the two clocks */
 	rc = sfptpd_clockfeed_compare(servo->clock2_feed, servo->clock1_feed, &diff,
@@ -521,8 +527,9 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 	    ((servo->clock_ctrl == SFPTPD_CLOCK_CTRL_STEP_ON_FIRST_LOCK) &&
                 !servo->stepped_after_lrc_locked && sfptpd_clock_get_been_locked(servo->master)) || 
             ((servo->clock_ctrl == SFPTPD_CLOCK_CTRL_STEP_FORWARD) && (diff_ns < 0))) {
-		if ((diff_ns <= -servo->step_threshold) ||
-		    (diff_ns >= servo->step_threshold)) {
+		if (!passive &&
+		    ((diff_ns <= -servo->step_threshold) ||
+		     (diff_ns >= servo->step_threshold))) {
 			/* Step the clock and return */
 			rc = sfptpd_servo_step_clock(servo, &diff);
 
@@ -553,14 +560,16 @@ static int do_servo_synchronize(struct sfptpd_engine *engine, struct sfptpd_serv
 	else if (servo->freq_adjust_ppb < -servo->freq_adjust_max)
 		servo->freq_adjust_ppb = -servo->freq_adjust_max;
 
-	/* Adjust the clock frequency using the calculated adjustment */
-	rc = sfptpd_clock_adjust_frequency(servo->slave, servo->freq_adjust_ppb);
-	if (rc != 0) {
-		SYNC_MODULE_ALARM_SET(servo->alarms, CLOCK_CTRL_FAILURE);
-		WARNING("%s: failed to adjust clock %s, error %s\n", servo->servo_name,
-			sfptpd_clock_get_long_name(servo->slave), strerror(rc));
-	} else {
-		SYNC_MODULE_ALARM_CLEAR(servo->alarms, CLOCK_CTRL_FAILURE);
+	if (!passive) {
+		/* Adjust the clock frequency using the calculated adjustment */
+		rc = sfptpd_clock_adjust_frequency(servo->slave, servo->freq_adjust_ppb);
+		if (rc != 0) {
+			SYNC_MODULE_ALARM_SET(servo->alarms, CLOCK_CTRL_FAILURE);
+			WARNING("%s: failed to adjust clock %s, error %s\n", servo->servo_name,
+				sfptpd_clock_get_long_name(servo->slave), strerror(rc));
+		} else {
+			SYNC_MODULE_ALARM_CLEAR(servo->alarms, CLOCK_CTRL_FAILURE);
+		}
 	}
 
 	/* Update the convergence measure */
@@ -668,6 +677,9 @@ struct sfptpd_servo_stats sfptpd_servo_get_stats(struct sfptpd_servo *servo)
 
 void sfptpd_servo_update_sync_status(struct sfptpd_servo *servo)
 {
+	if (!sfptpd_clock_get_discipline(servo->slave))
+		return;
+
 	/* Update the NIC with the current sync status. If the slave clock is
 	 * system clock, update the NIC clock that is the master to this. If the
 	 * slave clock is a NIC clock, just update the NIC clock */

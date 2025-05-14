@@ -63,6 +63,7 @@
 #define SFPTPD_DEFAULT_CLOCK_FNAM_FMT		   "%C:"
 #define SFPTPD_DEFAULT_UNIQUE_CLOCKID_BITS         "00:00"
 #define SFPTPD_DEFAULT_SERVO_LOG_ALL_SAMPLES	   (false)
+#define SFPTPD_DEFAULT_OBSERVE_READONLY_CLOCKS     (false)
 
 /** Statistics logging interval in seconds */
 #define SFPTPD_DEFAULT_STATISTICS_LOGGING_INTERVAL 1
@@ -148,6 +149,7 @@ typedef struct sfptpd_config_clocks {
 	bool persistent_correction;
 	bool no_initial_correction;
 	bool discipline_all;
+	bool observe_readonly;
 	unsigned int num_clocks;
 	char clocks[SFPTPD_CONFIG_TOKENS_MAX][SFPTPD_CONFIG_MAC_STRING_MAX];
 	unsigned int num_readonly_clocks;

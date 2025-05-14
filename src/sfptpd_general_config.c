@@ -80,6 +80,8 @@ static int parse_clock_list(struct sfptpd_config_section *section, const char *o
 			    unsigned int num_params, const char * const params[]);
 static int parse_clock_readonly(struct sfptpd_config_section *section, const char *option,
 				unsigned int num_params, const char * const params[]);
+static int parse_observe_readonly_clocks(struct sfptpd_config_section *section, const char *option,
+					 unsigned int num_params, const char * const params[]);
 static int parse_persistent_clock_correction(struct sfptpd_config_section *section, const char *option,
 					     unsigned int num_params, const char * const params[]);
 static int parse_non_solarflare_nics(struct sfptpd_config_section *section, const char *option,
@@ -291,6 +293,11 @@ static const sfptpd_config_option_t config_general_options[] =
 		"Specifies a set of clocks that sfptpd should never step or slew, under any circumstance. Use with care.",
 		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
 		parse_clock_readonly},
+	{"observe_readonly_clocks", "<off | on>",
+		"Specifies whether to observe read-only clocks with passive servos",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_observe_readonly_clocks,
+		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_OBSERVE_READONLY_CLOCKS)},
 	{"persistent_clock_correction", "<off | on>",
 		"Specifies whether to used saved clock frequency corrections when disciplining clocks",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
@@ -1366,6 +1373,24 @@ static int parse_clock_readonly(struct sfptpd_config_section *section, const cha
 }
 
 
+static int parse_observe_readonly_clocks(struct sfptpd_config_section *section, const char *option,
+					 unsigned int num_params, const char * const params[])
+{
+	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+	assert(num_params == 1);
+
+	if (strcmp(params[0], "off") == 0) {
+		general->clocks.observe_readonly = false;
+	} else if (strcmp(params[0], "on") == 0) {
+		general->clocks.observe_readonly = true;
+	} else {
+		return EINVAL;
+	}
+
+	return 0;
+}
+
+
 static int parse_persistent_clock_correction(struct sfptpd_config_section *section, const char *option,
 					     unsigned int num_params, const char * const params[])
 {
@@ -2064,6 +2089,7 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		new->clocks.discipline_all = SFPTPD_DEFAULT_DISCIPLINE_ALL_CLOCKS;
 		new->clocks.num_clocks = 0;
 		new->clocks.no_initial_correction = false;
+		new->clocks.observe_readonly = SFPTPD_DEFAULT_OBSERVE_READONLY_CLOCKS;
 		new->epoch_guard = SFPTPD_DEFAULT_EPOCH_GUARD;
 		new->initial_clock_correction = SFPTPD_DEFAULT_INITIAL_CLOCK_CORRECTION;
 
