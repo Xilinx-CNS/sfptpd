@@ -47,6 +47,16 @@ typedef uint32_t sfptpd_interface_ts_caps_t;
 #define SFPTPD_INTERFACE_TS_CAPS_ALL (3)
 
 
+enum sfptpd_interface_prop {
+	SFPTPD_INTERFACE_PROP_VIRTUAL,
+	SFPTPD_INTERFACE_PROP_ETHER,
+	SFPTPD_INTERFACE_PROP_WIRELESS,
+	SFPTPD_INTERFACE_PROP_MAX,
+};
+
+extern const char *sfptpd_interface_prop_name[];
+
+
 /****************************************************************************
  * Function Prototypes
 ****************************************************************************/
@@ -343,5 +353,7 @@ int sfptpd_interface_hw_timestamping_suspend(struct sfptpd_db_query_result *q,
  * @return 0 on success, else errno
  */
 int sfptpd_interface_hw_timestamping_restore(struct sfptpd_db_query_result *q);
+
+enum sfptpd_interface_prop sfptpd_interface_prop_from_str(const char *prop_name);
 
 #endif /* _SFPTPD_INTERFACE_H */

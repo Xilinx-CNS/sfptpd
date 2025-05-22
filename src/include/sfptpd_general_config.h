@@ -64,6 +64,7 @@
 #define SFPTPD_DEFAULT_UNIQUE_CLOCKID_BITS         "00:00"
 #define SFPTPD_DEFAULT_SERVO_LOG_ALL_SAMPLES	   (false)
 #define SFPTPD_DEFAULT_OBSERVE_READONLY_CLOCKS     (false)
+#define SFPTPD_DEFAULT_PHYSICAL_INTERFACES         "$phys@ether!virtual!wireless $macvlan@ether!wireless"
 
 /** Statistics logging interval in seconds */
 #define SFPTPD_DEFAULT_STATISTICS_LOGGING_INTERVAL 1
@@ -197,6 +198,14 @@ struct sfptpd_config_metrics {
 	char family_prefix[32];
 };
 
+struct sfptpd_config_interface_selection {
+	bool negative;
+	enum sfptpd_link_type link_type; /* Ignore if link_kind specified */
+	char *link_kind;
+	unsigned int props_require;
+	unsigned int props_exclude;
+};
+
 /** struct sfptpd_config_general - sfptpd general configuration
  * @hdr: Configuration section common header
  * @config_filename: Path of configuration file
@@ -298,6 +307,7 @@ typedef struct sfptpd_config_general {
 	char run_dir[PATH_MAX];
 	struct sfptpd_config_metrics openmetrics;
 	bool servo_log_all_samples;
+	struct sfptpd_config_interface_selection *eligible_interface_types;
 } sfptpd_config_general_t;
 
 static_assert(sizeof ((sfptpd_config_general_t *) 0)->declared_sync_modules * 8 >= SFPTPD_CONFIG_CATEGORY_MAX,

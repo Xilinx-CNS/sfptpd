@@ -33,6 +33,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Add `observe_readonly_clocks` option to create passive servos. (SWPTP-1579)
 - A PPS sync instance may be created for each external pin associated with an
   interface clock, configured for `pps-in` or `pps-out` functions. (SWPTP-1576)
+- Make determination of what counts as a suitable physical interface for
+  timestamping configurable for experimental and testing purposes. Only the
+  default value (Ethernet and MACVLAN interfaces) is supported. (SWPTP-1578)
 - Add `fir_filter_size` option for secondary servos. (SWPTP-1584)
 - Add hardware clock control and diagnostic utility `tstool`.
 

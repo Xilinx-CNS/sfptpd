@@ -109,6 +109,12 @@ const char *sfptpd_link_type_str(enum sfptpd_link_type type)
 	}
 }
 
+enum sfptpd_link_type sfptpd_link_type_from_str(const char *type_name)
+{
+	enum sfptpd_link_type type;
+	for (type = 0; type < SFPTPD_LINK_MAX && strcmp(type_name, sfptpd_link_type_names[type]); type++);
+	return type;
+}
 
 const struct sfptpd_link *sfptpd_link_by_name(const struct sfptpd_link_table *link_table,
 					      const char *link_name)

@@ -736,4 +736,6 @@ int sfptpd_config_parse_command_line_pass2(struct sfptpd_config *config,
  */
 int sfptpd_config_parse_file(struct sfptpd_config *config);
 
+unsigned int tokenize(char *input, unsigned int max_tokens, char *tokens[]);
+
 #endif /* _SFPTPD_CONFIG_H */

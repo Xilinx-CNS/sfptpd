@@ -28,7 +28,6 @@
  * External declarations
  ****************************************************************************/
 
-extern unsigned int tokenize(char *input, unsigned int max_tokens, const char *tokens[]);
 
 
 /****************************************************************************
@@ -114,7 +113,7 @@ int sfptpd_test_config(void)
 	int test;
 	unsigned int i, j, num_tokens;
 	char line[SFPTPD_CONFIG_LINE_LENGTH_MAX];
-	const char *tokens[SFPTPD_CONFIG_TOKENS_MAX];
+	char *tokens[SFPTPD_CONFIG_TOKENS_MAX];
 
 	for (i = 0; i < sizeof(tokenize_tests)/sizeof(tokenize_tests[0]); i++) {
 		sfptpd_strncpy(line, tokenize_tests[i].input, sizeof(line)); 

@@ -246,6 +246,12 @@ static const struct drv_stat_type drv_stats[SFPTPD_DRVSTAT_MAX] = {
 	[ SFPTPD_DRVSTAT_PPS_PER_MAX ]  = { "pps_stats/pps_per_max", false },
 };
 
+const char *sfptpd_interface_prop_name[] = {
+	[ SFPTPD_INTERFACE_PROP_VIRTUAL ] = "virtual",
+	[ SFPTPD_INTERFACE_PROP_ETHER ] = "ether",
+	[ SFPTPD_INTERFACE_PROP_WIRELESS ] = "wireless",
+};
+
 
 /****************************************************************************
  * Searching and Sorting
@@ -511,6 +517,8 @@ static bool interface_check_suitability(const struct sfptpd_link *link,
 	int device_id = 0;
 	int i;
 	const char *name;
+	struct sfptpd_config_interface_selection *s;
+	bool match = false;
 
 	assert(sysfs_dir != NULL);
 	assert(link != NULL);
@@ -525,48 +533,39 @@ static bool interface_check_suitability(const struct sfptpd_link *link,
 	 * devices that are wireless, bridges, vlan interfaces, bonds,
 	 * tap devices and virtual interfaces */
 
-	switch(link->type) {
-	case SFPTPD_LINK_BRIDGE:
-		TRACE_L2("interface %s: is a bridge - ignoring\n", name);
+	for (s = sfptpd_general_config_get(sfptpd_interface_config)->eligible_interface_types;
+	     s && (s->link_type != SFPTPD_LINK_MAX || s->link_kind);
+	     s++) {
+		unsigned int props, props_to_check;
+
+		if (s->link_type != link->type &&
+		    (!s->link_kind || link->if_kind[0] == '\0' ||
+		     strcmp(link->if_kind, s->link_kind)))
+			continue;
+
+		props_to_check = s->props_require | s->props_exclude;
+		props= 0;
+
+		if (props_to_check & (1 << SFPTPD_INTERFACE_PROP_VIRTUAL) &&
+		    sysfs_file_exists(SFPTPD_SYSFS_VIRTUAL_NET_PATH, "", name))
+			props |= (1 << SFPTPD_INTERFACE_PROP_VIRTUAL);
+
+		if (props_to_check & (1 << SFPTPD_INTERFACE_PROP_WIRELESS) &&
+		    (sysfs_file_exists(sysfs_dir, name, "wireless") ||
+		     sysfs_file_exists(sysfs_dir, name, "phy80211")))
+			props |= (1 << SFPTPD_INTERFACE_PROP_WIRELESS);
+
+		if (link->if_type == ARPHRD_ETHER)
+			props |= (1 << SFPTPD_INTERFACE_PROP_ETHER);
+
+		if ((props & s->props_require) == s->props_require &&
+		    (props & s->props_exclude) == 0)
+			match = !s->negative;
+	}
+
+	if (!match) {
+		TRACE_L2("interface %s: does not match eligible physical interface criteria - ignoring\n", name);
 		return false;
-	case SFPTPD_LINK_BOND:
-		TRACE_L2("interface %s: is a bond - ignoring\n", name);
-		return false;
-	case SFPTPD_LINK_TEAM:
-		TRACE_L2("interface %s: is a team - ignoring\n", name);
-		return false;
-	case SFPTPD_LINK_TUNNEL:
-		TRACE_L2("interface %s: is a tunnel or tap interface - ignoring\n", name);
-		return false;
-	case SFPTPD_LINK_VLAN:
-		TRACE_L2("interface %s: is a VLAN - ignoring\n", name);
-		return false;
-	case SFPTPD_LINK_IPVLAN:
-	case SFPTPD_LINK_VETH:
-	case SFPTPD_LINK_DUMMY:
-	case SFPTPD_LINK_OTHER:
-		TRACE_L2("interface %s: is virtual/other - ignoring\n", name);
-		return false;
-	case SFPTPD_LINK_MACVLAN:
-	case SFPTPD_LINK_PHYSICAL:
-		if (sysfs_file_exists(sysfs_dir, name, "wireless") ||
-		    sysfs_file_exists(sysfs_dir, name, "phy80211")) {
-			TRACE_L2("interface %s: is wireless - ignoring\n", name);
-			return false;
-		}
-		if (link->type != SFPTPD_LINK_MACVLAN &&
-		    sysfs_file_exists(SFPTPD_SYSFS_VIRTUAL_NET_PATH, "", name)) {
-			TRACE_L2("interface %s: is virtual - ignoring\n", name);
-			return false;
-		}
-		if (link->if_type != ARPHRD_ETHER) {
-			TRACE_L2("interface %s: not ethernet (type %d) - ignoring\n",
-				 name, link->if_type);
-			return false;
-		}
-		break;
-	default:
-		assert(!"invalid link type");
 	}
 
 	/* Finally, get the vendor and device ID to determine if it is
@@ -2387,5 +2386,13 @@ int sfptpd_interface_hw_timestamping_restore(struct sfptpd_db_query_result *q)
 	q->free(q);
 	return rc2;
 }
+
+enum sfptpd_interface_prop sfptpd_interface_prop_from_str(const char *prop_name)
+{
+	enum sfptpd_interface_prop prop;
+	for (prop = 0; prop < SFPTPD_INTERFACE_PROP_MAX && strcmp(prop_name, sfptpd_interface_prop_name[prop]); prop++);
+	return prop;
+}
+
 
 /* fin */

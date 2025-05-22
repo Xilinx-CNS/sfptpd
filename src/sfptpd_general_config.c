@@ -159,8 +159,12 @@ static int parse_openmetrics_acl_order(struct sfptpd_config_section *section, co
 				       unsigned int num_params, const char * const params[]);
 static int parse_servo_log_all_samples(struct sfptpd_config_section *section, const char *option,
 				       unsigned int num_params, const char * const params[]);
+static int parse_eligible_interface_types(struct sfptpd_config_section *section, const char *option,
+					  unsigned int num_params, const char * const params[]);
 
 static int validate_config(struct sfptpd_config_section *section);
+
+static void destroy_interface_selection(struct sfptpd_config_interface_selection **selection);
 
 static const sfptpd_config_option_t config_general_options[] =
 {
@@ -505,6 +509,12 @@ static const sfptpd_config_option_t config_general_options[] =
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
 		parse_servo_log_all_samples,
 		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_SERVO_LOG_ALL_SAMPLES)},
+	{"eligible_interface_types", "([+|-]<$group|kind>[@prop|!prop]* )*",
+		"Specify list of eligible interface types by group, if_kind "
+		"and conditional properties",
+		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_eligible_interface_types,
+		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_PHYSICAL_INTERFACES)},
 };
 
 static const sfptpd_config_option_set_t config_general_option_set =
@@ -2038,6 +2048,129 @@ static int parse_servo_log_all_samples(struct sfptpd_config_section *section, co
 }
 
 
+/* Parse the eligible interface types.
+ *
+ * There may be any number of selection groups specified in this
+ * configuration, separated by spaces. If preceded by a '-' then the group
+ * defines interface types that will be EXCLUDED. When an interface matches
+ * more than one group, the rightmost definition prevails.
+ *
+ * Each group may optionally be preceded by a '+' sign. If the first group
+ * in the list is not prefixed by '-' or '+' then the existing list is
+ * replaced, otherwise it is modified.
+ *
+ * Each group begins with either an IFLA_INFO_KIND string provided by
+ * rtnetlink(7) (e.g. "macvlan", "team", "bond", "veth" but not, notably,
+ * for Ethernet interfaces) or a family of interface types as interpreted
+ * by sfptpd into an 'enum sfptpd_link_type' value, prefixed by '$', e.g.
+ * '$phys' for assumed physical interfaces.
+ *
+ * The match is then further qualified by any number of suffixed '!attr' or
+ * '@attr' terms for negative or positive constraints respectively. The
+ * available attributes are:
+ *   - wireless: for wireless interfaces
+ *   - ether:    for Ethernet interfaces
+ *   - virtual:  for virtual interfaces
+ */
+static int parse_eligible_interface_types(struct sfptpd_config_section *section, const char *option,
+					  unsigned int num_params, const char * const params[])
+{
+	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+	struct sfptpd_config_interface_selection *ss = general->eligible_interface_types;
+	const char *separators = "@!";
+	const char *ptr;
+	char *next;
+	char *word;
+	int rc;
+	int keep = 0;
+	int i;
+
+	assert(general != NULL);
+
+	if (num_params && (*params[0] == '+' || *params[0] == '-')) {
+		/* If the first selection begins with '+' or '-' we are
+		 * adding to or subtracting from the existing/default list */
+
+		/* Count the number of selections in the existing list */
+		for (; ss && (ss[keep].link_type != SFPTPD_LINK_MAX || ss[keep].link_kind); keep++);
+
+		ss = realloc(ss, (keep + num_params + 1) * sizeof *ss);
+		if (ss == NULL) {
+			rc = errno;
+			destroy_interface_selection(&general->eligible_interface_types);
+			return rc;
+		}
+		memset(ss + (keep * sizeof *ss), '\0', (num_params + 1) * sizeof *ss);
+	} else {
+		/* Otherwise replace the existing/default list. */
+
+		destroy_interface_selection(&general->eligible_interface_types);
+		ss = calloc(num_params + 1, sizeof(struct sfptpd_config_interface_selection));
+		if (ss == NULL)
+			return errno;
+	}
+
+	for (i = 0; i < num_params; i++) {
+		struct sfptpd_config_interface_selection *s = ss + i + keep;
+
+		ptr = params[i];
+		if (*ptr == '-') {
+			s->negative = true;
+			ptr++;
+		} else if (*ptr == '+') {
+			ptr++;
+		}
+
+		next = strpbrk(ptr, separators);
+		if (!(word = next ? strndup(ptr, next - ptr) : strdup(ptr))) {
+			rc = errno;
+			goto fail;
+		}
+
+		if (*ptr == '$') {
+			s->link_type = sfptpd_link_type_from_str(word + 1);
+			free(word);
+		} else {
+			s->link_type = SFPTPD_LINK_MAX;
+			s->link_kind = word;
+		}
+
+		/* Process appended property constraints */
+		while ((ptr = next)) {
+			bool exclusion;
+			enum sfptpd_interface_prop prop;
+
+			/* All properties have a prefix charater; else they
+			 * would not have been picked up as properties. */
+			exclusion = (*ptr++ == '!');
+			next = strpbrk(ptr, separators);
+			if (!(word = next ? strndup(ptr, next - ptr) : strdup(ptr))) {
+				rc = errno;
+				goto fail;
+			}
+			prop = sfptpd_interface_prop_from_str(word);
+			if (prop == SFPTPD_INTERFACE_PROP_MAX) {
+				rc = EINVAL;
+				goto fail;
+			}
+			if (exclusion)
+				s->props_exclude |= (1 << prop);
+			else
+				s->props_require |= (1 << prop);
+			free(word);
+		}
+	}
+
+	/* Set sentinel */
+	ss[keep + num_params].link_type = SFPTPD_LINK_MAX;
+	general->eligible_interface_types = ss;
+	return 0;
+fail:
+	destroy_interface_selection(&ss);
+	return rc;
+}
+
+
 static int validate_config(struct sfptpd_config_section *general)
 {
 	struct sfptpd_config *config = general->config;
@@ -2069,6 +2202,18 @@ static int validate_config(struct sfptpd_config_section *general)
  * Local Functions
  ****************************************************************************/
 
+static void destroy_interface_selection(struct sfptpd_config_interface_selection **selection)
+{
+	struct sfptpd_config_interface_selection *intf;
+
+	for (intf = *selection;
+	     intf && (intf->link_type != SFPTPD_LINK_MAX || intf->link_kind);
+	     intf++)
+		free(intf->link_kind);
+	free(*selection);
+	*selection = NULL;
+}
+
 static void general_config_destroy(struct sfptpd_config_section *section)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *) section;
@@ -2076,6 +2221,7 @@ static void general_config_destroy(struct sfptpd_config_section *section)
 	assert(section != NULL);
 	assert(section->category == SFPTPD_CONFIG_CATEGORY_GENERAL);
 
+	destroy_interface_selection(&general->eligible_interface_types);
 	free(general->groups);
 	free(general->openmetrics.tcp);
 	sfptpd_acl_free(&general->openmetrics.acl);
@@ -2182,6 +2328,19 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		new->declared_sync_modules = 0;
 
 		new->servo_log_all_samples = SFPTPD_DEFAULT_SERVO_LOG_ALL_SAMPLES;
+
+		{
+			char *default_str = strdup(SFPTPD_DEFAULT_PHYSICAL_INTERFACES);
+			char *tokens[SFPTPD_CONFIG_TOKENS_MAX];
+			int num_tokens;
+			int rc;
+
+			num_tokens = tokenize(default_str, SFPTPD_CONFIG_TOKENS_MAX, tokens);
+			rc = parse_eligible_interface_types((struct sfptpd_config_section *) new,
+							    NULL, num_tokens, (const char *const *)tokens);
+			assert(rc == 0);
+			free(default_str);
+		}
 	}
 
 	sfptpd_config_section_init(&new->hdr, general_config_create,

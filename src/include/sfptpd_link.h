@@ -124,6 +124,8 @@ const char *sfptpd_link_event_str(enum sfptpd_link_event event);
 
 const char *sfptpd_link_type_str(enum sfptpd_link_type type);
 
+enum sfptpd_link_type sfptpd_link_type_from_str(const char *type_name);
+
 const struct sfptpd_link *sfptpd_link_by_name(const struct sfptpd_link_table *link_table,
 					      const char *link_name);
 
