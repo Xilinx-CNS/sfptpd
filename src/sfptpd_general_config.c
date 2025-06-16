@@ -30,6 +30,7 @@
 #include "sfptpd_phc.h"
 #include "sfptpd_crny_module.h"
 #include "sfptpd_config_helpers.h"
+#include "sfptpd_filter.h"
 
 
 /****************************************************************************
@@ -100,6 +101,8 @@ static int parse_pid_filter_kp(struct sfptpd_config_section *section, const char
 			      unsigned int num_params, const char * const params[]);
 static int parse_pid_filter_ki(struct sfptpd_config_section *section, const char *option,
 			      unsigned int num_params, const char * const params[]);
+static int parse_fir_filter_size(struct sfptpd_config_section *section, const char *option,
+				 unsigned int num_params, const char * const params[]);
 static int parse_trace_level(struct sfptpd_config_section *section, const char *option,
 			     unsigned int num_params, const char * const params[]);
 static int parse_test_mode(struct sfptpd_config_section *section, const char *option,
@@ -355,6 +358,15 @@ static const sfptpd_config_option_t config_general_options[] =
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_pid_filter_ki,
 		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_SERVO_K_INTEGRAL)},
+	{"fir_filter_size", "NUMBER",
+		"Number of data samples stored in the FIR filter. The "
+		"valid range is [" STRINGIFY(SFPTPD_FIR_FILTER_STIFFNESS_MIN)
+		"," STRINGIFY(SFPTPD_FIR_FILTER_STIFFNESS_MAX) "]. A value of "
+		"1 means that the filter is off while higher values will "
+		"reduce adaptability but increase stability. "
+		"Default is one second's worth of samples.",
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_fir_filter_size},
 	{"trace_level", "[<general | threading | bic | netlink | ntp | servo | clocks | most | all>] NUMBER",
 		"Specifies a module (of 'general' if omitted) trace level from 0 (none) to 6 (excessive)",
 		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
@@ -1578,6 +1590,28 @@ static int parse_pid_filter_ki(struct sfptpd_config_section *section, const char
 	return 0;
 }
 
+static int parse_fir_filter_size(struct sfptpd_config_section *section, const char *option,
+				 unsigned int num_params, const char * const params[])
+{
+	int tokens, size;
+	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+	assert(num_params == 1);
+
+	tokens = sscanf(params[0], "%u", &size);
+	if (tokens != 1)
+		return EINVAL;
+
+	if ((size < SFPTPD_FIR_FILTER_STIFFNESS_MIN) ||
+	    (size > SFPTPD_FIR_FILTER_STIFFNESS_MAX)) {
+		CFG_ERROR(section, "fir_filter_size %s invalid. Expect range [%d,%d]\n",
+		          params[0], SFPTPD_FIR_FILTER_STIFFNESS_MIN,
+			  SFPTPD_FIR_FILTER_STIFFNESS_MAX);
+		return ERANGE;
+	}
+
+	general->fir_filter_size = (unsigned int)size;
+	return 0;
+}
 
 static int parse_trace_level(struct sfptpd_config_section *section, const char *option,
 			     unsigned int num_params, const char * const params[])
@@ -2118,6 +2152,7 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 
 		new->pid_filter.kp = SFPTPD_DEFAULT_SERVO_K_PROPORTIONAL;
 		new->pid_filter.ki = SFPTPD_DEFAULT_SERVO_K_INTEGRAL;
+		new->fir_filter_size = 0; /* 0 indicates to use default computed size */
 
 		new->selection_policy = sfptpd_default_selection_policy;
                 memcpy(new->phc_diff_methods, sfptpd_default_phc_diff_methods, sizeof(sfptpd_default_phc_diff_methods));

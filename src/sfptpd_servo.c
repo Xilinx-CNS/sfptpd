@@ -183,6 +183,10 @@ struct sfptpd_servo *sfptpd_servo_create(struct sfptpd_clockfeed *clockfeed,
 	else if (stiffness > SFPTPD_SERVO_FILTER_STIFFNESS_MAX)
 		stiffness = SFPTPD_SERVO_FILTER_STIFFNESS_MAX;
 
+	/* Override computed FIR filter size if specified in config. */
+	if (general_config->fir_filter_size != 0)
+		stiffness = general_config->fir_filter_size;
+
 	/* Initialise the PID and FIR filters */
 	sfptpd_fir_filter_init(&servo->fir_filter, stiffness);
 	sfptpd_pid_filter_init(&servo->pid_filter,

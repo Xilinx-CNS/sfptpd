@@ -276,6 +276,7 @@ typedef struct sfptpd_config_general {
 		long double kp;
 		long double ki;
 	} pid_filter;
+	unsigned int fir_filter_size;
 	struct sfptpd_selection_policy selection_policy;
 	sfptpd_phc_pps_method_t phc_pps_method[SFPTPD_PPS_METHOD_MAX + 1];
 	char json_stats_filename[PATH_MAX];
