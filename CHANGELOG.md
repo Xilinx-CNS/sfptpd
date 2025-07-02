@@ -15,6 +15,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Exported over TCP if configured with `openmetrics_tcp <listen-addr>*`.
   - Configure real time stats buffer size with `openmetrics_rt_stats_buf`.
   - Specify metrics family prefix with `openmetrics_prefix`.
+- Add `clock_adj_method` option to choose whether to prefer adjustments
+  mainly to system clock tick length (the new default) or frequency. (SWPTP-1066)
 - Export real time stats over OpenMetrics HTTP socket. (SWPTP-1385)
   - For JSON Lines, GET /rt-stats.jsonl
   - For JSON Seq (RFC7464), GET /rt-stats.json-seq
@@ -45,6 +47,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Issue SWPTP-1066
+  - Fix poor system clock adjustment when frequency error exceeds 500ppm.
 - Issue SWPTP-1569
   - Avoid aborting when a clock name would exceed 63 characters.
 - Issue SWPTP-1570

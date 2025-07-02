@@ -65,6 +65,7 @@
 #define SFPTPD_DEFAULT_SERVO_LOG_ALL_SAMPLES	   (false)
 #define SFPTPD_DEFAULT_OBSERVE_READONLY_CLOCKS     (false)
 #define SFPTPD_DEFAULT_PHYSICAL_INTERFACES         "$phys@ether!virtual!wireless $macvlan@ether!wireless"
+#define SFPTPD_DEFAULT_CLOCK_ADJ_METHOD            SFPTPD_CLOCK_PREFER_TICKADJ
 
 /** Statistics logging interval in seconds */
 #define SFPTPD_DEFAULT_STATISTICS_LOGGING_INTERVAL 1
@@ -167,6 +168,7 @@ typedef struct sfptpd_config_clocks {
         */
 	enum clock_config_state readonly_clocks_applied[SFPTPD_CONFIG_TOKENS_MAX];
 	enum clock_config_state clock_list_applied[SFPTPD_CONFIG_TOKENS_MAX];
+	enum sfptpd_clock_adj_method adj_method;
 } sfptpd_config_clocks_t;
 
 /** struct sfptpd_config_timestamping - sfptpd timestamping configuration

@@ -193,6 +193,9 @@ struct sfptpd_clock_system {
 	long double min_tick;
 	long double max_tick;
 
+	/* Preferred adjustment procedure */
+	enum sfptpd_clock_adj_method adj_method;
+
 	/* Master copy of kernel status flags */
 	int kernel_status;
 };
@@ -717,6 +720,7 @@ static int new_system_clock(struct sfptpd_config_general *config,
 	new->u.system.min_tick = -100000.0 / new->u.system.tick_freq_hz;
 	new->u.system.max_tick = 100000.0 / new->u.system.tick_freq_hz;
 	new->u.system.kernel_status = STA_UNSYNC;
+	new->u.system.adj_method = config->clocks.adj_method;
 
 	/* Set a nominal value for the NIC clock accuracy and maximum frequency
 	 * adjustment */
@@ -1992,22 +1996,28 @@ int sfptpd_clock_adjust_frequency(struct sfptpd_clock *clock, long double freq_a
 		long double tick;
 		struct sfptpd_clock_system *system = &clock->u.system;
 
-		/* If the frequency adjustment is large, this is achieved by
-		* adjusting the kernel tick length (t.tick) and placing the
-		* remainder in the frequency adjustment (t.freq).
-		*/
-		tick = 0.0;
-		if (freq > system->max_freq_adj) {
+		/* Achieve the adjustment by changing the kernel tick length
+		 * (t.tick) and defining a frequency adjustment ratio (t.freq).
+		 * The setting of adj_method defines which field takes the
+		 * the bulk of the correction (t.tick by default and which
+		 * takes the residual part. */
+		if (system->adj_method == SFPTPD_CLOCK_PREFER_TICKADJ)
+			tick = roundl(freq_adj_ppb / system->tick_resolution_ppb);
+		else if (freq > system->max_freq_adj) /* SFPTPD_CLOCK_PREFER_FREQADJ */
 			tick = roundl((freq_adj_ppb - system->max_freq_adj) / system->tick_resolution_ppb);
-			if (tick > system->max_tick)
-				tick = system->max_tick;
-			freq -= tick * system->tick_resolution_ppb;
-		} else if (freq < -system->max_freq_adj) {
-			tick= -roundl((-freq_adj_ppb - system->max_freq_adj) / system->tick_resolution_ppb);
-			if (tick < system->min_tick)
-				tick = system->min_tick;
-			freq -= tick * system->tick_resolution_ppb;
-		}
+		else if (freq < -system->max_freq_adj)
+			tick = -roundl((-freq_adj_ppb - system->max_freq_adj) / system->tick_resolution_ppb);
+		else
+			tick = 0.0L;
+
+		/* Saturate the tick length adjustment */
+		if (tick > system->max_tick)
+			tick = system->max_tick;
+		else if (tick < system->min_tick)
+			tick = system->min_tick;
+
+		/* Calculate the residual correction after tick length change */
+		freq -= tick * system->tick_resolution_ppb;
 
 		/* Saturate the frequency adjustment */
 		if (freq > system->max_freq_adj)

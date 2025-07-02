@@ -161,6 +161,8 @@ static int parse_servo_log_all_samples(struct sfptpd_config_section *section, co
 				       unsigned int num_params, const char * const params[]);
 static int parse_eligible_interface_types(struct sfptpd_config_section *section, const char *option,
 					  unsigned int num_params, const char * const params[]);
+static int parse_clock_adj_method(struct sfptpd_config_section *section, const char *option,
+				  unsigned int num_params, const char * const params[]);
 
 static int validate_config(struct sfptpd_config_section *section);
 
@@ -515,6 +517,12 @@ static const sfptpd_config_option_t config_general_options[] =
 		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
 		parse_eligible_interface_types,
 		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_PHYSICAL_INTERFACES)},
+	{"clock_adj_method", "<prefer-tickadj | prefer-freqadj>",
+		"Specify whether tick length or frequency adjustment should "
+		"be used for most of the frequency correction",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_clock_adj_method,
+		.dfl = "prefer-tickadj"},
 };
 
 static const sfptpd_config_option_set_t config_general_option_set =
@@ -2171,6 +2179,24 @@ fail:
 }
 
 
+static int parse_clock_adj_method(struct sfptpd_config_section *section, const char *option,
+				  unsigned int num_params, const char * const params[])
+{
+	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
+	assert(num_params == 1);
+
+	if (strcmp(params[0], "prefer-tickadj") == 0) {
+		general->clocks.adj_method = SFPTPD_CLOCK_PREFER_TICKADJ;
+	} else if (strcmp(params[0], "prefer-freqadj") == 0) {
+		general->clocks.adj_method = SFPTPD_CLOCK_PREFER_FREQADJ;
+	} else {
+		return EINVAL;
+	}
+
+	return 0;
+}
+
+
 static int validate_config(struct sfptpd_config_section *general)
 {
 	struct sfptpd_config *config = general->config;
@@ -2270,6 +2296,7 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		new->clocks.num_clocks = 0;
 		new->clocks.no_initial_correction = false;
 		new->clocks.observe_readonly = SFPTPD_DEFAULT_OBSERVE_READONLY_CLOCKS;
+		new->clocks.adj_method = SFPTPD_DEFAULT_CLOCK_ADJ_METHOD;
 		new->epoch_guard = SFPTPD_DEFAULT_EPOCH_GUARD;
 		new->initial_clock_correction = SFPTPD_DEFAULT_INITIAL_CLOCK_CORRECTION;
 
