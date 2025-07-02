@@ -747,17 +747,9 @@ void sfptpd_log_trace(sfptpd_component_id_e component, unsigned int level,
 }
 
 
-void sfptpd_log_stats(FILE *stream, const char *format, ...)
+FILE *sfptpd_log_get_stats_out_stream(void)
 {
-	va_list ap;
-
-	assert(format != NULL);
-
-	if (stats_log != SFPTPD_STATS_LOG_OFF) {
-		va_start(ap, format);
-		vfprintf(stream, format, ap);
-		va_end(ap);
-	}
+	return stats_log == SFPTPD_STATS_LOG_OFF ? NULL : stdout;
 }
 
 

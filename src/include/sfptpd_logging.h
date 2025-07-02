@@ -128,10 +128,12 @@ struct sfptpd_log_time_cache {
 #ifdef SFPTPD_BUILDTIME_CHECKS
 #define sfptpd_log_message(p, f, ...) printf(f, ##__VA_ARGS__)
 #define sfptpd_log_trace(c, l, f, ...) printf(f, ##__VA_ARGS__)
-#define sfptpd_log_stats(s, f, ...) fprintf(s, f, ##__VA_ARGS__)
 #define sfptpd_log_write_state(c, i, f, ...) printf(f, ##__VA_ARGS__)
 #define sfptpd_log_topology_write_field(s, n, f, ...) printf(f, ##__VA_ARGS__)
 #endif
+/* And always define the log stats function this way as it no longer
+ * has anything else to do. */
+#define sfptpd_log_stats(s, f, ...) fprintf(s, f, ##__VA_ARGS__)
 
 
 /** For printing out tables for logging */
@@ -186,13 +188,6 @@ void sfptpd_log_message(int priority, const char *format, ...);
  */
 void sfptpd_log_trace(sfptpd_component_id_e component, unsigned int level,
 		      const char *format, ...);
-
-/** Log statistics. If statistics logging is enabled, writes stats to either
- * stdout or to a file.
- * @param output Output stream
- * @param format Format string followed by a variable list of parameters
- */
-void sfptpd_log_stats(FILE *output, const char *format, ...);
 
 /** Write state information for a clock. This creates a file in the
  * location SFPTPD_STATE_PATH with the name of the specified clock and the
@@ -379,6 +374,11 @@ void sfptpd_log_format_time(struct sfptpd_log_time *time, const struct sfptpd_ti
  * @return Stream pointer. May be NULL if realtime stats are disabled.
  */
 FILE* sfptpd_log_get_rt_stats_out_stream(void);
+
+/** Get stats log stream.
+ * @return Stream pointer of NULL if stats logging disabled.
+ */
+FILE *sfptpd_log_get_stats_out_stream(void);
 
 /** Records number of characters of RT stats written.
  * @param chars The number of characters written.

@@ -932,7 +932,10 @@ static int select_sync_instance(struct sfptpd_engine *engine,
 static void write_rt_stats_log(struct sfptpd_engine *engine,
 			       struct sfptpd_sync_instance_rt_stats_entry *entry)
 {
-	sfptpd_log_render_rt_stat_text(&engine->rt_stats_last, stdout, entry);
+	FILE *output = sfptpd_log_get_stats_out_stream();
+
+	if (output)
+		sfptpd_log_render_rt_stat_text(&engine->rt_stats_last, output, entry);
 }
 
 
