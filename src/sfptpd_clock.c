@@ -2005,9 +2005,9 @@ int sfptpd_clock_adjust_frequency(struct sfptpd_clock *clock, long double freq_a
 		if (system->adj_method == SFPTPD_CLOCK_PREFER_TICKADJ)
 			tick = roundl(freq_adj_ppb / system->tick_resolution_ppb);
 		else if (freq > system->max_freq_adj) /* SFPTPD_CLOCK_PREFER_FREQADJ */
-			tick = roundl((freq_adj_ppb - system->max_freq_adj) / system->tick_resolution_ppb);
+			tick = roundl((freq_adj_ppb - system->max_freq_adj) / system->tick_resolution_ppb) + 1;
 		else if (freq < -system->max_freq_adj)
-			tick = -roundl((-freq_adj_ppb - system->max_freq_adj) / system->tick_resolution_ppb);
+			tick = -roundl((-freq_adj_ppb - system->max_freq_adj) / system->tick_resolution_ppb) - 1;
 		else
 			tick = 0.0L;
 
