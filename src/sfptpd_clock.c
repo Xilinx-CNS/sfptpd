@@ -1995,6 +1995,7 @@ int sfptpd_clock_adjust_frequency(struct sfptpd_clock *clock, long double freq_a
 	if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM) {
 		long double tick;
 		struct sfptpd_clock_system *system = &clock->u.system;
+		long double midpoint = 1000000.0L / system->tick_freq_hz;
 
 		/* Achieve the adjustment by changing the kernel tick length
 		 * (t.tick) and defining a frequency adjustment ratio (t.freq).
@@ -2016,17 +2017,18 @@ int sfptpd_clock_adjust_frequency(struct sfptpd_clock *clock, long double freq_a
 		else if (tick < system->min_tick)
 			tick = system->min_tick;
 
+		/* Adjust the tick length */
+		t.modes |= ADJ_TICK;
+		t.tick = (long)roundl(tick + midpoint);
+
 		/* Calculate the residual correction after tick length change */
-		freq -= tick * system->tick_resolution_ppb;
+		freq -= ((long double) t.tick - midpoint) * system->tick_resolution_ppb;
 
 		/* Saturate the frequency adjustment */
 		if (freq > system->max_freq_adj)
 			freq = system->max_freq_adj;
 		else if (freq < -system->max_freq_adj)
 			freq = -system->max_freq_adj;
-
-		t.modes |= ADJ_TICK;
-		t.tick = (long)roundl(tick + (1000000.0 / system->tick_freq_hz));
 
 		if (clock->cfg_rtc_adjust) {
 			t.modes |= ADJ_STATUS;
