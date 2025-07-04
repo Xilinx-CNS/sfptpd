@@ -2189,6 +2189,8 @@ static int parse_clock_adj_method(struct sfptpd_config_section *section, const c
 		general->clocks.adj_method = SFPTPD_CLOCK_PREFER_TICKADJ;
 	} else if (strcmp(params[0], "prefer-freqadj") == 0) {
 		general->clocks.adj_method = SFPTPD_CLOCK_PREFER_FREQADJ;
+	} else if (strcmp(params[0], "legacy") == 0) {
+		general->clocks.adj_method = SFPTPD_CLOCK_LEGACY_ADJ;
 	} else {
 		return EINVAL;
 	}

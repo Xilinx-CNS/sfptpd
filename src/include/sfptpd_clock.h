@@ -87,6 +87,7 @@ enum sfptpd_time_source {
 enum sfptpd_clock_adj_method {
 	SFPTPD_CLOCK_PREFER_TICKADJ,
 	SFPTPD_CLOCK_PREFER_FREQADJ,
+	SFPTPD_CLOCK_LEGACY_ADJ, /* Used for testing only */
 };
 
 #define SFPTPD_CLOCK_SHORT_NAME_SIZE 16
