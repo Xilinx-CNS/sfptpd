@@ -1948,7 +1948,8 @@ static void on_step_clocks(struct sfptpd_engine *engine)
 		 * offset is not relevent in this case as the NTP module is not
 		 * in charge of disciplining the clock */
 		for (i = 0; i < SFPTPD_CONFIG_CATEGORY_MAX; i++) {
-			if ((1 << i) & SFPTPD_SYNC_MODULE_IS_NTP)
+			if (((1 << i) & SFPTPD_SYNC_MODULE_IS_NTP) &&
+			    engine->sync_modules[i] != NULL)
 				sfptpd_sync_module_step_clock(engine->sync_modules[i],
 							      NULL, &zero);
 		}
