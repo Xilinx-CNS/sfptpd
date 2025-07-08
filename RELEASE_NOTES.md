@@ -1,7 +1,7 @@
 AMD Solarflare Enhanced PTP Daemon
 ==================================
 
-Version: v3.9.0.1002
+Version: v3.9.0.1003
 
 These are the release notes for sfptpd on AMD Solarflare adaptors.
 
@@ -53,12 +53,13 @@ This package is supported on:
 
 - Red Hat Enterprise Linux 7.9
 - Red Hat Enterprise Linux 8.1 - 8.10
-- Red Hat Enterprise Linux 9.0 - 9.5
+- Red Hat Enterprise Linux 9.0 - 9.6
+- Red Hat Enterprise Linux 10.0
 - Canonical Ubuntu Server LTS 20.04, 22.04, 24.04
 - Debian 10 "Buster"
 - Debian 11 "Bullseye"
 - Debian 12 "Bookworm"
-- Linux kernels 3.0 - 6.13
+- Linux kernels 3.0 - 6.15
 
 Other and older platforms and non-amd64 architectures may be compatible with
 sfptpd but are not supported by AMD. Please raise issues and patches for
@@ -131,15 +132,17 @@ Advanced notice of possible future changes
   unicast signalling, not multicast. Unicast signalling is recommended.)
 
 
-Summary of major new features since v3.8.x
-------------------------------------------
+Summary of major changes since v3.8.x
+-------------------------------------
 
 For a full list of changes, see the changelog.
 
-The following major new features are provided in v3.9.x:
+The following major changes are provided in v3.9.x:
 
 - JSON or OpenMetrics stats exported over TCP or Unix socket. (SWPTP-1000)
 - tstool utility provided to perform diagnostic operations on NIC clocks.
+- System clock adjustment fidelity improved when the standard system clock
+  frequency needs correcting by more than 500000ppb (0.05%). (SWPTP-1066)
 
 
 Copyright

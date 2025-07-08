@@ -6,36 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 (c) Copyright 2012-2025 Advanced Micro Devices, Inc.
 
-## [3.9.0.1002] - [Unreleased]
+## [3.9.0.1003] - 2025-07-18
 
 ### Added
 
 - Export stats with OpenMetrics exposition. (SWPTP-1000)
   - Exported by default over Unix socket (`openmetrics_unix off` to disable).
-  - Exported over TCP if configured with `openmetrics_tcp <listen-addr>*`.
+  - Exported over TCP if configured with `openmetrics_tcp <listen-addr>`.
   - Configure real time stats buffer size with `openmetrics_rt_stats_buf`.
   - Specify metrics family prefix with `openmetrics_prefix`.
 - Add `clock_adj_method` option to choose whether to prefer adjustments
   mainly to system clock tick length (the new default) or frequency. (SWPTP-1066)
 - Export real time stats over OpenMetrics HTTP socket. (SWPTP-1385)
-  - For JSON Lines, GET /rt-stats.jsonl
-  - For JSON Seq (RFC7464), GET /rt-stats.json-seq
-  - For sfptpd stats log text, GET /rt-stats.txt
-  - To avoid consuming real time stats, GET /peek/rt-stats.jsonl, etc.
-  - e.g. `curl --unix-socket /run/sfptpd/metrics.sock http://_/rt-stats.jsonl`
+  - For JSON Lines, use /rt-stats.jsonl, for example:
+    `curl --unix-socket /run/sfptpd/metrics.sock http://_/rt-stats.jsonl`
+  - For JSON Seq (RFC7464), use /rt-stats.json-seq
+  - For sfptpd stats log text, use /rt-stats.txt (can be used to access stats
+    with `stats_log off`)
+  - To avoid consuming real time stats from the buffer when reading, insert
+    `peek/` into path
 - Add `phc_dedup` option to identify duplicate non-Solarflare PHC devices
   sharing a single NIC clock and treat as one device. (SWPTP-1348)
   - This option requires a calibration step that may take a few seconds.
   - This is an experimental feature.
-- Add `trace_level all <n>` option or `most` omitting `threading`. (SWPTP-1421)
+- Add `all` and `most` logging modules, e.g. `trace_level all <n>` (SWPTP-1421)
 - Extend PTP ACLs to cover IPv6 addresses. (SWPTP-1536).
 - Add configurable run, state, control and metrics access modes. (SWPTP-1551)
-- Add `servo_log_all_samples` option. (SWPTP-1566)
+- Add `servo_log_all_samples` option to output every sample for secondary
+  servos (16 per second by default) into real-time stats. (SWPTP-1566)
 - Add new clock display format interpolators. (SWPTP-1569)
-- Add `observe_readonly_clocks` option to create passive servos. (SWPTP-1579)
+- Add `observe_readonly_clocks` option to create passive servos for monitoring
+  sync between local clocks not performed by sfptpd. (SWPTP-1579)
 - A PPS sync instance may be created for each external pin associated with an
   interface clock, configured for `pps-in` or `pps-out` functions. (SWPTP-1576)
-- Make determination of what counts as a suitable physical interface for
+- Make the determination of what counts as a suitable physical interface for
   timestamping configurable for experimental and testing purposes. Only the
   default value (Ethernet and MACVLAN interfaces) is supported. (SWPTP-1578)
 - Add `fir_filter_size` option for secondary servos. (SWPTP-1584)
@@ -48,11 +52,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - Issue SWPTP-1066
-  - Fix poor system clock adjustment when frequency error exceeds 500ppm.
+  - Fix poor system clock adjustment when frequency error exceeds 500000ppb.
 - Issue SWPTP-1569
   - Avoid aborting when a clock name would exceed 63 characters.
 - Issue SWPTP-1570
   - Ensure multicast used when multiple PTP instances per interface.
+- Issue SWPTP-1586
+  - Avoid crash on `sfptpdctl stepclocks` when implicit crny instance disabled.
 
 ## [3.8.1.1004] - 2025-02-14
 
