@@ -1816,7 +1816,6 @@ static void ntp_on_clock_control_change(crny_module_t *ntp, struct ntp_state *ne
 		INFO("crny: attempting to restore chronyd clock control state...\n");
 		rc = crny_clock_control(ntp, clock_control);
 		if (rc == 0) {
-			new_state->sys_info.clock_control_enabled = clock_control;
 			INFO("crny: successfully %sabled chronyd clock control\n",
 			     clock_control? "en": "dis");
 		} else {
