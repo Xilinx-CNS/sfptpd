@@ -1812,7 +1812,7 @@ static void ntp_on_clock_control_change(crny_module_t *ntp, struct ntp_state *ne
 
 	/* If we have control, try to stop NTP */
 	if (new_state->sys_info.clock_control_enabled != clock_control &&
-	    (new_state->state != SYNC_MODULE_STATE_DISABLED)) {
+	    (!clock_control || new_state->state != SYNC_MODULE_STATE_DISABLED)) {
 		INFO("crny: attempting to restore chronyd clock control state...\n");
 		rc = crny_clock_control(ntp, clock_control);
 		if (rc == 0) {
