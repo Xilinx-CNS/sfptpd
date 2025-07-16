@@ -113,7 +113,12 @@ sudo docker run \
 
 Host networking is not required if a MACVLAN or IPVLAN is mapped through to the
 container but due to security limitations in the kernel hardware timetamping
-needs to be enabled in the host namespace if this is done.
+needs to be enabled in the host namespace if this is done. A suitable command
+for doing this is:
+
+```sh
+tstool interface set_ts ens1f0 on all
+```
 
 Note that the sfptpd running within a container cannot communicate with
 chronyd, so chronyd must be disabled.
