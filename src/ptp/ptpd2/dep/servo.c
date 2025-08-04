@@ -359,7 +359,12 @@ static bool servo_update(ptp_servo_t *servo)
 
 	offset = sfptpd_ptp_tsd_get_offset_from_master(filtered_delay);
 
-	outlier = sfptpd_peirce_filter_update(servo->peirce_filt, offset);
+	/* Get monotonic timestamp for the Peirce filter */
+	struct sfptpd_timespec timestamp = sfptpd_ptp_tsd_get_monotonic_time(&servo->timestamps);
+
+	outlier = sfptpd_peirce_filter_update(servo->peirce_filt, offset,
+					      servo->frequency_adjustment - servo->frequency_correction,
+					      &timestamp);
 	servo->counters.outliers_num_samples += 1;
 	if (outlier) {
 		/* We have an outlier so don't update the offset from master or

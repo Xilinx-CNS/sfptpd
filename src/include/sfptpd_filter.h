@@ -102,8 +102,16 @@ struct sfptpd_peirce_filter {
 	/* Index where next delta will be written */
 	unsigned int write_idx;
 
-	/* Array of data samples */
-	long double data[0];
+	/* Running sum of cumulative drift to avoid recalculating on each update */
+	long double cumulative_drift_sum_ns;
+
+	/* Update counter for periodic drift recalculation to prevent numerical error accumulation */
+	unsigned int update_count;
+
+	/* Arrays of data samples, timestamps and pre-computed drift values. */
+	long double *data;
+	struct sfptpd_timespec *timestamps;
+	long double *drift_values_ns;
 };
 
 /** Minimum number of samples of the Peirce filter to operate correctly */
@@ -111,6 +119,10 @@ struct sfptpd_peirce_filter {
 
 /** Maximum supported size of Peirce filter */
 #define SFPTPD_PEIRCE_FILTER_SAMPLES_MAX 60
+
+/** Period for recalculating cumulative drift to prevent numerical error accumulation.
+ * Every X ring buffer overflows, we recalculate cumulative drift from scratch. */
+#define SFPTPD_PEIRCE_FILTER_RECALCULATION_PERIOD 100
 
 /** Forward declaration of Peirce filter */
 struct sfptpd_peirce_filter;
@@ -271,10 +283,14 @@ void sfptpd_peirce_filter_reset(struct sfptpd_peirce_filter *filter);
 /** Update the peirce filter with new sample data.
  * @param filter Pointer to filter instance
  * @param sample New data sample
+ * @param freq_adj Frequency adjustment applied during the recent sample period
+ * @param timestamp Timestamp when the sample was captured
  * @return 0 or ERANGE according to whether the data is considered an outlier.
  */
 int sfptpd_peirce_filter_update(struct sfptpd_peirce_filter *filter,
-			        long double sample);
+			        long double sample,
+			        long double freq_adj,
+			        struct sfptpd_timespec *timestamp);
 
 
 /** Get the Peirce filter criterion
