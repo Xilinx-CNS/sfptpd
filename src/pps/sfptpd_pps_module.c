@@ -1585,8 +1585,17 @@ static void pps_on_pps_event(pps_module_t *pps,
 			/* Apply the outlier filter. If the sample is detected
 			 * as an outlier then we do not adjust the clock */
 			if (instance->outlier_filter != NULL) {
+
+				/* Note: time parameter - We use the hardware timestamp from the PPS event
+				 * for the Peirce filter. This provides the "actual" time when the PPS pulse
+				 * occurred. Since we process a historic event here (which could be up to
+				 * PPS_POLL_INTERVAL_NS (250ms) later due to polling), we cannot query
+				 * the monotonic clock to get sample capture time and pass it to the
+				 * sfptpd_peirce_filter_update function (like we do for the PTP module).  */
 				rc = sfptpd_peirce_filter_update(instance->outlier_filter,
-								 instance->pps_period_ns);
+								 instance->pps_period_ns,
+								 instance->freq_adjust_ppb - instance->freq_adjust_base,
+								 time);
 				if (rc != 0) {
 					TRACE_L3("pps %s: outlier detected- period %0.3Lf\n",
 						 SFPTPD_CONFIG_GET_NAME(instance->config), 

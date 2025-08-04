@@ -315,18 +315,31 @@ struct sfptpd_peirce_filter *sfptpd_peirce_filter_create(unsigned int max_sample
 {
 	struct sfptpd_peirce_filter *new;
 	size_t size;
+	char *mem_ptr;
 
 	assert((max_samples > 0) && (max_samples <= SFPTPD_PEIRCE_FILTER_SAMPLES_MAX));
 	assert((outlier_weighting >= 0.0) && (outlier_weighting <= 1.0));
 
-	/* Allocate sufficient memory for the structure and the data samples */
-	size = sizeof(*new) + (max_samples * sizeof(long double));
+	/* Allocate sufficient memory for the structure, data samples,
+	 * drift values and their time records */
+	size = sizeof(*new) +
+	       (max_samples * sizeof(long double)) +           /* data samples */
+	       (max_samples * sizeof(struct sfptpd_timespec)) + /* timestamps */
+	       (max_samples * sizeof(long double));             /* drift values */
 
 	new = (struct sfptpd_peirce_filter *)calloc(1, size);
 	if (new == NULL) {
 		CRITICAL("failed to allocate memory for Peirce filter\n");
 		return NULL;
 	}
+
+	/* Setup pointers to the arrays allocated after the structure */
+	mem_ptr = (char *)new + sizeof(*new);
+	new->data = (long double *)mem_ptr;
+	mem_ptr += max_samples * sizeof(long double);
+	new->timestamps = (struct sfptpd_timespec *)mem_ptr;
+	mem_ptr += max_samples * sizeof(struct sfptpd_timespec);
+	new->drift_values_ns = (long double *)mem_ptr;
 
 	new->max_samples = max_samples;
 	new->outlier_weighting = outlier_weighting;
@@ -349,16 +362,47 @@ void sfptpd_peirce_filter_reset(struct sfptpd_peirce_filter *filter)
 	sfptpd_stats_std_dev_init(&filter->std_dev);
 	filter->num_samples = 0;
 	filter->write_idx = 0;
+	filter->cumulative_drift_sum_ns = 0.0;
+	filter->update_count = 0;
+
+	memset(filter->data, 0, filter->max_samples * sizeof(long double));
+	memset(filter->timestamps, 0, filter->max_samples * sizeof(struct sfptpd_timespec));
+	memset(filter->drift_values_ns, 0, filter->max_samples * sizeof(long double));
 }
 
 
 int sfptpd_peirce_filter_update(struct sfptpd_peirce_filter *filter,
-			        long double sample)
+			        long double sample,
+			        long double freq_adj,
+			        struct sfptpd_timespec *timestamp)
 {
 	long double sd, mean, deviation, criterion;
+	long double current_drift_ns = 0.0;
+	long double cumulative_drift_ns = 0.0;
 	int rc = 0;
 
 	assert(filter != NULL);
+
+	/* Calculate drift for this sample. Drift is a recently applied frequency scaling rate
+	 * multiplied by time delta between the current and the last sample.  This will tell us
+	 * by how much we shifted our time base when analyzing a new sample. */
+	if (filter->num_samples > 0) {
+		struct sfptpd_timespec duration;
+		long double duration_s;
+
+		unsigned int prev_idx = (filter->write_idx + filter->max_samples - 1) % filter->max_samples;
+
+		sfptpd_time_subtract(&duration, timestamp, &filter->timestamps[prev_idx]);
+		duration_s = sfptpd_time_timespec_to_float_s(&duration);
+
+		current_drift_ns = freq_adj * duration_s;
+	}
+
+	/* Calculate cumulative_drift - add drift from current sample and remove from the oldest */
+	cumulative_drift_ns = filter->cumulative_drift_sum_ns + fabsl(current_drift_ns);
+	if (filter->num_samples >= filter->max_samples) {
+		cumulative_drift_ns -= fabsl(filter->drift_values_ns[filter->write_idx]);
+	}
 
 	/* If we have enough samples, apply the filter... */
 	if (filter->num_samples >= SFPTPD_PEIRCE_FILTER_SAMPLES_MIN) {
@@ -368,20 +412,21 @@ int sfptpd_peirce_filter_update(struct sfptpd_peirce_filter *filter,
 		criterion = peirce_filter_get_criterion(filter->num_samples);
 
 		/* If the absolute deviation of this sample is greater than
-		 * the residual multiplied by the standard deviation, we
-		 * consider that the sample is an outlier and return ERANGE.
+		 * the residual multiplied by the standard deviation plus the
+		 * cumulative drift, we consider that the sample is an outlier
+		 * and return ERANGE.
 		 * 
 		 * If we find an outlier, we still need to include the sample
 		 * in the stats such that the filter adapts if the quality of
 		 * the samples improve or degrade over time. */
 		deviation = sample - mean;
-		if (fabsl(deviation) > criterion * sd) {
+		if (fabsl(deviation) > criterion * sd + cumulative_drift_ns) {
 			rc = ERANGE;
 		}
 
 		TRACE_L5("peirce: num samples %d, mean %Lf, sd %Lf, "
-			 "sample %Lf, deviation %Lf, rc %d\n",
-			 filter->num_samples, mean, sd, sample, deviation, rc);
+			 "sample %Lf, deviation %Lf, cumulative drift %Lf, rc %d\n",
+			 filter->num_samples, mean, sd, sample, deviation, cumulative_drift_ns, rc);
 
 		if (rc == ERANGE) {
 			/* Apply the weighting factor and modify the sample */
@@ -403,8 +448,30 @@ int sfptpd_peirce_filter_update(struct sfptpd_peirce_filter *filter,
 	/* Update the standard deviation measure with the new data sample */
 	sfptpd_stats_std_dev_add_sample(&filter->std_dev, sample);
 
-	/* Store the data sample so that we can remove it later */
+	/* Update filter internals */
 	filter->data[filter->write_idx] = sample;
+	filter->timestamps[filter->write_idx] = *timestamp;
+	filter->drift_values_ns[filter->write_idx] = current_drift_ns;
+	filter->cumulative_drift_sum_ns = cumulative_drift_ns;
+	filter->update_count++;
+
+	/* Recalculate cumulative drift sum from scratch to clear all numerical errors */
+	if (filter->num_samples > 0 && (filter->update_count % (filter->max_samples * SFPTPD_PEIRCE_FILTER_RECALCULATION_PERIOD) == 0)) {
+		long double recalculated_sum = 0.0;
+		int i;
+
+		for (i = 0; i < filter->num_samples; i++) {
+			recalculated_sum += fabsl(filter->drift_values_ns[i]);
+		}
+
+		/* Replace the accumulated sum with the recalculated one */
+		filter->cumulative_drift_sum_ns = recalculated_sum;
+
+		TRACE_L5("peirce: periodic recalculation at update %u, "
+			 "recalculated cumulative drift  %Lf ns\n",
+			 filter->update_count, recalculated_sum);
+	}
+
 	filter->write_idx++;
 	if (filter->write_idx >= filter->max_samples)
 		filter->write_idx = 0;
