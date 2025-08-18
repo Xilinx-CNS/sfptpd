@@ -59,6 +59,7 @@ This package is supported on:
 - Debian 10 "Buster"
 - Debian 11 "Bullseye"
 - Debian 12 "Bookworm"
+- Debian 13 "Trixie"
 - Linux kernels 3.0 - 6.15
 
 Other and older platforms and non-amd64 architectures may be compatible with
