@@ -218,11 +218,15 @@ static int test_outlier_filter(void)
 	long double data[MAX_PEIRCE_SAMPLES];
 	unsigned int num_samples, i, j, s, total, outliers;
 	struct sfptpd_stats_std_dev stat;
+	struct sfptpd_timespec timestamp;
 	struct sfptpd_peirce_filter *filter;
 	int r;
 
 	outliers = 0;
 	total = 0;
+
+	/* Initialize timestamp for testing */
+	sfclock_gettime(CLOCK_MONOTONIC, &timestamp);
 
 	/* NUM_PEIRCE_ITERATIONS Iterations */
 	for (i = 0; i < NUM_PEIRCE_ITERATIONS; i++) {
@@ -245,7 +249,11 @@ static int test_outlier_filter(void)
 		for (s = 0; s < num_samples; s++) {
 			data[s] = appox_normal();
 
-			r = sfptpd_peirce_filter_update(filter, data[s]);
+			/* Simulate time progression */
+			timestamp.nsec += 1000000; /* Add 1ms */
+			if (timestamp.nsec >= 1000000000) { timestamp.sec++; timestamp.nsec -= 1000000000; }
+
+			r = sfptpd_peirce_filter_update(filter, data[s], 0.0, &timestamp);
 			if (r != 0)
 				outliers++;
 
@@ -258,7 +266,11 @@ static int test_outlier_filter(void)
 				data[s] = appox_normal();
 				sfptpd_stats_std_dev_add_sample(&stat, data[s]);
 
-				r = sfptpd_peirce_filter_update(filter, data[s]);
+				/* Simulate time progression */
+				timestamp.nsec += 1000000; /* Add 1ms */
+				if (timestamp.nsec >= 1000000000) { timestamp.sec++; timestamp.nsec -= 1000000000; }
+
+				r = sfptpd_peirce_filter_update(filter, data[s], 0.0, &timestamp);
 				if (r != 0)
 					outliers ++;
 			}
