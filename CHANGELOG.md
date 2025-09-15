@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 (c) Copyright 2012-2025 Advanced Micro Devices, Inc.
 
-## [3.9.0.1003] - 2025-07-18
+## [3.9.0.1004] - Unreleased
 
 ### Added
 
@@ -42,6 +42,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Make the determination of what counts as a suitable physical interface for
   timestamping configurable for experimental and testing purposes. Only the
   default value (Ethernet and MACVLAN interfaces) is supported. (SWPTP-1578)
+- Feed frequency adjustment into Peirce Criterion to allow for expected
+  drift. (SWPTP-1598)
 - Add `fir_filter_size` option for secondary servos. (SWPTP-1584)
 - Add hardware clock control and diagnostic utility `tstool`.
 
@@ -59,6 +61,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Ensure multicast used when multiple PTP instances per interface.
 - Issue SWPTP-1586
   - Avoid crash on `sfptpdctl stepclocks` when implicit crny instance disabled.
+- Issue SWPTP-1590
+  - Fix clock control and system clock blocking behaviour when chrony state
+    changes unexpectedly.
+- Issue SWPTP-1597
+  - Eliminate risk of file descriptor leak in check for incompatible
+    programs running.
 
 ## [3.8.1.1004] - 2025-02-14
 
