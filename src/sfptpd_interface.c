@@ -35,7 +35,6 @@
 #include <arpa/inet.h>
 #include <regex.h>
 
-#include "efx_ioctl.h"
 #include "sfptpd_logging.h"
 #include "sfptpd_config.h"
 #include "sfptpd_general_config.h"
@@ -149,9 +148,6 @@ struct sfptpd_interface {
 
 	/* Indicates that the associated PTP clock supports the PHC API */
 	bool clock_supports_phc;
-
-	/* Indicates that the driver supports the EFX IOCTL */
-	bool driver_supports_efx;
 
 	/* Timestamping capabilities structure */
 	struct ethtool_ts_info ts_info;
@@ -793,29 +789,6 @@ static void interface_populate_ts_info(struct sfptpd_interface *interface)
 }
 
 
-static void interface_check_efx_support(struct sfptpd_interface *interface)
-{
-	struct efx_sock_ioctl req;
-	int rc;
-
-	assert(interface != NULL);
-
-	if ((interface->class == SFPTPD_INTERFACE_SFC ||
-	    interface->link.type == SFPTPD_LINK_MACVLAN) &&
-	    !interface->driver_supports_efx) {
-
-		memset(&req, 0, sizeof(req));
-		req.cmd = EFX_TS_SETTIME;
-		req.u.ts_settime.iswrite = 0;
-
-		rc = sfptpd_interface_ioctl(interface, SIOCEFX, &req);
-		if (rc != EOPNOTSUPP) {
-			interface->driver_supports_efx = true;
-		}
-	}
-}
-
-
 /* Must be called after interface_get_versions to populate driver info */
 static void interface_driver_stats_init(struct sfptpd_interface *interface)
 {
@@ -1095,16 +1068,12 @@ static int interface_init(const struct sfptpd_link *link, const char *sysfs_dir,
 	/* Get the timestamping capabilities of the interface */
 	interface_populate_ts_info(interface);
 
-	/* Check whether the driver supports the EFX ioctl */
-	interface_check_efx_support(interface);
-
 	/* Check whether the device supports PHC */
 	(void) interface_is_ptp_capable(interface->name, &interface->ts_info);
 	snprintf(phc_num, sizeof phc_num, "(%d)", interface->ts_info.phc_index);
 
-	TRACE_L3("interface %s: hw %s, flags%s%s%s\n",
+	TRACE_L3("interface %s: hw %s, flags%s%s\n",
 		 interface->name, interface->mac_string,
-		 interface->driver_supports_efx ? " efx" : "",
 		 interface->ts_info.phc_index != -1 ? " phc" :"",
 		 interface->ts_info.phc_index != -1 ? phc_num : "");
 	if (interface->pci_vendor_id != 0)
@@ -1719,24 +1688,20 @@ struct sfptpd_clock *sfptpd_interface_get_clock(struct sfptpd_interface *interfa
 
 
 void sfptpd_interface_get_clock_device_idx(const struct sfptpd_interface *interface,
-					   bool *supports_phc, int *device_idx,
-					   bool *supports_efx)
+					   bool *supports_phc, int *device_idx)
 {
 	assert(interface != NULL);
 	assert(supports_phc != NULL);
-	assert(supports_efx != NULL);
 	assert(device_idx != NULL);
 
 	if (!interface_get_canonical_with_lock((struct sfptpd_interface **) &interface)) {
 		*supports_phc = false;
-		*supports_efx = false;
 		*device_idx = -1;
 		return;
 	}
 
 	assert(interface->magic == SFPTPD_INTERFACE_MAGIC);
 	*supports_phc = interface->clock_supports_phc;
-	*supports_efx = interface->driver_supports_efx;
 	*device_idx = interface->ts_info.phc_index;
 	interface_unlock();
 }
@@ -2299,7 +2264,6 @@ int sfptpd_interface_reassign_to_nic(int from_phc, int to_phc)
 		intf->ts_info = nic->ts_info;
 		intf->clock = nic->clock;
 		intf->clock_supports_phc = nic->clock_supports_phc;
-		intf->driver_supports_efx = nic->driver_supports_efx;
 		INFO("interface: reassigned %s to nic id %d\n",
 		     intf->name, nic->nic_id);
 	}

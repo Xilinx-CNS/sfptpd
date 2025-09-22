@@ -815,10 +815,18 @@ static int clock_compare_using_efx(void *context, struct sfptpd_timespec *diff)
 	struct efx_sock_ioctl req = { .cmd = EFX_TS_SYNC };
 	int rc;
 
+	if (!clock->u.nic.supports_efx)
+		return EOPNOTSUPP;
+
 	rc = sfptpd_interface_ioctl(clock->u.nic.primary_if, SIOCEFX, &req);
-	if (rc == 0)
+	if (rc == 0) {
 		/* Store the difference- this is (Tptp - Tsys) */
 		sfptpd_time_init(diff, req.u.ts_sync.ts.tv_sec, req.u.ts_sync.ts.tv_nsec, 0);
+	} else if (rc == EOPNOTSUPP) {
+		clock->u.nic.supports_efx = false;
+		TRACE_L3("clock %s: efx time difference ioctl not available\n",
+			 clock->long_name);
+	}
 
 	return rc;
 }
@@ -832,7 +840,6 @@ static int renew_clock(struct sfptpd_clock *clock)
 	int i, nic_id;
 	int phc_idx;
 	bool supports_phc = false;
-	bool supports_efx;
 	bool change = false;
 	int rc = 0;
 
@@ -866,15 +873,13 @@ static int renew_clock(struct sfptpd_clock *clock)
 			primary = interface;
 			sfptpd_interface_get_clock_device_idx(interface,
 							      &supports_phc,
-							      &phc_idx,
-							      &supports_efx);
+							      &phc_idx);
 		}
 	}
 
 	if (primary != clock->u.nic.primary_if ||
 	    (supports_phc && clock->u.nic.phc == NULL) ||
 	    (!supports_phc && clock->u.nic.phc != NULL) ||
-	    supports_efx != clock->u.nic.supports_efx ||
 	    phc_idx != clock->u.nic.device_idx)
 		change = true;
 
@@ -896,7 +901,7 @@ static int renew_clock(struct sfptpd_clock *clock)
 		clock->u.nic.supports_sync_status_reporting = !clock->cfg_avoid_efx;
 		clock->u.nic.supports_efx_pps = !clock->cfg_avoid_efx;
 		clock->u.nic.device_idx = phc_idx;
-		clock->u.nic.supports_efx = supports_efx;
+		clock->u.nic.supports_efx = !clock->cfg_avoid_efx;
 
 		sfptpd_format(clock_format_specifiers, clock, clock->short_name,
 			      sizeof clock->short_name, general_config->clocks.format_short);
@@ -1111,7 +1116,6 @@ static void sfptpd_clock_init_interface(int nic_id,
 					struct sfptpd_interface *interface) {
 	struct sfptpd_clock *clock;
 	bool supports_phc;
-	bool supports_efx;
 	int clock_dev_idx, rc;
 	struct sfptpd_config_general *general_config;
 	sfptpd_clock_type_t type = SFPTPD_CLOCK_TYPE_NON_SFC;
@@ -1128,8 +1132,7 @@ static void sfptpd_clock_init_interface(int nic_id,
 			is_new = true;
 			sfptpd_interface_get_clock_device_idx(interface,
 							      &supports_phc,
-							      &clock_dev_idx,
-							      &supports_efx);
+							      &clock_dev_idx);
 			if (clock_dev_idx < 0) {
 				WARNING("clock: interface %s of nic %d is no longer PTP capable",
 					sfptpd_interface_get_name(interface),
@@ -2528,7 +2531,7 @@ int sfptpd_clock_pps_get_fd(struct sfptpd_clock *clock)
 	    ((clock->type == SFPTPD_CLOCK_TYPE_NON_SFC && clock->cfg_non_sfc_nics) ||
 	     (clock->type == SFPTPD_CLOCK_TYPE_XNET) ||
 	     (clock->type == SFPTPD_CLOCK_TYPE_SFC &&
-	      (!clock->u.nic.supports_efx || clock->cfg_avoid_efx)))) {
+	      (!clock->u.nic.supports_efx_pps || clock->cfg_avoid_efx)))) {
 		return sfptpd_phc_get_pps_fd(clock->u.nic.phc);
 	} else {
 		return -1;
@@ -2553,7 +2556,7 @@ int sfptpd_clock_pps_get(struct sfptpd_clock *clock, uint32_t *sequence_num,
 	    ((clock->type == SFPTPD_CLOCK_TYPE_NON_SFC && clock->cfg_non_sfc_nics) ||
 	     (clock->type == SFPTPD_CLOCK_TYPE_XNET) ||
 	     (clock->type == SFPTPD_CLOCK_TYPE_SFC &&
-	      (!clock->u.nic.supports_efx || clock->cfg_avoid_efx)))) {
+	      (!clock->u.nic.supports_efx_pps || clock->cfg_avoid_efx)))) {
 		rc = sfptpd_phc_get_pps_event(clock->u.nic.phc, time, sequence_num);
 		goto finish;
 	}
@@ -2615,7 +2618,7 @@ const char *sfptpd_clock_get_pps_method(struct sfptpd_clock *clock)
 
 	if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM) {
 		return "n/a";
-	} else if (clock->u.nic.supports_efx &&
+	} else if (clock->u.nic.supports_efx_pps &&
 		   !clock->cfg_avoid_efx) {
 		return "efx";
 	} else if (clock->u.nic.phc != NULL) {

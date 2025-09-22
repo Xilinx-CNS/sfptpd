@@ -454,7 +454,6 @@ static int intf_command(int argc, char *argv[])
 	char sof_str[128];
 	char tx_type_str[20];
 	char rx_filter_str[20];
-	bool supports_efx;
 	bool supports_phc;
 	unsigned long rx;
 	unsigned long tx;
@@ -504,7 +503,7 @@ static int intf_command(int argc, char *argv[])
 	case INTF_CMD_INFO:
 		intf = interfaces[0];
 		clock = sfptpd_interface_get_clock(intf);
-		sfptpd_interface_get_clock_device_idx(intf, &supports_phc, &device_idx, &supports_efx);
+		sfptpd_interface_get_clock_device_idx(intf, &supports_phc, &device_idx);
 		sfptpd_interface_get_ts_info(intf, &ts_info);
 		sfptpd_interface_ioctl(intf, SIOCGHWTSTAMP, &so_ts_req);
 		format_flags(tx_types_str, sizeof tx_types_str, tx_types, NUM_TX_TYPES, ts_info.tx_types);
@@ -516,7 +515,7 @@ static int intf_command(int argc, char *argv[])
 		       "clock: %s\n"
 		       "mac-address: %s\n"
 		       "fw-version: %s\n"
-		       "supported-apis:%s%s\n"
+		       "supported-apis:%s (efx not probed)\n"
 		       "supported-tx-modes:%s\n"
 		       "supported-rx-filters:%s\n"
 		       "supported-sof-flags:%s\n"
@@ -527,7 +526,6 @@ static int intf_command(int argc, char *argv[])
 		       sfptpd_interface_get_mac_string(intf),
 		       sfptpd_interface_get_fw_version(intf),
 		       supports_phc ? " phc" : "",
-		       supports_efx ? " efx" : "",
 		       tx_types_str,
 		       rx_filters_str,
 		       sof_str,

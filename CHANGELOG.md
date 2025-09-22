@@ -63,6 +63,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Issue SWPTP-1590
   - Fix clock control and system clock blocking behaviour when chrony state
     changes unexpectedly.
+- Issue SWPTP-1595
+  - Evade driver warnings in logs by not probing for recently-removed private
+    ioctls unless preferred Linux method not available.
 - Issue SWPTP-1597
   - Eliminate risk of file descriptor leak in check for incompatible
     programs running.

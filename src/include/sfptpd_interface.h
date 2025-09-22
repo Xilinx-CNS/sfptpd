@@ -137,11 +137,9 @@ struct sfptpd_clock *sfptpd_interface_get_clock(struct sfptpd_interface *interfa
  * @param interface Pointer to interface instance
  * @param supports_phc Returned value - supports PHC
  * @param device_idx Returned unique clock device index
- * @param supports_efx Returned value - supports EFX ioctl
  */
 void sfptpd_interface_get_clock_device_idx(const struct sfptpd_interface *interface,
-					   bool *supports_phc, int *device_idx,
-					   bool *supports_efx);
+					   bool *supports_phc, int *device_idx);
 
 /** Notify that PHC operations do not succeed so should be avoided. The
  * returned device index is used as a pseudo clock identifier enabling
