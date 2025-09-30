@@ -1503,10 +1503,12 @@ static void close_listeners(void)
 {
 	struct listener *l;
 	struct listener **hd = &metrics.listeners;
+	struct linger linger = { .l_onoff = 1, .l_linger = 0 };
 
 	while ((l = *hd)) {
 		*hd = l->next;
 		sfptpd_thread_user_fd_remove(l->fd);
+		setsockopt(l->fd, SOL_SOCKET, SO_LINGER, &linger, sizeof linger);
 		close(l->fd);
 		free(l);
 	}
@@ -1515,6 +1517,7 @@ static void close_listeners(void)
 
 void sfptpd_metrics_listener_close(void)
 {
+	struct linger linger = { .l_onoff = 1, .l_linger = 0 };
 	unsigned queries;
 	int qi;
 
@@ -1525,6 +1528,8 @@ void sfptpd_metrics_listener_close(void)
 		     __builtin_popcount(queries);
 		     qi = __builtin_ctz(queries &= ~ (1 << qi))) {
 			sfptpd_thread_user_fd_remove(metrics.query[qi].fd);
+			setsockopt(metrics.query[qi].fd,
+				   SOL_SOCKET, SO_LINGER, &linger, sizeof linger);
 			close(metrics.query[qi].fd);
 			metrics.active_queries &= ~(1 << qi);
 		}
