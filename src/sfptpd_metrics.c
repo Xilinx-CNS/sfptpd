@@ -1617,6 +1617,9 @@ static int listen_unix(struct sfptpd_config_general *general_config)
 	int fd = -1;
 	int rc;
 
+	if (!general_config->openmetrics.unix)
+		return 0;
+
 	/* Size-up path */
 	sz = sfptpd_format(sfptpd_log_get_format_specifiers(), NULL,
 			   NULL, 0,

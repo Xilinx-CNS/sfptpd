@@ -2361,7 +2361,7 @@ static int engine_start_metrics(struct sfptpd_engine *engine)
 	struct sfptpd_config_metrics *openmetrics = &engine->general_config->openmetrics;
 	int rc;
 
-	if (!openmetrics->unix)
+	if (!openmetrics->unix && openmetrics->num_tcp_addrs == 0)
 		return 0;
 
 	rc = sfptpd_metrics_init();
