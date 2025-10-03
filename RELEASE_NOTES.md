@@ -30,6 +30,7 @@ The daemon contained in this package supports the following adapters:
    - AMD Solarflare(TM) 8000 Series Ethernet Adapter (with Plus license)
    - AMD Solarflare(TM) X2 Series Low Latency Ethernet Adapter
    - AMD Alveo(TM) X3 Series Low Latency Ethernet Adapter
+   - AMD Solarflare(TM) X4 Series Ethernet Adapter
 
 - Support for other adapters is best effort. Particular attention
   should be paid when some drivers advertise an independent physical clock
