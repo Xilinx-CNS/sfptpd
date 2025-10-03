@@ -1,7 +1,7 @@
 AMD Solarflare Enhanced PTP Daemon
 ==================================
 
-Version: v3.9.0.1004
+Version: v3.9.0.1005
 
 These are the release notes for sfptpd on AMD Solarflare adaptors.
 
@@ -24,20 +24,14 @@ NIC clocks and remote time sources and sinks using PTP, NTP and PPS.
 Supported hardware platforms
 ----------------------------
 
-The daemon contained in this package supports the following AMD adapters:
+The daemon contained in this package supports the following adapters:
 
-- AMD Solarflare Server Adapters:
-   - XtremeScale(TM) SFN8522 Dual Port SFP+ Server Adapter (with Plus license)
-   - XtremeScale(TM) SFN8542 Dual Port QSFP+ Server Adapter (with Plus license)
-   - XtremeScale(TM) SFN8042 Dual Port QSFP+ Server Adapter (with Plus license)
-   - XtremeScale(TM) SFN8722 Dual Port SFP+ OCP Server Adapter (with Plus license)
-   - XtremeScale(TM) X2522 10GbE Adapter
-   - XtremeScale(TM) X2522-25 10/25GbE Adapter
-   - XtremeScale(TM) X2541 Single Port 10/25/40/50/100GbE Adapter
-   - XtremeScale(TM) X2542 Dual Port 10/25/40/50/100GbE Adapter
-   - Alveo(TM) XtremeScale(TM) X3522 low latency network adapter
+- AMD server adapters:
+   - AMD Solarflare(TM) 8000 Series Ethernet Adapter (with Plus license)
+   - AMD Solarflare(TM) X2 Series Low Latency Ethernet Adapter
+   - AMD Alveo(TM) X3 Series Low Latency Ethernet Adapter
 
-- Support for non-Solarflare adapters is best effort. Particular attention
+- Support for other adapters is best effort. Particular attention
   should be paid when some drivers advertise an independent physical clock
   device for each interface when they are in fact the same underlying clock,
   which can be mitigated by listing clocks explicitly.

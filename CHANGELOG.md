@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 (c) Copyright 2012-2025 Advanced Micro Devices, Inc.
 
-## [3.9.0.1004] - Unreleased
+## [3.9.0.1005] - Unreleased
 
 ### Added
 
@@ -15,14 +15,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Exported over TCP if configured with `openmetrics_tcp <listen-addr>`.
   - Configure real time stats buffer size with `openmetrics_rt_stats_buf`.
   - Specify metrics family prefix with `openmetrics_prefix`.
-- Add `clock_adj_method` option to choose whether to prefer adjustments
-  mainly to system clock tick length (the new default) or frequency. (SWPTP-1066)
 - Export real time stats over OpenMetrics HTTP socket. (SWPTP-1385)
-  - For JSON Lines, use /rt-stats.jsonl, for example:
+  - For JSON Lines, use path `/rt-stats.jsonl`, for example:
     `curl --unix-socket /run/sfptpd/metrics.sock http://_/rt-stats.jsonl`
-  - For JSON Seq (RFC7464), use /rt-stats.json-seq
-  - For sfptpd stats log text, use /rt-stats.txt (can be used to access stats
-    with `stats_log off`)
+  - For JSON Seq (RFC7464), use path `/rt-stats.json-seq`
+  - For sfptpd stats log text, use path `/rt-stats.txt` (can be used to access
+    stats with `stats_log off`)
   - To avoid consuming real time stats from the buffer when reading, insert
     `peek/` into path
 - Add `phc_dedup` option to identify duplicate non-Solarflare PHC devices
@@ -31,14 +29,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - This is an experimental feature.
 - Add `all` and `most` logging modules, e.g. `trace_level all <n>` (SWPTP-1421)
 - Extend PTP ACLs to cover IPv6 addresses. (SWPTP-1536).
-- Add configurable run, state, control and metrics access modes. (SWPTP-1551)
+- Make access modes configurable for runtime files and sockets. (SWPTP-1551)
 - Add `servo_log_all_samples` option to output every sample for secondary
   servos (16 per second by default) into real-time stats. (SWPTP-1566)
-- Add new clock display format interpolators. (SWPTP-1569)
+- Add new clock display format interpolators `%i`, `%n` and `%m`. (SWPTP-1569)
 - Add `observe_readonly_clocks` option to create passive servos for monitoring
   sync between local clocks not performed by sfptpd. (SWPTP-1579)
-- A PPS sync instance may be created for each external pin associated with an
-  interface clock, configured for `pps-in` or `pps-out` functions. (SWPTP-1576)
+- Multiple PPS sync instances may be created for a single interface and
+  external connectors individually configured for `pps-in` or `pps-out`
+  functions, for boards where this is needed. (SWPTP-1576)
 - Make the determination of what counts as a suitable physical interface for
   timestamping configurable for experimental and testing purposes. Only the
   default value (Ethernet and MACVLAN interfaces) is supported. (SWPTP-1578)
@@ -49,7 +48,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- Default control socket moved to /run/sfptpd/control-v1.sock (SWPTP-1551)
+- Default control socket moved to `/run/sfptpd/control-v1.sock` (SWPTP-1551)
 
 ### Fixed
 
