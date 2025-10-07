@@ -29,7 +29,6 @@ Recommends:
 Suggests:
  ntpsec | ntp,
 Conflicts:
- ${runit:Conflicts},
  systemd-timesyncd,
  openntpd,
 Breaks:
@@ -37,9 +36,11 @@ Breaks:
 Description: System time sync daemon supporting PTP, NTP and 1PPS
  Use multiple PTP an PPS sources and sync local clocks together in one
  integrated application with high quality timestamp filtering supporting
- active-backup and active-active bonds, VLANs, ntpsec/chrony integration, live
- stats and long term monitoring. Implements IEEE Std 1588-2019 over UDP with
- the default and enterprise profiles.
+ active-backup and active-active bonds, VLANs, ntpsec/chrony integration,
+ live stats, long term monitoring and a built-in OpenMetrics exporter.
+ .
+ Implements IEEE Std 1588-2019 over UDP with the default and enterprise
+ profiles.
 
 Package: sfptpd-python3
 Architecture: all
