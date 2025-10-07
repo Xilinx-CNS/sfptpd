@@ -144,7 +144,7 @@ install: sfptpd sfptpdctl sfptpd_priv_helper tstool $(addprefix $(BUILD_DIR)/,sf
 	install -m 755 -p -D $(BUILD_DIR)/sfptpdctl $(INST_SBINDIR)/sfptpdctl
 	install -m 755 -p -D $(BUILD_DIR)/tstool $(INST_SBINDIR)/tstool
 	[ -n "$(filter sfptpmon,$(INST_OMIT))" ] || install -m 755 -p -D scripts/sfptpmon $(INST_SBINDIR)/sfptpmon
-	install -m 644 -p -D scripts/sfptpd.env $(INST_DEFAULTSDIR)/sfptpd
+	[ -n "$(filter env,$(INST_OMIT))" ]] || install -m 644 -p -D scripts/sfptpd.env $(INST_DEFAULTSDIR)/sfptpd
 	[ -z "$(filter systemd,$(INST_INITS))" ] || install -m 644 -p -D $(BUILD_DIR)/sfptpd.service $(INST_UNITDIR)/sfptpd.service
 	[ -n "$(filter license,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGLICENSEDIR) LICENSE PTPD2_COPYRIGHT NTP_COPYRIGHT
 	[ -e $(INST_CONFDIR)/sfptpd.conf ] || install -m 644 -p -D config/default.cfg $(INST_CONFDIR)/sfptpd.conf

@@ -1,8 +1,8 @@
 #!/usr/bin/env /lib/runit/invoke-run
 # SPDX-License-Identifier: BSD-3-Clause
-# (c) Copyright 2023-2024 Advanced Micro Devices, Inc.
+# (c) Copyright 2023-2025 Advanced Micro Devices, Inc.
 
 set -e
 exec 2>&1
 echo "Starting ${PWD##*/}..."
-exec $TASKSET /usr/sbin/sfptpd --no-daemon $OPTIONS $SFPTPD_USER
+exec $TASKSET /usr/sbin/sfptpd --no-daemon -p -u_sfptpd $OPTIONS

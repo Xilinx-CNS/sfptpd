@@ -1,15 +1,10 @@
 #!/usr/bin/make -f
 # SPDX-License-Identifier: BSD-3-Clause
-# (c) Copyright 2024 Advanced Micro Devices, Inc.
-
-#export DH_VERBOSE = 1
+# (c) Copyright 2024,2025 Advanced Micro Devices, Inc.
 
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 export DEB_CFLAGS_MAINT_APPEND  = -Wall
 export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
-
-# Rely on dh_installinit to install the init script from source tree
-# Rely on dh_installchangelog to install the upstream changelog from source tree
 
 %:
 	prefix=/usr INST_INITS="systemd" INST_OMIT="c-examples changelog" dh $@ --with python3,sysuser,runit
@@ -19,12 +14,6 @@ override_dh_auto_test:
 
 override_dh_installchangelogs:
 	dh_installchangelogs CHANGELOG.md
-
-override_dh_installsystemd:
-	dh_installsystemd --no-enable --no-start
-
-override_dh_installinit:
-	dh_installinit --no-enable --no-start
 
 # Avoid compressing example configurations so they can be used easily.
 override_dh_compress:

@@ -27,11 +27,7 @@ clicking on the commit log summary line in the following index:
 * Creates an `sfptpd` user
    - uses `sysusers.d`
    - state files to be owned by `sfptpd` user
-   - comments out `SFPTPD_USER` setting in `/etc/sysconfig/sfptpd` because
-     chronyd integration cannot work as a non-root user, unless that user
-     is the same as chronyd!
-   - users only have to uncomment out the above setting to run as a non-root
-     user if appropriate for them
+   - runs with privileged helper and drops user on startup
 
 ### EL8
 
@@ -82,8 +78,8 @@ approaches is needed:
 e.g.:
 
 ```sh
-cd scripts/rpm/el7
-git diff -- ../el8/sfptpd.spec sfptpd.spec | patch -u --merge
+cd scripts/rpm/el8
+git diff -- ../el9/sfptpd.spec | patch -u --merge
 ```
 
 Use the `--dry-run` option with `patch` to check what will be changed in

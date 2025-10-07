@@ -18,11 +18,12 @@ Restart=on-failure
 RestartSec=5s
 
 # Source configuration shared with other init systems
+Environment=OPTIONS="-f /etc/sfptpd.conf"
 EnvironmentFile=-/etc/sysconfig/sfptpd
 
 # Override any 'daemon' setting in configuration file as it is systemd's
 # responsibility to fork the daemon.
-ExecStart=/usr/sbin/sfptpd --no-daemon $OPTIONS $SFPTPD_USER
+ExecStart=/usr/sbin/sfptpd --no-daemon -p -u_sfptpd $OPTIONS
 
 # Optionally set which CPU(s) to run sfptpd on e.g. limit CPU selection to
 # cores 3 and 4:

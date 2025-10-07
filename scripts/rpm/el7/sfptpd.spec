@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# (c) Copyright 2014-2024 Advanced Micro Devices, Inc.
+# (c) Copyright 2014-2025 Advanced Micro Devices, Inc.
 
 Name: sfptpd
 Version: %{pkgversion}
@@ -40,9 +40,10 @@ and customisable Python equivalent of the sfptpdctl client.
 %prep
 %autosetup
 scripts/sfptpd_versioning write %{version}
-sed -i 's,.*\(SFPTPD_USER=\).*",#\1"",g' scripts/sfptpd.env
+sed -i -E 's,(-p )?-u[ _]sfptpd ?,,g' scripts/systemd/sfptpd.service
 
 %build
+export prefix=%{_prefix}
 scl enable devtoolset-8 '%make_build'
 
 %install
@@ -111,5 +112,5 @@ make fast_test
 %exclude %{_libexecdir}/%{name}/*.py[co]
 
 %changelog
-* Fri Sep 20 2024 AMD NIC Support <support-nic@amd.com> - 3.8.0.1005-1
+* Mon Oct 06 2025 AMD NIC Support <support-nic@amd.com> - 3.9.0.1005-1
 - see CHANGELOG.md in source archive for changelog

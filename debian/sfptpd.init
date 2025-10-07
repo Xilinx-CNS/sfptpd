@@ -17,10 +17,9 @@
 # Default defaults
 NAME=sfptpd
 DESCRIPTION="AMD Solarflare Enhanced PTP Daemon"
-DAEMON=/usr/sbin/$NAME
-OPTIONS="-f /etc/${NAME}.conf"
+DAEMON=/usr/sbin/sfptpd
+OPTIONS="-f /etc/sfptpd.conf"
 TASKSET=""
-SFPTPD_USER=""
 
 # Defaults
 [ -r /etc/default/$NAME ] && . /etc/default/$NAME
@@ -35,42 +34,16 @@ else
 	LAUNCHER_ARGS=""
 fi
 
-get_user() {
-	OPTIND=1
-	while getopts pu: opt
-	do
-		case $opt in
-		u)	echo $OPTARG;;
-		esac
-	done
-}
-
-# Derived variables
-USER_SPEC=$(get_user ${SFPTPD_USER})
-RUNAS_U=${USER_SPEC%%:*}
-
 test -f $DAEMON || exit 0
 
 . /lib/lsb/init-functions
-
-[ -z "$RUNAS_U" ] || getent passwd "$RUNAS_U" > /dev/null || {
-	log_failure_msg "User $RUNAS_U required for $NAME does not exist"
-	exit 1
-}
-
-if [ -n "$RUNAS_U" ]
-then
-	CONDITIONAL_USER_ARG="--user $RUNAS_U"
-else
-	CONDITIONAL_USER_ARG=""
-fi
 
 start() {
 	log_daemon_msg "Starting $DESCRIPTION" "$NAME"
 	start-stop-daemon --start --quiet --oknodo \
 		--notify-await \
 		--exec $DAEMON --startas $LAUNCHER \
-		-- $LAUNCHER_ARGS --daemon $OPTIONS $SFPTPD_USER
+		-- $LAUNCHER_ARGS --daemon -p -u_sfptpd $OPTIONS
 	retval=$?
 	log_end_msg $retval
 	return $retval
@@ -80,7 +53,7 @@ stop() {
 	log_daemon_msg "Stopping $DESCRIPTION" "$NAME"
 	start-stop-daemon --stop --quiet --oknodo \
 		--retry TERM/10/KILL/5 \
-		$CONDITIONAL_USER_ARG \
+		--user _sfptpd \
 		--exec $DAEMON
 	retval=$?
 	log_end_msg $retval

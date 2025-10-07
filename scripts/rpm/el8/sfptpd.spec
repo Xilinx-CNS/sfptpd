@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# (c) Copyright 2014-2024 Advanced Micro Devices, Inc.
+# (c) Copyright 2014-2025 Advanced Micro Devices, Inc.
 
 Name: sfptpd
 Version: %{pkgversion}
-Release: 1
+Release: 1%{?dist}
 Summary: System time sync daemon supporting PTP, NTP and 1PPS
 License: BSD-3-Clause AND BSD-2-Clause AND NTP AND ISC
 Group: System Environment/Daemons
@@ -39,12 +39,13 @@ and customisable Python equivalent of the sfptpdctl client.
 %prep
 %autosetup
 scripts/sfptpd_versioning write %{version}
-sed -i 's,.*\(SFPTPD_USER=\).*",#\1"",g' scripts/sfptpd.env
+sed -i -E 's,(-p )?-u[ _]sfptpd ?,,g' scripts/systemd/sfptpd.service
 
 %build
 # Not normally required but ensures the CFLAGS etc. get set to platform
 # hardened defaults when launched from containerised github workflow
 %set_build_flags
+export prefix=%{_prefix}
 %make_build
 
 %install
@@ -111,5 +112,5 @@ make fast_test
 %{_libexecdir}/%{name}/chrony_clockcontrol.py
 
 %changelog
-* Fri Sep 20 2024 AMD NIC Support <support-nic@amd.com> - 3.8.0.1005-1
+* Mon Oct 06 2025 AMD NIC Support <support-nic@amd.com> - 3.9.0.1005-1
 - see CHANGELOG.md in source archive for changelog

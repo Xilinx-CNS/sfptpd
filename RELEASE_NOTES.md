@@ -139,6 +139,15 @@ The following major changes are provided in v3.9.x:
 - System clock adjustment fidelity improved when the standard system clock
   frequency needs correcting by more than 500000ppb (0.05%). (SWPTP-1066)
 
+A new package type is supplied for RHEL 8, as with RHEL 7 already, while the
+generic RPM package is suitable for RHEL 9 and later OSs.
+
+The daemon is now started as a non-root user except with the legacy packages
+for RHEL 7 & 8. The privileged helper provides access to resources where
+needed, with the exception of chronyd integration via a custom control script.
+If a custom chrony control script is used then the `-p -u sfptpd` options
+should be removed from the systemd unit or equivalent.
+
 
 Copyright
 ---------

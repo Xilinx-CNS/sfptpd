@@ -16,8 +16,8 @@ The following builds are currently provided:
 |              | Debian 10 Buster     | 20.04 LTS            |
 
 The sfptpd daemon is installed as a service using native service definitions
-for the sysvinit, systemd and runit init systems. The service is installed
-initially disabled and not started.
+for the sysvinit, systemd and runit init systems with a default configuration
+that disciplines only local NIC clocks.
 
 After configuring sfptpd's /etc/sfptpd.conf file, using the examples in
 /usr/share/doc/sfptpd/config for guidance, run commands appropriate to
@@ -25,4 +25,4 @@ the init system to enable and start, e.g. systemctl enable sfptpd
 
 Copyright (c) 2024 Advanced Micro Devices, Inc.
 
- -- AMD NIC Support <support-nic@amd.com>  Tue, 17 Sep 2024 18:21:00 +0100
+ -- AMD NIC Support <support-nic@amd.com>  Mon, 06 Oct 2025 16:24:07 +0100
