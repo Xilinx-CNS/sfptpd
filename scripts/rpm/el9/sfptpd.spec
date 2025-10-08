@@ -120,5 +120,5 @@ make fast_test
 %{_libexecdir}/%{name}/chrony_clockcontrol.py
 
 %changelog
-* Mon Oct 06 2025 AMD NIC Support <support-nic@amd.com> - 3.9.0.1005-1
+* Mon Oct 06 2025 AMD NIC Support <support-nic@amd.com> - 3.9.0.1006-1
 - see CHANGELOG.md in source archive for changelog
