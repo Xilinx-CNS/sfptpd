@@ -236,7 +236,7 @@ static int test_outlier_filter(void)
 
 		//printf("iteration %d: samples = %d\n", i, num_samples);
 
-		filter = sfptpd_peirce_filter_create(num_samples, 1.0);
+		filter = sfptpd_peirce_filter_create(num_samples, 1.0, i & 1 ? true : false);
 		if (filter == NULL) {
 			printf("ERROR: failed to alloc filter\n");
 			return ENOMEM;

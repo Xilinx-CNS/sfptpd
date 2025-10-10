@@ -311,7 +311,8 @@ long double peirce_filter_get_criterion(unsigned int num_samples)
 
 
 struct sfptpd_peirce_filter *sfptpd_peirce_filter_create(unsigned int max_samples,
-							 long double outlier_weighting)
+							 long double outlier_weighting,
+							 bool drift_term)
 {
 	struct sfptpd_peirce_filter *new;
 	size_t size;
@@ -343,6 +344,8 @@ struct sfptpd_peirce_filter *sfptpd_peirce_filter_create(unsigned int max_sample
 
 	new->max_samples = max_samples;
 	new->outlier_weighting = outlier_weighting;
+	new->drift_term = drift_term;
+
 	sfptpd_peirce_filter_reset(new);
 
 	return new;
@@ -371,17 +374,12 @@ void sfptpd_peirce_filter_reset(struct sfptpd_peirce_filter *filter)
 }
 
 
-int sfptpd_peirce_filter_update(struct sfptpd_peirce_filter *filter,
-			        long double sample,
-			        long double freq_adj,
-			        struct sfptpd_timespec *timestamp)
+static long double peirce_filter_process_sample_drift(struct sfptpd_peirce_filter *filter,
+						      long double freq_adj,
+						      struct sfptpd_timespec *timestamp)
 {
-	long double sd, mean, deviation, criterion;
-	long double current_drift_ns = 0.0;
-	long double cumulative_drift_ns = 0.0;
-	int rc = 0;
-
-	assert(filter != NULL);
+	long double current_drift_ns = 0.0L;
+	long double cumulative_drift_ns;
 
 	/* Calculate drift for this sample. Drift is a recently applied frequency scaling rate
 	 * multiplied by time delta between the current and the last sample.  This will tell us
@@ -403,6 +401,45 @@ int sfptpd_peirce_filter_update(struct sfptpd_peirce_filter *filter,
 	if (filter->num_samples >= filter->max_samples) {
 		cumulative_drift_ns -= fabsl(filter->drift_values_ns[filter->write_idx]);
 	}
+
+	filter->drift_values_ns[filter->write_idx] = current_drift_ns;
+
+	return cumulative_drift_ns;
+}
+
+static void peirce_filter_recalculate_drift(struct sfptpd_peirce_filter *filter)
+{
+	/* Recalculate cumulative drift sum from scratch to clear all numerical errors */
+	if (filter->num_samples > 0 && (filter->update_count % (filter->max_samples * SFPTPD_PEIRCE_FILTER_RECALCULATION_PERIOD) == 0)) {
+		long double recalculated_sum = 0.0;
+		int i;
+
+		for (i = 0; i < filter->num_samples; i++) {
+			recalculated_sum += fabsl(filter->drift_values_ns[i]);
+		}
+
+		/* Replace the accumulated sum with the recalculated one */
+		filter->cumulative_drift_sum_ns = recalculated_sum;
+
+		TRACE_L5("peirce: periodic recalculation at update %u, "
+			 "recalculated cumulative drift  %Lf ns\n",
+			 filter->update_count, recalculated_sum);
+	}
+}
+
+int sfptpd_peirce_filter_update(struct sfptpd_peirce_filter *filter,
+			        long double sample,
+			        long double freq_adj,
+			        struct sfptpd_timespec *timestamp)
+{
+	long double sd, mean, deviation, criterion;
+	long double cumulative_drift_ns = 0.0;
+	int rc = 0;
+
+	assert(filter != NULL);
+
+	if (filter->drift_term)
+		peirce_filter_process_sample_drift(filter, freq_adj, timestamp);
 
 	/* If we have enough samples, apply the filter... */
 	if (filter->num_samples >= SFPTPD_PEIRCE_FILTER_SAMPLES_MIN) {
@@ -451,26 +488,11 @@ int sfptpd_peirce_filter_update(struct sfptpd_peirce_filter *filter,
 	/* Update filter internals */
 	filter->data[filter->write_idx] = sample;
 	filter->timestamps[filter->write_idx] = *timestamp;
-	filter->drift_values_ns[filter->write_idx] = current_drift_ns;
 	filter->cumulative_drift_sum_ns = cumulative_drift_ns;
 	filter->update_count++;
 
-	/* Recalculate cumulative drift sum from scratch to clear all numerical errors */
-	if (filter->num_samples > 0 && (filter->update_count % (filter->max_samples * SFPTPD_PEIRCE_FILTER_RECALCULATION_PERIOD) == 0)) {
-		long double recalculated_sum = 0.0;
-		int i;
-
-		for (i = 0; i < filter->num_samples; i++) {
-			recalculated_sum += fabsl(filter->drift_values_ns[i]);
-		}
-
-		/* Replace the accumulated sum with the recalculated one */
-		filter->cumulative_drift_sum_ns = recalculated_sum;
-
-		TRACE_L5("peirce: periodic recalculation at update %u, "
-			 "recalculated cumulative drift  %Lf ns\n",
-			 filter->update_count, recalculated_sum);
-	}
+	if (filter->drift_term)
+		peirce_filter_recalculate_drift(filter);
 
 	filter->write_idx++;
 	if (filter->write_idx >= filter->max_samples)

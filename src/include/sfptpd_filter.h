@@ -90,6 +90,9 @@ struct sfptpd_peirce_filter {
 	/* Maximum samples to consider */
 	unsigned int max_samples;
 
+	/* Whether to accumulate drift term */
+	bool drift_term;
+
 	/* Weighting to give to outliers */
 	long double outlier_weighting;
 
@@ -268,7 +271,8 @@ int sfptpd_notch_filter_update(sfptpd_notch_filter_t *notch,
  * @return A pointer to the filter structure or NULL on error
  */
 struct sfptpd_peirce_filter *sfptpd_peirce_filter_create(unsigned int max_samples,
-							 long double outlier_weighting);
+							 long double outlier_weighting,
+							 bool drift_term);
 
 /** Destroy a filter instance
  * @param filter Pointer to filter instance

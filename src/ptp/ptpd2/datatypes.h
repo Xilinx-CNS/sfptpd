@@ -503,6 +503,7 @@ typedef struct ptpd_port_config {
 	long double path_delay_filter_ageing;
 	unsigned int outlier_filter_size;
 	long double outlier_filter_adaption;
+	bool outlier_filter_drift;
 	unsigned int fir_filter_size;
 	long double step_threshold;
 

@@ -568,6 +568,25 @@ static int parse_outlier_adaption(struct sfptpd_config_section *section, const c
 }
 
 
+static int parse_outlier_filter_drift(struct sfptpd_config_section *section, const char *option,
+				      unsigned int num_params, const char * const params[])
+{
+	int rc = 0;
+	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
+	assert(num_params == 1);
+
+	if (strcmp(params[0], "off") == 0) {
+		pps->outlier_filter.drift_feedback = false;
+	} else if (strcmp(params[0], "on") == 0) {
+		pps->outlier_filter.drift_feedback = true;
+	} else {
+		rc = EINVAL;
+	}
+
+	return rc;
+}
+
+
 static int parse_fir_filter_size(struct sfptpd_config_section *section, const char *option,
 				 unsigned int num_params, const char * const params[])
 {
@@ -685,6 +704,12 @@ static const sfptpd_config_option_t pps_config_options[] =
 		STRINGIFY(SFPTPD_PPS_DEFAULT_OUTLIER_FILTER_ADAPTION) ".",
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_outlier_adaption},
+	{"outlier_filter_drift", "<off | on>",
+		"Specifies whether to feed back frequency adjustment to "
+		"accumulate as a drift term in outlier filter",
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_outlier_filter_drift,
+		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_PPS_DEFAULT_OUTLIER_FILTER_DRIFT)},
 	{"fir_filter_size", "NUMBER",
 		"Number of data samples stored in the FIR filter. The "
 		"valid range is [" STRINGIFY(SFPTPD_FIR_FILTER_STIFFNESS_MIN)
@@ -2275,7 +2300,8 @@ static int pps_start_instance(pps_module_t *pps,
 	if (config->outlier_filter.enabled) {
 		instance->outlier_filter =
 			sfptpd_peirce_filter_create(config->outlier_filter.size,
-						    config->outlier_filter.adaption);
+						    config->outlier_filter.adaption,
+						    config->outlier_filter.drift_feedback);
 		if (instance->outlier_filter == NULL) {
 			CRITICAL("pps %s: failed to create outlier filter\n",
 				 SFPTPD_CONFIG_GET_NAME(instance->config));

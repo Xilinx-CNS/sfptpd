@@ -974,6 +974,24 @@ static int parse_outlier_filter_adaption(struct sfptpd_config_section *section, 
 	return 0;
 }
 
+static int parse_outlier_filter_drift(struct sfptpd_config_section *section, const char *option,
+				      unsigned int num_params, const char * const params[])
+{
+	int rc = 0;
+	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
+	assert(num_params == 1);
+
+	if (strcmp(params[0], "off") == 0) {
+		ptp->ptpd_port.outlier_filter_drift = false;
+	} else if (strcmp(params[0], "on") == 0) {
+		ptp->ptpd_port.outlier_filter_drift = true;
+	} else {
+		rc = EINVAL;
+	}
+
+	return rc;
+}
+
 static int parse_mpd_filter_size(struct sfptpd_config_section *section, const char *option,
 				 unsigned int num_params, const char * const params[])
 {
@@ -1506,6 +1524,12 @@ static const sfptpd_config_option_t ptp_config_options[] =
 		STRINGIFY(DEFAULT_OUTLIER_FILTER_ADAPTION) ".",
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_outlier_filter_adaption},
+	{"outlier_filter_drift", "<off | on>",
+		"Specifies whether to feed back frequency adjustment to "
+		"accumulate as a drift term in outlier filter",
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_outlier_filter_drift,
+		.dfl = SFPTPD_CONFIG_DFL_BOOL(DEFAULT_OUTLIER_FILTER_DRIFT)},
 	{"mpd_filter_size", "NUMBER",
 		"Number of data samples stored in the mean path delay filter. The "
 		"valid range is [" STRINGIFY(SFPTPD_SMALLEST_FILTER_SAMPLES_MIN) ","

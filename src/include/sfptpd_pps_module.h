@@ -27,6 +27,7 @@
 #define SFPTPD_PPS_DEFAULT_OUTLIER_FILTER_ENABLED  (true)
 #define SFPTPD_PPS_DEFAULT_OUTLIER_FILTER_SIZE     30
 #define SFPTPD_PPS_DEFAULT_OUTLIER_FILTER_ADAPTION 1.0
+#define SFPTPD_PPS_DEFAULT_OUTLIER_FILTER_DRIFT    (false)
 
 #define SFPTPD_PPS_DEFAULT_PID_FILTER_KP  0.05
 #define SFPTPD_PPS_DEFAULT_PID_FILTER_KI  0.001
@@ -90,6 +91,9 @@ typedef struct sfptpd_pps_module_config {
 		/* Weighting given to outliers - controls how adaptive the
 		 * filter is */
 		long double adaption;
+
+		/* Apply drift feedback */
+		bool drift_feedback;
 	} outlier_filter;
 
 	/** FIR filter size */

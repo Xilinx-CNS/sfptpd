@@ -42,6 +42,7 @@ void ptpd_config_port_initialise(struct ptpd_port_config *config,
 	config->path_delay_filter_ageing = DEFAULT_MPD_FILTER_AGEING;
 	config->outlier_filter_size = DEFAULT_OUTLIER_FILTER_SIZE;
 	config->outlier_filter_adaption = DEFAULT_OUTLIER_FILTER_ADAPTION;
+	config->outlier_filter_drift = DEFAULT_OUTLIER_FILTER_DRIFT;
 	config->fir_filter_size = DEFAULT_FIR_FILTER_SIZE;
 
 	config->clockQuality.clockAccuracy = DEFAULT_CLOCK_ACCURACY;

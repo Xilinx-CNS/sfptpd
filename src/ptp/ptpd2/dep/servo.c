@@ -119,7 +119,8 @@ servo_init(const RunTimeOpts *rtOpts, ptp_servo_t *servo, struct sfptpd_clock *c
 	}
 
 	servo->peirce_filt = sfptpd_peirce_filter_create(rtOpts->outlier_filter_size,
-							 rtOpts->outlier_filter_adaption);
+							 rtOpts->outlier_filter_adaption,
+							 rtOpts->outlier_filter_drift);
 	if (NULL == servo->peirce_filt) {
 		WARNING("ptp %s: failed to allocate peirce filter\n", rtOpts->name);
 		goto exit;

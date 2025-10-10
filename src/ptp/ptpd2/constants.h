@@ -45,6 +45,7 @@
 #define DEFAULT_MPD_FILTER_AGEING 2.0
 #define DEFAULT_OUTLIER_FILTER_SIZE 60
 #define DEFAULT_OUTLIER_FILTER_ADAPTION 1.0
+#define DEFAULT_OUTLIER_FILTER_DRIFT false
 #define DEFAULT_FIR_FILTER_SIZE 1
 
 /* Value used in logMessageInterval field to indicate an unknown/undefined
