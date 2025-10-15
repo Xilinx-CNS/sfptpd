@@ -439,7 +439,7 @@ int sfptpd_peirce_filter_update(struct sfptpd_peirce_filter *filter,
 	assert(filter != NULL);
 
 	if (filter->drift_term)
-		peirce_filter_process_sample_drift(filter, freq_adj, timestamp);
+		cumulative_drift_ns = peirce_filter_process_sample_drift(filter, freq_adj, timestamp);
 
 	/* If we have enough samples, apply the filter... */
 	if (filter->num_samples >= SFPTPD_PEIRCE_FILTER_SAMPLES_MIN) {
