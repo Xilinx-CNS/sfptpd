@@ -110,5 +110,5 @@ touch %{buildroot}%{_localstatedir}/lib/%{name}/{config,interfaces,sync-instance
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
-* Mon Oct 06 2025 AMD NIC Support <support-nic@amd.com> - 3.9.0.1006-1
+* Mon Oct 06 2025 AMD NIC Support <support-nic@amd.com> - 3.9.0.1007-1
 - see CHANGELOG.md in source archive for changelog

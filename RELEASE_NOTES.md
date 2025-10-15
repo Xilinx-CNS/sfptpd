@@ -1,7 +1,7 @@
 AMD Solarflare Enhanced PTP Daemon
 ==================================
 
-Version: v3.9.0.1006
+Version: v3.9.0.1007
 
 These are the release notes for sfptpd on AMD Solarflare adaptors.
 
