@@ -41,8 +41,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Make the determination of what counts as a suitable physical interface for
   timestamping configurable for experimental and testing purposes. Only the
   default value (Ethernet and MACVLAN interfaces) is supported. (SWPTP-1578)
-- Add `outlier_filter_drift` option to feed frequency adjustment into
-  Peirce Criterion to allow for known drift. Off by default. (SWPTP-1598)
 - Add `fir_filter_size` option for secondary servos. (SWPTP-1584)
 - Add hardware clock control and diagnostic utility `tstool`.
 

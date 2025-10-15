@@ -577,7 +577,7 @@ static int parse_outlier_filter_drift(struct sfptpd_config_section *section, con
 
 	if (strcmp(params[0], "off") == 0) {
 		pps->outlier_filter.drift_feedback = false;
-	} else if (strcmp(params[0], "on") == 0) {
+	} else if (strcmp(params[0], "widen-window") == 0) {
 		pps->outlier_filter.drift_feedback = true;
 	} else {
 		rc = EINVAL;
@@ -704,11 +704,12 @@ static const sfptpd_config_option_t pps_config_options[] =
 		STRINGIFY(SFPTPD_PPS_DEFAULT_OUTLIER_FILTER_ADAPTION) ".",
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_outlier_adaption},
-	{"outlier_filter_drift", "<off | on>",
+	{"outlier_filter_drift", "<off | widen-window>",
 		"Specifies whether to feed back frequency adjustment to "
-		"accumulate as a drift term in outlier filter",
+		"accumulate as a drift term in outlier filter window",
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_outlier_filter_drift,
+		.hidden = true,
 		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_PPS_DEFAULT_OUTLIER_FILTER_DRIFT)},
 	{"fir_filter_size", "NUMBER",
 		"Number of data samples stored in the FIR filter. The "
