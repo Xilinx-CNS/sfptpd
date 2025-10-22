@@ -1393,6 +1393,7 @@ static int mode7_get_peer_info(struct sfptpd_ntpclient_state *ntpclient,
 
 	for (i = 0; i < num_items; i++) {
 		peer = &peer_info->peers[i];
+		*peer = sfptpd_ntpclient_peer_null();
 		seconds = ntohl(summary[i].offset.l_i);
 		fraction = ntohl(summary[i].offset.l_uf);
 		offset = (long double)seconds + ((long double)fraction / FRAC);
@@ -1403,16 +1404,12 @@ static int mode7_get_peer_info(struct sfptpd_ntpclient_state *ntpclient,
 			      summary[i].v6_flag, summary[i].srcadr, &summary[i].srcadr6);
 		write_address(&peer->local_address, &peer->local_address_len,
 			      summary[i].v6_flag, summary[i].dstadr, &summary[i].dstadr6);
-		peer->pkts_sent = 0;
-		peer->pkts_received = 0;
 		peer->stratum = summary[i].stratum;
 		peer->selected = ((summary[i].flags & INFO_FLAG_SYSPEER) != 0);
 		peer->shortlist = ((summary[i].flags & INFO_FLAG_SHORTLIST) != 0);
 		peer->candidate = (summary[i].hmode == MODE_CLIENT);
 		peer->self = ((summary[i].flags & INFO_FLAG_REFCLOCK) != 0);
 		peer->offset = offset;
-		peer->smoothed_offset = NAN;
-		peer->smoothed_root_dispersion = NAN;
 	}
 
 	/* For each peer, get the peer stats and info */

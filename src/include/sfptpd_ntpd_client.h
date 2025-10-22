@@ -79,6 +79,7 @@ struct sfptpd_ntpclient_peer {
 	socklen_t local_address_len;
 	uint32_t pkts_sent;
 	uint32_t pkts_received;
+	uint32_t ref_id;
 	unsigned int stratum;
 	bool selected;
 	bool shortlist;
@@ -88,6 +89,7 @@ struct sfptpd_ntpclient_peer {
 	long double root_dispersion;
 	long double smoothed_offset;
 	long double smoothed_root_dispersion;
+	long double tracking_offset;
 };
 
 /** Structure to return information about the peers of the NTP daemon.
@@ -200,7 +202,9 @@ void sfptpd_ntpclient_print_peers(struct sfptpd_ntpclient_peer_info *peer_info,
  */
 static inline sfptpd_time_t sfptpd_ntpclient_offset(struct sfptpd_ntpclient_peer *peer)
 {
-	return isnormal(peer->smoothed_offset) ? peer->smoothed_offset : peer->offset;
+	return isnormal(peer->tracking_offset) ? peer->tracking_offset :
+			(isnormal(peer->smoothed_offset) ? peer->smoothed_offset :
+			 peer->offset);
 }
 
 
@@ -213,5 +217,13 @@ static inline sfptpd_time_t sfptpd_ntpclient_error(struct sfptpd_ntpclient_peer 
 	return isnormal(peer->smoothed_root_dispersion) ? peer->smoothed_root_dispersion : peer->root_dispersion;
 }
 
+static inline struct sfptpd_ntpclient_peer sfptpd_ntpclient_peer_null(void) {
+	return (struct sfptpd_ntpclient_peer) {
+		.offset = NAN,
+		.root_dispersion = NAN,
+		.smoothed_offset = NAN,
+		.smoothed_root_dispersion = NAN,
+	};
+}
 
 #endif /* _SFPTPD_NTPD_CLIENT_H */

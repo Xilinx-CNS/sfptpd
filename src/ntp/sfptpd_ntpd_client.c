@@ -114,13 +114,15 @@ void sfptpd_ntpclient_print_peers(struct sfptpd_ntpclient_peer_info *peer_info,
 		       "candidate %d, stratum %d, offset %0.3Lf ns, "
 		       "root disp %0.3Lf ns, "
 		       "smoothed_offset %0.3Lf ns, "
-		       "smoothed_root disp %0.3Lf ns\n",
+		       "smoothed_root disp %0.3Lf ns, "
+		       "tracking_offset %0.3Lf ns\n",
 		       subsystem, i,
 		       remote_host, local_host,
 		       peer->pkts_sent, peer->pkts_received,
 		       peer->candidate, peer->stratum,
 		       peer->offset, peer->root_dispersion,
-		       peer->smoothed_offset, peer->smoothed_root_dispersion);
+		       peer->smoothed_offset, peer->smoothed_root_dispersion,
+		       peer->tracking_offset);
 	}
 }
 

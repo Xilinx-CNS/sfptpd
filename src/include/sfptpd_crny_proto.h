@@ -47,6 +47,13 @@ struct crny_addr {
 
 static_assert(sizeof(struct crny_addr) == 20, "structure matches protocol");
 
+struct crny_tracking {
+	uint32_t ref_id;
+	struct crny_addr ip_addr;
+	uint32_t ignore[4];
+	uint32_t tracking_f;
+};
+
 struct crny_source {
 	struct crny_addr ip_addr; /* we need this to pass to the ntpdata query */
 	uint32_t ignore;
@@ -73,7 +80,7 @@ struct crny_ntpdata {
 };
 
 struct crny_sourcestats {
-	uint32_t ignore1;
+	uint32_t ref_id;
 	struct crny_addr ignore2;
 	uint32_t ignore3[6];
 	uint32_t offset_f;

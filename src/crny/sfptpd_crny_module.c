@@ -112,6 +112,14 @@ struct ntp_state {
 	/* NTP daemon system info */
 	struct sfptpd_ntpclient_sys_info sys_info;
 
+	/* chronyd has a central 'tracking offset' which reflects what
+	 * it would like to do to the system clock. This will need copying
+	 * into the selected peer info object to match ntpd client logic */
+	long double tracking_offset;
+
+	/* ref_id related to the tracking offset */
+	uint32_t ref_id;
+
 	/* NTP daemon peer info */
 	struct sfptpd_ntpclient_peer_info peer_info;
 
@@ -701,6 +709,8 @@ void crny_parse_state(struct ntp_state *state, int rc, bool offset_unsafe)
 		else
 			state->state = SYNC_MODULE_STATE_FAULTY;
 		state->sys_info.peer_address_len = 0;
+		state->tracking_offset = NAN;
+		state->ref_id = REF_ID_UNSYNC;
 		/* state->sys_info.clock_control_enabled is set by static check. */
 		state->selected_peer_idx = -1;
 		state->peer_info.num_peers = 0;
@@ -1054,6 +1064,7 @@ static int handle_get_sys_info(crny_module_t *ntp)
 	struct sfptpd_ntpclient_sys_info sys_info = {
 		.clock_control_enabled = next_state->sys_info.clock_control_enabled
 	};
+	struct crny_tracking *answer = (struct crny_tracking *)(&reply->data);
 
 	assert(ntp != NULL);
 
@@ -1065,7 +1076,7 @@ static int handle_get_sys_info(crny_module_t *ntp)
 	}
 
 	/* ref_id of 0x7f7f0101L means LOCAL == 127.127.1.1. 0x4C4F434C == LOCL also means local */
-	uint32_t ref_id = ntohl(*(uint32_t*)reply->data);
+	uint32_t ref_id = ntohl(answer->ref_id);
 	DBG_L6("crny: get-sys-info: tracking ref id: %08lX\n", ref_id);
 	if (ref_id == REF_ID_UNSYNC){
 		/* if the ref_id is null then we likely don't have any other info either
@@ -1077,9 +1088,7 @@ static int handle_get_sys_info(crny_module_t *ntp)
 		DBG_L6("crny: get-sys-info: peer is local\n");
 	}
 
-	struct crny_addr *ip_addr = (struct crny_addr *)((uint32_t *)reply->data + 1);
-
-	if (ip_addr->addr_family == 0){
+	if (answer->ip_addr.addr_family == 0){
 		DBG_L6("crny: get-sys-info: tracked source does not "
 		       "have a network address.\n");
 	} else {
@@ -1087,7 +1096,7 @@ static int handle_get_sys_info(crny_module_t *ntp)
 
 		sfptpd_crny_addr_to_sockaddr(&sys_info.peer_address,
 					     &sys_info.peer_address_len,
-					     ip_addr);
+					     &answer->ip_addr);
 
 		int rc = getnameinfo((struct sockaddr *) &sys_info.peer_address,
 				     sys_info.peer_address_len,
@@ -1098,6 +1107,8 @@ static int handle_get_sys_info(crny_module_t *ntp)
 	}
 
 	next_state->sys_info = sys_info;
+	next_state->ref_id = ref_id;
+	next_state->tracking_offset = sfptpd_crny_tofloat(ntohl(answer->tracking_f)) * -1.0e9;
 
 	return 0;
 }
@@ -1218,16 +1229,24 @@ int handle_get_source_stats(crny_module_t *ntp)
 		return ENOENT;
 	}
 
+	peer->ref_id = ntohl(answer->ref_id);
 	peer->smoothed_offset = sfptpd_crny_tofloat(ntohl(answer->offset_f)) * 1.0e9;
 	peer->smoothed_root_dispersion = sfptpd_crny_tofloat(ntohl(answer->offset_error_f)) * 1.0e9;
 
-	DBG_L6("crny: get-peer%d-info: smoothed_offset %Lf smoothed_root_dispersion %Lf\n",
-	       ntp->query.src_idx, peer->smoothed_offset, peer->smoothed_root_dispersion);
+	DBG_L6("crny: get-peer%d-info: ref_id %08x smoothed_offset %Lf smoothed_root_dispersion %Lf\n",
+	       ntp->query.src_idx, peer->ref_id, peer->smoothed_offset, peer->smoothed_root_dispersion);
 
 	if (ntp->query.src_mode == CRNY_SRC_MODE_REF) {
 		DBG_L6("crny: get-peer%d-info: source is a reference clock\n", ntp->query.src_idx);
 		/* No peer information will be avaliable via NTPDATA request */
 		return ENOENT;
+	}
+
+	/* If selected, then this source 'owns' the tracking offset */
+	if (peer->selected && peer->ref_id == next_state->ref_id) {
+		peer->tracking_offset = next_state->tracking_offset;
+	} else {
+		peer->tracking_offset = NAN;
 	}
 
 	/* Go straight on to populate following NTPDATA request */
@@ -1273,6 +1292,7 @@ int handle_get_ntp_datum(crny_module_t *ntp)
 		sfptpd_crny_addr_to_sockaddr(&peer->local_address,
 					     &peer->local_address_len,
 					     &answer->local_ip);
+		peer->ref_id = ntohl(answer->ref_id);
 		peer->pkts_sent = ntohl(answer->total_sent);
 		peer->pkts_received = ntohl(answer->total_received);
 		peer->stratum = answer->stratum;
