@@ -4,6 +4,7 @@
 /* Chrony connection helper */
 
 #include <assert.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -224,6 +225,9 @@ static int edit_env(enum chrony_clock_control_op op)
 		char *next_line;
 		size_t map_sz;
 		bool no_newline_at_eof = false;
+		char *fixup;
+		char *fixup_end;
+		const char *minus_x = "-x";
 
 		env_fd = open(style->path, O_RDWR);
 		if (env_fd == -1) {
@@ -322,16 +326,33 @@ static int edit_env(enum chrony_clock_control_op op)
 
 		switch (op) {
 		case CRNY_CTRL_OP_DISABLE:
+			/* Add '-x' to options */
 			fprintf(env_stream,
 				"%s\n%s=\"%s%s%s\"\n%s\n",
 				START_BLOCK,
 				options_key ? options_key : style->default_key,
 				options_value ? options_value : "",
 				options_value ? " " : "",
-				"-x",
+				minus_x,
 				END_BLOCK);
 			break;
 		case CRNY_CTRL_OP_ENABLE:
+			/* Remove '-x' from options if present once. */
+			fixup = (options_key && options_value) ? strstr(options_value, minus_x) : NULL;
+			if (fixup) {
+				fixup_end = fixup + strlen(minus_x);
+				*fixup = '\0';
+				if (*fixup_end && !isspace(*fixup_end))
+					*--fixup_end = '-';
+				fprintf(env_stream,
+					"%s\n%s=\"%s%s\"\n%s\n",
+					START_BLOCK,
+					options_key,
+					options_value,
+					fixup_end,
+					END_BLOCK);
+			}
+			break;
 		case CRNY_CTRL_OP_SAVE:
 		case CRNY_CTRL_OP_RESTORE:
 		case CRNY_CTRL_OP_RESTORENORESTART:
