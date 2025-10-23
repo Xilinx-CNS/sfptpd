@@ -1763,7 +1763,7 @@ static int do_clock_control(crny_module_t *ntp,
 }
 
 static int crny_clock_control(crny_module_t *ntp,
-			 bool enable)
+			      bool enable)
 {
 	if (!ntp->chrony_state_saved) {
 		do_clock_control(ntp, CRNY_CTRL_OP_SAVE);
@@ -2321,6 +2321,10 @@ static void ntp_on_shutdown(void *context)
 	assert(ntp != NULL);
 
 	crny_close_socket(ntp);
+
+	if (ntp->chrony_state_saved)
+		do_clock_control(ntp, CRNY_CTRL_OP_RESTORE);
+
 	sfptpd_stats_collection_free(&ntp->stats);
 
 	/* Delete the sync module context */
