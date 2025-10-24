@@ -1,0 +1,91 @@
+#!/usr/bin/perl -w
+#
+# Example script for reconfiguring whether the chrony system service
+# controls the system clock.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025, Advanced Micro Devices, Inc.
+#
+# Usage: edit-chrony-cmdline.pl enable|disable|save|restore|restorenorestart
+
+use strict;
+
+my %formats = (
+  "/etc/default/chrony" => "DAEMON_OPTS",
+  "/etc/sysconfig/chronyd" => "OPTIONS",
+);
+
+my $chrony_short_opt=qr/46ndpQrRsUmvh/;
+use constant { KEEP => 0, SAVE => 1, RESTART => 2 };
+my @cleanups = ( qr/^\s+/, '' );
+
+my %ops = (
+  enable           =>  [ SAVE | RESTART,
+                         qr/(^|\s+)-x+\b/, "",
+                         qr/(^|\s+)-x+\B/, "-",
+                         qr/(?:^|\s+)(-[$chrony_short_opt]+)x+\b/, '$1' ],
+  disable          => [ SAVE | RESTART,
+                         qr/(?<!-x)$/, " -x" ],
+  save             => [ KEEP ],
+  restore          => [ SAVE | RESTART ],
+  restorenorestart => [ SAVE ],
+);
+
+my $op = $ops{$ARGV[0] // ""} or die "Usage: $0 ".(join '|',(keys %ops));
+my ($action, @substs) = @{$op};
+exit if $action == KEEP;
+
+foreach my $env_file (grep { -f } (keys %formats)) {
+  open (my $fh, "+<", $env_file) or die "$!";
+  my $key = $formats{$env_file};
+  my @interleaved_lines;
+  my $opts = "";
+  my ($begin, $end);
+  my $offset = 0;
+
+  while (<$fh>) {
+    if (defined $begin and not defined $end) {
+      $end = $offset if /^### END sfptpd ###/;
+    } else {
+      if (/^### BEGIN sfptpd ###/) {
+        $begin = $offset;
+        undef $end;
+      } else {
+        if (defined $begin) {
+          push @interleaved_lines, $_;
+        }
+        $_ =~ s/^([^=]+=\s*)\b{wb}([^"]\S*)(.*)/$1"$2"$3/g; # En-quote
+        $opts = $2 if /^\s*($key)\s*=\s*"([^"]*)"/;
+      }
+    }
+    $offset = tell $fh;
+  }
+  if ($action & SAVE) {
+    my @sub = (@substs, @cleanups);
+    my ($srch, $repl);
+    my $new = $opts;
+    $new =~ s/$srch/$repl/g while ($srch, $repl) = splice(@sub, 0, 2);
+    if (defined $begin) {
+      seek $fh, $begin, 0;
+      truncate $fh, $begin;
+      print $fh $_ foreach (@interleaved_lines);
+    }
+    print $fh <<~EOF if $new ne $opts;
+      ### BEGIN sfptpd ###
+      $key="$new"
+      ### END sfptpd ###
+      EOF
+  }
+  close $fh;
+  if ($action & RESTART) {
+     my $rc;
+     if (($rc = (system("systemctl restart chronyd") >> 8)) == 127) {
+       if (($rc = (system("service chronyd restart") >> 8)) == 4) {
+         $rc = system("service chrony restart") >> 8;
+       }
+     } elsif ($rc >= 4) {
+         $rc = system("systemctl restart chronyd") >> 8;
+     }
+     return $rc if $rc;
+  }
+}

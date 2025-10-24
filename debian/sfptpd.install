@@ -5,6 +5,7 @@
 /usr/sbin/sfptpdctl
 /usr/sbin/tstool
 /usr/libexec/sfptpd/sfptpd_priv_helper
+/usr/libexec/sfptpd/edit-chrony-cmdline
 /lib/systemd/system/sfptpd.service
 /etc/sfptpd.conf
 /etc/default/sfptpd

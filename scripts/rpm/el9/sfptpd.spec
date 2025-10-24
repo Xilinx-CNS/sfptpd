@@ -88,6 +88,7 @@ make fast_test
 %{_sbindir}/sfptpdctl
 %{_sbindir}/tstool
 %{_libexecdir}/%{name}/sfptpd_priv_helper
+%{_libexecdir}/%{name}/edit-chrony-cmdline
 %{_unitdir}/sfptpd.service
 %config(noreplace) %{_sysconfdir}/sfptpd.conf
 %config(noreplace) %{_sysconfdir}/sysconfig/sfptpd

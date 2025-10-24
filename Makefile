@@ -158,6 +158,7 @@ install: sfptpd sfptpdctl sfptpd_priv_helper tstool $(addprefix $(BUILD_DIR)/,sf
 	[ -n "$(filter c-examples,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGDOCDIR)/examples src/sfptpdctl/sfptpdctl.c
 	[ -n "$(filter changelog,$(INST_OMIT))" ] || install -m 644 -p -t $(INST_PKGDOCDIR) CHANGELOG.md
 	install -m 755 -p -t $(INST_PKGLIBEXECDIR) examples/chrony_clockcontrol.py
+	install -m 755 -p -t $(INST_PKGLIBEXECDIR) examples/edit-chrony-cmdline
 	install -m 755 -p -t $(INST_PKGLIBEXECDIR) $(BUILD_DIR)/sfptpd_priv_helper
 	install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/sfptpd.8)
 	install -m 644 -p -t $(INST_MANDIR)/man8 $(wildcard doc/sfptpdctl.8)
