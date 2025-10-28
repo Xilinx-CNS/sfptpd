@@ -1624,7 +1624,7 @@ static void ntp_send_rt_stats_update(crny_module_t *ntp,
 	assert(ntp != NULL);
 
 	if (new_state->state == SYNC_MODULE_STATE_SLAVE) {
-		sfptpd_time_t offset = new_state->peer_info.peers[new_state->selected_peer_idx].offset;
+		sfptpd_time_t offset = sfptpd_ntpclient_offset(&new_state->peer_info.peers[new_state->selected_peer_idx]);
 
 		bool disciplining = new_state->sys_info.clock_control_enabled;
 
@@ -1645,7 +1645,7 @@ static void ntp_send_clustering_input(crny_module_t *ntp, struct ntp_state *stat
 	assert(ntp != NULL);
 
 	if (ntp->ctrl_flags & SYNC_MODULE_CLUSTERING_DETERMINANT) {
-		sfptpd_time_t offset = state->peer_info.peers[state->selected_peer_idx].offset;
+		sfptpd_time_t offset = sfptpd_ntpclient_offset(&state->peer_info.peers[state->selected_peer_idx]);
 
 		sfptpd_engine_clustering_input(ntp->engine,
 					       SFPTPD_CONFIG_GET_NAME(ntp->config),
