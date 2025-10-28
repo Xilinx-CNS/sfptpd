@@ -1077,7 +1077,7 @@ static int handle_get_sys_info(crny_module_t *ntp)
 
 	/* ref_id of 0x7f7f0101L means LOCAL == 127.127.1.1. 0x4C4F434C == LOCL also means local */
 	uint32_t ref_id = ntohl(answer->ref_id);
-	DBG_L6("crny: get-sys-info: tracking ref id: %08lX\n", ref_id);
+	DBG_L5("crny: get-sys-info: tracking ref id: %08lX\n", ref_id);
 	if (ref_id == REF_ID_UNSYNC){
 		/* if the ref_id is null then we likely don't have any other info either
 		so we should just return an error code */
@@ -1102,7 +1102,7 @@ static int handle_get_sys_info(crny_module_t *ntp)
 				     sys_info.peer_address_len,
 				     host, sizeof host,
 				     NULL, 0, NI_NUMERICHOST);
-		DBG_L6("crny: get-sys-info: selected-peer-address: %s\n",
+		DBG_L5("crny: get-sys-info: selected-peer-address: %s\n",
 		       rc == 0 ? host : gai_strerror(rc));
 	}
 
@@ -1190,7 +1190,7 @@ int handle_get_source_datum(crny_module_t *ntp)
 	enum crny_state_code state = ntohs(src_data->state);
 	enum crny_src_mode_code mode = ntohs(src_data->mode);
 
-	DBG_L6("crny: get-peer%d-info: mode %d state %d\n",
+	DBG_L5("crny: get-peer%d-info: mode %d state %d\n",
 	       ntp->query.src_idx, mode, state);
 
 	peer->selected = (state == CRNY_STATE_SYSPEER);
@@ -1233,7 +1233,7 @@ int handle_get_source_stats(crny_module_t *ntp)
 	peer->smoothed_offset = sfptpd_crny_tofloat(ntohl(answer->offset_f)) * 1.0e9;
 	peer->smoothed_root_dispersion = sfptpd_crny_tofloat(ntohl(answer->offset_error_f)) * 1.0e9;
 
-	DBG_L6("crny: get-peer%d-info: ref_id %08x smoothed_offset %Lf smoothed_root_dispersion %Lf\n",
+	DBG_L5("crny: get-peer%d-info: ref_id %08x smoothed_offset %Lf smoothed_root_dispersion %Lf\n",
 	       ntp->query.src_idx, peer->ref_id, peer->smoothed_offset, peer->smoothed_root_dispersion);
 
 	if (ntp->query.src_mode == CRNY_SRC_MODE_REF) {
@@ -1532,7 +1532,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 	}
 
 finish:
-	DBG_L6("crny: state %s --%s--> %s (%s)\n",
+	DBG_L6("crny: proto state %s --%s--> %s (%s)\n",
 	       query_state_names[ntp->query.state],
 	       query_event_names[event],
 	       query_state_names[next_query_state],
@@ -1722,7 +1722,7 @@ static int do_clock_control(crny_module_t *ntp,
 		op_do = CRNY_CTRL_OP_RESTORENORESTART;
 
 	action = clock_control_op_name(op_do);
-	DBG_L6("crny: chrony_clock_control(op_req = %s, op_do = %s)\n",
+	DBG_L5("crny: chrony_clock_control(op_req = %s, op_do = %s)\n",
 	       clock_control_op_name(op_req), action);
 
 	if (op_do == CRNY_CTRL_OP_NOP)
