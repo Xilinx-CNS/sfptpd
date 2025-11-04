@@ -1210,6 +1210,7 @@ int handle_get_source_datum(crny_module_t *ntp)
 
 	peer->selected = (state == CRNY_STATE_SYSPEER);
 	peer->shortlist = (state == CRNY_STATE_CANDIDATE);
+	peer->candidate = (state == CRNY_STATE_CANDIDATE);
 	peer->self = (mode == CRNY_SRC_MODE_REF);
 
 	/* Copy chrony address specifier for later ntp_data query */
@@ -1228,7 +1229,7 @@ int issue_get_source_stats(crny_module_t *ntp)
 
 int handle_get_source_stats(crny_module_t *ntp)
 {
-	int rc;
+	int rc = 0;
 	struct crny_addr *ip_addr;
 	struct crny_comm *comm = &ntp->crny_comm;
 	struct crny_cmd_request *req = &comm->req;
@@ -1251,17 +1252,18 @@ int handle_get_source_stats(crny_module_t *ntp)
 	DBG_L5("crny: get-peer%d-info: ref_id %08x smoothed_offset %Lf smoothed_root_dispersion %Lf\n",
 	       ntp->query.src_idx, peer->ref_id, peer->smoothed_offset, peer->smoothed_root_dispersion);
 
-	if (ntp->query.src_mode == CRNY_SRC_MODE_REF) {
-		DBG_L6("crny: get-peer%d-info: source is a reference clock\n", ntp->query.src_idx);
-		/* No peer information will be avaliable via NTPDATA request */
-		return ENOENT;
-	}
 
 	/* If selected, then this source 'owns' the tracking offset */
 	if (peer->selected && peer->ref_id == next_state->ref_id) {
 		peer->tracking_offset = next_state->tracking_offset;
 	} else {
 		peer->tracking_offset = NAN;
+	}
+
+	if (ntp->query.src_mode == CRNY_SRC_MODE_REF) {
+		DBG_L6("crny: get-peer%d-info: source is a reference clock\n", ntp->query.src_idx);
+		/* No peer information will be avaliable via NTPDATA request */
+		return ENOENT;
 	}
 
 	/* Go straight on to populate following NTPDATA request */
@@ -2021,17 +2023,13 @@ static void ntp_on_save_state(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 	if (ntp->state.state == SYNC_MODULE_STATE_SLAVE) {
 		char host[NI_MAXHOST] = "";
 		struct sfptpd_ntpclient_peer *peer;
-		int rc;
 
 		peer = &ntp->state.peer_info.peers[ntp->state.selected_peer_idx];
 
-		rc = getnameinfo((struct sockaddr *) &peer->remote_address,
-				 peer->remote_address_len,
-				 host, sizeof host,
-				 NULL, 0, NI_NUMERICHOST);
-		if (rc != 0) {
-			DBG_L4("crny: getnameinfo: %s\n", gai_strerror(rc));
-		}
+		 getnameinfo((struct sockaddr *) &peer->remote_address,
+			     peer->remote_address_len,
+			     host, sizeof host,
+			     NULL, 0, NI_NUMERICHOST);
 
 		sfptpd_log_write_state(clock,
 			SFPTPD_CONFIG_GET_NAME(ntp->config),
@@ -2086,7 +2084,6 @@ static void ntp_on_write_topology(crny_module_t *ntp, sfptpd_sync_module_msg_t *
 	struct sfptpd_clock *clock;
 	char host[NI_MAXHOST] = "";
 	struct sfptpd_ntpclient_peer *peer;
-	int rc;
 
 	assert(ntp != NULL);
 	assert(msg != NULL);
@@ -2096,13 +2093,10 @@ static void ntp_on_write_topology(crny_module_t *ntp, sfptpd_sync_module_msg_t *
 
 	peer = &ntp->state.peer_info.peers[ntp->state.selected_peer_idx];
 
-	rc = getnameinfo((struct sockaddr *) &peer->remote_address,
-			 peer->remote_address_len,
-			 host, sizeof host,
-			 NULL, 0, NI_NUMERICHOST);
-	if (rc != 0) {
-		DBG_L4("crny: getnameinfo: %s\n", gai_strerror(rc));
-	}
+	getnameinfo((struct sockaddr *) &peer->remote_address,
+		    peer->remote_address_len,
+		    host, sizeof host,
+		    NULL, 0, NI_NUMERICHOST);
 
 	stream = msg->u.write_topology_req.stream;
 

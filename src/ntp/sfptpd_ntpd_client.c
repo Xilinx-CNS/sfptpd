@@ -75,50 +75,58 @@ void sfptpd_ntpclient_print_peers(struct sfptpd_ntpclient_peer_info *peer_info,
 
 	for (i = 0; i < peer_info->num_peers; i++)
 	{
+		int rc = 0;
+
 		peer = &peer_info->peers[i];
 		remote_host[0]	= '\0';
 		local_host[0]	= '\0';
 
-		int rc = getnameinfo((struct sockaddr *) &peer->remote_address,
-				     peer->remote_address_len,
-				     remote_host, sizeof remote_host,
-				     NULL, 0, NI_NUMERICHOST);
-		if (rc != 0) {
-			if (peer->self) {
-				strcpy(remote_host, "<reference clock>");
-			} else {
+		if (peer->self) {
+			strcpy(remote_host, "<reference clock>");
+		} else if (peer->remote_address.ss_family != 0) {
+			rc = getnameinfo((struct sockaddr *) &peer->remote_address,
+					 peer->remote_address_len,
+					 remote_host, sizeof remote_host,
+					 NULL, 0, NI_NUMERICHOST);
+			if (rc != 0) {
 				DBG_L5("ntpclient: getnameinfo: error "
 				       "retrieving remote_address, %s\n",
 				       gai_strerror(rc));
 				strcpy(remote_host, "<invalid>");
 			}
+		} else {
+			strcpy(remote_host, "<>");
 		}
 
-		rc = getnameinfo((struct sockaddr *) &peer->local_address,
-				 peer->local_address_len,
-				 local_host, sizeof local_host,
-				 NULL, 0, NI_NUMERICHOST);
-		if (rc != 0) {
-			if (peer->self) {
-				strcpy(local_host, "<reference clock>");
-			} else {
+		if (peer->self) {
+			strcpy(local_host, "<reference clock>");
+		} else if (peer->local_address.ss_family != 0) {
+			rc = getnameinfo((struct sockaddr *) &peer->local_address,
+					 peer->local_address_len,
+					 local_host, sizeof local_host,
+					 NULL, 0, NI_NUMERICHOST);
+			if (rc != 0) {
 				DBG_L5("ntpclient: getnameinfo: error "
 				       "retrieving local_address, %s\n",
 				       gai_strerror(rc));
 				strcpy(local_host, "<invalid>");
 			}
+		} else {
+			strcpy(local_host, "<>");
 		}
 
-		DBG_L5("%s-peer%d: remote-address %s, "
+		DBG_L5("%s-peer%d: ref-id %08X, remote-address %s, "
 		       "local-address %s, sent %u, received %u, "
+		       "selected %d, "
 		       "candidate %d, stratum %d, offset %0.3Lf ns, "
 		       "root disp %0.3Lf ns, "
 		       "smoothed_offset %0.3Lf ns, "
 		       "smoothed_root disp %0.3Lf ns, "
 		       "tracking_offset %0.3Lf ns\n",
-		       subsystem, i,
+		       subsystem, i, peer->ref_id,
 		       remote_host, local_host,
 		       peer->pkts_sent, peer->pkts_received,
+		       peer->selected,
 		       peer->candidate, peer->stratum,
 		       peer->offset, peer->root_dispersion,
 		       peer->smoothed_offset, peer->smoothed_root_dispersion,
