@@ -400,6 +400,25 @@ static int parse_control_script(struct sfptpd_config_section *section,
 }
 
 
+static int parse_allow_refclk(struct sfptpd_config_section *section,
+			      const char *option,
+			      unsigned int num_params,
+			      const char * const params[])
+{
+	sfptpd_crny_module_config_t *ntp = (sfptpd_crny_module_config_t *)section;
+	assert(num_params == 1);
+
+	if (!strcmp(params[0], "off"))
+		ntp->allow_refclk = false;
+	else if (!strcmp(params[0], "on"))
+		ntp->allow_refclk = true;
+	else
+		return EINVAL;
+
+	return 0;
+}
+
+
 static const sfptpd_config_option_t ntp_config_options[] =
 {
 	{"priority", "<NUMBER>",
@@ -429,6 +448,11 @@ static const sfptpd_config_option_t ntp_config_options[] =
 		"the default location which is: "
 		STRINGIFY(SFPTPD_CRNY_DEFAULT_CONTROL_SCRIPT),
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE, parse_control_script},
+	{"allow_refclk", "<off | on>",
+		"Whether to recognise reference clocks as external clock "
+		"sources. Needed when chrony handles PPS",
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE, parse_allow_refclk,
+		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_CRNY_DEFAULT_ALLOW_REFCLK)},
 };
 
 static int crny_validate_config(struct sfptpd_config_section *section)
@@ -695,7 +719,7 @@ void crny_stats_update(crny_module_t *ntp)
 }
 
 
-void crny_parse_state(struct ntp_state *state, int rc, bool offset_unsafe)
+void crny_parse_state(crny_module_t *ntp, struct ntp_state *state, int rc, bool offset_unsafe)
 {
 	unsigned int i;
 	bool candidates;
@@ -740,7 +764,7 @@ void crny_parse_state(struct ntp_state *state, int rc, bool offset_unsafe)
 		peer = &state->peer_info.peers[i];
 
 		/* Ignore ourselves */
-		if (peer->self)
+		if (peer->self && !ntp->config->allow_refclk)
 			continue;
 
 		if (peer->selected) {
@@ -1400,7 +1424,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 		} else if (rc == EINPROGRESS) {
 			next_query_state = NTP_QUERY_STATE_CONNECT_WAIT;
 		} else {
-			crny_parse_state(next_state, rc, next_state->offset_unsafe);
+			crny_parse_state(ntp, next_state, rc, next_state->offset_unsafe);
 			next_query_state = NTP_QUERY_STATE_SLEEP_DISCONNECTED;
 		}
 		break;
@@ -1455,7 +1479,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 			rc = handle_get_source_datum(ntp);
 			if (rc == ENOENT) {
 				if (++ntp->query.src_idx == next_state->peer_info.num_peers) {
-					crny_parse_state(next_state, 0, next_state->offset_unsafe);
+					crny_parse_state(ntp, next_state, 0, next_state->offset_unsafe);
 					update = true;
 					sfptpd_ntpclient_print_peers(&next_state->peer_info, MODULE);
 					next_query_state = NTP_QUERY_STATE_SLEEP_CONNECTED;
@@ -1477,7 +1501,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 			rc = handle_get_source_stats(ntp);
 			if (rc == ENOENT) {
 				if (++ntp->query.src_idx == next_state->peer_info.num_peers) {
-					crny_parse_state(next_state, 0, next_state->offset_unsafe);
+					crny_parse_state(ntp, next_state, 0, next_state->offset_unsafe);
 					update = true;
 					sfptpd_ntpclient_print_peers(&next_state->peer_info, MODULE);
 					next_query_state = NTP_QUERY_STATE_SLEEP_CONNECTED;
@@ -1498,7 +1522,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 		if (event == NTP_QUERY_EVENT_TRAFFIC) {
 			rc = handle_get_ntp_datum(ntp);
 			if (++ntp->query.src_idx == next_state->peer_info.num_peers) {
-				crny_parse_state(next_state, 0, next_state->offset_unsafe);
+				crny_parse_state(ntp, next_state, 0, next_state->offset_unsafe);
 				update = true;
 				sfptpd_ntpclient_print_peers(&next_state->peer_info, MODULE);
 				next_query_state = NTP_QUERY_STATE_SLEEP_CONNECTED;
@@ -1522,7 +1546,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 			if (ntp->chrony_running)
 				next_query_state = NTP_QUERY_STATE_CONNECT;
 			else
-				crny_parse_state(next_state, ENOPROTOOPT, next_state->offset_unsafe);
+				crny_parse_state(ntp, next_state, ENOPROTOOPT, next_state->offset_unsafe);
 			ntp->next_poll_time.sec += ntp->config->poll_interval;
 		}
 		break;
@@ -2529,6 +2553,7 @@ static struct sfptpd_config_section *ntp_config_create(const char *name,
 		new->convergence_threshold = 0.0;
 		new->poll_interval = 2;
 		new->clock_control = false;
+		new->allow_refclk = SFPTPD_CRNY_DEFAULT_ALLOW_REFCLK;
 	}
 
 	/* If this is an implicitly created sync instance, give it the lowest
