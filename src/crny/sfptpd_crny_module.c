@@ -1240,7 +1240,7 @@ int handle_get_source_stats(crny_module_t *ntp)
 	rc = check_reply(req, reply, CRNY_RESP_SOURCE_STATS);
 	if (rc != 0) {
 		DBG_L6("crny: get-peer%d-info: invalid reply, %s\n",
-		       ntp->query.src_idx, strerror(errno));
+		       ntp->query.src_idx, strerror(rc));
 		return ENOENT;
 	}
 
