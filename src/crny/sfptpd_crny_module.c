@@ -1459,6 +1459,8 @@ static bool crny_state_machine(crny_module_t *ntp,
 					next_query_state = NTP_QUERY_STATE_SLEEP_CONNECTED;
 				} else if (issue_get_source_datum(ntp) != 0)
 					disconnect = true;
+				else
+					next_query_state = NTP_QUERY_STATE_SOURCE_DATUM;
 			} else if (issue_get_source_stats(ntp) != 0)
 				disconnect = true;
 			else
@@ -1479,6 +1481,8 @@ static bool crny_state_machine(crny_module_t *ntp,
 					next_query_state = NTP_QUERY_STATE_SLEEP_CONNECTED;
 				} else if (issue_get_source_datum(ntp) != 0)
 					disconnect = true;
+				else
+					next_query_state = NTP_QUERY_STATE_SOURCE_DATUM;
 			} else if (issue_get_ntp_datum(ntp) != 0)
 				disconnect = true;
 			else
