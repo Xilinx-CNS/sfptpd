@@ -267,6 +267,16 @@ static const char *query_event_names[] = {
 	"REPLY_TIMEOUT",
 };
 
+static const char *crny_state_names[CRNY_STATE_MAX] = {
+	[CRNY_STATE_SYSPEER] = "selected",
+	[CRNY_STATE_UNREACHABLE] = "unreachable",
+	[CRNY_STATE_FALSETICKER] = "false-ticker",
+	[CRNY_STATE_JITTERY] = "jittery",
+	[CRNY_STATE_CANDIDATE] = "candidate",
+	[CRNY_STATE_OUTLIER] = "outlier",
+};
+
+
 /****************************************************************************
  * Function prototypes
  ****************************************************************************/
@@ -453,6 +463,11 @@ static const sfptpd_config_option_set_t ntp_config_option_set =
 /****************************************************************************
  * Internal Functions
  ****************************************************************************/
+
+static inline const char *crny_peer_state(enum crny_state_code code) {
+	return (code >= 0 && code <= CRNY_STATE_MAX ?
+		crny_state_names[code] : "invalid");
+}
 
 const char *crny_state_text(sfptpd_sync_module_state_t state, unsigned int alarms)
 {
@@ -1190,8 +1205,8 @@ int handle_get_source_datum(crny_module_t *ntp)
 	enum crny_state_code state = ntohs(src_data->state);
 	enum crny_src_mode_code mode = ntohs(src_data->mode);
 
-	DBG_L5("crny: get-peer%d-info: mode %d state %d\n",
-	       ntp->query.src_idx, mode, state);
+	DBG_L5("crny: get-peer%d-info: mode %d state %s\n",
+	       ntp->query.src_idx, mode, crny_peer_state(state));
 
 	peer->selected = (state == CRNY_STATE_SYSPEER);
 	peer->shortlist = (state == CRNY_STATE_CANDIDATE);

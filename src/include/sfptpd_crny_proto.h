@@ -135,7 +135,8 @@ enum crny_state_code {
 	CRNY_STATE_FALSETICKER   = 2,
 	CRNY_STATE_JITTERY       = 3,
 	CRNY_STATE_CANDIDATE     = 4, /* shortlist */
-	CRNY_STATE_OUTLIER       = 5
+	CRNY_STATE_OUTLIER       = 5,
+	CRNY_STATE_MAX
 };
 
 /* chrony source mode codes. These are different from ntpdata mode codes. */
