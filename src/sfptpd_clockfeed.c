@@ -14,6 +14,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/un.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <pthread.h>
@@ -167,7 +168,7 @@ struct clockfeed_source;
 struct clockfeed_shm {
 	struct sfptpd_clockfeed_sample samples[MAX_CLOCK_SAMPLES];
 	uint64_t magic;
-	int64_t write_counter;
+	_Atomic int64_t write_counter;
 };
 
 struct sfptpd_clockfeed_sub {
@@ -354,11 +355,12 @@ static void clockfeed_on_timer(void *user_context, unsigned int id)
 		const unsigned cadence_mask = (1 << cadence) - 1;
 
 		if ((source->cycles & cadence_mask) == 0) {
-			const unsigned index = source->shm.write_counter & index_mask;
+			const int64_t write_counter = source->shm.write_counter;
+			const unsigned index = write_counter & index_mask;
 			struct sfptpd_clockfeed_sample *record = &source->shm.samples[index];
 			struct sfptpd_timespec diff;
 
-			record->seq = source->shm.write_counter;
+			record->seq = write_counter;
 			record->rc = sfptpd_clock_compare(source->clock,
 						  sfptpd_clock_get_system_clock(),
 						  &diff);
@@ -374,14 +376,17 @@ static void clockfeed_on_timer(void *user_context, unsigned int id)
 			else
 				sfptpd_time_zero(&record->snapshot);
 
+			/* Memory barrier to make sure the record is written
+			   before the counter. */
+			atomic_thread_fence(memory_order_release);
+			source->shm.write_counter = write_counter + 1;
+
 			DBG_L6(FMT_SOURCE ": cycle %" PRIu64 ": write_counter %" PRId64 ": rc %d: "
 			       SFPTPD_FMT_SFTIMESPEC " " SFPTPD_FMT_SFTIMESPEC "\n",
 			       FARGS_SOURCE(source),
-			       source->cycles, source->shm.write_counter, record->rc,
+			       source->cycles, write_counter, record->rc,
 			       SFPTPD_ARGS_SFTIMESPEC(record->system),
 			       SFPTPD_ARGS_SFTIMESPEC(record->snapshot));
-
-			source->shm.write_counter++;
 		}
 		source->cycles++;
 		sources_count++;
@@ -891,6 +896,9 @@ static int clockfeed_compare_to_sys(struct sfptpd_clockfeed_sub *sub,
 	clock = sub->source->clock;
 	writer1 = shm->write_counter;
 
+	/* Memory barrier to make sure the record is read after the counter. */
+	atomic_thread_fence(memory_order_acquire);
+
 	if (sub->source->inactive)
 		return EOWNERDEAD;
 
@@ -910,7 +918,9 @@ static int clockfeed_compare_to_sys(struct sfptpd_clockfeed_sub *sub,
 
 	sfptpd_time_subtract(diff, &sample->snapshot, &sample->system);
 
-	/* Check for overrun */
+	/* Check for overrun. Make sure we read the whole record before
+	   the check and stop subsequent readers overtaking us. */
+	atomic_thread_fence(memory_order_acquire);
 	writer2 = shm->write_counter;
 	if (writer2 - writer1 >= MAX_CLOCK_SAMPLES - 1) {
 		WARNING(PREFIX "%s: last sample lost while reading - reader too slow? Writer got %" PRId64 " samples ahead\n",
