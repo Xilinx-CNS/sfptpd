@@ -17,6 +17,8 @@
 
 #include "sfptpd_test.h"
 
+#define SFPTPD_CONTROL_MAX_CLOCKS 7
+
 enum sfptpd_control_action {
 	CONTROL_NOP,
 	CONTROL_ERROR,
@@ -27,6 +29,7 @@ enum sfptpd_control_action {
 	CONTROL_TESTMODE,
 	CONTROL_DUMPTABLES,
 	CONTROL_PID_ADJUST,
+	CONTROL_BLOCK_CLOCK,
 };
 
 union sfptpd_control_action_parameters {
@@ -42,7 +45,12 @@ union sfptpd_control_action_parameters {
 		double kd;
 		bool reset;
 	} pid_adjust;
+	struct {
+		struct sfptpd_clock *clocks[SFPTPD_CONTROL_MAX_CLOCKS];
+		bool state;
+	} block_clock;
 };
+
 
 
 /****************************************************************************

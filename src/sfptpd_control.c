@@ -47,6 +47,7 @@ static const char *COMMAND_SELECTINSTANCE = "selectinstance";
 static const char *COMMAND_TESTMODE = "testmode";
 static const char *COMMAND_DUMPTABLES = "dumptables";
 static const char *COMMAND_PID_ADJUST = "pid_adjust";
+static const char *COMMAND_BLOCK_CLOCK = "block_clock";
 
 static const struct sfptpd_test_mode_descriptor test_modes[] = SFPTPD_TESTS_ARRAY;
 
@@ -259,6 +260,34 @@ enum sfptpd_control_action sfptpd_control_socket_get_action(union sfptpd_control
 		if (param->pid_adjust.servo_type_mask == 0)
 			param->pid_adjust.servo_type_mask = SFPTPD_SERVO_TYPE_ALL;
 		return CONTROL_PID_ADJUST;
+	} else if (!strcmp(command, COMMAND_BLOCK_CLOCK)) {
+		char *token;
+		int i = 0;
+
+		token = strsep(&opts, PARAM_DELIM);
+		param->block_clock.state = true;
+		memset(param->block_clock.clocks, '\0', sizeof param->block_clock.clocks);
+
+		/* Fixed parameters */
+		if (token != NULL && *token)
+			param->block_clock.state = strtod(token, NULL) ? true : false;
+
+		/* Clock parameters */
+		while ((token = strsep(&opts, PARAM_DELIM))) {
+			struct sfptpd_clock *clock = sfptpd_clock_find_by_name(token);
+			if (clock) {
+				if (i >= SFPTPD_CONTROL_MAX_CLOCKS) {
+					ERROR(PREFIX "too many clocks specified: %d\n", i + 1);
+					return CONTROL_ERROR;
+				}
+				param->block_clock.clocks[i++] = clock;
+			} else {
+				ERROR(PREFIX "%s has unknown clock identifier: %s\n", command, token);
+				return CONTROL_ERROR;
+			}
+		}
+
+		return CONTROL_BLOCK_CLOCK;
 	} else {
 		NOTICE(PREFIX "unknown command %s received\n",
 		       command);

@@ -743,6 +743,7 @@ static void on_control_socket_fd(int fd)
 		sfptpd_app_msg_t app;
 		sfptpd_servo_msg_t servo;
 	} msg;
+	int i;
 
 	action = sfptpd_control_socket_get_action(&param);
 	switch (action) {
@@ -808,6 +809,13 @@ static void on_control_socket_fd(int fd)
 				      SFPTPD_SERVO_MSG_PID_ADJUST,
 				      SFPTPD_MSG_POOL_GLOBAL, true);
 		break;
+	case CONTROL_BLOCK_CLOCK:
+		NOTICE("received 'block_clock' control command\n");
+		for (i = 0; i < SFPTPD_CONTROL_MAX_CLOCKS; i++) {
+			if (param.block_clock.clocks[i])
+				sfptpd_clock_set_blocked(param.block_clock.clocks[i],
+							 param.block_clock.state);
+		}
 	}
 }
 

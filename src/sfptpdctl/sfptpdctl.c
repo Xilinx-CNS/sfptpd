@@ -54,6 +54,8 @@ static void usage(FILE *stream)
 		"    dumptables           dump some internal state to message log\n"
 		"    pid_adjust=[KP[,[KI][,[KD][,local|ptp|pps|reset]*]]]\n"
 		"                         set PID coefficients with optional reset per servo type, or all by default\n"
+		"    block_clock=<1|0>[,CLOCK]*\n"
+		"                         block or unblock a list of clocks\n"
 		"\n"
 		"  OPTIONS\n"
 		"    -h, --help           Show usage\n"
