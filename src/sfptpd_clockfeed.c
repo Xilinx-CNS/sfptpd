@@ -335,7 +335,7 @@ static void clockfeed_reap_zombies(struct sfptpd_clockfeed *module,
  * structure for consumption in another thread via helper functions. Typically
  * only the last snapshot available will be consumed but additional samples
  * are present to help avoid losing samples through contention and in case
- * future consumers can benefit from out-of-date history.
+ * future consumers can benefit from recent history.
  */
 static void clockfeed_on_timer(void *user_context, unsigned int id)
 {
@@ -974,7 +974,7 @@ int sfptpd_clockfeed_compare(struct sfptpd_clockfeed_sub *sub1,
 			mono = &mono1;
 	}
 
-	DBG_L6("consumer: comparing %s (%p shm) to %s (%p shm)\n",
+	DBG_L6("consumer: requested to compare %s (%p shm) with %s (%p shm)\n",
 		shm1 ? sfptpd_clock_get_short_name(feed1->clock) : "<sys>", shm1,
 		shm2 ? sfptpd_clock_get_short_name(feed2->clock) : "<sys>", shm2);
 
