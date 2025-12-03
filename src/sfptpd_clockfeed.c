@@ -168,7 +168,9 @@ struct clockfeed_source;
 struct clockfeed_shm {
 	struct sfptpd_clockfeed_sample samples[MAX_CLOCK_SAMPLES];
 	uint64_t magic;
-	_Atomic int64_t write_counter;
+
+	/* Number of samples (or errors) that have been recorded. */
+	_Atomic uint64_t write_counter;
 };
 
 struct sfptpd_clockfeed_sub {
@@ -178,14 +180,15 @@ struct sfptpd_clockfeed_sub {
 	struct clockfeed_source *source;
 
 	/* Sample counter for last read sample */
-	int64_t read_counter;
+	uint64_t last_read;
 
 	/* Minimum counter for next read sample */
-	int64_t min_counter;
+	uint64_t min_next_read;
 
 	/* Flags */
 	bool have_max_age:1;
 	bool have_max_age_diff:1;
+	bool have_min_next_read:1;
 
 	/* Maximum age of sample */
 	struct sfptpd_timespec max_age;
@@ -277,12 +280,12 @@ static void clockfeed_dump_state(struct sfptpd_clockfeed *clockfeed, int sev)
 		DBG_LX(sev, " %s sources:\n", which[i]);
 		for (source = (i == 0 ? clockfeed->active : clockfeed->inactive); source; source = source->next) {
 			DBG_LX(sev, "  - clock %s\n", sfptpd_clock_get_short_name(source->clock));
-			DBG_LX(sev, "     write_counter %" PRId64 "\n", source->shm.write_counter);
+			DBG_LX(sev, "     write_counter %" PRIu64 "\n", source->shm.write_counter);
 			DBG_LX(sev, "     subscribers:\n");
 			for (subscriber = source->subscribers; subscriber; subscriber = subscriber->next) {
 				DBG_LX(sev, "    - subscriber %p\n", subscriber);
-				DBG_LX(sev, "       read_counter %" PRId64 "\n", subscriber->read_counter);
-				DBG_LX(sev, "       min_counter %" PRId64 "\n", subscriber->min_counter);
+				DBG_LX(sev, "       last_read %" PRIu64 "\n", subscriber->last_read);
+				DBG_LX(sev, "       min_next_read %" PRIu64 "\n", subscriber->min_next_read);
 			}
 		}
 	}
@@ -355,7 +358,7 @@ static void clockfeed_on_timer(void *user_context, unsigned int id)
 		const unsigned cadence_mask = (1 << cadence) - 1;
 
 		if ((source->cycles & cadence_mask) == 0) {
-			const int64_t write_counter = source->shm.write_counter;
+			const uint64_t write_counter = source->shm.write_counter;
 			const unsigned index = write_counter & index_mask;
 			struct sfptpd_clockfeed_sample *record = &source->shm.samples[index];
 			struct sfptpd_timespec diff;
@@ -381,7 +384,7 @@ static void clockfeed_on_timer(void *user_context, unsigned int id)
 			atomic_thread_fence(memory_order_release);
 			source->shm.write_counter = write_counter + 1;
 
-			DBG_L6(FMT_SOURCE ": cycle %" PRIu64 ": write_counter %" PRId64 ": rc %d: "
+			DBG_L6(FMT_SOURCE ": cycle %" PRIu64 ": write_counter %" PRIu64 ": rc %d: "
 			       SFPTPD_FMT_SFTIMESPEC " " SFPTPD_FMT_SFTIMESPEC "\n",
 			       FARGS_SOURCE(source),
 			       source->cycles, write_counter, record->rc,
@@ -562,8 +565,8 @@ static void clockfeed_on_subscribe(struct sfptpd_clockfeed *module,
 
 		subscriber->magic = CLOCKFEED_SUBSCRIBER_MAGIC;
 		subscriber->source = source;
-		subscriber->read_counter = -1;
-		subscriber->min_counter = -1;
+		subscriber->last_read = UINT64_MAX;
+		subscriber->min_next_read = UINT64_MAX;
 		subscriber->next = source->subscribers;
 		source->subscribers = subscriber;
 
@@ -885,16 +888,17 @@ static int clockfeed_compare_to_sys(struct sfptpd_clockfeed_sub *sub,
 	struct sfptpd_clock *clock;
 	struct sfptpd_timespec now_mono;
 	struct sfptpd_timespec age;
-	int64_t writer1;
-	int64_t writer2;
+	const bool have_min_next_read = sub->have_min_next_read;
 
+	sub->have_min_next_read = false;
 	sfptpd_time_zero(diff);
 
 	DBG_L5(FMT_SUB " consumer: comparing (%p shm) to sys\n",
 	       FARGS_SUB(sub), shm);
 
 	clock = sub->source->clock;
-	writer1 = shm->write_counter;
+	const uint64_t writer1 = shm->write_counter;
+	const uint64_t latest_sample = writer1 - 1;
 
 	/* Memory barrier to make sure the record is read after the counter. */
 	atomic_thread_fence(memory_order_acquire);
@@ -906,12 +910,17 @@ static int clockfeed_compare_to_sys(struct sfptpd_clockfeed_sub *sub,
 		return ENOENT;
 
 	if (writer1 == 0) {
+		/* When the index rolls over we will incorrectly infer that
+		   we did not obtain a sample. This, mostly harmless,
+		   spurious event will happen once every 36 billion years
+		   at 16 samples per second. Then normal operation will
+		   resume for the next sample. */
 		ERROR(PREFIX "no samples yet obtained from %s\n",
 		      sfptpd_clock_get_short_name(clock));
 		return EAGAIN;
 	}
 
-	sample = &shm->samples[(writer1 - 1) & index_mask];
+	sample = &shm->samples[latest_sample & index_mask];
 
 	if (sample->rc != 0)
 		return sample->rc;
@@ -921,17 +930,18 @@ static int clockfeed_compare_to_sys(struct sfptpd_clockfeed_sub *sub,
 	/* Check for overrun. Make sure we read the whole record before
 	   the check and stop subsequent readers overtaking us. */
 	atomic_thread_fence(memory_order_acquire);
-	writer2 = shm->write_counter;
-	if (writer2 - writer1 >= MAX_CLOCK_SAMPLES - 1) {
-		WARNING(PREFIX "%s: last sample lost while reading - reader too slow? Writer got %" PRId64 " samples ahead\n",
+	const uint64_t writer2 = shm->write_counter;
+	if (writer2 - latest_sample >= MAX_CLOCK_SAMPLES) {
+		WARNING(PREFIX "%s: last sample lost while reading - reader too slow? Writer got %" PRIu64 " samples ahead\n",
 		        sfptpd_clock_get_short_name(clock), writer2 - writer1);
 		return ENODATA;
 	}
 
 	/* Check for old sample when new one requested */
-	if (writer1 - sub->min_counter < 0) {
-		WARNING(PREFIX "%s: old sample (%d) when fresh one (%d) requested\n",
-		        sfptpd_clock_get_short_name(clock), writer1, sub->min_counter);
+	if (have_min_next_read &&
+	    (int64_t) (latest_sample - sub->min_next_read) < 0) {
+		WARNING(PREFIX "%s: old sample (%" PRIu64 ") when fresh one (%" PRIu64 ") requested\n",
+		        sfptpd_clock_get_short_name(clock), latest_sample, sub->min_next_read);
 		return ESTALE;
 	}
 	if (sub->have_max_age &&
@@ -950,7 +960,7 @@ static int clockfeed_compare_to_sys(struct sfptpd_clockfeed_sub *sub,
 	if (mono_time)
 		*mono_time = sample->mono;
 	if (sample->rc == 0) {
-		sub->read_counter = writer1;
+		sub->last_read = latest_sample;
 	}
 
 	return sample->rc;
@@ -1026,10 +1036,12 @@ void sfptpd_clockfeed_require_fresh(struct sfptpd_clockfeed_sub *sub)
 
 	assert(sub->magic == CLOCKFEED_SUBSCRIBER_MAGIC);
 
-	DBG_L6(FMT_SUB ": updating minimum read counter from %" PRId64 " to %" PRId64 "\n",
-	       FARGS_SUB(sub), sub->min_counter, sub->read_counter + 1);
+	DBG_L6(FMT_SUB ": updating minimum read counter from %" PRIu64 " to %" PRIu64 "\n",
+	       FARGS_SUB(sub),
+	       sub->min_next_read, sub->last_read + 1);
 
-	sub->min_counter = sub->read_counter + 1;
+	sub->min_next_read = sub->last_read + 1;
+	sub->have_min_next_read = true;
 }
 
 void sfptpd_clockfeed_set_max_age(struct sfptpd_clockfeed_sub *sub,
