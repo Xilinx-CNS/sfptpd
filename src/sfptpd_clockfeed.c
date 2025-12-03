@@ -753,6 +753,7 @@ struct sfptpd_clockfeed *sfptpd_clockfeed_create(struct sfptpd_thread **threadre
 		return NULL;
 	}
 
+	clockfeed->magic = CLOCKFEED_MODULE_MAGIC;
 	clockfeed->poll_period_log2 = min_poll_period_log2;
 
 	/* Create the statistics collection */
@@ -772,7 +773,6 @@ struct sfptpd_clockfeed *sfptpd_clockfeed_create(struct sfptpd_thread **threadre
 		goto fail;
 	}
 
-	clockfeed->magic = CLOCKFEED_MODULE_MAGIC;
 	clockfeed->thread = *threadret;
 	return clockfeed;
 
