@@ -36,6 +36,7 @@
 #define OPT_NO_DAEMON   0x10001
 #define OPT_DAEMON      0x10002
 #define OPT_CONSOLE     0x10003
+#define OPT_CPU         0x10004
 
 #define CONFIG_REDACTION_STRING "********"
 
@@ -53,6 +54,7 @@ static const struct option command_line_options_long[] =
 	{"no-daemon", 0, NULL, OPT_NO_DAEMON},
 	{"daemon", 0, NULL, OPT_DAEMON},
 	{"console", 0, NULL, OPT_CONSOLE},
+	{"cpu", 1, NULL, OPT_CPU},
 	{"priv-helper", 2, NULL, (int)'p'},
 	{NULL, 0, NULL, 0}
 };
@@ -103,6 +105,8 @@ static void config_display_help(void)
 		"-t, --test-config            Test configuration\n"
 		"-u, --user=USER[:GROUP]      Run as user USER (and group GROUP)\n"
 		"-p, --priv-helper[=PATH]     Use privileged helper (default path: %s)\n"
+		"    --cpu=([THREAD=](FROM[-TO])[,...])[;...]\n"
+		"                             Affinitise THREAD to given CPU ranges\n"
 		"    --no-daemon              Do not run as a daemon, overriding config file\n"
 		"    --daemon                 Run as a daemon, overriding config file\n"
 		"-v, --verbose                Verbose: enable stats, trace and send output to stdout/stderr\n"
@@ -112,7 +116,13 @@ static void config_display_help(void)
 		"Runtime Signals:\n"
 		"SIGHUP              Rotate message and statistics log (if logging to file)\n"
 		"SIGUSR1             Step the clocks by the current offset from the master clock\n"
-		"\n",
+		"\n"
+		"Threads:\n"
+		"engine, clocks, freerun, ptp, pps, ntp, crny"
+#ifdef HAVE_GPS
+                ", gps"
+#endif
+		"\n\n",
 		SFPTPD_VERSION_TEXT,
 		SFPTPD_DEFAULT_PRIV_HELPER_PATH
 	);
@@ -670,6 +680,18 @@ int sfptpd_config_parse_command_line_pass1(struct sfptpd_config *config,
 			sfptpd_config_general_set_console_logging(config);
 			break;
 
+		case OPT_CPU:
+			char *cpus, *thread;
+			while ((cpus = thread = strsep(&optarg, ";"))) {
+				strsep(&cpus, "=");
+				if (cpus == NULL) {
+					cpus = thread;
+					thread = "";
+				}
+				sfptpd_thread_config_affinity(thread, cpus);
+			}
+			break;
+
 		case 'i':
 			/* Update the interface name for the global section of
 			 * each sync module. */
@@ -732,6 +754,7 @@ int sfptpd_config_parse_command_line_pass2(struct sfptpd_config *config,
 		case 'D':
 		case 'u':
 		case OPT_VERSION:
+		case OPT_CPU:
 		case 'p':
 			/* We've already handled these- ignore them */
 			break;

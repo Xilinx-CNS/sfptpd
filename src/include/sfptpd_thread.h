@@ -304,5 +304,11 @@ void sfptpd_thread_event_destroy_writer(struct sfptpd_thread_event_writer *write
  */
 int sfptpd_thread_event_post(struct sfptpd_thread_event_writer *writer);
 
+/** Configure affinity for a future thread
+ * @param thread_name Name of matching thread
+ * @param cpu_spec Required CPU affinity in taskset(1) CPU list format
+ * @return 0 on success or an errno otherwise
+ */
+int sfptpd_thread_config_affinity(char *thread_name, char *cpu_spec);
 
 #endif /* _SFPTPD_THREAD_H */

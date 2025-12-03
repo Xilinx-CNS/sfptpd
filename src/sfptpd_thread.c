@@ -9,12 +9,14 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <assert.h>
+#include <ctype.h>
 #include <pthread.h>
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sched.h>
 #include <signal.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
@@ -194,6 +196,19 @@ struct sfptpd_thread
 	struct sfptpd_event *event_list;
 };
 
+/* Thread affinity config */
+struct sfptpd_thread_affinity_config
+{
+	/* Config for next thread */
+	struct sfptpd_thread_affinity_config *next;
+
+	/* Name of matching thread */
+	char *thread_name;
+
+	/* Affinity */
+	cpu_set_t *set;
+	size_t set_size;
+};
 
 /* Threading library context */
 struct sfptpd_thread_lib
@@ -224,6 +239,9 @@ struct sfptpd_thread_lib
 
 	/* Zombie list */
 	struct sfptpd_thread *zombie_list;
+
+	/* Affinity config list */
+	struct sfptpd_thread_affinity_config *affinities;
 };
 
 
@@ -1760,6 +1778,7 @@ static int thread_create(const char *name, const struct sfptpd_thread_ops *ops,
 	/* If we are creating a child thread, create a new pthread */
 	if (!root_thread) {
 		struct sfptpd_thread *self = sfptpd_thread_self();
+		struct sfptpd_thread_affinity_config *affinity;
 		sfptpd_msg_thread_startup_status_t *msg = &new->startup_status;
 		sfptpd_msg_hdr_t *hdr;
 		char thread_name[16];
@@ -1782,6 +1801,19 @@ static int thread_create(const char *name, const struct sfptpd_thread_ops *ops,
 		snprintf(thread_name, sizeof thread_name, "%.7s:%s",
 			 program_invocation_short_name, name);
 		pthread_setname_np(new->pthread, thread_name);
+
+		/* Set the thread affinitisation, if configured. */
+		for (affinity = sfptpd_thread_lib.affinities;
+		     affinity && strcmp(affinity->thread_name, name);
+		     affinity = affinity->next);
+		if (!affinity)
+			for (affinity = sfptpd_thread_lib.affinities;
+			     affinity && *affinity->thread_name;
+			     affinity = affinity->next); /* Default */
+		if (affinity && (rc = pthread_setaffinity_np(new->pthread,
+							     affinity->set_size,
+							     affinity->set)))
+			WARNING("thread: could not affinitise: %s\n", name);
 
 		/* Wait for the response from the thread to indicate that
 		 * startup is complete. */
@@ -1836,6 +1868,38 @@ fail1:
 	new->magic = 0;
 	free(new);
 	return rc;
+}
+
+/* Parse a CPU range in the form MIN[-MAX] into the range array.
+ * As a side effect, update the value of *max if a higher value is seen.
+ */
+static int thread_parse_cpu_range(const char *str, int *from, int *to, int *max) {
+	enum { S_FROM, S_TO, S_DONE } state = S_FROM;
+	int val = 0;
+	char c = -1;
+
+	while (state < S_DONE && c) {
+		if (isdigit(c = *str++)) {
+			val = val * 10 + c - '0';
+		} else if ((c == '-' && state == S_FROM) ||
+			   c == '\0') {
+			if (state++ == S_FROM)
+				*from = val;
+			*to = val;
+			val = 0;
+		} else {
+			return EINVAL;
+		}
+	}
+
+	/* Nothing listed */
+	if (state == S_FROM)
+		return EINVAL;
+
+	if (*to > *max)
+		*max = *to;
+
+	return 0;
 }
 
 
@@ -1901,6 +1965,13 @@ fail1:
 void sfptpd_threading_shutdown(void)
 {
 	struct sfptpd_thread *thread;
+
+	while (sfptpd_thread_lib.affinities) {
+		void *to_free = sfptpd_thread_lib.affinities;
+		free(sfptpd_thread_lib.affinities->set);
+		sfptpd_thread_lib.affinities = sfptpd_thread_lib.affinities->next;
+		free(to_free);
+	}
 
 	for (thread = sfptpd_thread_lib.thread_list; thread != NULL; thread = thread->next)
 		WARNING("threading shutdown but thread %s still exists\n",
@@ -2266,5 +2337,51 @@ int sfptpd_thread_user_fd_remove(int fd)
 	return 0;
 }
 
+int sfptpd_thread_config_affinity(char *thread_name, char *cpu_spec)
+{
+	struct sfptpd_thread_affinity_config *config;
+	char *rest = cpu_spec;
+	char *end = cpu_spec;
+	char *tok;
+	int from, to;
+	int max = 0;
+	int rc = 0;
+	int cpu;
+
+	/* Size up mask to maximum requested CPU index */
+	while((tok = strsep(&rest, ","))) {
+		if ((rc = thread_parse_cpu_range(tok, &from, &to, &max)) != 0) {
+			ERROR("invalid CPU list: %s\n", tok);
+			return rc;
+		}
+		end = tok;
+	}
+
+	config = calloc(1, sizeof *config);
+	if (config == NULL) {
+		return rc;
+	}
+	config->thread_name = thread_name;
+
+	config->set_size = CPU_ALLOC_SIZE(max++);
+	config->set = CPU_ALLOC(max);
+	if (config->set == NULL) {
+		ERROR("allocating CPU mask: %s\n", strerror(rc = errno));
+		free(config);
+		return rc;
+	}
+	CPU_ZERO_S(config->set_size, config->set);
+
+	for (tok = cpu_spec; tok <= end; tok += strlen(tok) + 1) {
+		thread_parse_cpu_range(tok, &from, &to, &max);
+		for (cpu = from; cpu <= to; cpu ++)
+			CPU_SET_S(cpu, config->set_size, config->set);
+	}
+
+	config->next = sfptpd_thread_lib.affinities;
+	sfptpd_thread_lib.affinities = config;
+
+	return 0;
+}
 
 /* fin */
