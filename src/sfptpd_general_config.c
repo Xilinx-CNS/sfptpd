@@ -1867,13 +1867,6 @@ static const sfptpd_config_option_t config_general_options[] =
 		(sfptpd_config_option_parser_t) parse_path,
 		.cookie = SFPTPD_PATH_JSON_STATS,
 		.dfl = "Disabled by default"},
-	{"json_remote_monitor", "<filename>",
-		"Write JSON lines to this file for data collected by the PTP "
-		"remote monitor (which is DEPRECATED in favour of sfptpmon)",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		(sfptpd_config_option_parser_t) parse_path,
-		.cookie = SFPTPD_PATH_JSON_REMOTE_MONITOR,
-		.dfl = "Disabled by default"},
 	{"hotplug_detection_mode", "<netlink | auto>",
 		"obsolete option to control how interface and bond changes are "
 		"detected. The option value is ignored and netlink used.",
@@ -2166,7 +2159,6 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		memcpy(new->phc_pps_method, sfptpd_default_pps_method, sizeof new->phc_pps_method);
 
 		new->json_stats_filename = strdup("");
-		new->json_remote_monitor_filename = strdup("");
 
 		new->clustering_mode = SFPTPD_DEFAULT_CLUSTERING_MODE;
                 new->clustering_guard_enabled = SFPTPD_DEFAULT_CLUSTERING_GUARD;

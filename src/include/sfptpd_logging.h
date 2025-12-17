@@ -322,20 +322,6 @@ struct sfptpd_log *sfptpd_log_open_statistics(struct sfptpd_clock *clock,
 struct sfptpd_log *sfptpd_log_open_statistics_json(struct sfptpd_clock *clock,
 					      const char *entity_name);
 
-/** Open remote monitoring file for writing. It is the responsibility of the
- * caller to close the file once the information has been written using
- * sfptpd_log_file_close().
- * @return A logging object on success or NULL on error
- */
-struct sfptpd_log *sfptpd_log_open_remote_monitor(void);
-
-/** Open remote monitoring file for writing streaming stats in JSON Lines
- * format. It is the responsibility of the caller to close the file once
- * the information has been written using sfptpd_log_file_close().
- * @return A logging object on success or NULL on error
- */
-struct sfptpd_log *sfptpd_log_open_remote_monitor_json(void);
-
 /** Get the stream for a log file.
  * @param log The opaque log file state.
  * return The stream or NULL on error
@@ -386,11 +372,6 @@ FILE *sfptpd_log_get_stats_out_stream(void);
  * @return Whether the buffer was flushed.
  */
 bool sfptpd_log_rt_stats_written(size_t chars, bool flush);
-
-/** Gets the output stream for remote monitoring. Don't open/close this.
- * @return Stream pointer. May be NULL if remote monitoring is disabled.
- */
-FILE* sfptpd_log_get_remote_monitor_out_stream(void);
 
 /** Log a line of lexed configuration */
 void sfptpd_log_lexed_config(const char *format, ...);

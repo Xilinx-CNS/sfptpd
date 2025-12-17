@@ -144,7 +144,6 @@ enum sfptpd_path {
 	SFPTPD_PATH_CONTROL_SOCKET,
 	SFPTPD_PATH_METRICS_SOCKET,
 	SFPTPD_PATH_JSON_STATS,
-	SFPTPD_PATH_JSON_REMOTE_MONITOR,
 	SFPTPD_PATH_RUN_DIR,
 	SFPTPD_PATH_COUNT
 };
@@ -266,7 +265,6 @@ typedef struct sfptpd_config_general {
 			char *control_path;
 			char *metrics_path;
 			char *json_stats_filename;
-			char *json_remote_monitor_filename;
 			char *run_dir;
 		};
 	};

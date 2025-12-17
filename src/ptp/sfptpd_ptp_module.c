@@ -242,9 +242,6 @@ struct sfptpd_ptp_module {
 	/* PTPD private shared global data structure */
 	struct ptpd_global_context *ptpd_global_private;
 
-	/* PTP remote monitor */
-	struct sfptpd_ptp_monitor *remote_monitor;
-
 	/* Whether the timers have been started */
 	bool timers_started;
 
@@ -2924,11 +2921,6 @@ static void ptp_on_stats_end_period(sfptpd_ptp_module_t *ptp, sfptpd_sync_module
 									SFPTPD_CONFIG_GET_NAME(instance->config));
 	}
 
-	/* Write remote monitoring stats */
-	if (ptp->remote_monitor != NULL) {
-		sfptpd_ptp_monitor_flush(ptp->remote_monitor);
-	}
-
 	for (interface = ptp->intf_list; interface; interface = interface->next)
 		ptpd_process_intf_stats(interface->ptpd_intf_private, false);
 
@@ -3630,16 +3622,6 @@ static int ptp_start_instance(struct sfptpd_ptp_instance *instance) {
 	 * default config or config file parsing */
 	ptp_configure_ptpd(config);
 
-	/* Register the PTP remote monitor with all instances if configured */
-	if (config->remote_monitor) {
-		struct ptpd_remote_stats_logger *logger = &config->ptpd_port.remoteStatsLogger;
-		logger->log_rx_sync_timing_data_fn = sfptpd_ptp_monitor_update_rx_timing;
-		logger->log_rx_sync_computed_data_fn = sfptpd_ptp_monitor_update_rx_computed;
-		logger->log_tx_event_timestamps_fn = sfptpd_ptp_monitor_log_tx_timestamp;
-		logger->log_slave_status_fn = sfptpd_ptp_monitor_update_slave_status;
-		logger->context = instance->intf->module->remote_monitor;
-	}
-
 	/* Set up the critical stats logging callback */
 	config->ptpd_port.criticalStatsLogger.log_fn = ptp_critical_stats_update;
 	config->ptpd_port.criticalStatsLogger.private = instance;
@@ -3778,11 +3760,6 @@ static int ptp_on_startup(void *context)
 		CRITICAL("failed to subscribe to desired multicasts, %s\n",
 			 strerror(rc));
 		return rc;
-	}
-
-	/* Start the remote monitor */
-	if (instance->config->remote_monitor) {
-		ptp->remote_monitor = sfptpd_ptp_monitor_create();
 	}
 
 	for (instance = ptp_get_first_instance(ptp); instance; instance = ptp_get_next_instance(instance)) {
@@ -3991,11 +3968,6 @@ static void ptp_on_shutdown(void *context)
 	sfptpd_multicast_unsubscribe(SFPTPD_SERVO_MSG_PID_ADJUST);
 
 	ptp_destroy_instances(ptp);
-
-	/* Delete the monitor */
-	if (ptp->remote_monitor != NULL) {
-		sfptpd_ptp_monitor_destroy(ptp->remote_monitor);
-	}
 
 	/* Delete the ptpd structures. At this point (after ptp_destroy_instances()
 	 * above) there should only be the global context left to free. */

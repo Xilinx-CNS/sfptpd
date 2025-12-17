@@ -205,7 +205,6 @@ typedef enum {
  */
 typedef enum {
 	PTPD_NODE_CLOCK = 0,
-	PTPD_NODE_MONITOR
 } ptpd_node_type_e;
 
 /**

@@ -159,10 +159,6 @@ static int parse_ptp_mode(struct sfptpd_config_section *section, const char *opt
 		ptp->ptpd_port.slaveOnly = FALSE;
 		ptp->ptpd_port.masterOnly = TRUE;
 		ptp->ptpd_port.node_type = PTPD_NODE_CLOCK;
-	} else if (strcmp(params[0], "monitor") == 0) {
-		ptp->ptpd_port.slaveOnly = FALSE;
-		ptp->ptpd_port.masterOnly = FALSE;
-		ptp->ptpd_port.node_type = PTPD_NODE_MONITOR;
 	} else {
 		rc = EINVAL;
 	}
@@ -1059,17 +1055,6 @@ static int parse_fir_filter_size(struct sfptpd_config_section *section, const ch
 }
 
 
-static int parse_remote_monitor(struct sfptpd_config_section *section, const char *option,
-				unsigned int num_params, const char * const params[], int)
-{
-	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
-	assert(num_params == 0);
-
-	ptp->remote_monitor = true;
-	return 0;
-}
-
-
 static int parse_mon_monitor_address(struct sfptpd_config_section *section, const char *option,
 				     unsigned int num_params, const char * const params[], int)
 {
@@ -1292,7 +1277,7 @@ static const sfptpd_config_option_t ptp_config_options[] =
 		"2.1 => IEEE1588-2019. The default version is 2.0.",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
 		parse_ptp_version},
-	{"ptp_mode", "<slave | master | master-only | monitor>",
+	{"ptp_mode", "<slave | master | master-only>",
 		"Specifies the PTP mode of operation. The default mode is slave",
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_ptp_mode},
@@ -1556,11 +1541,6 @@ static const sfptpd_config_option_t ptp_config_options[] =
 		"Default is " STRINGIFY(DEFAULT_FIR_FILTER_SIZE) ".",
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_fir_filter_size},
-	{"remote_monitor", "",
-		"Enable the remote monitor. Collects Slave Event Monitoring "
-		"messages. DEPRECATED since v3.7.0.",
-		0, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_remote_monitor},
 	{"mon_monitor_address", "ADDRESS[:PORT]*",
 		"Address of up to " STRINGIFY(MAX_SLAVE_EVENT_DESTS) " "
 		"monitoring stations to which to send unicast signaling "

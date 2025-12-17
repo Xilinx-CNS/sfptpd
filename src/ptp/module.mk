@@ -13,8 +13,7 @@ include $(dir)/module.mk
 
 
 LIB_SRCS_$(d) := sfptpd_ptp_module.c sfptpd_ptp_config.c \
-	sfptpd_ptp_timestamp_dataset.c \
-	sfptpd_ptp_monitor.c
+	sfptpd_ptp_timestamp_dataset.c
 
 LIB_$(d) := ptp
 

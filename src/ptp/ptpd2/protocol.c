@@ -164,30 +164,8 @@ static const struct tlv_handling tlv_handlers[] = {
 		.pass1_handler_fn = NULL,
 		.pass2_handler_fn = NULL
 	},
-	{
-		.tlv_type = PTPD_TLV_SLAVE_RX_SYNC_TIMING_DATA,
-		.name = "SLAVE_RX_SYNC_TIMING_DATA",
-		.permitted_message_types_mask = 1 << PTPD_MSG_SIGNALING,
-		.required_acl_types_mask = PTPD_ACL_MONITORING,
-		.pass1_handler_fn = NULL,
-		.pass2_handler_fn = slave_rx_sync_timing_data_handler
-	},
-	{
-		.tlv_type = PTPD_TLV_SLAVE_RX_SYNC_COMPUTED_DATA,
-		.name = "SLAVE_RX_SYNC_COMPUTED_DATA",
-		.permitted_message_types_mask = 1 << PTPD_MSG_SIGNALING,
-		.required_acl_types_mask = PTPD_ACL_MONITORING,
-		.pass1_handler_fn = NULL,
-		.pass2_handler_fn = slave_rx_sync_computed_data_handler
-	},
-	{
-		.tlv_type = PTPD_TLV_SLAVE_TX_EVENT_TIMESTAMPS,
-		.name = "SLAVE_TX_EVENT_TIMESTAMPS",
-		.permitted_message_types_mask = 1 << PTPD_MSG_SIGNALING,
-		.required_acl_types_mask = PTPD_ACL_MONITORING,
-		.pass1_handler_fn = NULL,
-		.pass2_handler_fn = slave_tx_event_timestamps_handler
-	},
+	/* Example of an organisation extension TLV handler, from
+	 * the old remote monitor, now removed.
 	{
 		.tlv_type = PTPD_TLV_ORGANIZATION_EXTENSION_NON_FORWARDING,
 		.organization_id = PTPD_SFC_TLV_ORGANISATION_ID,
@@ -197,6 +175,7 @@ static const struct tlv_handling tlv_handlers[] = {
 		.pass1_handler_fn = NULL,
 		.pass2_handler_fn = slave_status_handler
 	},
+	 */
 	{
 		.tlv_type = PTPD_TLV_PORT_COMMUNICATION_CAPABILITIES,
 		.name = "PORT_COMMUNICATION_CAPABILITIES",
@@ -1019,19 +998,10 @@ processMessage(InterfaceOpts *ifOpts, PtpInterface *ptpInterface, struct sfptpd_
 		return;
 	}
 
-
-	PtpClock *monitoringPort = NULL;
 	for (port = ptpInterface->ports; port; port = port->next) {
-		if (port->rtOpts.node_type == PTPD_NODE_MONITOR)
-			monitoringPort = port;
 		if (port->domainNumber == ptpInterface->msgTmpHeader.domainNumber)
 			break;
 	}
-
-	/* Divert any traffic for unhandled domains to the monitoring
-	   port if one is defined. */
-	if (port == NULL && monitoringPort != NULL)
-		port = monitoringPort;
 
 	if (port != NULL) {
 		DBG2("delivering message from %s for domain %d to port %d (instance %s)\n",
@@ -1072,8 +1042,7 @@ processPortMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
 
 	assert(ptpClock);
 	assert(ptpClock->interface);
-	assert(ptpClock->interface->msgTmpHeader.domainNumber == ptpClock->domainNumber ||
-	       rtOpts->node_type == PTPD_NODE_MONITOR);
+	assert(ptpClock->interface->msgTmpHeader.domainNumber == ptpClock->domainNumber);
 
 	ptpInterface = ptpClock->interface;
 

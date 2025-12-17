@@ -45,9 +45,6 @@ typedef struct sfptpd_ptp_module_config {
 	/** PPS statistics logging enabled */
 	bool pps_logging;
 
-	/** Remote monitor enabled */
-	bool remote_monitor;
-
 	/** PTP trace level */
 	unsigned int trace_level;
 
@@ -96,7 +93,6 @@ typedef struct sfptpd_ptp_bond_info sfptpd_ptp_bond_info_t;
 /* Forward structure declarations */
 struct sfptpd_engine;
 struct sfptpd_thread;
-struct sfptpd_ptp_monitor;
 
 
 /****************************************************************************
@@ -155,69 +151,6 @@ int sfptpd_ptp_module_create(struct sfptpd_config *config,
 			     int instances_info_entries,
 			     const struct sfptpd_link_table *link_table,
 			     bool *link_table_subscriber);
-
-/** Create a remote stats monitor.
- * @return the monitor object, or NULL on failure.
- */
-struct sfptpd_ptp_monitor *sfptpd_ptp_monitor_create(void);
-
-/** Destroy a remote stats monitor.
- * @return the monitor object, or NULL on failure.
- */
-void sfptpd_ptp_monitor_destroy(struct sfptpd_ptp_monitor *monitor);
-
-/** Post rx event timing stats received from a remote host to the monitor
- * @param logger a callback object used by ptpd that contains a reference to
- * the monitor object.
- * @param stats metadata for the stats.
- * @param num_timing_data the number of elements
- * @param timing_data the timing data
- */
-void sfptpd_ptp_monitor_update_rx_timing(struct ptpd_remote_stats_logger *logger,
-					 struct ptpd_remote_stats stats,
-					 int num_timing_data,
-					 SlaveRxSyncTimingDataElement *timing_data);
-
-/** Post rx event computed stats received from a remote host to the monitor
- * @param logger a callback object used by ptpd that contains a reference to
- * the monitor object.
- * @param stats metadata for the stats.
- * @param num_computed_data the number of elements
- * @param computed_data the computed data
- */
-void sfptpd_ptp_monitor_update_rx_computed(struct ptpd_remote_stats_logger *logger,
-					   struct ptpd_remote_stats stats,
-					   int num_computed_data,
-					   SlaveRxSyncComputedDataElement *computed_data);
-
-/** Post tx event timestamps received from a remote host to the monitor
- * @param logger a callback object used by ptpd that contains a reference to
- * the monitor object.
- * @param stats metadata for the stats.
- * @param message_type the time of message to which the timestamps relate
- * @param num_computed_data the number of timestamps
- * @param computed_data the timestamps
- */
-void sfptpd_ptp_monitor_log_tx_timestamp(struct ptpd_remote_stats_logger *logger,
-					 struct ptpd_remote_stats stats,
-					 ptpd_msg_id_e message_type,
-					 int num_timestamps,
-					 SlaveTxEventTimestampsElement *timestamps);
-
-/** Post slave status reports received from a remote host to the monitor
- * @param logger a callback object used by ptpd that contains a reference to
- * the monitor object.
- * @param stats metadata for the stats.
- * @param slave_status the status report.
- */
-void sfptpd_ptp_monitor_update_slave_status(struct ptpd_remote_stats_logger *logger,
-					    struct ptpd_remote_stats stats,
-					    SlaveStatus *slave_status);
-
-/** Flush the latest stats, e.g. to file, as appropriate.
- * @param monitor the monitor object.
- */
-void sfptpd_ptp_monitor_flush(struct sfptpd_ptp_monitor *monitor);
 
 const struct sfptpd_ptp_profile_def *sfptpd_ptp_get_profile_def(enum sfptpd_ptp_profile profile_index);
 

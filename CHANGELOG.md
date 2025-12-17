@@ -21,6 +21,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - understand non-NTP chrony peers, controlled by `allow_refclk`. (SWPTP-1618)
 - Add `--cpu` option to affinitise all or some threads. (SWPTP-1626)
 
+### Removed
+
+- The deprecated remote monitor mode is now removed. The lightweight sfptpmon
+  example script (introduced in v3.7.0) replaces this functionality.
+  Note that the PTP event monitoring is meant for diagnostic purposes and
+  other monitoring options such as OpenMetrics, JSON RT stats and NetSyncMon
+  are more appropriate for production time sync compliance. The daemon
+  continues to send event monitoring TLVs when so configured. (SWPTP-1636)
+
 ### Fixed
 
 - Issue SWPTP-1634

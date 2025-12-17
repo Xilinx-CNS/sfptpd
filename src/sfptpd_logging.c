@@ -62,7 +62,6 @@ const char *sfptpd_freq_correction_file_format = "freq-correction-%s";
 const char *sfptpd_topology_file = "topology";
 const char *sfptpd_interfaces_file = "interfaces";
 const char *sfptpd_nodes_file = "ptp-nodes";
-const char *sfptpd_remote_monitor_file = "remote-monitor";
 const char *sfptpd_config_log_file = "config";
 const char *sfptpd_sync_instances_file = "sync-instances";
 
@@ -126,7 +125,6 @@ static enum sfptpd_msg_log_config message_log = SFPTPD_MSG_LOG_TO_STDERR;
 static enum sfptpd_stats_log_config stats_log = SFPTPD_STATS_LOG_OFF;
 static int message_log_fd = -1;
 static int stats_log_fd = -1;
-static FILE *json_remote_monitor_fp = NULL;
 static pthread_mutex_t vmsg_mutex;
 static char freq_correction_file_format[PATH_MAX];
 static char state_file_format[PATH_MAX];
@@ -404,7 +402,6 @@ int sfptpd_log_open(struct sfptpd_config *config)
 				    "topology",
 				    "interfaces",
 				    "ptp-nodes",
-				    "remote-monitor",
 				    "sync-instances",
 				    ".next.*"
 	};
@@ -622,19 +619,6 @@ int sfptpd_log_rotate(struct sfptpd_config *config)
 		}
 		free_path(path);
 	}
-
-	if (strlen(general_config->json_remote_monitor_filename) > 0) {
-		/* Close and then reopen the log file */
-		if(json_remote_monitor_fp != NULL)
-			fclose(json_remote_monitor_fp);
-
-		json_remote_monitor_fp = fopen(general_config->json_remote_monitor_filename, "a");
-		if (json_remote_monitor_fp == NULL) {
-			ERROR("Failed to open json remote monitor file %s, error %s\n",
-				  general_config->json_remote_monitor_filename, strerror(errno));
-			/* We don't set rc = errno because this log is non-critical. */
-		}
-	}
 	return rc;
 }
 
@@ -662,11 +646,6 @@ void sfptpd_log_close(void)
 		fclose(json_stats_fp);
 		json_stats_fp = NULL;
 		free(json_stats_buf);
-	}
-
-	if (json_remote_monitor_fp != NULL) {
-		fclose(json_remote_monitor_fp);
-		json_remote_monitor_fp = NULL;
 	}
 
 	pthread_mutex_destroy(&vmsg_mutex);
@@ -775,12 +754,6 @@ bool sfptpd_log_rt_stats_written(size_t chars, bool flush)
 	}
 
 	return flushed;
-}
-
-
-FILE *sfptpd_log_get_remote_monitor_out_stream(void)
-{
-	return json_remote_monitor_fp;
 }
 
 
@@ -1070,12 +1043,6 @@ struct sfptpd_log *sfptpd_log_open_statistics_json(struct sfptpd_clock *clock,
 	 */
 	return create_log("statistics_json",
 			  sfptpd_statistics_json_file_format, name);
-}
-
-
-struct sfptpd_log *sfptpd_log_open_remote_monitor(void)
-{
-	return create_log("remote-monitor", sfptpd_remote_monitor_file);
 }
 
 #pragma GCC diagnostic ignored "-Wformat-truncation"
