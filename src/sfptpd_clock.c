@@ -910,7 +910,8 @@ static int renew_clock(struct sfptpd_clock *clock)
 
 		if (clock->u.nic.phc == NULL) {
 			rc = sfptpd_phc_open(clock->u.nic.device_idx,
-					     &clock->u.nic.phc);
+					     &clock->u.nic.phc,
+					     clock->read_only);
 			if (rc != 0) {
 				ERROR("clock %s: failed to open PHC device %d, %s\n",
 				      clock->short_name, clock->u.nic.device_idx,
@@ -919,6 +920,13 @@ static int renew_clock(struct sfptpd_clock *clock)
 				clock->posix_id = POSIX_ID_NULL;
 				return errno;
 			}
+
+			if (!sfptpd_phc_have_lock(clock->u.nic.phc)) {
+				NOTICE("clock %s: could not lock PHC device: blocking clock\n",
+				       clock->short_name);
+				sfptpd_clock_set_blocked(clock, true, SFPTPD_CLOCK_BLOCK_REASON_LOCKED);
+			}
+
 			clock->posix_id = sfptpd_phc_get_clock_id(clock->u.nic.phc);
 			if (clock->u.nic.supports_efx) {
 				sfptpd_phc_define_diff_method(clock->u.nic.phc,

@@ -17,6 +17,7 @@
 #include <limits.h>
 #include <string.h>
 #include <fts.h>
+#include <sys/file.h>
 #include <sys/syscall.h>
 #include <sys/ioctl.h>
 #include <sys/timex.h>
@@ -145,6 +146,12 @@ struct sfptpd_phc {
 
 	/* Synthetic pps state */
 	enum pps_state synth_pps_state;
+
+	/* Opened read-only */
+	bool read_only;
+
+	/* Got flock */
+	bool got_flock;
 };
 
 
@@ -1145,7 +1152,7 @@ int sfptpd_phc_set_diff_methods(const enum sfptpd_phc_diff_method *new_order)
 	return ERANGE;
 }
 
-int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc)
+int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc, bool read_only)
 {
 	const int timex_max_adj_32bit = ((1LL<<31)-1)*1000/65536;
 	char *path;
@@ -1164,6 +1171,7 @@ int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc)
 
 	new->diff_method_index = SFPTPD_DIFF_METHOD_MAX;
 	new->pps_method = SFPTPD_PPS_METHOD_MAX;
+	new->read_only = read_only;
 	/* new->pps_ext_pin = SFPTPD_PIN_EFX; */
 
 	/* Open the PHC device */
@@ -1178,6 +1186,22 @@ int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc)
 		ERROR("phc%d: failed to open device %s, %s\n",
 		      phc_index, path, strerror(rc));
 		goto fail1;
+	}
+
+	if (!read_only) {
+		int e;
+		do rc = flock(new->phc_fd, LOCK_EX | LOCK_NB);
+		while (rc == -1 && (e = errno) == EINTR);
+		if (rc == -1 && e != EWOULDBLOCK && e != EINVAL && e != EOPNOTSUPP) {
+			ERROR("phc%d: failure locking device %s, %s\n",
+			      phc_index, path, strerror(rc = e));
+			goto fail2;
+		}
+
+		/* If locking not supported, act as if we got the lock */
+		new->got_flock = rc == 0 || e != EWOULDBLOCK;
+	} else {
+		new->got_flock = true;
 	}
 
 	rc = ioctl(new->phc_fd, PTP_CLOCK_GETCAPS, &new->caps);
@@ -1221,6 +1245,11 @@ fail1:
 fail0:
 	free(new);
 	return rc;
+}
+
+bool sfptpd_phc_have_lock(struct sfptpd_phc *phc)
+{
+	return phc->got_flock;
 }
 
 int sfptpd_phc_start(struct sfptpd_phc *phc)

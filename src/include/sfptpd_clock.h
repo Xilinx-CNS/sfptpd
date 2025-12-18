@@ -93,6 +93,7 @@ enum sfptpd_clock_adj_method {
 enum sfptpd_clock_block_reason {
 	SFPTPD_CLOCK_BLOCK_REASON_NTP,
 	SFPTPD_CLOCK_BLOCK_REASON_MANUAL,
+	SFPTPD_CLOCK_BLOCK_REASON_LOCKED,
 	SFPTPD_CLOCK_BLOCK_REASON_MAX,
 };
 

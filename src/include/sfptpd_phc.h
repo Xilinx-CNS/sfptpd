@@ -67,9 +67,10 @@ extern const char *sfptpd_phc_pin_func_text[];
 /** Open a PHC device
  * @param phx_idx Index of PHC device to open
  * @param phc Returned PHC context
+ * @param read_only If logical read only access is required
  * @return 0 on success or an errno otherwise
  */
-int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc);
+int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc, bool read_only);
 
 /** Choose methods and start PHC operations
  * @param phc Handle of the PHC device
@@ -81,6 +82,12 @@ int sfptpd_phc_start(struct sfptpd_phc *phc);
  * @param phc Handle of the PHC device
  */
 void sfptpd_phc_close(struct sfptpd_phc *phc);
+
+/* Get whether we have a lock on the PHC device, if we need it.
+ * @param phc Handle of the PHC device
+ * @return true if we have the lock or do not need it, flase otherwise.
+ */
+bool sfptpd_phc_have_lock(struct sfptpd_phc *phc);
 
 /** Get the Posix clock ID for the PHC device.
  * @param phc Handle of the PHC device
