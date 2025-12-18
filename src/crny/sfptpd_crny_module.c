@@ -829,7 +829,8 @@ static void block_clock(crny_module_t *ntp)
 {
 	if (!ntp->have_blocked_sys) {
 		INFO("crny: blocking system clock\n");
-		sfptpd_clock_set_blocked(sfptpd_clock_get_system_clock(), true);
+		sfptpd_clock_set_blocked(sfptpd_clock_get_system_clock(), true,
+					 SFPTPD_CLOCK_BLOCK_REASON_NTP);
 		ntp->have_blocked_sys = true;
 	}
 }
@@ -838,7 +839,8 @@ static void unblock_clock(crny_module_t *ntp)
 {
 	if (ntp->have_blocked_sys) {
 		INFO("crny: unblocking system clock\n");
-		sfptpd_clock_set_blocked(sfptpd_clock_get_system_clock(), false);
+		sfptpd_clock_set_blocked(sfptpd_clock_get_system_clock(), false,
+					 SFPTPD_CLOCK_BLOCK_REASON_NTP);
 		ntp->have_blocked_sys = false;
 	}
 }

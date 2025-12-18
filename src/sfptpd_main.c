@@ -814,7 +814,8 @@ static void on_control_socket_fd(int fd)
 		for (i = 0; i < SFPTPD_CONTROL_MAX_CLOCKS; i++) {
 			if (param.block_clock.clocks[i])
 				sfptpd_clock_set_blocked(param.block_clock.clocks[i],
-							 param.block_clock.state);
+							 param.block_clock.state,
+							 SFPTPD_CLOCK_BLOCK_REASON_MANUAL);
 		}
 	}
 }

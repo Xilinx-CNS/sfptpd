@@ -90,6 +90,12 @@ enum sfptpd_clock_adj_method {
 	SFPTPD_CLOCK_LEGACY_ADJ, /* Used for testing only */
 };
 
+enum sfptpd_clock_block_reason {
+	SFPTPD_CLOCK_BLOCK_REASON_NTP,
+	SFPTPD_CLOCK_BLOCK_REASON_MANUAL,
+	SFPTPD_CLOCK_BLOCK_REASON_MAX,
+};
+
 #define SFPTPD_CLOCK_SHORT_NAME_SIZE 16
 #define SFPTPD_CLOCK_FULL_NAME_SIZE 64
 #define SFPTPD_CLOCK_HW_ID_SIZE 8
@@ -498,7 +504,8 @@ bool sfptpd_clock_is_writable(struct sfptpd_clock *clock);
  * @param block whether to block or unblock
  * @return true if the clock is now temporarily blocked
  */
-bool sfptpd_clock_set_blocked(struct sfptpd_clock *clock, bool block);
+bool sfptpd_clock_set_blocked(struct sfptpd_clock *clock, bool block,
+			      enum sfptpd_clock_block_reason reason);
 
 /** Is given clock currently blocked
  * @param clock the clock to check

@@ -11,6 +11,7 @@
 #include <stddef.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <time.h>
@@ -232,8 +233,8 @@ struct sfptpd_clock {
 	/* Clock cannot be adjusted, only observed */
 	bool read_only;
 
-	/* Reference count of temporary blocks */
-	int blocked_count;
+	/* Bitset of temporary block reasons */
+	unsigned blocked_flags;
 
 	/* Boolean indicating whether to use saved clock corrections */
 	bool use_clock_correction;
@@ -1670,22 +1671,30 @@ bool sfptpd_clock_is_writable(struct sfptpd_clock *clock)
 {
 	assert(clock != NULL);
 	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
-	return clock->discipline && !clock->read_only && (clock->blocked_count < 1);
+	return clock->discipline && !clock->read_only && (clock->blocked_flags == 0);
 }
 
 
-/* Adjust ref count for temporary block */
-bool sfptpd_clock_set_blocked(struct sfptpd_clock *clock, bool block)
+/* Updated blocked flag for given reason */
+bool sfptpd_clock_set_blocked(struct sfptpd_clock *clock, bool block,
+			      enum sfptpd_clock_block_reason reason)
 {
+	unsigned old_flags;
+
 	assert(clock != NULL);
 	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
 
-	return (clock->blocked_count += block ? 1 : -1) > 0;
+	if (block)
+		old_flags = atomic_fetch_or(&clock->blocked_flags, (1U << reason));
+	else
+		old_flags = atomic_fetch_and(&clock->blocked_flags, ~(1U << reason));
+
+	return (old_flags & (1U << reason)) != 0;
 }
 
 bool sfptpd_clock_is_blocked(const struct sfptpd_clock *clock)
 {
-	return clock->blocked_count > 0;
+	return clock->blocked_flags != 0;
 }
 
 
@@ -1909,7 +1918,7 @@ int sfptpd_clock_adjust_time(struct sfptpd_clock *clock, struct sfptpd_timespec 
 		goto finish;
 	}
 
-	if (clock->blocked_count > 0) {
+	if (clock->blocked_flags != 0) {
 		NOTICE("clock %s: adjust time temporarily blocked\n",
 		       clock->long_name);
 		goto finish;
@@ -1972,7 +1981,7 @@ int sfptpd_clock_adjust_frequency(struct sfptpd_clock *clock, long double freq_a
 		goto finish;
 	}
 
-	if (clock->blocked_count > 0) {
+	if (clock->blocked_flags != 0) {
 		TRACE_L4("clock %s: adjust freq temporarily blocked\n",
 			 clock->long_name);
 		goto finish;
