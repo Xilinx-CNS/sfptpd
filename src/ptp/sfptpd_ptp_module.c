@@ -2539,6 +2539,7 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 	struct ptpd_port_snapshot *snapshot;
 	unsigned int snapshot_alarms;
 	char alarms[256], flags[256];
+	char *blocked_by;
 	bool hw_ts;
 	struct sfptpd_log *nodes_log;
 	const char *if_unicast;
@@ -2576,6 +2577,7 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 		switch (snapshot->port.state) {
 		case PTPD_SLAVE:
 			ptp_port_update_derived(instance);
+			blocked_by = sfptpd_clock_get_blocked_reasons(instance->ptpd_port_private->clock);
 			format = "instance: %s\n"
 				"clock-name: %s\n"
 				"clock-id: %s\n"
@@ -2609,7 +2611,8 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 				"leap-59: %d\n"
 				"leap-61: %d\n"
 				"clustering-score: %d\n"
-				"diff-method: %s\n";
+				"diff-method: %s\n"
+				"blocked-by: %s\n";
 
 			sfptpd_log_write_state(instance->ptpd_port_private->clock,
 				SFPTPD_CONFIG_GET_NAME(instance->config),
@@ -2652,7 +2655,9 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 				snapshot->time.leap59,
 				snapshot->time.leap61,
 				instance->clustering_score_snapshot,
-				sfptpd_clock_get_diff_method(instance->ptpd_port_private->clock));
+				sfptpd_clock_get_diff_method(instance->ptpd_port_private->clock),
+				blocked_by);
+			free(blocked_by);
 			break;
 
 		case PTPD_MASTER:

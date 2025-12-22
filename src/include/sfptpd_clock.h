@@ -558,4 +558,10 @@ int sfptpd_clock_deduplicate(void);
  */
 bool sfptpd_clock_try_claim_locks(void);
 
+/** Get reasons for clock being blocked as text
+ * @param clock the clock
+ * @return a list of reasons to be freed by the caller
+ */
+char *sfptpd_clock_get_blocked_reasons(struct sfptpd_clock *clock);
+
 #endif /* _SFPTPD_CLOCK_H */

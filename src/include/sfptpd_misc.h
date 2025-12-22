@@ -93,6 +93,8 @@ struct sfptpd_prog {
 	pid_t a_pid;
 };
 
+typedef unsigned long sfptpd_bitset_t;
+
 
 /****************************************************************************
  * Function Prototypes
@@ -235,5 +237,15 @@ int sfptpd_read_int_from_fd(int fd, long long *answer);
  * @return 0 on success, else errno
  */
 int sfptpd_read_int_from_fileat(int dir_fd, const char *filename, long long *answer);
+
+/* Format a bitset as space-delimited text
+ * @param set the bitset
+ * @param strings an array of defined strings for the set
+ * @param max the number of values defined in the string array
+ * @return a string that the caller should free
+ */
+char *sfptpd_bitset_format(sfptpd_bitset_t set,
+			   const char** strings,
+			   unsigned int max);
 
 #endif /* _SFPTPD_MISC_H */

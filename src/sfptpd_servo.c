@@ -699,12 +699,14 @@ void sfptpd_servo_update_sync_status(struct sfptpd_servo *servo)
 void sfptpd_servo_save_state(struct sfptpd_servo *servo)
 {
 	char alarms[256];
+	char *blocked_by;
 
 	assert(servo != NULL);
 	assert(servo->master != NULL);
 	assert(servo->slave != NULL);
 
 	sfptpd_sync_module_alarms_text(servo->alarms, alarms, sizeof(alarms));
+	blocked_by = sfptpd_clock_get_blocked_reasons(servo->slave);
 
 	sfptpd_log_write_state(servo->slave, NULL,
 			       "clock-name: %s\n"
@@ -719,7 +721,8 @@ void sfptpd_servo_save_state(struct sfptpd_servo *servo)
 			       "p-term: " SFPTPD_FORMAT_FLOAT "\n"
 			       "i-term: " SFPTPD_FORMAT_FLOAT "\n"
 			       "pid-coefficients: " SFPTPD_FORMAT_FLOAT " " SFPTPD_FORMAT_FLOAT " " SFPTPD_FORMAT_FLOAT "\n"
-			       "diff-method: %s/%s\n",
+			       "diff-method: %s/%s\n"
+			       "blocked-by: %s\n",
 			       sfptpd_clock_get_long_name(servo->slave),
 			       sfptpd_clock_get_hw_id_string(servo->slave),
 			       alarms,
@@ -734,7 +737,10 @@ void sfptpd_servo_save_state(struct sfptpd_servo *servo)
 			       servo->pid_filter.k_i,
 			       servo->pid_filter.k_d,
 			       sfptpd_clock_get_diff_method(servo->slave),
-			       sfptpd_clock_get_diff_method(servo->master));
+			       sfptpd_clock_get_diff_method(servo->master),
+			       blocked_by);
+
+	free(blocked_by);
 	
 	/* If the clock is currently considered to be in sync, save the 
 	 * frequency adjustment */

@@ -545,7 +545,7 @@ ssize_t sfptpd_format(const struct sfptpd_interpolation *interpolators, void *co
 			/* Look up interpolator */
 			for (spec = interpolators;
 			     (spec->id != SFPTPD_INTERPOLATORS_END &&
-			      c != spec->specifier);
+			     c != spec->specifier);
 			     spec++);
 
 			/* Error in invalid specifier */
@@ -706,5 +706,50 @@ int sfptpd_read_int_from_fileat(int dir_fd, const char *filename, long long *ans
 	return rc;
 }
 
+char *sfptpd_bitset_format(sfptpd_bitset_t set, const char** strings, unsigned int max)
+{
+	const char *unknown_fmt = "?%d ";
+	sfptpd_bitset_t tst = set;
+	ssize_t len = 0;
+	char *buf, *ptr;
+	int rc;
+
+	while (tst) {
+		unsigned int key = __builtin_ctz(tst);
+		if (key < max && strings[key]) {
+			len += strlen(strings[key]) + 1;
+		} else {
+			if ((rc = snprintf(NULL, 0, unknown_fmt, key)) == -1)
+				return NULL;
+			len += rc;
+		}
+		tst &= ~(1UL << key);
+	}
+
+	if ((ptr = buf = malloc(len + 1)) == NULL)
+		return buf;
+
+	while (set) {
+		unsigned int key = __builtin_ctz(set);
+		assert(len >= 0);
+		if (key < max && strings[key]) {
+			rc = snprintf(ptr, len, "%s ", strings[key]);
+		} else {
+			rc = snprintf(ptr, len, unknown_fmt, key);
+		}
+		if (rc == -1) goto fail;
+		len -= rc;
+		ptr += rc;
+		set &= ~(1UL << key);
+	}
+
+	/* Remove trailing space if bits were set */
+	ptr[ptr == buf ? 0 : -1] = '\0';
+
+	return buf;
+fail:
+	free(buf);
+	return NULL;
+}
 
 /* fin */

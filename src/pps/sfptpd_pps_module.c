@@ -2051,6 +2051,7 @@ static void pps_on_save_state(pps_module_t *pps, sfptpd_sync_module_msg_t *msg)
 {
 	struct sfptpd_pps_instance *instance;
 	char alarms[256], flags[256];
+	char *blocked_by;
 
 	assert(pps != NULL);
 	assert(msg != NULL);
@@ -2061,6 +2062,7 @@ static void pps_on_save_state(pps_module_t *pps, sfptpd_sync_module_msg_t *msg)
 		sfptpd_sync_module_ctrl_flags_text(instance->ctrl_flags, flags, sizeof(flags));
 
 		if (instance->state == SYNC_MODULE_STATE_SLAVE) {
+			blocked_by = sfptpd_clock_get_blocked_reasons(instance->clock),
 			sfptpd_log_write_state(instance->clock,
 				SFPTPD_CONFIG_GET_NAME(instance->config),
 				"instance: %s\n"
@@ -2077,7 +2079,8 @@ static void pps_on_save_state(pps_module_t *pps, sfptpd_sync_module_msg_t *msg)
 				"in-sync: %d\n"
 				"clustering-score: %d\n"
 				"diff-method: %s\n"
-				"pps-method: %s\n",
+				"pps-method: %s\n"
+				"blocked-by: %s\n",
 				SFPTPD_CONFIG_GET_NAME(instance->config),
 				sfptpd_clock_get_long_name(instance->clock),
 				sfptpd_clock_get_hw_id_string(instance->clock),
@@ -2091,7 +2094,9 @@ static void pps_on_save_state(pps_module_t *pps, sfptpd_sync_module_msg_t *msg)
 				instance->synchronized,
 				instance->clustering_score,
 				sfptpd_clock_get_diff_method(instance->clock),
-				sfptpd_clock_get_pps_method(instance->clock));
+				sfptpd_clock_get_pps_method(instance->clock),
+				blocked_by);
+			free(blocked_by);
 		} else {
 			sfptpd_log_write_state(instance->clock,
 				SFPTPD_CONFIG_GET_NAME(instance->config),

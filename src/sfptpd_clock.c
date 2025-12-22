@@ -234,7 +234,7 @@ struct sfptpd_clock {
 	bool read_only;
 
 	/* Bitset of temporary block reasons */
-	unsigned blocked_flags;
+	sfptpd_bitset_t blocked_flags;
 
 	/* Boolean indicating whether to use saved clock corrections */
 	bool use_clock_correction;
@@ -334,6 +334,13 @@ static struct sfptpd_interpolation clock_format_specifiers[] = {
 	{ CLOCK_FMT_PRI_INTF_MAC,    'm', false, pri_intf_interpolate },
 	{ SFPTPD_INTERPOLATORS_END }
 };
+
+static const char *clock_block_reason_text[SFPTPD_CLOCK_BLOCK_REASON_MAX] = {
+	"ntp",
+	"manual",
+	"flock",
+};
+
 
 /****************************************************************************
  * Clock Internal Functions
@@ -1687,17 +1694,17 @@ bool sfptpd_clock_is_writable(struct sfptpd_clock *clock)
 bool sfptpd_clock_set_blocked(struct sfptpd_clock *clock, bool block,
 			      enum sfptpd_clock_block_reason reason)
 {
-	unsigned old_flags;
+	sfptpd_bitset_t old_flags;
 
 	assert(clock != NULL);
 	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
 
 	if (block)
-		old_flags = atomic_fetch_or(&clock->blocked_flags, (1U << reason));
+		old_flags = atomic_fetch_or(&clock->blocked_flags, (1UL << reason));
 	else
-		old_flags = atomic_fetch_and(&clock->blocked_flags, ~(1U << reason));
+		old_flags = atomic_fetch_and(&clock->blocked_flags, ~(1UL << reason));
 
-	return (old_flags & (1U << reason)) != 0;
+	return (old_flags & (1UL << reason)) != 0;
 }
 
 bool sfptpd_clock_is_blocked(const struct sfptpd_clock *clock)
@@ -2839,6 +2846,13 @@ bool sfptpd_clock_try_claim_locks(void)
 	}
 	clock_unlock();
 	return any_still_locked;
+}
+
+char *sfptpd_clock_get_blocked_reasons(struct sfptpd_clock *clock)
+{
+	return sfptpd_bitset_format(clock->blocked_flags,
+				    clock_block_reason_text,
+				    SFPTPD_CLOCK_BLOCK_REASON_MAX);
 }
 
 /* fin */
