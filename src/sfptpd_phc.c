@@ -1152,6 +1152,23 @@ int sfptpd_phc_set_diff_methods(const enum sfptpd_phc_diff_method *new_order)
 	return ERANGE;
 }
 
+bool sfptpd_phc_try_claim_lock(struct sfptpd_phc *phc)
+{
+	int rc;
+
+	if (phc->got_flock)
+		return true;
+
+	do rc = flock(phc->phc_fd, LOCK_EX | LOCK_NB);
+	while (rc == -1 && (rc = errno) == EINTR);
+	if (rc != 0 && rc != EWOULDBLOCK && rc != EINVAL && rc != EOPNOTSUPP)
+		ERROR("phc%d: failure locking device, %s\n",
+		      phc->phc_idx, strerror(rc));
+
+	/* If locking not supported, act as if we got the lock */
+	return (phc->got_flock = rc == 0 || rc != EWOULDBLOCK);
+}
+
 int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc, bool read_only)
 {
 	const int timex_max_adj_32bit = ((1LL<<31)-1)*1000/65536;
@@ -1188,21 +1205,10 @@ int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc, bool read_only)
 		goto fail1;
 	}
 
-	if (!read_only) {
-		int e;
-		do rc = flock(new->phc_fd, LOCK_EX | LOCK_NB);
-		while (rc == -1 && (e = errno) == EINTR);
-		if (rc == -1 && e != EWOULDBLOCK && e != EINVAL && e != EOPNOTSUPP) {
-			ERROR("phc%d: failure locking device %s, %s\n",
-			      phc_index, path, strerror(rc = e));
-			goto fail2;
-		}
-
-		/* If locking not supported, act as if we got the lock */
-		new->got_flock = rc == 0 || e != EWOULDBLOCK;
-	} else {
+	if (!read_only)
+		sfptpd_phc_try_claim_lock(new);
+	else
 		new->got_flock = true;
-	}
 
 	rc = ioctl(new->phc_fd, PTP_CLOCK_GETCAPS, &new->caps);
 	if (rc != 0) {

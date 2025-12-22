@@ -2819,5 +2819,26 @@ finish:
 	return 0;
 }
 
+bool sfptpd_clock_try_claim_locks(void)
+{
+	bool any_still_locked = false;
+	struct sfptpd_clock *clock;
+
+	clock_lock();
+	for (clock = sfptpd_clock_list_head; clock != NULL; clock = clock->next) {
+		if (clock->type != SFPTPD_CLOCK_TYPE_SYSTEM &&
+		    !clock->read_only &&
+		    !sfptpd_phc_have_lock(clock->u.nic.phc)) {
+			if (sfptpd_phc_try_claim_lock(clock->u.nic.phc)) {
+				NOTICE("clock %s: acquired lock on PHC device: unblocking clock\n", clock->short_name);
+				sfptpd_clock_set_blocked(clock, false, SFPTPD_CLOCK_BLOCK_REASON_LOCKED);
+			} else {
+				any_still_locked = true;
+			}
+		}
+	}
+	clock_unlock();
+	return any_still_locked;
+}
 
 /* fin */

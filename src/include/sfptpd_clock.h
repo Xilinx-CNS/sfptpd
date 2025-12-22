@@ -552,4 +552,10 @@ bool sfptpd_clock_is_active(const struct sfptpd_clock *clock);
  */
 int sfptpd_clock_deduplicate(void);
 
+/** Try to claim lock on any NIC clock devices on which we do not
+ * already have a clock.
+ * @return true if any NIC clock devices remain unlocked, else false.
+ */
+bool sfptpd_clock_try_claim_locks(void);
+
 #endif /* _SFPTPD_CLOCK_H */

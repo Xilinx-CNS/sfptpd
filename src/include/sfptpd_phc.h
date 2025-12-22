@@ -194,4 +194,10 @@ void sfptpd_phc_define_diff_method(struct sfptpd_phc *phc,
 const char *sfptpd_phc_pin_func_to_text(enum sfptpd_phc_pin_func index);
 enum sfptpd_phc_pin_func sfptpd_phc_pin_func_from_text(const char *text);
 
+/* Try to claim flock(2) on PHC device.
+ * @param phc Handle of the PHC device
+ * @return true if we now hold the lock or false otherwise
+ */
+bool sfptpd_phc_try_claim_lock(struct sfptpd_phc *phc);
+
 #endif /* _SFPTPD_PHC_H */

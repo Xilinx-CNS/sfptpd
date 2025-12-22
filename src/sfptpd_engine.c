@@ -48,6 +48,15 @@
 
 
 /****************************************************************************
+ * Constants
+ ****************************************************************************/
+
+static const struct sfptpd_timespec engine_try_lock_clocks_interval = {
+	.sec = 7,
+};
+
+
+/****************************************************************************
  * Engine Messages
  ****************************************************************************/
 
@@ -180,6 +189,7 @@ enum engine_event_ids {
 	ENGINE_TIMER_NETLINK_RESCAN,
 	ENGINE_TIMER_NETLINK_COALESCE,
 	ENGINE_EVENT_CLOCKFEED_SYNC,
+	ENGINE_TIMER_TRY_LOCK_CLOCKS,
 };
 
 /* Leap second states */
@@ -280,6 +290,7 @@ static void on_leap_second_timer(void *user_context, unsigned int timer_id);
 static void on_selection_holdoff_timer(void *user_context, unsigned int timer_id);
 static void on_netlink_rescan_timer(void *user_context, unsigned int timer_id);
 static void on_netlink_coalesce_timer(void *user_context, unsigned int timer_id);
+static void on_try_lock_clocks(void *user_context, unsigned int timer_id);
 
 struct engine_timer_defn {
 	enum engine_event_ids timer_id;
@@ -296,6 +307,7 @@ static const struct engine_timer_defn engine_timer_defns[] =
 	{ENGINE_TIMER_SELECTION_HOLDOFF, CLOCK_MONOTONIC, on_selection_holdoff_timer},
 	{ENGINE_TIMER_NETLINK_RESCAN,    CLOCK_MONOTONIC, on_netlink_rescan_timer},
 	{ENGINE_TIMER_NETLINK_COALESCE,  CLOCK_MONOTONIC, on_netlink_coalesce_timer},
+	{ENGINE_TIMER_TRY_LOCK_CLOCKS,   CLOCK_MONOTONIC, on_try_lock_clocks},
 };
 
 
@@ -1371,6 +1383,7 @@ static void engine_handle_new_link_table(struct sfptpd_engine *engine, int versi
 	if (version < 0)
 		ERROR("engine: servicing netlink responses, %s\n", strerror(-version));
 
+	on_try_lock_clocks(engine, ENGINE_TIMER_TRY_LOCK_CLOCKS);
 
 	/* Reflect hot-plugged clocks in clock feeds */
 	clocks_after = sfptpd_clock_get_active_snapshot(&num_clocks_after);
@@ -1497,6 +1510,15 @@ static void on_netlink_rescan_timer(void *user_context, unsigned int timer_id)
 static void on_netlink_coalesce_timer(void *user_context, unsigned int timer_id)
 {
 	engine_service_netlink((struct sfptpd_engine *) user_context, true);
+}
+
+
+static void on_try_lock_clocks(void *user_context, unsigned int timer_id)
+{
+	if (sfptpd_clock_try_claim_locks())
+		sfptpd_thread_timer_start(ENGINE_TIMER_TRY_LOCK_CLOCKS,
+					  false, false,
+					  &engine_try_lock_clocks_interval);
 }
 
 
@@ -2611,6 +2633,9 @@ static void on_run(struct sfptpd_engine *engine)
 			sfptpd_app_run(engine->sync_modules[type]);
 		}
 	}
+
+	/* Ensure lock clock checking timer started if necessary */
+	on_try_lock_clocks(engine, ENGINE_TIMER_TRY_LOCK_CLOCKS);
 
 fail:
 	if (rc != 0)
