@@ -57,14 +57,8 @@ static int parse_daemon(struct sfptpd_config_section *section, const char *optio
 			unsigned int num_params, const char * const params[]);
 static int parse_lock(struct sfptpd_config_section *section, const char *option,
 		      unsigned int num_params, const char * const params[]);
-static int parse_state_path(struct sfptpd_config_section *section, const char *option,
-			    unsigned int num_params, const char * const params[]);
-static int parse_control_path(struct sfptpd_config_section *section, const char *option,
-			    unsigned int num_params, const char * const params[]);
-static int parse_metrics_path(struct sfptpd_config_section *section, const char *option,
-			      unsigned int num_params, const char * const params[]);
-static int parse_run_dir(struct sfptpd_config_section *section, const char *option,
-			 unsigned int num_params, const char * const params[]);
+static int parse_path(struct sfptpd_config_section *section, const char *option,
+		      unsigned int num_params, const char * const params[], int cookie);
 static int parse_access_mode(struct sfptpd_config_section *section, const char *option,
 			     unsigned int num_params, const char * const params[]);
 static int parse_sync_interval(struct sfptpd_config_section *section, const char *option,
@@ -107,12 +101,6 @@ static int parse_trace_level(struct sfptpd_config_section *section, const char *
 			     unsigned int num_params, const char * const params[]);
 static int parse_test_mode(struct sfptpd_config_section *section, const char *option,
 			   unsigned int num_params, const char * const params[]);
-
-static int parse_json_stats(struct sfptpd_config_section *section, const char *option,
-				unsigned int num_params, const char * const params[]);
-
-static int parse_json_remote_monitor(struct sfptpd_config_section *section, const char *option,
-				     unsigned int num_params, const char * const params[]);
 static int parse_hotplug_detection_mode(struct sfptpd_config_section *section, const char *option,
 					unsigned int num_params, const char * const params[]);
 static int parse_reporting_intervals(struct sfptpd_config_section *section, const char *option,
@@ -224,22 +212,26 @@ static const sfptpd_config_option_t config_general_options[] =
 	{"state_path", "<path>",
 		"Directory in which to store sfptpd state data",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_state_path,
+		(sfptpd_config_option_parser_t) parse_path,
+		.cookie = SFPTPD_PATH_STATE_DIR,
 		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_STATE_PATH)},
 	{"control_path", "<path>",
 		"Path for Unix domain control socket",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_control_path,
+		(sfptpd_config_option_parser_t) parse_path,
+		.cookie = SFPTPD_PATH_CONTROL_SOCKET,
 		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_CONTROL_PATH)},
 	{"metrics_path", "<path>",
 		"Path for Unix domain socket serving OpenMetrics",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_metrics_path,
+		(sfptpd_config_option_parser_t) parse_path,
+		.cookie = SFPTPD_PATH_METRICS_SOCKET,
 		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_METRICS_PATH)},
 	{"run_dir", "<path>",
 		"Path for run directory",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_run_dir,
+		(sfptpd_config_option_parser_t) parse_path,
+		.cookie = SFPTPD_PATH_RUN_DIR,
 		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_RUN_DIR)},
 	{"run_dir_mode", "MODE",
 		"Specifies MODE with which to create run directory, subject to umask",
@@ -386,12 +378,16 @@ static const sfptpd_config_option_t config_general_options[] =
 		.hidden = true},
 	{"json_stats", "<filename>",
 		"Output realtime module statistics in JSON-lines format to this file (http://jsonlines.org)",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_json_stats,
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		(sfptpd_config_option_parser_t) parse_path,
+		.cookie = SFPTPD_PATH_JSON_STATS,
 		.dfl = "Disabled by default"},
 	{"json_remote_monitor", "<filename>",
 		"Write JSON lines to this file for data collected by the PTP "
 		"remote monitor (which is DEPRECATED in favour of sfptpmon)",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_json_remote_monitor,
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		(sfptpd_config_option_parser_t) parse_path,
+		.cookie = SFPTPD_PATH_JSON_REMOTE_MONITOR,
 		.dfl = "Disabled by default"},
 	{"hotplug_detection_mode", "<netlink | auto>",
 		"obsolete option to control how interface and bond changes are "
@@ -799,8 +795,9 @@ static int parse_message_log(struct sfptpd_config_section *section, const char *
 		general->message_log = SFPTPD_MSG_LOG_TO_STDERR;
 	} else {
 		general->message_log = SFPTPD_MSG_LOG_TO_FILE;
-		sfptpd_strncpy(general->message_log_filename, params[0],
-			       sizeof(general->message_log_filename));
+		free(general->message_log_filename);
+		if ((general->message_log_filename = strdup(params[0])) == NULL)
+			return errno;
 	}
 
 	return 0;
@@ -821,8 +818,9 @@ static int parse_stats_log(struct sfptpd_config_section *section, const char *op
 		general->stats_log_filename[0] = '\0';
 	} else {
 		general->stats_log = SFPTPD_STATS_LOG_TO_FILE;
-		sfptpd_strncpy(general->stats_log_filename, params[0],
-			       sizeof(general->stats_log_filename));
+		free(general->stats_log_filename);
+		if ((general->stats_log_filename = strdup(params[0])) == NULL)
+			return errno;
 	}
 
 	return 0;
@@ -986,56 +984,18 @@ static int parse_lock(struct sfptpd_config_section *section, const char *option,
 }
 
 
-static int parse_state_path(struct sfptpd_config_section *section, const char *option,
-			      unsigned int num_params, const char * const params[])
+static int parse_path(struct sfptpd_config_section *section, const char *option,
+		      unsigned int num_params, const char * const params[],
+		      int cookie)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
+	assert(cookie >= 0 && cookie < SFPTPD_PATH_COUNT);
 
-	sfptpd_strncpy(general->state_path, params[0],
-		       sizeof(general->state_path));
-
-	return 0;
+	free(general->path[cookie]);
+	return (general->path[cookie] = strdup(params[0])) ? 0 : errno;
 }
 
-
-static int parse_control_path(struct sfptpd_config_section *section, const char *option,
-			      unsigned int num_params, const char * const params[])
-{
-	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
-	assert(num_params == 1);
-
-	sfptpd_strncpy(general->control_path, params[0],
-		       sizeof(general->control_path));
-
-	return 0;
-}
-
-
-static int parse_metrics_path(struct sfptpd_config_section *section, const char *option,
-			      unsigned int num_params, const char * const params[])
-{
-	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
-	assert(num_params == 1);
-
-	sfptpd_strncpy(general->metrics_path, params[0],
-		       sizeof(general->metrics_path));
-
-	return 0;
-}
-
-
-static int parse_run_dir(struct sfptpd_config_section *section, const char *option,
-			 unsigned int num_params, const char * const params[])
-{
-	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
-	assert(num_params == 1);
-
-	sfptpd_strncpy(general->run_dir, params[0],
-		       sizeof(general->run_dir));
-
-	return 0;
-}
 
 static int parse_access_mode(struct sfptpd_config_section *section, const char *option,
 			     unsigned int num_params, const char * const params[])
@@ -1697,40 +1657,6 @@ static int parse_test_mode(struct sfptpd_config_section *section, const char *op
 	return 0;
 }
 
-static int parse_json_stats(struct sfptpd_config_section *section, const char *option,
-			    unsigned int num_params, const char * const params[])
-{
-	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
-	assert(general != NULL);
-	assert(num_params == 1);
-
-	if (strlen(params[0]) >= PATH_MAX) {
-		CFG_ERROR(section, "file name %s too long\n", params[0]);
-		return EINVAL;
-	}
-	sfptpd_strncpy(general->json_stats_filename, params[0],
-				   sizeof general->json_stats_filename);
-	return 0;
-}
-
-
-static int parse_json_remote_monitor(struct sfptpd_config_section *section, const char *option,
-				     unsigned int num_params, const char * const params[])
-{
-	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
-	assert(general != NULL);
-	assert(num_params == 1);
-
-	if (strlen(params[0]) >= PATH_MAX) {
-		CFG_ERROR(section, "file name %s too long\n", params[0]);
-		return EINVAL;
-	}
-	sfptpd_strncpy(general->json_remote_monitor_filename, params[0],
-				   sizeof general->json_remote_monitor_filename);
-	return 0;
-}
-
-
 static int parse_hotplug_detection_mode(struct sfptpd_config_section *section, const char *option,
 					unsigned int num_params, const char * const params[])
 {
@@ -2245,10 +2171,13 @@ static void destroy_interface_selection(struct sfptpd_config_interface_selection
 static void general_config_destroy(struct sfptpd_config_section *section)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *) section;
+	int i;
 
 	assert(section != NULL);
 	assert(section->category == SFPTPD_CONFIG_CATEGORY_GENERAL);
 
+	for (i = 0; i < SFPTPD_PATH_COUNT; i++)
+		free(general->path[i]);
 	destroy_interface_selection(&general->eligible_interface_types);
 	free(general->groups);
 	free(general->openmetrics.tcp);
@@ -2263,6 +2192,7 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 							   const struct sfptpd_config_section *src)
 {
 	struct sfptpd_config_general *new;
+	int i;
 
 	assert((src == NULL) || (src->category == SFPTPD_CONFIG_CATEGORY_GENERAL));
 
@@ -2276,16 +2206,27 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 	 * initialise with the default values. */
 	if (src != NULL) {
 		memcpy(new, src, sizeof(*new));
+		for (i = 0; i < SFPTPD_PATH_COUNT; i++)
+			if (!(new->path[i] = strdup(new->path[i]))) {
+				int e = errno;
+				while (--i >= 0)
+					free(new->path[i]);
+				free(new);
+				errno = e;
+				return NULL;
+			}
 	} else {
-		new->config_filename[0] = '\0';
+		new->config_filename = strdup("");
+		new->priv_helper_path = strdup("");
+		new->message_log_filename = strdup("");
 		new->message_log = SFPTPD_DEFAULT_MESSAGE_LOG;
 		new->stats_log = SFPTPD_DEFAULT_STATS_LOG;
-		new->stats_log_filename[0] = '\0';
+		new->stats_log_filename = strdup("");
 		new->trace_level = SFPTPD_DEFAULT_TRACE_LEVEL;
-		sfptpd_strncpy(new->state_path, SFPTPD_DEFAULT_STATE_PATH, sizeof(new->state_path));
-		sfptpd_strncpy(new->control_path, SFPTPD_DEFAULT_CONTROL_PATH, sizeof(new->control_path));
-		sfptpd_strncpy(new->metrics_path, SFPTPD_DEFAULT_METRICS_PATH, sizeof(new->metrics_path));
-		sfptpd_strncpy(new->run_dir, SFPTPD_RUN_DIR, sizeof(new->run_dir));
+		new->state_path = strdup(SFPTPD_DEFAULT_STATE_PATH);
+		new->control_path = strdup(SFPTPD_DEFAULT_CONTROL_PATH);
+		new->metrics_path = strdup(SFPTPD_DEFAULT_METRICS_PATH);
+		new->run_dir = strdup(SFPTPD_DEFAULT_RUN_DIR);
 		new->state_dir_mode = SFPTPD_DEFAULT_STATE_DIR_MODE;
 		new->run_dir_mode = SFPTPD_DEFAULT_RUN_DIR_MODE;
 		new->control_socket_mode = (mode_t) -1;
@@ -2334,8 +2275,8 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		assert(sizeof new->phc_pps_method == sizeof sfptpd_default_pps_method);
 		memcpy(new->phc_pps_method, sfptpd_default_pps_method, sizeof new->phc_pps_method);
 
-		new->json_stats_filename[0] = '\0';
-		new->json_remote_monitor_filename[0] = '\0';
+		new->json_stats_filename = strdup("");
+		new->json_remote_monitor_filename = strdup("");
 
 		new->clustering_mode = SFPTPD_DEFAULT_CLUSTERING_MODE;
                 new->clustering_guard_enabled = SFPTPD_DEFAULT_CLUSTERING_GUARD;
@@ -2357,6 +2298,14 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		new->declared_sync_modules = 0;
 
 		new->servo_log_all_samples = SFPTPD_DEFAULT_SERVO_LOG_ALL_SAMPLES;
+
+		for (i = 0; i < SFPTPD_PATH_COUNT; i++)
+			if (new->path[i] == NULL) {
+				for (i = 0; i < SFPTPD_PATH_COUNT; i++)
+					free(new->path[i]);
+				errno = ENOMEM;
+				return NULL;
+			}
 
 		{
 			char *default_str = strdup(SFPTPD_DEFAULT_PHYSICAL_INTERFACES);
@@ -2419,28 +2368,38 @@ struct sfptpd_config_general *sfptpd_general_config_get(struct sfptpd_config *co
 }
 
 
-void sfptpd_config_set_config_file(struct sfptpd_config *config,
+int sfptpd_config_set_config_file(struct sfptpd_config *config,
 				   char *filename)
 {
 	struct sfptpd_config_general *general = sfptpd_general_config_get(config);
+	int rc;
 
 	/* Take a copy of the config file name */
-	sfptpd_strncpy(general->config_filename, filename,
-		       sizeof(general->config_filename));
+	free(general->config_filename);
+	if ((general->config_filename = strdup(filename)) == NULL) {
+		ERROR("setting config file, %s\n", strerror(rc = errno));
+		return rc;
+	}
 	TRACE_L4("using config file %s\n", general->config_filename);
+	return 0;
 }
 
 
-void sfptpd_config_set_priv_helper(struct sfptpd_config *config,
-				   char *path)
+int sfptpd_config_set_priv_helper(struct sfptpd_config *config,
+				  char *path)
 {
 	struct sfptpd_config_general *general = sfptpd_general_config_get(config);
+	int rc;
 
 	/* Take a copy of the priv helper path */
-	sfptpd_strncpy(general->priv_helper_path,
-		       path ? path : SFPTPD_DEFAULT_PRIV_HELPER_PATH,
-		       sizeof(general->priv_helper_path));
+	free(general->priv_helper_path);
+	if ((general->priv_helper_path = strdup(
+		       path ? path : SFPTPD_DEFAULT_PRIV_HELPER_PATH)) == NULL) {
+		ERROR("setting privileged helper, %s\n", strerror(rc = errno));
+		return rc;
+	}
 	TRACE_L4("using privileged helper %s\n", general->priv_helper_path);
+	return 0;
 }
 
 

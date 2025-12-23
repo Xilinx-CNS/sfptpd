@@ -370,8 +370,8 @@ static int config_parse_option(struct sfptpd_config *config,
 			}
 
 			/* Parse the option! */
-			rc = opt->parse(section, opt->option,
-					num_params, tokens + 1);
+			rc = ((sfptpd_config_option_parser_real_t)opt->parse)(section, opt->option,
+					num_params, tokens + 1, opt->cookie);
 
 			if (rc == EINVAL) {
 				CFG_ERROR(section, "option %s expects %s, but have %s\n",
@@ -654,7 +654,8 @@ int sfptpd_config_parse_command_line_pass1(struct sfptpd_config *config,
 
 	/* parse command line arguments */
 	optind = 1;
-	while ((chr = getopt_long(argc, argv, command_line_options_short,
+	while (rc == 0 &&
+	       (chr = getopt_long(argc, argv, command_line_options_short,
 				  command_line_options_long, &index)) != -1) {
 		char *cpus, *thread;
 
@@ -664,15 +665,15 @@ int sfptpd_config_parse_command_line_pass1(struct sfptpd_config *config,
 			[[fallthrough]];
 		case OPT_VERSION:
 			/* Terminate early: not an error */
-			return ESHUTDOWN;
+			rc = ESHUTDOWN;
 			break;
 
 		case 'f':
-			sfptpd_config_set_config_file(config, optarg);
+			rc = sfptpd_config_set_config_file(config, optarg);
 			break;
 
 		case 'p':
-			sfptpd_config_set_priv_helper(config, optarg);
+			rc = sfptpd_config_set_priv_helper(config, optarg);
 			break;
 
 		case 'v':
@@ -708,8 +709,7 @@ int sfptpd_config_parse_command_line_pass1(struct sfptpd_config *config,
 		case 'u':
 			if ((group = strchr(optarg, ':')))
 				*group++ = '\0';
-			if ((rc = sfptpd_config_general_set_user(config, optarg, group)))
-				return rc;
+			rc = sfptpd_config_general_set_user(config, optarg, group);
 			break;
 
 		case 't':
@@ -727,7 +727,7 @@ int sfptpd_config_parse_command_line_pass1(struct sfptpd_config *config,
 		}
 	}
 
-	if (optind < argc) {
+	if (rc == 0 && optind < argc) {
 		printf("expected a command line option, got \"%s\"\n", argv[optind]);
 		return EINVAL;
 	}
@@ -922,6 +922,5 @@ int sfptpd_config_parse_file(struct sfptpd_config *config)
 	fclose(cfg_file);
 	return 0;
 }
-
 
 /* fin */

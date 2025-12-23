@@ -547,6 +547,16 @@ typedef struct sfptpd_config {
 	struct sfptpd_config_section *categories[SFPTPD_CONFIG_CATEGORY_MAX];
 } sfptpd_config_t;
 
+
+/* Config option parsers have an optional final cookie argument */
+typedef int (*sfptpd_config_option_parser_t)(
+		struct sfptpd_config_section *, const char *option,
+		unsigned int num_params, const char * const *params);
+typedef int (*sfptpd_config_option_parser_real_t)(
+		struct sfptpd_config_section *, const char *option,
+		unsigned int num_params, const char * const *params,
+		int cookie);
+
 /** struct sfptpd_config_option - structure used to define config file
  * options. Hidden options exist for diagnostic or testing purposes
  * and not advised for production use.
@@ -568,12 +578,12 @@ typedef struct sfptpd_config_option {
 	const char *description;
 	int num_params;
 	enum sfptpd_config_scope scope;
-	int (*parse)(struct sfptpd_config_section *, const char *option,
-		     unsigned int num_params, const char * const *params);
+	sfptpd_config_option_parser_t parse;
 	const char *dfl;
 	const char *unit;
 	bool hidden;
 	bool confidential;
+	int cookie;
 } sfptpd_config_option_t;
 
 /** struct sfptpd_config_option_set - structure used to define a collection

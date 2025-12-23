@@ -134,6 +134,21 @@ enum sfptpd_critical_error {
 	SFPTPD_CRITICAL_MAX,
 };
 
+enum sfptpd_path {
+	/* Retain order to match anonymous struct */
+	SFPTPD_PATH_CONFIG_FILE,
+	SFPTPD_PATH_PRIV_HELPER,
+	SFPTPD_PATH_MESSAGE_LOG,
+	SFPTPD_PATH_STATS_LOG,
+	SFPTPD_PATH_STATE_DIR,
+	SFPTPD_PATH_CONTROL_SOCKET,
+	SFPTPD_PATH_METRICS_SOCKET,
+	SFPTPD_PATH_JSON_STATS,
+	SFPTPD_PATH_JSON_REMOTE_MONITOR,
+	SFPTPD_PATH_RUN_DIR,
+	SFPTPD_PATH_COUNT
+};
+
 
 /** struct sfptpd_config_clocks - sfptpd clock configuration
  * @sync_interval: Interval in 2^number seconds at which the clocks are
@@ -239,12 +254,24 @@ struct sfptpd_config_interface_selection {
  */
 typedef struct sfptpd_config_general {
 	sfptpd_config_section_t hdr;
-	char config_filename[PATH_MAX];
-	char priv_helper_path[PATH_MAX];
+	union {
+		char *path[SFPTPD_PATH_COUNT];
+		struct {
+			/* Retain order to match enum */
+			char *config_filename;
+			char *priv_helper_path;
+			char *message_log_filename;
+			char *stats_log_filename;
+			char *state_path;
+			char *control_path;
+			char *metrics_path;
+			char *json_stats_filename;
+			char *json_remote_monitor_filename;
+			char *run_dir;
+		};
+	};
 	enum sfptpd_msg_log_config message_log;
-	char message_log_filename[PATH_MAX];
 	enum sfptpd_stats_log_config stats_log;
-	char stats_log_filename[PATH_MAX];
 	unsigned int trace_level;
 	unsigned int threading_trace_level;
 	unsigned int bic_trace_level;
@@ -265,9 +292,6 @@ typedef struct sfptpd_config_general {
 	gid_t gid;
 	gid_t *groups;
 	int num_groups;
-	char state_path[PATH_MAX];
-	char control_path[PATH_MAX];
-	char metrics_path[PATH_MAX];
 	mode_t run_dir_mode;
 	mode_t state_dir_mode;
 	mode_t control_socket_mode;
@@ -290,8 +314,6 @@ typedef struct sfptpd_config_general {
 	unsigned int fir_filter_size;
 	struct sfptpd_selection_policy selection_policy;
 	sfptpd_phc_pps_method_t phc_pps_method[SFPTPD_PPS_METHOD_MAX + 1];
-	char json_stats_filename[PATH_MAX];
-	char json_remote_monitor_filename[PATH_MAX];
 	enum sfptpd_epoch_guard_config epoch_guard;
 	enum sfptpd_clock_initial_correction initial_clock_correction;
 	enum sfptpd_clustering_mode clustering_mode;
@@ -306,7 +328,6 @@ typedef struct sfptpd_config_general {
 	unsigned long declared_sync_modules;
 	uint8_t unique_clockid_bits[8];
 	bool legacy_clockids;
-	char run_dir[PATH_MAX];
 	struct sfptpd_config_metrics openmetrics;
 	bool servo_log_all_samples;
 	struct sfptpd_config_interface_selection *eligible_interface_types;
@@ -337,16 +358,18 @@ struct sfptpd_config_general *sfptpd_general_config_get(struct sfptpd_config *co
 /** Set the configuration filename
  * @param config  Pointer to configuration
  * @param filename  Config filename
+ * @return 0 on success, else errno
  */
-void sfptpd_config_set_config_file(struct sfptpd_config *config,
+int sfptpd_config_set_config_file(struct sfptpd_config *config,
 				   char *filename);
 
 /** Set the path to the privileged helper
  * @param config  Pointer to configuration
  * @param path  Path
+ * @return 0 on success, else errno
  */
-void sfptpd_config_set_priv_helper(struct sfptpd_config *config,
-				   char *path);
+int sfptpd_config_set_priv_helper(struct sfptpd_config *config,
+				  char *path);
 
 /** Direct all output to the console.
  * @param config  Pointer to configuration
