@@ -1148,7 +1148,7 @@ int sfptpd_phc_set_diff_methods(const enum sfptpd_phc_diff_method *new_order)
 int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc)
 {
 	const int timex_max_adj_32bit = ((1LL<<31)-1)*1000/65536;
-	char path[PATH_MAX];
+	char *path;
 	struct sfptpd_phc *new;
 	int rc;
 
@@ -1167,7 +1167,10 @@ int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc)
 	/* new->pps_ext_pin = SFPTPD_PIN_EFX; */
 
 	/* Open the PHC device */
-	snprintf(path, sizeof(path), SFPTPD_PHC_DEVICE_FORMAT, phc_index);
+	rc = asprintf(&path, SFPTPD_PHC_DEVICE_FORMAT, phc_index);
+	if (rc == -1)
+		goto fail0;
+
 	new->phc_fd = sfptpd_priv_open_dev(path);
 	if (new->phc_fd < 0) {
 		rc = -new->phc_fd;
@@ -1206,12 +1209,16 @@ int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc)
 	phc_choose_extpps(new);
 
 	*phc = new;
+	free(path);
 	return 0;
 
 fail2:
 	close(new->phc_fd);
 
 fail1:
+	free(path);
+
+fail0:
 	free(new);
 	return rc;
 }

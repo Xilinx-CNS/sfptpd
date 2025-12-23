@@ -92,8 +92,8 @@ int sfptpd_find_running_programs(struct sfptpd_prog *others)
 	ftsent = fts_children(fts, FTS_NAMEONLY);
 	for (ftsent = fts_children(fts, FTS_NAMEONLY); ftsent; ftsent = ftsent->fts_link) {
 		ssize_t res;
-		char path[PATH_MAX];
-		char exe[PATH_MAX];
+		char path[64]; /* Size for procfs paths */
+		char exe[64]; /* Size for procfs paths */
 		char *command;
 		FILE *stream;
 		char status;
