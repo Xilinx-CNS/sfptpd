@@ -656,6 +656,8 @@ int sfptpd_config_parse_command_line_pass1(struct sfptpd_config *config,
 	optind = 1;
 	while ((chr = getopt_long(argc, argv, command_line_options_short,
 				  command_line_options_long, &index)) != -1) {
+		char *cpus, *thread;
+
 		switch (chr) {
 		case 'h':
 			config_display_help();
@@ -681,7 +683,6 @@ int sfptpd_config_parse_command_line_pass1(struct sfptpd_config *config,
 			break;
 
 		case OPT_CPU:
-			char *cpus, *thread;
 			while ((cpus = thread = strsep(&optarg, ";"))) {
 				strsep(&cpus, "=");
 				if (cpus == NULL) {
