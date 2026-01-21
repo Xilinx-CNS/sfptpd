@@ -348,6 +348,21 @@ static int track_priv_helper(void)
 }
 
 
+static void wait_priv_helper(void)
+{
+	siginfo_t siginf;
+
+	if (priv_helper_pid != -1) {
+		while (waitid(P_PID, priv_helper_pid, &siginf, WEXITED) == 0 || errno == EINTR);
+		priv_helper_pid = -1;
+	}
+	if (priv_helper_pidfd != -1) {
+		close(priv_helper_pidfd);
+		priv_helper_pidfd = -1;
+	}
+}
+
+
 static int lock_create(struct sfptpd_config *config, int *lock_fd)
 {
 	int fd;
@@ -849,7 +864,11 @@ static void main_on_user_fds(void *not_used, unsigned int num_fds,
 					      strerror(rc));
 					/* ... but we should only be here if the helper
 					 * died any, so assume the worst. */
+					break;
 				} else {
+					close(priv_helper_pidfd);
+					priv_helper_pidfd = -1;
+					priv_helper_pid = -1;
 					if (siginf.si_code == CLD_EXITED) {
 						rc = siginf.si_status;
 					} else {
@@ -1026,6 +1045,7 @@ fail:
 	sfptpd_log_config_abandon();
 	sfptpd_priv_stop_helper();
 	sfptpd_config_destroy(config);
+	wait_priv_helper();
 
 	return rc;
 }
