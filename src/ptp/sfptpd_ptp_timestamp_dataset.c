@@ -225,7 +225,7 @@ sfptpd_time_t sfptpd_ptp_tsd_get_offset_from_master(sfptpd_ptp_tsd_t *tsd)
 	return tsd->offset_from_master;
 }
 
-sfptpd_time_t sfptpd_ptp_tsd_get_path_delay(sfptpd_ptp_tsd_t *tsd)
+sfptpd_time_t sfptpd_ptp_tsd_get_path_delay(const sfptpd_ptp_tsd_t *tsd)
 {
 	assert(tsd);
 	assert(tsd->complete);

@@ -140,7 +140,7 @@ sfptpd_time_t sfptpd_ptp_tsd_get_offset_from_master(sfptpd_ptp_tsd_t *tsd);
  * @param tsd Pointer to dataset object
  * @return The current path delay in nanoseconds
  */
-sfptpd_time_t sfptpd_ptp_tsd_get_path_delay(sfptpd_ptp_tsd_t *tsd);
+sfptpd_time_t sfptpd_ptp_tsd_get_path_delay(const sfptpd_ptp_tsd_t *tsd);
 
 /** Return the monotonic time of the current set of timestamps.
  * @param tsd Pointer to dataset object
