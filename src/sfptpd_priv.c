@@ -140,7 +140,7 @@ static int sfptpd_priv_rpc(struct sfptpd_priv_state *state,
 			   int returned_fds[1])
 {
 	const int max_fds = 1;
-	int num_fds;
+	int num_fds = 0;
 	struct iovec recv_iov[1];
 	struct msghdr recv_hdr;
 	union {

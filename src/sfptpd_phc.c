@@ -795,7 +795,7 @@ static int phc_compare_using_kernel_readings_n(struct sfptpd_phc *phc,
 
 static int phc_set_fallback_diff_method(struct sfptpd_phc *phc)
 {
-	enum sfptpd_phc_diff_method method;
+	enum sfptpd_phc_diff_method method = SFPTPD_DIFF_METHOD_MAX;
 	const struct phc_diff_method *defn;
 	int sys_offset_extended_rc;
 	struct sfptpd_timespec sink;
