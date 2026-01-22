@@ -462,7 +462,7 @@
 
 /** Produce help text for default string config quoted macro values */
 #define SFPTPD_CONFIG_DFL_STR(val) _Generic((val), \
-	char *: "Defaults to " val)
+	const char *: "Defaults to " val, char *: "Defaults to " val)
 
 /** Enumeration of different config section categories. */
 enum sfptpd_config_category {
