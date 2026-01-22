@@ -1174,7 +1174,7 @@ static void sfptpd_clock_init_interface(int nic_id,
 		/* Link the existing or newly created clock to the interface */
 		sfptpd_interface_set_clock(interface, clock);
 
-		if (is_new) {
+		if (is_new && clock) {
 			/* Set disciplining state for new clock */
 			rc = configure_new_clock(clock, general_config);
 			if (rc != 0) {
