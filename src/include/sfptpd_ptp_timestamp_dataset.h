@@ -4,6 +4,8 @@
 #ifndef _SFPTPD_PTP_TIMESTAMP_DATASET_H
 #define _SFPTPD_PTP_TIMESTAMP_DATASET_H
 
+#include <assert.h>
+
 #include "sfptpd_time.h"
 
 
@@ -134,25 +136,44 @@ bool sfptpd_ptp_tsd_set_p2p(sfptpd_ptp_tsd_t *tsd,
  * @param tsd Pointer to dataset object
  * @return The offset from master in nanoseconds
  */
-sfptpd_time_t sfptpd_ptp_tsd_get_offset_from_master(sfptpd_ptp_tsd_t *tsd);
+static inline sfptpd_time_t sfptpd_ptp_tsd_get_offset_from_master(const sfptpd_ptp_tsd_t *tsd)
+{
+	assert(tsd);
+	assert(tsd->complete);
+	return tsd->offset_from_master;
+}
 
 /** Return the path delay based on the current set of timestamps.
  * @param tsd Pointer to dataset object
  * @return The current path delay in nanoseconds
  */
-sfptpd_time_t sfptpd_ptp_tsd_get_path_delay(const sfptpd_ptp_tsd_t *tsd);
+static inline sfptpd_time_t sfptpd_ptp_tsd_get_path_delay(const sfptpd_ptp_tsd_t *tsd)
+{
+	assert(tsd);
+	assert(tsd->complete);
+	return tsd->path_delay;
+}
 
 /** Return the monotonic time of the current set of timestamps.
  * @param tsd Pointer to dataset object
  * @return The time in the dataset
 */
-struct sfptpd_timespec sfptpd_ptp_tsd_get_monotonic_time(sfptpd_ptp_tsd_t *tsd);
+static inline struct sfptpd_timespec sfptpd_ptp_tsd_get_monotonic_time(const sfptpd_ptp_tsd_t *tsd)
+{
+       assert(tsd);
+       assert(tsd->complete);
+       return tsd->time_monotonic;
+}
 
 /** Return the protocol time of the current set of timestamps.
  * @param tsd Pointer to dataset object
  * @return The time in the dataset
 */
-struct sfptpd_timespec sfptpd_ptp_tsd_get_protocol_time(sfptpd_ptp_tsd_t *tsd);
+static inline struct sfptpd_timespec sfptpd_ptp_tsd_get_protocol_time(const sfptpd_ptp_tsd_t *tsd)
+{
+       assert(tsd);
+       return tsd->time_protocol;
+}
 
 
 #endif /* _SFPTPD_PTP_TIMESTAMP_DATASET_H */

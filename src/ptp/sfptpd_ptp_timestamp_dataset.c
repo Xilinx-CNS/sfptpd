@@ -218,32 +218,4 @@ bool sfptpd_ptp_tsd_set_p2p(sfptpd_ptp_tsd_t *tsd,
 	return sfptpd_ptp_tsd_update(tsd);
 }
 
-sfptpd_time_t sfptpd_ptp_tsd_get_offset_from_master(sfptpd_ptp_tsd_t *tsd)
-{
-	assert(tsd);
-	assert(tsd->complete);
-	return tsd->offset_from_master;
-}
-
-sfptpd_time_t sfptpd_ptp_tsd_get_path_delay(const sfptpd_ptp_tsd_t *tsd)
-{
-	assert(tsd);
-	assert(tsd->complete);
-	return tsd->path_delay;
-}
-
-struct sfptpd_timespec sfptpd_ptp_tsd_get_monotonic_time(sfptpd_ptp_tsd_t *tsd)
-{
-       assert(tsd);
-       assert(tsd->complete);
-       return tsd->time_monotonic;
-}
-
-struct sfptpd_timespec sfptpd_ptp_tsd_get_protocol_time(sfptpd_ptp_tsd_t *tsd)
-{
-       assert(tsd);
-       return tsd->time_protocol;
-}
-
-
 /* fin */
