@@ -1168,6 +1168,9 @@ static void sfptpd_clock_init_interface(int nic_id,
 				sfptpd_clock_correct_new(clock);
 		}
 
+		/* Invariant: by now there must be a clock allocated */
+		assert(clock);
+
 		/* Link the existing or newly created clock to the interface */
 		sfptpd_interface_set_clock(interface, clock);
 
