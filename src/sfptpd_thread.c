@@ -2343,13 +2343,13 @@ int sfptpd_thread_config_affinity(char *thread_name, char *cpu_spec)
 	char *rest = cpu_spec;
 	char *end = cpu_spec;
 	char *tok;
-	int from, to;
 	int max = 0;
 	int rc = 0;
 	int cpu;
 
 	/* Size up mask to maximum requested CPU index */
 	while((tok = strsep(&rest, ","))) {
+	    int from, to;
 		if ((rc = thread_parse_cpu_range(tok, &from, &to, &max)) != 0) {
 			ERROR("invalid CPU list: %s\n", tok);
 			return rc;
@@ -2373,7 +2373,8 @@ int sfptpd_thread_config_affinity(char *thread_name, char *cpu_spec)
 	CPU_ZERO_S(config->set_size, config->set);
 
 	for (tok = cpu_spec; tok <= end; tok += strlen(tok) + 1) {
-		thread_parse_cpu_range(tok, &from, &to, &max);
+	    int from, to;
+		if (!thread_parse_cpu_range(tok, &from, &to, &max))
 		for (cpu = from; cpu <= to; cpu ++)
 			CPU_SET_S(cpu, config->set_size, config->set);
 	}
