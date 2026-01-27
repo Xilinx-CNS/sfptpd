@@ -104,6 +104,7 @@ static struct sfptpd_nl_state *netlink = NULL;
 static const struct sfptpd_link_table *initial_link_table = NULL;
 static int priv_helper_pidfd = -1;
 static int priv_helper_pid = -1;
+static int notify_fd = -1;
 
 /* The hardware state lock protects data structures that shadow
    the state of the hardware so that they are internally consistent.
@@ -560,13 +561,19 @@ static int daemonize(struct sfptpd_config *config, int *lock_fd)
 	return 0;
 }
 
+static void notify_close(void)
+{
+	if (notify_fd != -1) {
+		close(notify_fd);
+		notify_fd = -1;
+	}
+}
 
-static int notify_init(int retcode)
+static int notify_open(void)
 {
 	const char *failure = "could not notify init supervisor: %s: %s\n";
 	struct sockaddr_un addr;
 	const char *path;
-	FILE *stream;
 	int fd;
 	int rc;
 
@@ -596,29 +603,31 @@ static int notify_init(int retcode)
 	rc = connect(fd, (const struct sockaddr *) &addr, sizeof(addr));
 	if (rc == -1) {
 		CRITICAL(failure, "connect", strerror(errno));
-		goto fail;
-	}
-
-	stream = fdopen(fd, "w");
-	if (stream == NULL) {
-		CRITICAL(failure, "fdopen", strerror(errno));
-		goto fail;
-	}
-
-	if (retcode == 0) {
-		fprintf(stream, "READY=1\n");
+		rc = errno;
+		close(fd);
 	} else {
-		fprintf(stream, "ERRNO=%d\n", rc);
+		notify_fd = fd;
 	}
 
-	fclose(stream);
-	return 0;
-
-fail:
-	close(fd);
-	return errno;
+	return rc;
 }
 
+static int notify_ready(int retcode)
+{
+	int rc;
+
+	if (notify_fd == -1)
+		return 0;
+
+	if (retcode == 0) {
+		rc = dprintf(notify_fd, "READY=1\n");
+	} else {
+		rc = dprintf(notify_fd, "ERRNO=%d\n", retcode);
+	}
+	notify_close();
+
+	return rc == 0 ? 0 : errno;
+}
 
 static int main_on_startup(void *not_used)
 {
@@ -674,9 +683,11 @@ static int main_on_startup(void *not_used)
 	rc = sfptpd_engine_create(config, &engine, netlink, initial_link_table);
 
 	/* Notify init supervisor */
-	ret = notify_init(rc);
+	ret = notify_ready(rc);
 	if (rc == 0)
 		rc = ret;
+	if (ret != 0)
+		sfptpd_engine_destroy(engine);
 
 	return rc; 
 }
@@ -990,6 +1001,8 @@ int main(int argc, char **argv)
 	if (rc != 0)
 		goto exit;
 
+	notify_open();
+
 #ifdef HAVE_CAPS
 	/* Drop to non-root user/group if so configured */
 	original_user = geteuid();
@@ -1046,6 +1059,7 @@ fail:
 	sfptpd_priv_stop_helper();
 	sfptpd_config_destroy(config);
 	wait_priv_helper();
+	notify_close();
 
 	return rc;
 }
