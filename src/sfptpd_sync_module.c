@@ -247,12 +247,11 @@ void sfptpd_sync_module_ctrl_flags_text(sfptpd_sync_module_ctrl_flags_t flags,
 size_t sfptpd_sync_module_alarms_stream(FILE *stream,
 	sfptpd_sync_module_alarms_t alarms, const char *separator)
 {
-	int i;
 	int ret;
 	size_t len = 0;
 	const char *sep = "";
 
-	for (i = 0; i < sizeof(alarm_texts)/sizeof(alarm_texts[0]); i++) {
+	for (unsigned i = 0; i < sizeof(alarm_texts)/sizeof(alarm_texts[0]); i++) {
 		if (alarms & alarm_texts[i].bitmask) {
 			ret = fprintf(stream, "%s\"%s\"", sep, alarm_texts[i].text);
 			if (ret > 0)

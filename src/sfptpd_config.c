@@ -75,7 +75,7 @@ static void config_make_param_string(char *buffer, unsigned int buffer_size,
 				     const char * const tokens[],
 				     unsigned int num_tokens)
 {
-	int len = 0;
+	unsigned int len = 0;
 
 	buffer[0] = '\0';
 	while ((num_tokens != 0) && (len < buffer_size)) {
@@ -353,7 +353,7 @@ static int config_parse_option(struct sfptpd_config *config,
 
 			/* Are there an appropriate number of parameters? */
 			bool exact_reqd = opt->num_params >= 0;
-			int num_reqd = exact_reqd ? opt->num_params : ~opt->num_params;
+			unsigned int num_reqd = exact_reqd ? opt->num_params : ~opt->num_params;
 
 			if ((exact_reqd && (num_params != num_reqd)) ||
 			     (!exact_reqd && (num_params < num_reqd))) {
@@ -888,8 +888,6 @@ int sfptpd_config_parse_file(struct sfptpd_config *config)
 					 section_name);
 				sfptpd_log_lexed_config("\n[%s]\n", section_name);
 			} else if (section != NULL) {
-				int i;
-
 				/* Parse the option. The function returns ENOENT
 				 * if the option is not found or 0 for success.
 				 * Anything else is treated as an error.
@@ -903,7 +901,7 @@ int sfptpd_config_parse_file(struct sfptpd_config *config)
 				if (rc < 0)
 					return -rc;
 
-				for (i = 0; i < num_tokens; i++) {
+				for (unsigned i = 0; i < num_tokens; i++) {
 					sfptpd_log_lexed_config("%s%c",
 								i > 0 && rc == 1 ? CONFIG_REDACTION_STRING : tokens[i],
 								(i < num_tokens - 1) ? ' ' : '\n');

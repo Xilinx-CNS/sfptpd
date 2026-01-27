@@ -161,7 +161,7 @@ enum sfptpd_control_action sfptpd_control_socket_get_action(union sfptpd_control
 		      strerror(rc));
 		return CONTROL_ERROR;
 	} else {
-		assert(rc < sizeof buf);
+		assert(rc < (ssize_t) sizeof buf);
 		buf[rc] = '\0';
 	}
 

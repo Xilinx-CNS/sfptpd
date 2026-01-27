@@ -609,7 +609,6 @@ static int mode6_response(struct sfptpd_ntpclient_state *ntpclient,
 	size_t num_frags;
 	size_t frag_idx;
 	unsigned char *read_ptr;
-	int i;
 
 	assert(ntpclient != NULL);
 	assert(resp_status != NULL);
@@ -783,7 +782,7 @@ static int mode6_response(struct sfptpd_ntpclient_state *ntpclient,
 			continue;
 		}
 		/* Move all later fragments +1 index to make room for new fragment */
-		for (i = num_frags; i > frag_idx; i--) {
+		for (unsigned i = num_frags; i > frag_idx; i--) {
 			offsets[i] = offsets[i-1];
 			counts[i] = counts[i-1];
 		}
@@ -1054,7 +1053,6 @@ static int parse_addr_string(struct sockaddr_storage *sockaddr,
 	int gai_rc;
 	struct addrinfo *result;
 	const struct addrinfo hints = {	.ai_flags = AI_NUMERICHOST };
-	int i = 0;
 
 	sockaddr->ss_family = AF_UNSPEC;
 	*length = 0;
@@ -1066,6 +1064,7 @@ static int parse_addr_string(struct sockaddr_storage *sockaddr,
 	 * ipv6		xxxx:xxxx:xxxx:xxxx
 	 * ipv6+port	[xxxx:xxxx:xxxx:xxxx]:port */
 	if (address[0] == '[') {
+		unsigned i;
 		/* assume [ipv6]:port */
 		address++;
 		address_len--;
@@ -1080,8 +1079,8 @@ static int parse_addr_string(struct sockaddr_storage *sockaddr,
 		}
 		address[i] = '\0';
 	} else {
-		uint32_t colon_idx = -1;
-		for (i = 0; i < address_len; i++) {
+		int colon_idx = -1;
+		for (unsigned i = 0; i < address_len; i++) {
 			if (address[i] == ':') {
 				/* this is either ipv4:port or ipv6 */
 				if (colon_idx != -1) /* >=two colons, assume ipv6 */

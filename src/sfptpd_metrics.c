@@ -388,7 +388,7 @@ static int writev_all(struct query_state *q, struct iovec *iov, int iovcnt)
 	while (iovcnt && ret != -1) {
 		if (ret == 0) {
 			ret = writev(q->fd, iov, iovcnt);
-		} else if (ret >= iov->iov_len) {
+		} else if (ret >= (ssize_t) iov->iov_len) {
 			ret -= iov->iov_len;
 			iov++;
 			iovcnt--;
@@ -628,7 +628,7 @@ static int write_exemplars(void)
 	char *buf = NULL;
 	FILE *stream;
 	int rc;
-	int m;
+	unsigned int m;
 
 	stream = open_memstream(&buf, &buf_sz);
 	if (stream == NULL) {
@@ -672,7 +672,7 @@ static int sfptpd_metrics_send(struct query_state *q, bool peek)
 	int count = 0;
 	FILE *stream;
 	int rc = 0;
-	int m;
+	unsigned int m;
 
 	if (h->method == HTTP_METHOD_GET) {
 		stream = open_memstream(&buf, &buf_sz);
@@ -1094,7 +1094,7 @@ static void http_copydec_into(struct query_state *q,
 	size_t len = q->http.cursor;
 	bool negative = false;
 	int64_t v = 0LL;
-	int ptr;
+	unsigned int ptr;
 
 	for (ptr = 0; ptr < len && !q->abort; ptr++) {
 		char c = netbuf_read(nb, ptr);
@@ -1344,13 +1344,13 @@ static void metrics_process_query(struct sfptpd_thread_readyfd *event,
 
 	/* Read new data into circular buffer */
 	wr_ptr = nb->rd_ptr + nb->len;
-	if (wr_ptr >= nb->capacity)
+	if (wr_ptr >= (ssize_t) nb->capacity)
 		wr_ptr -= nb->capacity;
 
 	iov[0].iov_base = nb->data + wr_ptr;
 	iov[1].iov_base = nb->data;
 
-	if (wr_ptr > nb->rd_ptr || nb->len == 0) {
+	if (wr_ptr > (ssize_t) nb->rd_ptr || nb->len == 0) {
 		iov[0].iov_len = nb->capacity - wr_ptr;
 		iov[1].iov_len = nb->rd_ptr;
 	} else {
@@ -1399,7 +1399,7 @@ static void metrics_process_query(struct sfptpd_thread_readyfd *event,
 			}
 		}
 		q->http.action = HP_REQ_NO_ACTION;
-	} while (q->http.cursor < nb->len);
+	} while (q->http.cursor < (ssize_t) nb->len);
 
 	if (res == 0)
 		TRACE_L4("metrics: EOF received on connection\n");

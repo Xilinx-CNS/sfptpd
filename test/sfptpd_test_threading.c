@@ -128,7 +128,7 @@ static bool expect_event_coalescing = false;
 static int test_rc = 0;
 static sigset_t test_signal_set;
 
-static int test_signals_rxed[TEST_NUM_THREADS];
+static unsigned int test_signals_rxed[TEST_NUM_THREADS];
 
 
 static int test_on_startup(void *context);
@@ -196,7 +196,7 @@ static void test_send_msg(struct test_thread *t, unsigned int recipient,
 static void test_send_data(struct test_thread *t, unsigned int recipient)
 {
 	ssize_t bytes;
-	size_t length;
+	ssize_t length;
 	uint8_t buffer[TEST_DATAGRAM_SIZE];
 	struct sockaddr_in addr;
 
@@ -762,7 +762,7 @@ static void root_on_shutdown(void *context)
 	if (test_events) {
 		for (i = 0; i < TEST_NUM_THREADS; i++) {
 			for (j = 0; j < TEST_NUM_EVENTS; j++) {
-				int sent = 0;
+				unsigned int sent = 0;
 				int k;
 
 				for (k = 0; k < TEST_NUM_THREADS; k++)
@@ -952,7 +952,6 @@ static int test_threading(const char *name, bool timers, bool messaging,
 			  bool events, bool event_coalescing)
 {
 	sigset_t signal_set;
-	unsigned int i;
 	
 	printf("threading test %s...\n", name);
 	
@@ -976,7 +975,7 @@ static int test_threading(const char *name, bool timers, bool messaging,
 	sigemptyset(&signal_set);
 	sigaddset(&signal_set, SIGINT);
 	sigaddset(&signal_set, SIGTERM);
-	for (i = SIGRTMIN; i < SIGRTMIN + TEST_NUM_THREADS; i++) {
+	for (int i = SIGRTMIN; i < SIGRTMIN + TEST_NUM_THREADS; i++) {
 		sigaddset(&signal_set, i);
 	}
 	sfptpd_thread_main(&root_thread_ops, &signal_set, root_on_signal, NULL);
@@ -991,7 +990,6 @@ static int test_threading(const char *name, bool timers, bool messaging,
 int sfptpd_test_threading(void)
 {
 	int rc = 0;
-	unsigned int i;
 
 	/* Change this to run a soak */
 	bool soak = false;
@@ -1001,7 +999,7 @@ int sfptpd_test_threading(void)
 	sigemptyset(&test_signal_set);
 	sigaddset(&test_signal_set, SIGINT);
 	sigaddset(&test_signal_set, SIGTERM);
-	for (i = SIGRTMIN; i < SIGRTMAX; i++)
+	for (int i = SIGRTMIN; i < SIGRTMAX; i++)
 		sigaddset(&test_signal_set, i);
 
 	do {

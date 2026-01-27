@@ -190,7 +190,7 @@ typedef struct sfptpd_crny_module {
 	/* NTP daemon query state. */
 	struct {
 		enum ntp_query_state state;
-		int src_idx;
+		unsigned int src_idx;
 		struct crny_addr src_addr;
 		enum crny_src_mode_code src_mode;
 	} query;
@@ -702,7 +702,7 @@ void crny_stats_update(crny_module_t *ntp)
 	if (ntp->state.state == SYNC_MODULE_STATE_SLAVE) {
 		assert(ntp->state.selected_peer_idx != -1);
 		assert(ntp->state.selected_peer_idx < SFPTPD_NTP_PEERS_MAX);
-		assert(ntp->state.selected_peer_idx < ntp->state.peer_info.num_peers);
+		assert(ntp->state.selected_peer_idx < (int) ntp->state.peer_info.num_peers);
 		peer = &ntp->state.peer_info.peers[ntp->state.selected_peer_idx];
 		/* Offset, frequency correction, one-way-delay */
 		sfptpd_stats_collection_update_range(stats, NTP_STATS_ID_OFFSET,
@@ -781,7 +781,7 @@ void crny_parse_state(crny_module_t *ntp, struct ntp_state *state, int rc, bool 
 
 	if (state->selected_peer_idx != -1) {
 		assert(state->selected_peer_idx < SFPTPD_NTP_PEERS_MAX);
-		assert(state->selected_peer_idx < state->peer_info.num_peers);
+		assert(state->selected_peer_idx < (int) state->peer_info.num_peers);
 		set_offset_id(state, &state->peer_info.peers[state->selected_peer_idx]);
 	} else {
 		reset_offset_id(state);
@@ -876,7 +876,7 @@ static bool clock_control_at_launch(crny_module_t *ntp)
 
 	char buf[sizeof "/proc/" STRINGIFY(UINT_MAX) "/cmdline0"];
 	rc = snprintf(buf, sizeof buf, "/proc/%d/cmdline", pid);
-	assume_absent = rc < 0 || rc >= sizeof buf;
+	assume_absent = rc < 0 || rc >= (int) sizeof buf;
 	assert(!assume_absent);
 
 	fd = open(buf, O_RDONLY);
@@ -2491,12 +2491,11 @@ static void crny_do_io(crny_module_t *ntp)
 static void ntp_on_user_fds(void *context, unsigned int num_fds,
 			    struct sfptpd_thread_readyfd events[])
 {
-	int i;
 	crny_module_t *ntp = (crny_module_t *) context;
 
 	assert(ntp != NULL);
 
-	for (i = 0; i < num_fds; i++) {
+	for (unsigned i = 0; i < num_fds; i++) {
 		if (ntp->crny_comm.sock == events[i].fd) {
 			crny_do_io(ntp);
 		}

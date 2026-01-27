@@ -179,7 +179,6 @@ static void format_flags(char *buf, ssize_t space,
 			 const char **names, size_t num_known,
 			 unsigned long flags)
 {
-	int i;
 	int len = 0;
 	const char ellipsis[] = u8"\u2026";
 	ssize_t rewind = 1 + strlen(ellipsis);
@@ -187,7 +186,7 @@ static void format_flags(char *buf, ssize_t space,
 	assert(space >= rewind);
 	*buf = '\0';
 
-	for (i = 0; len >= 0 && flags != 0 && space >= rewind; i++, flags >>= 1) {
+	for (unsigned i = 0; len >= 0 && flags != 0 && space >= rewind; i++, flags >>= 1) {
 		if (flags & 1) {
 			if (i < num_known)
 				len = snprintf(buf, space, " %s", names[i]);
@@ -207,7 +206,7 @@ static void format_flags(char *buf, ssize_t space,
 static int decode_option(const char **names, size_t num_known,
 			 unsigned long *option, const char *text)
 {
-	int i;
+	unsigned int i;
 
 	for (i = 0; i < num_known && strcmp(text, names[i]); i++);
 	if (i == num_known) {
@@ -354,7 +353,7 @@ static int clock_command(int argc, char *argv[])
 	switch(cmd->tag) {
 	case CLOCK_CMD_LIST:
 		all_clocks = sfptpd_clock_get_active_snapshot(&num_clocks);
-		for (i = 0; i < num_clocks; i++) {
+		for (i = 0; i < (int) num_clocks; i++) {
 			printf("%s\n", sfptpd_clock_get_long_name(all_clocks[i]));
 		}
 		sfptpd_clock_free_active_snapshot(all_clocks);

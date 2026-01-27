@@ -77,7 +77,7 @@ int sfptpd_crny_helper_connect(const char *client_path,
 	*sock_ret = -1;
 	*failing_step = "unknown";
 
-	if (snprintf(client_addr.sun_path,
+	if ((size_t) snprintf(client_addr.sun_path,
 		     sizeof client_addr.sun_path,
 		     "%s", client_path) >=
 	    sizeof client_addr.sun_path) {
@@ -85,7 +85,7 @@ int sfptpd_crny_helper_connect(const char *client_path,
 		return ENOMEM;
 	}
 
-	if (snprintf(server_addr.sun_path,
+	if ((size_t) snprintf(server_addr.sun_path,
 		     sizeof server_addr.sun_path,
 		     "%s", server_path) >=
 	    sizeof server_addr.sun_path) {
@@ -184,7 +184,6 @@ static int edit_env(enum chrony_clock_control_op op)
 {
 	char errbuf[256];
 	int rc = ENOENT;
-	int i;
 	unsigned int successes = 0;
 
 	regex_t our_lines_start_re;
@@ -207,7 +206,7 @@ static int edit_env(enum chrony_clock_control_op op)
 	}
 
 	rc = ENOENT;
-	for (i = 0; i < (sizeof env_files / sizeof env_files[0]); i++) {
+	for (unsigned i = 0; i < (sizeof env_files / sizeof env_files[0]); i++) {
 		const struct env_style *style = env_files + i;
 		regex_t option_re;
 		enum edit_state state;
@@ -269,7 +268,7 @@ static int edit_env(enum chrony_clock_control_op op)
 
 			line_start = ptr;
 			line = next_line = text + ptr;
-			if (no_newline_at_eof && strnlen(next_line, end - ptr) == end - ptr)
+			if (no_newline_at_eof && (off_t) strnlen(next_line, end - ptr) == end - ptr)
 				next_line = text + end;
 			else
 				strsep(&next_line, "\n");

@@ -695,7 +695,6 @@ static int phc_compare_using_extended_offset_n(struct sfptpd_phc *phc,
 	int rc = EOPNOTSUPP;
 
 #ifdef PTP_SYS_OFFSET_EXTENDED
-	int i;
 	struct ptp_sys_offset_extended sysoff;
 	struct sfptpd_timespec ts, window;
 	sfptpd_time_t smallest_window;
@@ -722,7 +721,7 @@ static int phc_compare_using_extended_offset_n(struct sfptpd_phc *phc,
 	rc = EAGAIN;
 	smallest_window = INFINITY;
 
-	for (i = 0; i < sysoff.n_samples; i++) {
+	for (unsigned i = 0; i < sysoff.n_samples; i++) {
 		struct ptp_clock_time *sys_before = &sysoff.ts[i][0];
 		struct ptp_clock_time *device     = &sysoff.ts[i][1];
 		struct ptp_clock_time *sys_after  = &sysoff.ts[i][2];
@@ -751,7 +750,7 @@ static int phc_compare_using_kernel_readings_n(struct sfptpd_phc *phc,
 					       int n_samples,
 					       struct sfptpd_timespec *diff)
 {
-	int rc, i;
+	int rc;
 	struct ptp_sys_offset sysoff;
 	struct sfptpd_timespec ts, window;
 	sfptpd_time_t smallest_window;
@@ -769,7 +768,7 @@ static int phc_compare_using_kernel_readings_n(struct sfptpd_phc *phc,
 	rc = EAGAIN;
 	smallest_window = INFINITY;
 
-	for (i = 0; i < sysoff.n_samples; i++) {
+	for (unsigned i = 0; i < sysoff.n_samples; i++) {
 		struct ptp_clock_time *sys_before = &sysoff.ts[2*i];
 		struct ptp_clock_time *device     = &sysoff.ts[2*i+1];
 		struct ptp_clock_time *sys_after  = &sysoff.ts[2*i+2];
@@ -968,7 +967,7 @@ static int phc_control_devptp(struct sfptpd_phc *phc,
 static int phc_get_devptp_event(struct sfptpd_phc *phc, struct sfptpd_timespec *timestamp)
 {
 	struct ptp_extts_event event;
-	const int channel = 0;
+	const unsigned int channel = 0;
 	int rc;
 
 	assert(phc != NULL);

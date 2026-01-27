@@ -545,7 +545,7 @@ typedef struct ptpd_port_config {
 
 	/* @task65531: Slave Status Monitoring (Solarflare extension). */
 	bool slave_status_monitoring_enable;
-	int num_monitor_dests;
+	unsigned int num_monitor_dests;
 	struct sockaddr_storage monitor_address[MAX_SLAVE_EVENT_DESTS];
 	socklen_t monitor_address_len[MAX_SLAVE_EVENT_DESTS];
 
@@ -943,7 +943,7 @@ struct ptpd_port_context {
 	UInteger32 portAlarms;
 	Integer8 logMinDelayReqInterval;
 	Integer8 logDelayRespReceiptTimeout;
-	UInteger32 lastSyncIfindex;
+	int lastSyncIfindex;
 
 	/* Configurable members */
 	Integer8 logAnnounceInterval;

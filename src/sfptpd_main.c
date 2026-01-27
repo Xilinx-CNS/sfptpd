@@ -815,11 +815,10 @@ static void on_control_socket_fd(int fd)
 static void main_on_user_fds(void *not_used, unsigned int num_fds,
 			     struct sfptpd_thread_readyfd fds[])
 {
-	int i;
 	int rc;
 	siginfo_t siginf;
 
-	for (i = 0; i < num_fds; i++) {
+	for (unsigned i = 0; i < num_fds; i++) {
 		int fd = fds[i].fd;
 
 		if (fd == sfptpd_control_socket_get_fd()) {

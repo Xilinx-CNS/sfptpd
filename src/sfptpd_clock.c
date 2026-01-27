@@ -580,7 +580,7 @@ static int configure_clock_list(struct sfptpd_clock *clock,
 static int configure_new_clock(struct sfptpd_clock *clock,
 			       struct sfptpd_config_general *cfg)
 {
-	int i;
+	unsigned int i;
 	int rc = 0;
 	/* If the configuration specifies readonly clocks, mark it so.
 	   The short_name and long_name are names like phc0, phc1 etc.
@@ -618,7 +618,8 @@ static int configure_new_clock(struct sfptpd_clock *clock,
 }
 
 static void fixup_clock(struct sfptpd_clock *clock, struct sfptpd_config_general *cfg) {
-        int i;
+        unsigned int i;
+
         /* If any clock_readonly names is an interface associated with the clock, mark the clock as readonly. */
         for (i = 0; i < cfg->clocks.num_readonly_clocks; i++) {
                 configure_clock_readonly(clock, cfg, i);
@@ -640,7 +641,7 @@ static void fixup_clock(struct sfptpd_clock *clock, struct sfptpd_config_general
 
 void fixup_readonly_and_clock_lists()
 {
-        int i;
+        unsigned int i;
         struct sfptpd_clock *clock;
         struct sfptpd_config_general *cfg = sfptpd_general_config_get(sfptpd_clock_config);
         /*
@@ -887,7 +888,7 @@ static int renew_clock(struct sfptpd_clock *clock)
 	 * is alive and active. If we didn't find an interface then this clock
 	 * and the interfaces associated with it have been deleted. */
 	if (primary != NULL && supports_phc) {
-		int name_len;
+		unsigned int name_len;
 		sfptpd_mac_addr_t mac;
 
 		if (clock->deleted) {
@@ -1230,7 +1231,7 @@ static struct sfptpd_clock **clock_snapshot(size_t *num_clocks, bool no_sfc)
 	struct sfptpd_clock **snapshot;
 	struct sfptpd_clock *node;
 	size_t count;
-	int index;
+	unsigned int index;
 
 	count = 0;
 	for (node = sfptpd_clock_list_head; node != NULL; node = node->next) {
@@ -2656,7 +2657,7 @@ int sfptpd_clock_deduplicate(void)
 	struct sfptpd_timespec threshold;
 	struct sfptpd_timespec t;
 	struct sfptpd_clock_calibration *calibrations;
-	int i, j;
+	unsigned int i;
 	int rc;
 	int changes = 0;
 
@@ -2730,7 +2731,7 @@ int sfptpd_clock_deduplicate(void)
 		}
 
 		/* Check if offset impacts other clocks */
-		for (j = 0; j < count; j++) {
+		for (unsigned j = 0; j < count; j++) {
 			struct sfptpd_clock *other = clocks_table[j];
 			if (i == j)
 				continue;

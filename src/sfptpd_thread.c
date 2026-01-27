@@ -418,7 +418,7 @@ static int pipe_write(struct sfptpd_pipe *pipe, const void *data, size_t count)
 
 	/* Write the data to the pipe */
 	bytes_written = write(pipe->fds[PIPE_WRITE_IDX], data, count);
-	if (bytes_written != count) {
+	if (bytes_written != (ssize_t) count) {
 		/* We expect to write all the data or nothing. */
 		if (bytes_written >= 0)
 			errno = ERANGE;
@@ -472,7 +472,7 @@ static int pipe_read(struct sfptpd_pipe *pipe, void *buffer, size_t count,
 	if (!wait && (bytes_read == -1) && (errno == EAGAIN))
 		return errno;
 
-	if (bytes_read != count) {
+	if (bytes_read != (ssize_t) count) {
 		/* We expect to read all the data or nothing */
 		if (bytes_read >= 0)
 			errno = ERANGE;
@@ -705,7 +705,7 @@ static int pool_receive(struct sfptpd_pool *pool, sfptpd_msg_hdr_t **msg,
  * Event Functions
  ****************************************************************************/
 
-static int event_get_id(struct sfptpd_event *event)
+static sfptpd_event_id_t event_get_id(struct sfptpd_event *event)
 {
 	assert(event != NULL);
 	assert(event->magic == SFPTPD_EVENT_MAGIC);
@@ -1316,7 +1316,7 @@ static void thread_exit_notify(struct sfptpd_thread *thread, int rc)
 }
 
 
-static int thread_on_possible_event(struct sfptpd_thread *thread, unsigned int fd)
+static int thread_on_possible_event(struct sfptpd_thread *thread, int fd)
 {
 	struct sfptpd_event *event;
 

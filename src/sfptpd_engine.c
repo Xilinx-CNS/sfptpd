@@ -228,7 +228,7 @@ struct sfptpd_engine {
 
 	/* Sync instances (array dimensioned at startup) */
 	struct sync_instance_record *sync_instances;
-	int num_sync_instances;
+	unsigned int num_sync_instances;
 
 	/* Current candidate sync instance for selection */
 	struct sync_instance_record *candidate;
@@ -313,9 +313,8 @@ static struct sync_instance_record *get_sync_instance_record_by_handle(struct sf
 								       struct sfptpd_sync_instance *handle)
 {
 	struct sync_instance_record *instance;
-	int i;
 
-	for (i = 0; i < engine->num_sync_instances; i++) {
+	for (unsigned i = 0; i < engine->num_sync_instances; i++) {
 		instance = &engine->sync_instances[i];
 		if (instance->info.handle == handle) {
 			return instance;
@@ -334,9 +333,8 @@ static struct sync_instance_record *get_sync_instance_record_by_name(struct sfpt
 								     const char *name)
 {
 	struct sync_instance_record *instance;
-	int i;
 
-	for (i = 0; i < engine->num_sync_instances; i++) {
+	for (unsigned i = 0; i < engine->num_sync_instances; i++) {
 		instance = &engine->sync_instances[i];
 		if (0 == strcmp(name, instance->info.name)) {
 			return instance;
@@ -608,17 +606,15 @@ static int create_timers(struct sfptpd_engine *engine)
 
 static void write_state(struct sfptpd_engine *engine)
 {
-	int i;
-
 	/* Save the state of the sync modules */
-	for (i = 0; i < SFPTPD_CONFIG_CATEGORY_MAX; i++) {
+	for (unsigned i = 0; i < SFPTPD_CONFIG_CATEGORY_MAX; i++) {
 		if (engine->sync_modules[i] != NULL) {
 			sfptpd_sync_module_save_state(engine->sync_modules[i]);
 		}
 	}
 
 	/* For each of the servos, save the state */
-	for (i = 0; i < engine->active_servos; i++)
+	for (unsigned i = 0; i < engine->active_servos; i++)
 		sfptpd_servo_save_state(engine->servos[i]);
 }
 
@@ -943,7 +939,7 @@ static void write_rt_stats_json(struct sfptpd_engine *engine,
 				FILE* json_stats_fp,
 				struct sfptpd_sync_instance_rt_stats_entry *entry)
 {
-	size_t len;
+	ssize_t len;
 
 	assert(json_stats_fp != NULL);
 	assert(entry != NULL);
@@ -1306,7 +1302,7 @@ static void engine_handle_new_link_table(struct sfptpd_engine *engine, int versi
 	size_t num_clocks_before;
 	size_t num_clocks_after;
 
-	int rc, i, j;
+	int rc;
 	int rows [[maybe_unused]];
 	bool new_link_table = false;
 	bool reconfigure = false;
@@ -1328,7 +1324,7 @@ static void engine_handle_new_link_table(struct sfptpd_engine *engine, int versi
 			return;
 		}
 
-		for (i = 0; i < engine->link_table->count; i++) {
+		for (int i = 0; i < engine->link_table->count; i++) {
 			const struct sfptpd_link *link = engine->link_table->rows + i;
 
 			assert(link->event != SFPTPD_LINK_DOWN);
@@ -1343,10 +1339,11 @@ static void engine_handle_new_link_table(struct sfptpd_engine *engine, int versi
 			}
 		}
 
-		for (i = 0; engine->link_table_prev &&
+		for (int i = 0; engine->link_table_prev &&
 		            i < engine->link_table_prev->count; i++) {
 			const struct sfptpd_link *link = engine->link_table_prev->rows + i;
 			int intf_i = link->if_index;
+			int j;
 			for (j = 0; j < engine->link_table->count; j++) {
 				int intf_j = engine->link_table->rows[j].if_index;
 				if (intf_i == intf_j)
@@ -1377,7 +1374,7 @@ static void engine_handle_new_link_table(struct sfptpd_engine *engine, int versi
 
 	/* Reflect hot-plugged clocks in clock feeds */
 	clocks_after = sfptpd_clock_get_active_snapshot(&num_clocks_after);
-	for (i = 0, j = 0; i < num_clocks_before || j < num_clocks_after;) {
+	for (unsigned i = 0, j = 0; i < num_clocks_before || j < num_clocks_after;) {
 		struct sfptpd_clock *clock_a = i < num_clocks_before ? clocks_before[i] : NULL;
 		struct sfptpd_clock *clock_b = j < num_clocks_after ? clocks_after[j] : NULL;
 
@@ -1407,7 +1404,7 @@ static void engine_handle_new_link_table(struct sfptpd_engine *engine, int versi
 
 	if (new_link_table) {
 		/* Send new link table to subscribing sync modules */
-		for (i = 0; i < engine->link_subscribers; i++) {
+		for (int i = 0; i < engine->link_subscribers; i++) {
 			assert(i < SFPTPD_CONFIG_CATEGORY_MAX);
 			assert(engine->link_subscriber[i] != NULL);
 
@@ -1468,13 +1465,12 @@ static void engine_on_user_fds(void *context, unsigned int num_fds,
 {
 	struct sfptpd_engine *engine = (struct sfptpd_engine *)context;
 	bool netlink;
-	int i, j;
 
 	assert(engine != NULL);
 
 	netlink = false;
-	for (i = 0; i < num_fds; i++)
-		for (j = 0; !netlink && j < engine->netlink_num_fds; j++)
+	for (unsigned i = 0; i < num_fds; i++)
+		for (int j = 0; !netlink && j < engine->netlink_num_fds; j++)
 			if (fd[i].fd == engine->netlink_fds[j])
 				netlink = true;
 
@@ -1508,7 +1504,7 @@ static void on_synchronize(void *user_context)
 {
 	struct sfptpd_engine *engine = (struct sfptpd_engine *)user_context;
 	struct sfptpd_timespec time;
-	int i;
+	unsigned i;
 
 	assert(engine != NULL);
 
@@ -1757,7 +1753,7 @@ static void on_log_stats(void *user_context, unsigned int timer_id)
 	struct sfptpd_engine *engine = (struct sfptpd_engine *)user_context;
 	struct sfptpd_timespec log_time;
 	struct sync_instance_record *instance;
-	int i;
+	unsigned int i;
 
 	assert(engine != NULL);
 
@@ -1827,7 +1823,7 @@ static void on_stats_period_end(void *user_context, unsigned int timer_id)
 	struct sfptpd_engine *engine = (struct sfptpd_engine *)user_context;
 	struct sfptpd_timespec time;
 	enum sfptpd_config_category type;
-	int i;
+	unsigned int i;
 
 	assert(engine != NULL);
 
@@ -1894,7 +1890,8 @@ static void on_step_clocks(struct sfptpd_engine *engine)
 	struct sfptpd_sync_instance_status status;
 	struct sfptpd_timespec servo_offset;
 	struct sfptpd_timespec zero = sfptpd_time_null();
-	int rc, i;
+	unsigned int i;
+	int rc;
 
 	assert(engine != NULL);
 
@@ -2217,15 +2214,13 @@ static void on_link_table_release(struct sfptpd_engine *engine,
 static void on_servo_pid_adjust(struct sfptpd_engine *engine,
 				sfptpd_servo_msg_t *msg)
 {
-	int i;
-
 	assert(engine != NULL);
 	assert(msg != NULL);
 
 	if (!(msg->u.pid_adjust.servo_type_mask & SFPTPD_SERVO_TYPE_LOCAL))
 		return;
 
-	for (i = 0; i < engine->active_servos; i++) {
+	for (unsigned i = 0; i < engine->active_servos; i++) {
 		sfptpd_servo_pid_adjust(engine->servos[i],
 					msg->u.pid_adjust.kp,
 					msg->u.pid_adjust.ki,
@@ -2375,8 +2370,7 @@ static int engine_on_startup(void *context)
 	struct sfptpd_config *config;
 	int rc;
 	enum sfptpd_config_category type;
-	int all_instances;
-	int i;
+	unsigned int all_instances;
 	struct sync_instance_record *bic_instance;
 
 	assert(engine != NULL);
@@ -2402,10 +2396,9 @@ static int engine_on_startup(void *context)
 		struct sfptpd_clock **active;
 		struct sfptpd_clock *clock;
 		size_t num_active;
-		int idx;
 
 		active = sfptpd_clock_get_active_snapshot(&num_active);
-		for (idx = 0; idx < num_active; idx++) {
+		for (unsigned idx = 0; idx < num_active; idx++) {
 		     clock = active[idx];
 			if (clock != sfptpd_clock_get_system_clock())
 				sfptpd_clockfeed_add_clock(engine->clockfeed, clock,
@@ -2473,7 +2466,7 @@ static int engine_on_startup(void *context)
 	}
 
 	/* Get the status from all the sync instances */
-	for (i = 0; i < all_instances; i++) {
+	for (unsigned i = 0; i < all_instances; i++) {
 		struct sync_instance_record *sync_instance = engine->sync_instances + i;
 		sfptpd_sync_instance_status_t sync_instance_status = { 0 };
 

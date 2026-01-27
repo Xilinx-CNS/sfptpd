@@ -201,7 +201,7 @@ void
 displayStatus(PtpClock *ptpClock, const char *prefixMessage) 
 {
 	char sbuf[SCREEN_BUFSZ];
-	int len = 0;
+	unsigned int len = 0;
 
 	len += snprintf(sbuf + len, sizeof(sbuf) - len, "ptp %s: %s",
 			ptpClock->rtOpts.name, prefixMessage);
@@ -231,7 +231,7 @@ void
 displayPortIdentity(PtpClock *ptpClock, PortIdentity *port, const char *prefixMessage)
 {
 	char sbuf[SCREEN_BUFSZ];
-	int len = 0;
+	unsigned len = 0;
 
 	len += snprintf(sbuf + len, sizeof(sbuf) - len, "ptp %s: %s ",
 			ptpClock->rtOpts.name, prefixMessage);

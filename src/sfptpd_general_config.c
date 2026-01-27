@@ -647,7 +647,7 @@ static int parse_selection_policy_rules(struct sfptpd_config_section *section, c
 					unsigned int num_params, const char * const params[])
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
-	int i, j, k;
+	unsigned int i, j, k;
 
 	if (num_params >= SELECTION_RULE_MAX) {
 		CFG_ERROR(section, "too many rules (%d) listed in selection policy\n", num_params);
@@ -687,7 +687,7 @@ static int parse_phc_diff_method_order(struct sfptpd_config_section *section, co
 					unsigned int num_params, const char * const params[])
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
-	int i, j, k;
+	unsigned int i, j, k;
 
 	if (num_params > SFPTPD_DIFF_METHOD_MAX) {
 		CFG_ERROR(section, "too many methods (%d) listed in phc diff methods\n", num_params);
@@ -727,7 +727,7 @@ static int parse_phc_pps_methods(struct sfptpd_config_section *section, const ch
                                  unsigned int num_params, const char * const params[])
 {
         sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
-        int i, j, k;
+        unsigned int i, j, k;
 
         if (num_params > SFPTPD_PPS_METHOD_MAX) {
                 CFG_ERROR(section, "too many methods (%d) listed in phc pps method list\n", num_params);
@@ -1217,7 +1217,7 @@ static int parse_openmetrics_tcp(struct sfptpd_config_section *section, const ch
 {
 	struct sfptpd_config_metrics *metrics = &((sfptpd_config_general_t *)section)->openmetrics;
 	int rc = 0;
-	int i;
+	unsigned int i;
 
 	metrics->tcp = calloc(num_params, sizeof *metrics->tcp);
 	metrics->num_tcp_addrs = num_params;
@@ -1752,7 +1752,7 @@ static int parse_reporting_intervals(struct sfptpd_config_section *section, cons
 	assert(num_params >= 2);
 	int tokens;
 	float interval;
-	int i;
+	unsigned int i;
 
 	if ((num_params & 1) != 0)
 		return EINVAL;
@@ -1920,7 +1920,7 @@ static int parse_ignore_critical(struct sfptpd_config_section *section, const ch
 			         unsigned int num_params, const char * const params[])
 {
 	int rc = 0;
-	int i;
+	unsigned int i;
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 
 	assert(num_params >= 1);
@@ -2091,7 +2091,7 @@ static int parse_eligible_interface_types(struct sfptpd_config_section *section,
 	char *word;
 	int rc;
 	int keep = 0;
-	int i;
+	unsigned int i;
 
 	assert(general != NULL);
 

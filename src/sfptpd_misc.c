@@ -111,7 +111,7 @@ int sfptpd_find_running_programs(struct sfptpd_prog *others)
 		/* Check if it's actually running */
 		res = snprintf(path, sizeof path, "%s/%s/stat",
 			       ftsent->fts_path, ftsent->fts_name);
-		assert(res < sizeof path);
+		assert((size_t) res < sizeof path);
 		stream = fopen(path, "r");
 		if (stream == NULL)
 			goto next_process;
@@ -125,7 +125,7 @@ int sfptpd_find_running_programs(struct sfptpd_prog *others)
 		/* Check what the exe link points to */
 		res = snprintf(path, sizeof path, "%s/%s/exe",
 			       ftsent->fts_path, ftsent->fts_name);
-		assert(res < sizeof path);
+		assert((size_t) res < sizeof path);
 
 		res = readlink(path, exe, sizeof exe - 1);
 		if (res != -1) {
@@ -133,7 +133,7 @@ int sfptpd_find_running_programs(struct sfptpd_prog *others)
 		} else if (errno == EACCES) {
 			res = snprintf(path, sizeof path, "%s/%s/cmdline",
 				       ftsent->fts_path, ftsent->fts_name);
-			assert(res < sizeof path);
+			assert(res < (ssize_t) sizeof path);
 
 			stream = fopen(path, "r");
 			if (stream == NULL)
@@ -247,9 +247,8 @@ static unsigned int hash(sfptpd_hash_table_t *table, void *key,
 	assert(table != NULL);
 	assert(key != NULL);
 
-        int index;
         unsigned int hashval = 0;
-        for(index = 0; index < key_size; index++) {
+        for(unsigned index = 0; index < key_size; index++) {
                 hashval = ((unsigned char *)key)[index] + (hashval << 5) - hashval;
         }
         return hashval % table->table_size;
@@ -315,13 +314,12 @@ struct sfptpd_hash_table *sfptpd_ht_alloc(const struct sfptpd_ht_ops *ops,
 
 void sfptpd_ht_free(struct sfptpd_hash_table *table)
 {
-        int ii;
         sfptpd_ht_entry_t *entry, *copy;
 	const struct sfptpd_ht_ops *ops = table->ops;
 
         assert(table != NULL);
 
-        for (ii = 0; ii < table->table_size; ii++) {
+        for (unsigned ii = 0; ii < table->table_size; ii++) {
                 entry = table->entries[ii];
 		while(entry != NULL) {
 			assert(entry->magic == SFPTPD_HT_MAGIC);
@@ -466,7 +464,7 @@ void sfptpd_ht_clear_entries(struct sfptpd_hash_table *table)
 	assert(table != NULL);
 
 	struct sfptpd_ht_entry *entry, *temp;
-	int index, counter = 0;
+	unsigned int index, counter = 0;
 	void *user;
 
 	sfptpd_ht_get_lock(table);
@@ -506,15 +504,17 @@ int sfptpd_ht_get_num_entries(struct sfptpd_hash_table *table)
  ****************************************************************************/
 
 ssize_t sfptpd_format(const struct sfptpd_interpolation *interpolators, void *context,
-		      char *buffer, size_t space, const char *format)
+		      char *buffer, const size_t capacity, const char *format)
 {
 	const struct sfptpd_interpolation *spec;
 	enum { IDLE, FMT } state = IDLE;
 	const char *f = format;
+	const ssize_t space = capacity;
 	ssize_t ret = 0;
 	ssize_t len = 0;
 	char c;
 
+	assert(space >= 0);
 	assert(format != NULL);
 	assert(buffer != NULL || space == 0);
 

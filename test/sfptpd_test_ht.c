@@ -261,14 +261,14 @@ bool output_test_result(bool test_success) {
 
 int sfptpd_test_ht(void)
 {
-	int ii, rc = 0;
+	int rc = 0;
 	bool success = true;
 	struct sfptpd_hash_table *table;
 
 	srand(time(NULL));
 	table = sfptpd_stats_create_set();
 
-	for (ii = 0; ii < (sizeof(tests) / sizeof(tests[0])); ii++) {
+	for (unsigned ii = 0; ii < (sizeof(tests) / sizeof(tests[0])); ii++) {
 		printf("%s", tests[ii].test_desc);
 		if (!output_test_result(add_and_check_wrapper(table, tests[ii])))
 			success = false;

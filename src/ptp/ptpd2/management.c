@@ -71,7 +71,8 @@ void managementInit(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	 * timestamping mode, we don't report a model or serial number. */
 	len = snprintf(ptpClock->product_desc, sizeof(ptpClock->product_desc),
 		       "%s", SFPTPD_MANUFACTURER);
-	if (len > sizeof(ptpClock->product_desc)) len = sizeof(ptpClock->product_desc);
+	if (len > (int) sizeof(ptpClock->product_desc))
+		len = sizeof(ptpClock->product_desc);
 
 	interface = ptpClock->interface->interface;
 	if (sfptpd_interface_get_class(interface) == SFPTPD_INTERFACE_SFC) {

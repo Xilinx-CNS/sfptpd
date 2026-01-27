@@ -285,7 +285,7 @@ static int test_fmds(const char *name,
 	struct sfptpd_timespec next_event = { 0 };
 	struct sfptpd_timespec delay = { 0 };
 	struct sfptpd_timespec remaining = { 0 };
-	int i;
+	unsigned int i;
 	int rc;
 	int errors = 0;
 	const struct fm_evt_in *last_best_event = NULL;

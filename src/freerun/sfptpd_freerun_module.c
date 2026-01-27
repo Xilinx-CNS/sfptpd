@@ -141,13 +141,12 @@ static int parse_clock_traceability(struct sfptpd_config_section *section, const
 				    unsigned int num_params, const char * const params[])
 {
 	int rc = 0;
-	int param;
 	sfptpd_freerun_module_config_t *fr = (sfptpd_freerun_module_config_t *)section;
 
 	fr->clock_time_traceable = false;
 	fr->clock_freq_traceable = false;
 
-	for (param = 0; param < num_params; param++) {
+	for (unsigned param = 0; param < num_params; param++) {
 		if (strcmp(params[param], "time") == 0) {
 			fr->clock_time_traceable = true;
 		} else if (strcmp(params[param], "freq") == 0) {

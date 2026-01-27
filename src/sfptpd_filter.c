@@ -412,9 +412,8 @@ static void peirce_filter_recalculate_drift(struct sfptpd_peirce_filter *filter)
 	/* Recalculate cumulative drift sum from scratch to clear all numerical errors */
 	if (filter->num_samples > 0 && (filter->update_count % (filter->max_samples * SFPTPD_PEIRCE_FILTER_RECALCULATION_PERIOD) == 0)) {
 		long double recalculated_sum = 0.0;
-		int i;
 
-		for (i = 0; i < filter->num_samples; i++) {
+		for (unsigned i = 0; i < filter->num_samples; i++) {
 			recalculated_sum += fabsl(filter->drift_values_ns[i]);
 		}
 

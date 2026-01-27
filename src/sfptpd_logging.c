@@ -211,7 +211,7 @@ static int construct_log_paths(struct sfptpd_log *log,
 {
 	va_list aq;
 	size_t space;
-	int ptr;
+	unsigned int ptr;
 
 	assert(log != NULL);
 	assert(filename_pattern != NULL);
@@ -397,7 +397,6 @@ int sfptpd_log_open(struct sfptpd_config *config)
 	FILE *file;
 	int rc_dircreate;
 	int rc;
-	int i;
 
 	/* Patterns for state files to be deleted */
 	const char *to_delete[] = { "state-*",
@@ -459,7 +458,7 @@ int sfptpd_log_open(struct sfptpd_config *config)
 		fclose(config_log_stream);
 		rc = snprintf(path, sizeof path, "%s/%s", state_path,
 			      sfptpd_config_log_file);
-		assert(rc < sizeof path);
+		assert(rc < (int) sizeof path);
 		log_write_file(path, config_log_buf, config_log_bufsz);
 		if (chown(path, general_config->uid, general_config->gid))
 			TRACE_L4("could not set config copy ownership, %s\n", strerror(errno));
@@ -469,19 +468,19 @@ int sfptpd_log_open(struct sfptpd_config *config)
 	}
 
 	/* Delete all state and stats files, interfaces and topology file before we begin */
-	for (i = 0; i < sizeof(to_delete) / sizeof(*to_delete); i++) {
+	for (unsigned i = 0; i < sizeof(to_delete) / sizeof(*to_delete); i++) {
 		rc = snprintf(path, sizeof path, "%s/%s", state_path, to_delete[i]);
-		assert(rc < sizeof path);
+		assert(rc < (int) sizeof path);
 		glob(path, (i == 0) ? 0 : GLOB_APPEND, NULL, &glob_results);
 	}
-	for (i = 0; i < glob_results.gl_pathc; i++) {
+	for (unsigned i = 0; i < glob_results.gl_pathc; i++) {
 		unlink(glob_results.gl_pathv[i]);
 	}
 	globfree(&glob_results);
 
 	/* Write the version number to the state path */
 	rc = snprintf(path, sizeof path, "%s/version", state_path);
-	if (rc >= sizeof path) return ENOMEM;
+	if (rc >= (int) sizeof path) return ENOMEM;
 	file = fopen(path, "w");
 	if (file == NULL) {
 		ERROR("couldn't open %s/version\n", state_path);
@@ -499,17 +498,17 @@ int sfptpd_log_open(struct sfptpd_config *config)
 	rc = snprintf(freq_correction_file_format,
 		      sizeof freq_correction_file_format,
 		      "%s/%s", state_path, sfptpd_freq_correction_file_format);
-	if (rc >= sizeof path) return ENOMEM;
+	if (rc >= (int) sizeof path) return ENOMEM;
 
 	rc = snprintf(state_file_format,
 		      sizeof state_file_format,
 		      "%s/", state_path);
-	if (rc >= sizeof path) return ENOMEM;
+	if (rc >= (int) sizeof path) return ENOMEM;
 
 	rc = snprintf(state_next_file_format,
 		      sizeof state_next_file_format,
 		      "%s/.next.", state_path);
-	if (rc >= sizeof path) return ENOMEM;
+	if (rc >= (int) sizeof path) return ENOMEM;
 	rc = 0;
 
 	pthread_mutex_init(&vmsg_mutex, NULL);
@@ -1092,7 +1091,7 @@ void sfptpd_log_format_time(struct sfptpd_log_time *time,
 
 	rc = snprintf(time->time, sizeof(time->time), "%s.%06" PRId32,
 		      temp, timestamp->nsec / 1000);
-	assert(rc < sizeof(time->time));
+	assert(rc < (int) sizeof(time->time));
 }
 #pragma GCC diagnostic pop
 

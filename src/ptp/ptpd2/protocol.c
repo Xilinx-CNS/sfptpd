@@ -64,7 +64,7 @@
 #include "sfptpd_lacp.h"
 
 static void handleAnnounce(MsgHeader*, ssize_t, RunTimeOpts*, PtpClock*);
-static void handleSync(const MsgHeader*, ssize_t, struct sfptpd_timespec*, Boolean, UInteger32, RunTimeOpts*, PtpClock*);
+static void handleSync(const MsgHeader*, ssize_t, struct sfptpd_timespec*, Boolean, int, RunTimeOpts*, PtpClock*);
 static void handleFollowUp(const MsgHeader*, ssize_t, const MsgFollowUp*, Boolean, RunTimeOpts*, PtpClock*);
 static void handlePDelayReq(MsgHeader*, ssize_t, struct sfptpd_timespec*, Boolean, RunTimeOpts*, PtpClock*);
 static void handleDelayReq(const MsgHeader*, ssize_t, struct sfptpd_timespec*, Boolean, RunTimeOpts*, PtpClock*);
@@ -1256,10 +1256,9 @@ processTLVs(RunTimeOpts *rtOpts, PtpClock *ptpClock, int payload_offset,
 	enum ptpd_tlv_result all_tlvs_result = PTPD_TLV_RESULT_CONTINUE;
 	enum ptpd_tlv_result tlv_result;
 	struct tlv_dispatch_info tlvs[MAX_TLVS];
-	int num_tlvs = 0;
+	unsigned int num_tlvs = 0;
 	off_t tlv_offset;
 	int offset;
-	int i;
 
 	assert(ptpClock);
 	assert(ptpClock->interface);
@@ -1323,7 +1322,7 @@ processTLVs(RunTimeOpts *rtOpts, PtpClock *ptpClock, int payload_offset,
 		}
 
 		/* Look for a handler for this TLV type */
-		for (i = 0; i < sizeof tlv_handlers / sizeof *tlv_handlers; i++) {
+		for (size_t i = 0; i < sizeof tlv_handlers / sizeof *tlv_handlers; i++) {
 			if (tlv_handlers[i].tlv_type == tlv.tlvType) {
 				if (!org_ext ||
 				    (oui == tlv_handlers[i].organization_id &&
@@ -1423,7 +1422,7 @@ processTLVs(RunTimeOpts *rtOpts, PtpClock *ptpClock, int payload_offset,
 
 	/* Do a second pass of the TLV handlers, so that they can act on the
 	   presence of each other. */
-	for (i = 0; i < num_tlvs; i++) {
+	for (size_t i = 0; i < num_tlvs; i++) {
 		struct tlv_dispatch_info *entry = &tlvs[i];
 		if (entry->handler->pass2_handler_fn != NULL) {
 			tlv_result = entry->handler->pass2_handler_fn(&ptpInterface->msgTmpHeader,
@@ -1850,7 +1849,7 @@ handleAnnounce(MsgHeader *header, ssize_t length,
 static void
 handleSync(const MsgHeader *header, ssize_t length,
 	   struct sfptpd_timespec *time, Boolean timestampValid,
-	   UInteger32 rxPhysIfindex,
+	   int rxPhysIfindex,
 	   RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
 	Integer8 msgInterval;

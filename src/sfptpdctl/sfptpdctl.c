@@ -74,7 +74,6 @@ int main(int argc, char *argv[])
 	int index;
 	int opt;
 	int rc;
-	int i;
 
 	/* Handle command line arguments */
 	while ((opt = getopt_long(argc, argv, opts_short, opts_long, &index)) != -1) {
@@ -120,9 +119,9 @@ int main(int argc, char *argv[])
 	}
 
 	/* Send each positional argument as a separate command */
-	for (i = optind; i < argc; i++) {
+	for (int i = optind; i < argc; i++) {
 		rc = write(control_fd, argv[i], strlen(argv[i]));
-		if (rc != strlen(argv[i])) {
+		if (rc != (int) strlen(argv[i])) {
 			perror("write");
 			return EXIT_FAILURE;
 		}

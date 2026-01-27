@@ -421,13 +421,12 @@ static int parse_master_traceability(struct sfptpd_config_section *section, cons
 				     unsigned int num_params, const char * const params[])
 {
 	int rc = 0;
-	int param;
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
 
 	pps->master_time_traceable = false;
 	pps->master_freq_traceable = false;
 
-	for (param = 0; param < num_params; param++) {
+	for (unsigned param = 0; param < num_params; param++) {
 		if (strcmp(params[param], "time") == 0) {
 			pps->master_time_traceable = true;
 		} else if (strcmp(params[param], "freq") == 0) {
@@ -1916,13 +1915,12 @@ static void pps_on_user_fds(void *context,
 			    unsigned int num_fds,
 			    struct sfptpd_thread_readyfd fds[])
 {
-	int i;
 	pps_module_t *pps = (pps_module_t *)context;
 	struct sfptpd_pps_instance *instance;
 
 	assert(pps != NULL);
 
-	for(i = 0; i < num_fds; i++) {
+	for(unsigned i = 0; i < num_fds; i++) {
 		for(instance = pps->instances; instance != NULL; instance = instance->next) {
 			if (instance->poll_fd == fds[i].fd) {
 				pps_do_poll(pps, instance);

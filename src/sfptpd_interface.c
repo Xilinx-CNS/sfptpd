@@ -511,7 +511,6 @@ static bool interface_check_suitability(const struct sfptpd_link *link,
 {
 	int vendor_id = 0;
 	int device_id = 0;
-	int i;
 	const char *name;
 	struct sfptpd_config_interface_selection *s;
 	bool match = false;
@@ -578,7 +577,7 @@ static bool interface_check_suitability(const struct sfptpd_link *link,
 		*class = SFPTPD_INTERFACE_OTHER;
 
 		if (vendor_id == SFPTPD_XILINX_PCI_VENDOR_ID) {
-			for (i = 0; i < sizeof xilinx_ptp_nics / sizeof *xilinx_ptp_nics; i++) {
+			for (unsigned i = 0; i < sizeof xilinx_ptp_nics / sizeof *xilinx_ptp_nics; i++) {
 				if (xilinx_ptp_nics[i] == device_id)
 					*class = SFPTPD_INTERFACE_XNET;
 			}
@@ -677,7 +676,6 @@ static void interface_get_pci_ids(struct sfptpd_interface *interface,
 				  const char *sysfs_dir)
 {
 	int id;
-	int i;
 
 	assert(interface != NULL);
 	assert(sysfs_dir != NULL);
@@ -692,7 +690,7 @@ static void interface_get_pci_ids(struct sfptpd_interface *interface,
 	else
 		interface->pci_device_id = 0;
 
-	for (i = 0; i < sizeof all_nic_models / sizeof *all_nic_models; i++) {
+	for (unsigned i = 0; i < sizeof all_nic_models / sizeof *all_nic_models; i++) {
 		const struct nic_model_caps *model = all_nic_models + i;
 		if (interface->pci_vendor_id == model->vendor &&
 		    interface->pci_device_id == model->device) {
@@ -793,7 +791,8 @@ static void interface_populate_ts_info(struct sfptpd_interface *interface)
 static void interface_driver_stats_init(struct sfptpd_interface *interface)
 {
 	struct ethtool_gstrings *gstrings = NULL;
-	int rc, i, j, found;
+	unsigned int i, j, found;
+	int rc;
 	char path[PATH_MAX];
 
 	assert(interface != NULL);
@@ -1231,7 +1230,7 @@ int sfptpd_interface_initialise(struct sfptpd_config *config,
 				const struct sfptpd_link_table *link_table)
 {
 	struct sfptpd_interface *new, *interface;
-	int rc, i, flags;
+	int rc, flags;
 	sfptpd_config_timestamping_t *ts;
 	sfptpd_interface_class_t class;
 	int row;
@@ -1311,7 +1310,7 @@ int sfptpd_interface_initialise(struct sfptpd_config *config,
 		if (rc != 0)
 			return rc;
 	} else {
-		for (i = 0; i < ts->num_interfaces; i++) {
+		for (unsigned i = 0; i < ts->num_interfaces; i++) {
 			interface = sfptpd_interface_find_by_name(ts->interfaces[i]);
 			if (interface == NULL) {
 				ERROR("rx-timestamping: interface \"%s\" not found\n",

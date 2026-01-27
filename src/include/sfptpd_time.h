@@ -239,7 +239,7 @@ static inline sfptpd_time_fp16_t sfptpd_time_to_ns16(struct sfptpd_timespec ts)
 		sfptpd_time_negate(&ts, &ts);
 
 	/* Look for saturation */
-	if (ts.sec >= (0x1000000000000ULL / 1000000000))
+	if (ts.sec >= (0x1000000000000LL / 1000000000))
 		return neg ? INT64_MIN : INT64_MAX;
 
 	nsec_fp16u =

@@ -213,7 +213,7 @@ static struct nlmsghdr *create_ethtool_string_query(struct nl_conn_state *conn,
  * Local Functions
  ****************************************************************************/
 
-static int snprint_flags_delta(char *buf, size_t space, int flags1, int flags2)
+static int snprint_flags_delta(char *buf, ssize_t space, int flags1, int flags2)
 {
 	const struct flag_desc *flag;
 	int total = 0;
@@ -439,12 +439,10 @@ static bool netlink_send_ethtool_query(struct sfptpd_nl_state *state, struct sfp
 #ifdef HAVE_IFLA_PERM_ADDRESS
 static void render_l2_addr(struct sfptpd_l2addr *addr)
 {
-	int ptr;
-
 	assert(addr);
 	assert(addr->len <= sizeof addr->addr);
 
-	for (ptr = 0; ptr < addr->len; ptr++)
+	for (unsigned ptr = 0; ptr < addr->len; ptr++)
 		snprintf(addr->string + ptr * 3,
 			 (sizeof addr->string) - ptr * 3,
 			 ptr == addr->len - 1 ? "%02hhx" : "%02hhx:",
@@ -623,7 +621,7 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 
 	/* Expand link table if full */
 	if (link->event != SFPTPD_LINK_DOWN &&
-	    db->table.count + 1 >= db->capacity) {
+	    db->table.count + 1 >= (ssize_t) db->capacity) {
 		size_t new_capacity;
 
 		if (db->capacity == 0)
@@ -686,7 +684,7 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 		return 0;
 	}
 
-	assert(row < db->capacity);
+	assert(row < (ssize_t) db->capacity);
 
 	db->table.rows[row] = *link;
 	db->table.count++;
@@ -939,7 +937,7 @@ static int netlink_handle_genl_team(struct nl_conn_state *conn,
 	struct nlattr *options[TEAM_ATTR_OPTION_MAX + 1] = { 0 };
 	int team_ifindex = -1;
 	int port_ifindex = -1;
-	int opt = CP_TEAM_OPTION_MAX;
+	unsigned int opt = CP_TEAM_OPTION_MAX;
 	enum sfptpd_link_event event = SFPTPD_LINK_NONE;
 
 	assert(conn);
@@ -1083,7 +1081,7 @@ static int netlink_handle_genl_ethtool(struct nl_conn_state *conn,
 	struct genlmsghdr *genl;
 	struct nlattr *attr[ETHTOOL_A_TSINFO_MAX + 1] = {};
 	struct nlattr *hdr[ETHTOOL_A_HEADER_MAX + 1] = {};
-	uint32_t if_index = 0;
+	int if_index = 0;
 	int row;
 	struct link_db *db = conn->state->db_hist + conn->state->db_hist_next;
 	struct sfptpd_link *link;
@@ -1115,7 +1113,7 @@ static int netlink_handle_genl_ethtool(struct nl_conn_state *conn,
 		mnl_attr_parse_nested(attr[ETHTOOL_A_TSINFO_HEADER],
 				      MNL_VALIDATE(ethtool_header), hdr);
 		if (hdr[ETHTOOL_A_HEADER_DEV_INDEX]) {
-			if_index = mnl_attr_get_u32(hdr[ETHTOOL_A_HEADER_DEV_INDEX]);
+			if_index = (int) mnl_attr_get_u32(hdr[ETHTOOL_A_HEADER_DEV_INDEX]);
 		}
 	}
 

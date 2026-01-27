@@ -271,7 +271,7 @@ static const char *ts_e10_quantile_to_unit(int q_e10)
 	int q_unit = q_e10 - TS_QUANTILE_MIN_UNIT_E10;
 
 	assert(q_unit >= 0);
-	assert(q_unit < (sizeof ts_quantile_units) / (sizeof *ts_quantile_units) ||
+	assert(q_unit < (int) ((sizeof ts_quantile_units) / (sizeof *ts_quantile_units)) ||
 	       q_index == TS_QUANTILES - 1);
 
 	/* The last quantile has no upper bound. */
@@ -1188,8 +1188,8 @@ int netTryGetSockIfindex(PtpInterface *ptpInterface, int sockfd)
 	bool ipv6 = (ptpInterface->ifOpts.transportAF == AF_INET6);
 	int ipproto = ipv6 ? IPPROTO_IPV6 : IPPROTO_IP;
 	int iptype = ipv6 ? IPV6_PKTINFO : IP_PKTINFO;
-	int cmsg_len = ipv6 ? CMSG_LEN(sizeof(struct in6_pktinfo))
-			    : CMSG_LEN(sizeof(struct in_pktinfo));
+	size_t cmsg_len = ipv6 ? CMSG_LEN(sizeof(struct in6_pktinfo))
+			       : CMSG_LEN(sizeof(struct in_pktinfo));
 	struct msghdr *msg = &ptpInterface->msgEbuf;
 	struct cmsghdr *cmsg;
 	ssize_t length;
@@ -1209,8 +1209,8 @@ int netTryGetSockIfindex(PtpInterface *ptpInterface, int sockfd)
 			}
 
 			ifindex = ipv6
-				? ((struct in6_pktinfo*)CMSG_DATA(cmsg))->ipi6_ifindex
-				: ((struct in_pktinfo*)CMSG_DATA(cmsg))->ipi_ifindex;
+				? (int) ((struct in6_pktinfo*)CMSG_DATA(cmsg))->ipi6_ifindex
+				: (int) ((struct in_pktinfo*)CMSG_DATA(cmsg))->ipi_ifindex;
 		}
 	}
 
@@ -1285,8 +1285,8 @@ bool netProcessError(PtpInterface *ptpInterface,
 			 * check whether the packet was sent to a multicast IP
 			 * to differentiate the cases. */
 			int ifindex = ipv6
-				    ? ((struct in6_pktinfo*)CMSG_DATA(cmsg))->ipi6_ifindex
-				    : ((struct in_pktinfo*)CMSG_DATA(cmsg))->ipi_ifindex;
+				    ? (int) ((struct in6_pktinfo*)CMSG_DATA(cmsg))->ipi6_ifindex
+				    : (int) ((struct in_pktinfo*)CMSG_DATA(cmsg))->ipi_ifindex;
 			bondSocksOnTxIfindex(&ptpInterface->transport, fd, ifindex);
 			matchedBondSock =
 				(bondSockFdIndexInSockPool(&ptpInterface->transport, fd) >= 0);
@@ -1343,7 +1343,7 @@ void netCheckTimestampStats(struct sfptpd_ts_cache *cache,
 	char buf[120];
 	int quantile;
 	int ptr;
-	int ret;
+	size_t ret;
 	int q;
 	struct sfptpd_timespec period;
 	sfptpd_time_t period_f;
@@ -2242,7 +2242,7 @@ static int sendMessage(int sockfd, const void *buf, size_t length,
 		return errno;
 	}
 
-	if (rc != length) {
+	if (rc != (int) length) {
 		DBG("error sending %s message, sent %d bytes, expected %zu\n",
 		    messageType, rc, length);
 		return EIO;
@@ -2259,14 +2259,14 @@ struct sfptpd_ts_ticket netExpectTimestamp(struct sfptpd_ts_cache *cache,
 {
 	struct sfptpd_ts_pkt *pkt;
 	char buf[48];
-	int slot;
+	unsigned int slot;
 	int bit;
 
 	if (cache->free_bitmap == 0) {
 
 		/* Cache is full - evict oldest packet */
 		uint64_t oldest = UINT64_MAX;
-		int oldest_slot = 0;
+		unsigned int oldest_slot = 0;
 		for (slot = 0; slot < TS_CACHE_SIZE; slot++) {
 			if (cache->packet->seq < oldest) {
 				oldest = cache->packet->seq;

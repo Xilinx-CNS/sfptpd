@@ -83,7 +83,7 @@ const struct sfptpd_ptp_profile_def *sfptpd_ptp_get_profile_def(enum sfptpd_ptp_
 		profile_index = SFPTPD_PTP_PROFILE_DEFAULT_E2E;
 
 	assert(profile_index >=0);
-	assert(profile_index < sizeof ptp_profiles / sizeof ptp_profiles[0]);
+	assert(profile_index < (int) (sizeof ptp_profiles / sizeof ptp_profiles[0]));
 
 	return &ptp_profiles[profile_index];
 }
@@ -1073,7 +1073,7 @@ static int parse_mon_monitor_address(struct sfptpd_config_section *section, cons
 				     unsigned int num_params, const char * const params[])
 {
 	int rc = 0;
-	int i, j;
+	unsigned int i, j;
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 
 	j = ptp->ptpd_port.num_monitor_dests;

@@ -185,7 +185,7 @@ FREE ( Nibble )
  */
 #define CHECK_INPUT_LENGTH(offset, size, length, name, result, failure_label) \
 	assert(UNPACK_OK(result)); \
-	if ((offset) + (size) > (length)) {				\
+	if ((offset) + (size) > ((ssize_t) length)) {				\
 		ERROR("attempt to unpack incoming message field %s beyond received data (%d + %d > %d)\n", \
 		      STRINGIFY(name), offset, size, length);		\
 		result = UNPACK_ERROR; \
@@ -200,7 +200,7 @@ FREE ( Nibble )
 */
 #define CHECK_OUTPUT_LENGTH(offset, size, length, name, result, failure_label) \
 	assert(PACK_OK(result)); \
-	if ((offset) + (size) > (length)) {				\
+	if ((offset) + (size) > ((ssize_t) length)) {				\
 		ERROR("attempt to pack outgoing message field %s beyond output buffer (%d + %d > %d)\n", \
 		      STRINGIFY(name), offset, size, length);		\
 		result = PACK_ERROR; \
@@ -230,7 +230,7 @@ FREE ( Nibble )
 /* Macro to check boundaries for TLV */
 #define TLV_BOUNDARY_CHECK(offset, space) \
 	assert(space > 4); \
-	assert(offset < space); \
+	assert(offset < (ssize_t) space); \
 	assert((offset & 1) == 0); \
 	assert((space & 1) == 0);
 
@@ -238,7 +238,7 @@ FREE ( Nibble )
 #define PAD_TO_EVEN_LENGTH(buf, offset, space, result, failure_label)	\
 	assert(PACK_OK(result));					\
 	if ((offset) % 2 != 0) {					\
-		if ((offset) + 1 > space) {				\
+		if ((offset) + 1 > (ssize_t) space) {				\
 			ERROR("no space to pad TLV to even length\n");	\
 			result = PACK_ERROR;				\
 		} else {						\

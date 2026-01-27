@@ -443,7 +443,7 @@ static struct store *array_create(size_t initial_capacity, size_t record_size)
 }
 
 
-static struct array_header *get_array_header(struct array *array, int index, bool is_new) {
+static struct array_header *get_array_header(struct array *array, unsigned int index, bool is_new) {
 	struct array_header *hdr;
 
 	assert(array);
@@ -565,7 +565,7 @@ static void array_foreach(struct sfptpd_db_table *table,
 		.valid = true
 	};
 	uintptr_t index;
-	int count;
+	uintptr_t count;
 
 	assert(table != NULL);
 	assert(fn != NULL);
@@ -1014,7 +1014,7 @@ void sfptpd_db_table_dump_impl(int trace_level,
 	struct col *col_end;
 	int width;
 	char *str;
-	size_t sz;
+	ssize_t sz;
 	int rc;
 	int all_cols_width = 0;
 	int i;
@@ -1046,7 +1046,7 @@ void sfptpd_db_table_dump_impl(int trace_level,
 		col->key = key;
 
 		if (field->snprint == NULL) {
-			if (col->width < strlen(unknown_value))
+			if (col->width < (ssize_t) strlen(unknown_value))
 			    col->width = strlen(unknown_value);
 		} else {
 			for (row = 0; row < result.num_records; row++) {
@@ -1107,7 +1107,7 @@ void sfptpd_db_table_dump_impl(int trace_level,
 		i = 0;
 		for (col = cols; col < col_end; col++) {
 			struct sfptpd_db_field *field = &table->def->fields[col->key];
-			int j;
+			unsigned int j;
 
 			rc = snprintf(str + i, sz - i, "| ");
 			assert(rc >= 0 && rc < sz - i);
@@ -1125,7 +1125,7 @@ void sfptpd_db_table_dump_impl(int trace_level,
 					rc = field->snprint(str + i, col->width + 1, col->width, result.record_ptrs[row]);
 					assert(rc >= 0 && rc <= col->width);
 					i += rc;
-					for (j = rc; j < col->width; j++)
+					for (j = rc; j < (size_t) col->width; j++)
 						str[i++] = ' ';
 				}
 			} else {

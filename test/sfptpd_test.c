@@ -78,22 +78,20 @@ static void register_unit_test(const char *name, sfptpd_unit_test_fn_t fn)
 }
 
 static int find_unit_test(const char *name) {
-	int i;
+	unsigned int i;
 
 	for (i = 0; i < num_unit_tests && strcmp(name, unit_tests[i].name); i++);
-	return (i == num_unit_tests ? -1 : i);
+	return (i == num_unit_tests ? -1 : (int) i);
 }
 
 static void help(FILE *stream, const char *prog)
 {
-	int i;
-
 	fprintf(stream,
 		"\nUsage: %s [OPTIONS] [all",
 		prog
 	);
 
-	for (i = 0; i < num_unit_tests; i++) {
+	for (unsigned i = 0; i < num_unit_tests; i++) {
 		fprintf(stream, "|%s", unit_tests[i].name);
 	}
 
@@ -119,7 +117,7 @@ int main(int argc, char **argv)
 	struct timeval tod;
 	unsigned int i;
 	int result = 0;
-	int not_found = 0;
+	unsigned int not_found = 0;
 	int seed;
 	int chr;
 	int index;
@@ -165,7 +163,7 @@ int main(int argc, char **argv)
 		for (i = 0; i < num_unit_tests; i++)
 			unit_tests[i].run = true;
 	else
-		for (i = 1; i < argc; i++) {
+		for (i = 1; (int) i < argc; i++) {
 			int test = find_unit_test(argv[i]);
 			if (test == -1) {
 				argv[++not_found] = argv[i];

@@ -1000,7 +1000,7 @@ static int mode7_response(struct sfptpd_ntpclient_state *ntpclient,
 {
 	struct ntp_response_pkt pkt;
 	fd_set fds;
-	int rc, i, len;
+	int rc, len;
 	unsigned int num_items, item_size, pad_size;
 	unsigned int seq_num, last_seq_num;
 	unsigned int error_code;
@@ -1106,7 +1106,7 @@ static int mode7_response(struct sfptpd_ntpclient_state *ntpclient,
 
 		/* If this isn't our first packet, make sure the size isn't
 		 * too large */
-		if ((pkts_received != 0) && (item_size > required_item_size)) {
+		if ((pkts_received != 0) && ((int) item_size > required_item_size)) {
 			DBG_L3("ntpclient: mode7: received itemsize %d, previous %d\n",
 			       item_size, required_item_size);
 			continue;
@@ -1130,7 +1130,7 @@ static int mode7_response(struct sfptpd_ntpclient_state *ntpclient,
 			last_seq_num = seq_num;
 
 		/* Work out whether we have to pad the data */
-		if (required_item_size > item_size)
+		if (required_item_size > (int) item_size)
 			pad_size = required_item_size - item_size;
 		else
 			pad_size = 0;
@@ -1146,7 +1146,7 @@ static int mode7_response(struct sfptpd_ntpclient_state *ntpclient,
 
 		/* Copy the data into the output buffer */
 		read_ptr = pkt.data;
-		for (i = 0; i < num_items; i++) {
+		for (unsigned i = 0; i < num_items; i++) {
 			memcpy(write_ptr, read_ptr, item_size);
 			write_ptr += item_size;
 			read_ptr += item_size;
@@ -1349,7 +1349,7 @@ static int mode7_get_sys_info(struct sfptpd_ntpclient_state *ntpclient,
 static int mode7_get_peer_info(struct sfptpd_ntpclient_state *ntpclient,
 			       struct sfptpd_ntpclient_peer_info *peer_info)
 {
-	int rc, i;
+	int rc;
 	unsigned int num_items;
 	struct ntp_info_peer_summary *summary;
 	struct ntp_info_peer_stats *stats;
@@ -1391,7 +1391,7 @@ static int mode7_get_peer_info(struct sfptpd_ntpclient_state *ntpclient,
 
 	peer_info->num_peers = num_items;
 
-	for (i = 0; i < num_items; i++) {
+	for (unsigned i = 0; i < num_items; i++) {
 		peer = &peer_info->peers[i];
 		*peer = sfptpd_ntpclient_peer_null();
 		seconds = ntohl(summary[i].offset.l_i);
@@ -1413,7 +1413,7 @@ static int mode7_get_peer_info(struct sfptpd_ntpclient_state *ntpclient,
 	}
 
 	/* For each peer, get the peer stats and info */
-	for (i = 0; i < peer_info->num_peers; i++) {
+	for (unsigned i = 0; i < peer_info->num_peers; i++) {
 		char remote_host[NI_MAXHOST];
 		char local_host[NI_MAXHOST];
 
