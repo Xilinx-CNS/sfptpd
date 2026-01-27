@@ -50,8 +50,10 @@ int sfptpd_config_parse_net_addr(struct sockaddr_storage *ss,
 	};
 	int rc;
 
-	assert(regcomp(&rquot, "^\\[(.*)](:([^:]*))?$", REG_EXTENDED) == 0);
-	assert(regcomp(&runquot, "^([^:]*)(:([^:]*))?$", REG_EXTENDED) == 0);
+	rc = regcomp(&rquot, "^\\[(.*)](:([^:]*))?$", REG_EXTENDED);
+	assert(rc == 0);
+	rc = regcomp(&runquot, "^([^:]*)(:([^:]*))?$", REG_EXTENDED);
+	assert(rc == 0);
 
 	rc = regexec(&rquot, spec, sizeof matches / sizeof *matches, matches, 0);
 	if (rc != 0)
@@ -100,11 +102,13 @@ int sfptpd_config_parse_net_prefix(struct sfptpd_acl_prefix *buf,
 	char *spec = strdup(addr);
 	regoff_t prefix;
 	regoff_t length;
-	int rc = 0;
+	int rc;
 	int af;
 
-	assert(regcomp(&r6, "^([[:xdigit:]:.]+)(/([[:digit:]]+))?$", REG_EXTENDED) == 0);
-	assert(regcomp(&r4, "^([[:digit:].]+)(/([[:digit:]]+))?$", REG_EXTENDED) == 0);
+	rc = regcomp(&r6, "^([[:xdigit:]:.]+)(/([[:digit:]]+))?$", REG_EXTENDED);
+	assert(rc == 0);
+	rc = regcomp(&r4, "^([[:digit:].]+)(/([[:digit:]]+))?$", REG_EXTENDED);
+	assert(rc == 0);
 
 	af = AF_INET;
 	rc = regexec(&r4, spec, sizeof matches / sizeof *matches, matches, 0);
