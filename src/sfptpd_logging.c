@@ -1079,7 +1079,7 @@ struct sfptpd_log *sfptpd_log_open_remote_monitor(void)
 	return create_log("remote-monitor", sfptpd_remote_monitor_file);
 }
 
-
+#pragma GCC diagnostic ignored "-Wformat-truncation"
 void sfptpd_log_get_time(struct sfptpd_log_time *time)
 {
 	char temp[SFPTPD_LOG_TIME_STR_MAX];
@@ -1096,7 +1096,6 @@ void sfptpd_log_get_time(struct sfptpd_log_time *time)
 	assert(rc < sizeof(time->time));
 }
 
-
 void sfptpd_log_format_time(struct sfptpd_log_time *time,
 			    const struct sfptpd_timespec *timestamp)
 {
@@ -1111,7 +1110,7 @@ void sfptpd_log_format_time(struct sfptpd_log_time *time,
 		      temp, timestamp->nsec / 1000);
 	assert(rc < sizeof(time->time));
 }
-
+#pragma GCC diagnostic pop
 
 void sfptpd_log_lexed_config(const char *format, ...)
 {
