@@ -1080,22 +1080,6 @@ struct sfptpd_log *sfptpd_log_open_remote_monitor(void)
 }
 
 #pragma GCC diagnostic ignored "-Wformat-truncation"
-void sfptpd_log_get_time(struct sfptpd_log_time *time)
-{
-	char temp[SFPTPD_LOG_TIME_STR_MAX];
-	struct sfptpd_timespec now;
-	int rc [[maybe_unused]];
-
-	assert(time != NULL);
-
-	sfclock_gettime(CLOCK_REALTIME, &now);
-	sfptpd_local_strftime(temp, sizeof(temp), "%Y-%m-%d %X", &now.sec);
-
-	rc = snprintf(time->time, sizeof(time->time), "%s.%06" PRId32,
-		      temp, now.nsec / 1000);
-	assert(rc < sizeof(time->time));
-}
-
 void sfptpd_log_format_time(struct sfptpd_log_time *time,
 			    const struct sfptpd_timespec *timestamp)
 {
@@ -1111,6 +1095,14 @@ void sfptpd_log_format_time(struct sfptpd_log_time *time,
 	assert(rc < sizeof(time->time));
 }
 #pragma GCC diagnostic pop
+
+void sfptpd_log_get_time(struct sfptpd_log_time *time)
+{
+	struct sfptpd_timespec now;
+
+	sfclock_gettime(CLOCK_REALTIME, &now);
+	sfptpd_log_format_time(time, &now);
+}
 
 void sfptpd_log_lexed_config(const char *format, ...)
 {
