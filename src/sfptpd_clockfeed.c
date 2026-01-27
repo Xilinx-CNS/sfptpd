@@ -714,12 +714,8 @@ static void clockfeed_on_message(void *context, struct sfptpd_msg_hdr *hdr)
 
 
 static void clockfeed_on_user_fds(void *context, unsigned int num_fds,
-				 struct sfptpd_thread_readyfd events[])
+				  struct sfptpd_thread_readyfd events[])
 {
-	struct sfptpd_clockfeed *module = (struct sfptpd_clockfeed *) context;
-
-	assert(module != NULL);
-	assert(module->magic == CLOCKFEED_MODULE_MAGIC);
 }
 
 

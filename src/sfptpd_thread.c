@@ -2152,6 +2152,7 @@ int sfptpd_thread_alloc_msg_pool(enum sfptpd_msg_pool_id pool_type,
 			DBG_L3("create rt_stats pool of size %u * %u\n", num_msgs, msg_size);
 			break;
 		default:
+			rc = EINVAL;
 			assert(!"Invalid message pool type in sfptpd_thread_alloc_msg_pool");
 	}
 

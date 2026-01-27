@@ -3389,7 +3389,7 @@ port_communication_capabilities_handler(const MsgHeader *header, ssize_t length,
 static void
 issueAnnounce(RunTimeOpts *rtOpts,PtpClock *ptpClock)
 {
-	ssize_t pack_result;
+	ssize_t pack_result [[maybe_unused]];
 
 	/* Test Function: Suppress Announce messsages */
 	if (rtOpts->test.no_announce_pkts)

@@ -215,20 +215,6 @@ static struct freerun_instance *freerun_find_instance_by_clock(freerun_module_t 
 	return instance;
 }
 
-static bool freerun_is_instance_in_list(freerun_module_t *fr,
-				       freerun_instance_t *instance) {
-	struct freerun_instance *ptr;
-
-	assert(instance);
-
-	/* Walk linked list, looking for the clock */
-	for (ptr = fr->instances;
-	     ptr && ptr != instance;
-	     ptr = ptr->next);
-
-	return (ptr == NULL) ? false : true;
-}
-
 static void freerun_destroy_instances(freerun_module_t *fr) {
 	freerun_instance_t *instance;
 	freerun_instance_t *next;
@@ -467,7 +453,6 @@ static void freerun_on_get_status(freerun_module_t *fr,
 
 	instance = (freerun_instance_t *) msg->u.get_status_req.instance_handle;
 	assert(instance);
-	assert(freerun_is_instance_in_list(fr, instance));
 
 	status = &msg->u.get_status_resp.status;
 	status->state = SYNC_MODULE_STATE_SLAVE;
@@ -501,7 +486,6 @@ static void freerun_on_control(freerun_module_t *fr,
 
 	instance = (freerun_instance_t *)msg->u.control_req.instance_handle;
 	assert(instance);
-	assert(freerun_is_instance_in_list(fr, instance));
 
 	instance->ctrl_flags &= ~msg->u.control_req.mask;
 	instance->ctrl_flags |= (msg->u.control_req.flags & msg->u.control_req.mask);
@@ -521,7 +505,6 @@ static void freerun_on_step_clock(freerun_module_t *fr,
 
 	instance = (freerun_instance_t *) msg->u.step_clock_req.instance_handle;
 	assert(instance);
-	assert(freerun_is_instance_in_list(fr, instance));
 
 	/* Step the slave clock by the specified amount */
 	(void)sfptpd_clock_adjust_time(instance->clock, &msg->u.step_clock_req.offset);
@@ -577,7 +560,6 @@ static void freerun_on_write_topology(freerun_module_t *fr,
 	stream = msg->u.write_topology_req.stream;
 	instance = (freerun_instance_t *) msg->u.write_topology_req.instance_handle;
 	assert(instance);
-	assert(freerun_is_instance_in_list(fr, instance));
 	assert(instance->clock != NULL);
 
 	/* This should only be called on selected instances */

@@ -874,10 +874,10 @@ static bool clock_control_at_launch(crny_module_t *ntp)
 	   without the '-x' option.
 	 */
 
-	char buf[PATH_MAX];
-
+	char buf[sizeof "/proc/" STRINGIFY(UINT_MAX) "/cmdline0"];
 	rc = snprintf(buf, sizeof buf, "/proc/%d/cmdline", pid);
-	assert(rc < sizeof buf);
+	assume_absent = rc < 0 || rc >= sizeof buf;
+	assert(!assume_absent);
 
 	fd = open(buf, O_RDONLY);
 	if (fd == -1)

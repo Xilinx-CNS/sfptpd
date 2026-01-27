@@ -1084,7 +1084,7 @@ void sfptpd_log_get_time(struct sfptpd_log_time *time)
 {
 	char temp[SFPTPD_LOG_TIME_STR_MAX];
 	struct sfptpd_timespec now;
-	int rc;
+	int rc [[maybe_unused]];
 
 	assert(time != NULL);
 
@@ -1101,7 +1101,7 @@ void sfptpd_log_format_time(struct sfptpd_log_time *time,
 			    const struct sfptpd_timespec *timestamp)
 {
 	char temp[SFPTPD_LOG_TIME_STR_MAX];
-	int rc;
+	int rc [[maybe_unused]];
 
 	assert(time != NULL);
 

@@ -957,21 +957,6 @@ static struct sfptpd_pps_instance *pps_find_instance_by_pin(pps_module_t *pps,
 }
 
 
-static bool pps_is_instance_in_list(pps_module_t *pps,
-				    struct sfptpd_pps_instance *instance) {
-	struct sfptpd_pps_instance *ptr;
-
-	assert(instance);
-
-	/* Walk linked list, looking for the clock */
-	for (ptr = pps->instances;
-	     ptr && ptr != instance;
-	     ptr = ptr->next);
-
-	return (ptr == NULL) ? false : true;
-}
-
-
 /* Finalise the contents of an instance. The instance itself will be
    freed with the list containing it. */
 static void pps_destroy_instance(pps_module_t *pps,
@@ -1166,15 +1151,11 @@ static int pps_configure_pin(pps_module_t *pps,
 	struct sfptpd_clock *clock;
 	struct sfptpd_interface *interface;
 	struct sfptpd_pps_instance *other_instance;
-	struct sfptpd_config_general *general_config;
 	int rc;
 
 	assert(pps != NULL);
 	assert(instance != NULL);
 	assert(config != NULL);
-
-	general_config = sfptpd_general_config_get(SFPTPD_CONFIG_TOP_LEVEL(instance->config));
-	assert(general_config != NULL);
 
 	/* Make sure that the user has specified an interface */
 	if (config->interface_name[0] == '\0') {
@@ -1961,7 +1942,6 @@ static void pps_on_get_status(pps_module_t *pps, sfptpd_sync_module_msg_t *msg)
 
 	instance = (struct sfptpd_pps_instance *) msg->u.get_status_req.instance_handle;
 	assert(instance);
-	assert(pps_is_instance_in_list(pps, instance));
 
 	status = &msg->u.get_status_resp.status;
 	status->state = instance->state;
@@ -2163,7 +2143,6 @@ static void pps_on_write_topology(pps_module_t *pps, sfptpd_sync_module_msg_t *m
 	stream = msg->u.write_topology_req.stream;
 
 	assert(instance);
-	assert(pps_is_instance_in_list(pps, instance));
 
 	/* This should only be called on selected instances */
 	assert(instance->ctrl_flags & SYNC_MODULE_SELECTED);
@@ -2241,7 +2220,6 @@ static void pps_on_test_mode(pps_module_t *pps, sfptpd_sync_module_msg_t *msg)
 
 	instance = (struct sfptpd_pps_instance *)msg->u.test_mode_req.instance_handle;
 	assert(instance);
-	assert(pps_is_instance_in_list(pps, instance));
 
 	switch (msg->u.test_mode_req.id) {
 	case SFPTPD_TEST_ID_BOGUS_PPS_EVENTS:

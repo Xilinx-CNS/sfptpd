@@ -2234,21 +2234,6 @@ static struct sfptpd_ptp_instance *ptp_get_next_instance(struct sfptpd_ptp_insta
 }
 
 
-static bool ptp_is_instance_valid(sfptpd_ptp_module_t *ptp,
-				  struct sfptpd_ptp_instance *instance) {
-	struct sfptpd_ptp_instance *ptr;
-
-	assert(ptp != NULL);
-	assert(instance != NULL);
-
-	for (ptr = ptp_get_first_instance(ptp);
-	     ptr != instance && ptr != NULL;
-	     ptr = ptp_get_next_instance(ptr));
-
-	return ptr == NULL ? false : true;
-}
-
-
 static void ptp_send_instance_rt_stats_update(struct sfptpd_engine *engine,
 					      struct sfptpd_ptp_instance *instance,
 					      const struct sfptpd_timespec *log_time)
@@ -2378,7 +2363,6 @@ static void ptp_on_get_status(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 
 	instance = (struct sfptpd_ptp_instance *) msg->u.get_status_req.instance_handle;
 	assert(instance);
-	assert(ptp_is_instance_valid(ptp, instance));
 
 	status->state = ptp_translate_state(instance->ptpd_port_snapshot.port.state);
 	status->alarms = ptp_get_alarms_snapshot(instance);
@@ -2410,7 +2394,6 @@ static void ptp_on_control(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t *m
 
 	instance = (struct sfptpd_ptp_instance *) msg->u.control_req.instance_handle;
 	assert(instance);
-	assert(ptp_is_instance_valid(ptp, instance));
 
 	ctrl_flags = instance->ctrl_flags;
 	ctrl_flags &= ~msg->u.control_req.mask;
@@ -2487,7 +2470,6 @@ static void ptp_on_step_clock(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 
 	instance = (struct sfptpd_ptp_instance *) msg->u.step_clock_req.instance_handle;
 	assert(instance != NULL);
-	assert(ptp_is_instance_valid(ptp, instance));
 
 	/* Step the clock and reset the servo */
 	ptpd_step_clock(instance->ptpd_port_private, &msg->u.step_clock_req.offset);
@@ -2813,8 +2795,6 @@ static void ptp_on_write_topology(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_m
 	instance = (struct sfptpd_ptp_instance *) msg->u.write_topology_req.instance_handle;
 
 	assert(instance);
-	assert(ptp_is_instance_valid(ptp, instance));
-
 	assert(instance->ptpd_port_private->clock != NULL);
 
 	/* This should only be called on selected instances */
@@ -2967,8 +2947,6 @@ static void ptp_on_test_mode(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t 
 
 	instance = (struct sfptpd_ptp_instance *)msg->u.test_mode_req.instance_handle;
 	assert(instance);
-	assert(ptp_is_instance_valid(ptp, instance));
-
 	assert(instance->ptpd_port_private != NULL);
 
 	config = instance->config;
@@ -3566,7 +3544,8 @@ static int ptp_create_instances(struct sfptpd_config *config,
 
 		/* Find/create interface state */
 		rc = ptp_ensure_interface_created(ptp, instance_config, &intf);
-		assert(rc == 0);
+		if (rc != 0)
+			goto fail;
 		instance->intf = intf;
 
 		/* Insert in linked list */

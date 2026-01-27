@@ -127,7 +127,7 @@ flushSlaveRxSyncTimingData(PtpClock *ptpClock, RunTimeOpts *rtOpts)
 	if (config->tlv_enable) {
 		MsgSignaling msgSignaling = { { 0 } };
 		SlaveRxSyncTimingDataTLV data;
-		ssize_t pack_result;
+		ssize_t pack_result [[maybe_unused]];
 
 		assert(state->num_events <= config->events_per_tlv);
 
@@ -160,7 +160,7 @@ flushSlaveRxSyncComputedData(PtpClock *ptpClock, RunTimeOpts *rtOpts)
 	if (config->tlv_enable) {
 		MsgSignaling msgSignaling = { { 0 } };
 		SlaveRxSyncComputedData data;
-		ssize_t pack_result;
+		ssize_t pack_result [[maybe_unused]];
 
 		assert(state->num_events <= config->events_per_tlv);
 
@@ -316,7 +316,7 @@ flushSlaveTxEventTimestamps(PtpClock *ptpClock, RunTimeOpts *rtOpts, ptpd_slave_
 	if (config->tlv_enable) {
 		MsgSignaling msgSignaling = { { 0 } };
 		SlaveTxEventTimestamps data;
-		ssize_t pack_result;
+		ssize_t pack_result [[maybe_unused]];
 
 		assert(state->num_events <= config->events_per_tlv);
 
@@ -413,7 +413,7 @@ slaveStatusMonitor(PtpClock *ptpClock, RunTimeOpts *rtOpts,
 		   int missingMessageAlarms, int otherAlarms, int events, int flags)
 {
 	MsgSignaling msgSignaling;
-	ssize_t pack_result;
+	ssize_t pack_result [[maybe_unused]];
 	SlaveStatus data;
 	struct sfptpd_timespec report_time;
 

@@ -1108,9 +1108,6 @@ static void on_test_leap_second(struct sfptpd_engine *engine,
 {
 	struct sfptpd_timespec now;
 	int rc;
-	struct sync_instance_record *instance = engine->selected;
-
-	assert(instance != NULL);
 
 	if (!engine->general_config->test_mode)
 		return;
@@ -1181,10 +1178,8 @@ static void on_leap_second_timer(void *user_context, unsigned int timer_id)
 	struct sfptpd_timespec expiry_time;
 	int rc;
 	struct sfptpd_engine *engine = (struct sfptpd_engine *)user_context;
-	struct sync_instance_record *instance = engine->selected;
 
 	assert(engine != NULL);
-	assert(instance != NULL);
 
 	switch (engine->leap_second.state) {
 	case LEAP_SECOND_STATE_SCHEDULED:
@@ -1311,7 +1306,8 @@ static void engine_handle_new_link_table(struct sfptpd_engine *engine, int versi
 	size_t num_clocks_before;
 	size_t num_clocks_after;
 
-	int rc, rows, i, j;
+	int rc, i, j;
+	int rows [[maybe_unused]];
 	bool new_link_table = false;
 	bool reconfigure = false;
 

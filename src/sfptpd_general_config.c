@@ -2362,13 +2362,14 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 			char *default_str = strdup(SFPTPD_DEFAULT_PHYSICAL_INTERFACES);
 			char *tokens[SFPTPD_CONFIG_TOKENS_MAX];
 			int num_tokens;
-			int rc;
+			int rc [[maybe_unused]];
 
 			num_tokens = tokenize(default_str, SFPTPD_CONFIG_TOKENS_MAX, tokens);
 			rc = parse_eligible_interface_types((struct sfptpd_config_section *) new,
 							    NULL, num_tokens, (const char *const *)tokens);
-			assert(rc == 0);
 			free(default_str);
+			/* assert not error because built-in defaults should always parse validly */
+			assert(rc == 0);
 		}
 	}
 
