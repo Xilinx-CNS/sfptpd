@@ -601,5 +601,110 @@ error:
 	}
 }
 
+int sfptpd_open_dirf(const char *fmt, ...)
+{
+	va_list ap;
+	char *path;
+	int rc;
+	int e = 0;
+
+	va_start(ap, fmt);
+	if ((rc = vasprintf(&path, fmt, ap)) == -1) {
+		e = errno;
+		CRITICAL("formatting path %s, %s\n", fmt, strerror(e));
+		errno = e;
+		return rc;
+	}
+	va_end(ap);
+
+	rc = open(path, O_PATH);
+	if (rc == -1) {
+		e = errno;
+		ERROR("opening directory %s, %s\n",
+		      fmt, strerror(e));
+	}
+
+	free(path);
+	errno = e;
+	return rc;
+}
+
+/* Read an integer from a file descriptor.
+ * This is meant for when the whole file only contains an integer.
+ * No assumption can be made about whether any extra bytes have been consumed.
+ * Any whitespace character or EOF will be treated as a delimiter.
+ */
+int sfptpd_read_int_from_fd(int fd, long long *answer)
+{
+	enum {
+		B_DEC,
+		B_HEX,
+		B_AUTO,
+		B_PREFIX,
+	} base = B_AUTO;
+	long long num = 0, prev;
+	bool negative = false;
+	char buf[16];
+	int sz;
+
+	while((sz = read(fd, buf, sizeof buf)) != 0) {
+		if (sz == -1 && errno != EINTR)
+			return errno;
+		for (int ptr = 0; ptr < sz; ptr++) {
+			char c = buf[ptr];
+			prev = num;
+			if (isspace(c))
+				break;
+			else if (base == B_AUTO) {
+				if (c == '-')
+					negative = !negative;
+				else if (c == '0')
+					base = B_PREFIX;
+				else if (isdigit(c))
+					base = B_DEC;
+				else
+					return EINVAL;
+			} else if (base == B_PREFIX) {
+				if (c == 'x' || c == 'X') {
+					base = B_HEX;
+					continue;
+				} else
+					return EINVAL;
+			}
+			if (base == B_HEX && isdigit(c))
+				num = prev * 16 + c - '0';
+			else if (base == B_HEX && isxdigit(c))
+				num = prev * 16 + c - 'a' + 10;
+			else if (base == B_DEC && isdigit(c))
+				num = prev * 10 + c - '0';
+			else if (base != B_PREFIX)
+				return EINVAL;
+			if (num < prev)
+				return ERANGE;
+		}
+	}
+	*answer = negative ? -num : num;
+	return 0;
+}
+
+int sfptpd_read_int_from_fileat(int dir_fd, const char *filename, long long *answer)
+{
+	int fd;
+	int rc;
+
+	if ((fd = openat(dir_fd, filename, O_RDONLY)) == -1) {
+		rc = errno;
+		TRACE_L1("failed to open file %s, %s\n", filename, strerror(rc));
+		return rc;
+	}
+
+	rc = sfptpd_read_int_from_fd(fd, answer);
+	if (rc != 0)
+		ERROR("failed to read number from %s, %s\n", filename, strerror(rc));
+
+	close(fd);
+	return rc;
+}
+
 
 /* fin */

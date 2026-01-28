@@ -6,6 +6,7 @@
  * @brief  Interface abstraction
  */
 
+#include <ctype.h>
 #include <unistd.h>
 #include <string.h>
 #include <stddef.h>
@@ -177,6 +178,7 @@ struct sfptpd_interface {
 	/* Methods for driver statistic recovery */
 	enum drv_stat_method drv_stat_method[SFPTPD_DRVSTAT_MAX];
 	int drv_stat_ethtool_index[SFPTPD_DRVSTAT_MAX];
+	int sysfs_device_dir_fd;
 
 	/* Bitfield of methods needed for driver stats */
 	int drv_stat_methods;
@@ -453,73 +455,77 @@ bool sfptpd_check_clock_interfaces(const int phc_index, const char* cfg_name)
                 SFPTPD_DB_SEL_END) != NULL;
 }
 
+static int interface_open_sysfs_device_dir(struct sfptpd_interface *interface)
+{
+	int rc;
+
+	if (interface->sysfs_device_dir_fd != -1)
+		return 0;
+
+	interface->sysfs_device_dir_fd =
+		sfptpd_open_dirf("%s%s/device", SFPTPD_SYSFS_NET_PATH, interface->name);
+	if (interface->sysfs_device_dir_fd == -1) {
+		rc = errno;
+		ERROR("%s: opening sysfs device directory, %s\n",
+		      interface->name, strerror(rc));
+	} else {
+		rc = 0;
+	}
+
+	return rc;
+}
+
+static void interface_close_sysfs_dirs(struct sfptpd_interface *interface)
+{
+	if (interface->sysfs_device_dir_fd != -1)
+		close(interface->sysfs_device_dir_fd);
+
+	interface->sysfs_device_dir_fd = -1;
+}
+
 static bool sysfs_file_exists(const char *base, const char *interface,
 			      const char *filename)
 {
-	char path[PATH_MAX];
+	char *path;
 	struct stat stat_buf;
+	bool exists;
 
 	assert(base != NULL);
 	assert(interface != NULL);
 	assert(filename != NULL);
 
 	/* Create the path name of the file */
-	snprintf(path, sizeof(path), "%s%s/%s", base, interface, filename);
-
-	/* Check whether the file exists */
-	return (stat(path, &stat_buf) == 0);
-}
-
-static bool sysfs_read_int(const char *base, const char *interface,
-			   const char *filename, int *value)
-{
-	char path[PATH_MAX];
-	FILE *file;
-	int tokens;
-
-	assert(base != NULL);
-	assert(interface != NULL);
-	assert(filename != NULL);
-	assert(value != NULL);
-
-	tokens = 0;
-	*value = 0;
-
-	/* Create the path name of the file */
-	snprintf(path, sizeof(path), "%s%s/%s", base, interface, filename);
-
-	file = fopen(path, "r");
-	if (file == NULL) {
-		TRACE_L4("interface %s: couldn't open %s\n", interface, path);
+	if (asprintf(&path, "%s%s/%s", base, interface, filename) == -1) {
+		exists = false;
+		CRITICAL("path construction failed: %s\n", strerror(errno));
 	} else {
-		/* Try to read the integer from the file */
-		tokens = fscanf(file, "%i", value);
-		if (tokens != 1)
-			TRACE_L4("interface %s: didn't find an integer in file %s\n",
-				 interface, path);
-
-		fclose(file);
+		/* Check whether the file exists */
+		exists = stat(path, &stat_buf) == 0;
+		free(path);
 	}
 
-	return (tokens == 1);
+	return exists;
 }
 
-
 static bool interface_check_suitability(const struct sfptpd_link *link,
-					const char *sysfs_dir,
 					sfptpd_interface_class_t *class)
 {
-	int vendor_id = 0;
-	int device_id = 0;
+	long long vendor_id = 0;
+	long long device_id = 0;
 	const char *name;
 	struct sfptpd_config_interface_selection *s;
 	bool match = false;
+	int sysfs_dir = -1;
+	struct stat stat_buf;
 
-	assert(sysfs_dir != NULL);
 	assert(link != NULL);
 	assert(class != NULL);
 
 	name = link->if_name;
+
+	/* Open sysfs */
+	if ((sysfs_dir = sfptpd_open_dirf("%s%s", SFPTPD_SYSFS_NET_PATH, name)) == -1)
+		goto finish;
 
 	/* Check what type of interface this is i.e. ethernet, ppp,
 	 * infiniband etc and ignore all non-ethernet types.
@@ -546,8 +552,8 @@ static bool interface_check_suitability(const struct sfptpd_link *link,
 			props |= (1 << SFPTPD_INTERFACE_PROP_VIRTUAL);
 
 		if (props_to_check & (1 << SFPTPD_INTERFACE_PROP_WIRELESS) &&
-		    (sysfs_file_exists(sysfs_dir, name, "wireless") ||
-		     sysfs_file_exists(sysfs_dir, name, "phy80211")))
+		    (fstatat(sysfs_dir, "wireless", &stat_buf, 0) == 0 ||
+		     fstatat(sysfs_dir, "phy80211", &stat_buf, 0) == 0))
 			props |= (1 << SFPTPD_INTERFACE_PROP_WIRELESS);
 
 		if (link->if_type == ARPHRD_ETHER)
@@ -560,14 +566,14 @@ static bool interface_check_suitability(const struct sfptpd_link *link,
 
 	if (!match) {
 		TRACE_L2("interface %s: does not match eligible physical interface criteria - ignoring\n", name);
-		return false;
+		goto finish;
 	}
 
 	/* Finally, get the vendor and device ID to determine if it is
 	 * a Solarflare device or not and other static properties */
-	if (!sysfs_read_int(sysfs_dir, name, "device/vendor", &vendor_id)) {
+	if (sfptpd_read_int_from_fileat(sysfs_dir, "device/vendor", &vendor_id)) {
 		WARNING("interface %s: couldn't read sysfs vendor ID\n", name);
-	} else if (!sysfs_read_int(sysfs_dir, name, "device/device", &device_id)) {
+	} else if (sfptpd_read_int_from_fileat(sysfs_dir, "device/device", &device_id)) {
 		WARNING("interface %s: couldn't read sysfs device ID\n", name);
 	}
 
@@ -584,7 +590,11 @@ static bool interface_check_suitability(const struct sfptpd_link *link,
 		}
 	}
 
-	return true;
+finish:
+	if (sysfs_dir != -1)
+		close(sysfs_dir);
+
+	return match;
 }
 
 
@@ -672,20 +682,18 @@ static int interface_get_hw_address(struct sfptpd_interface *interface)
 }
 
 
-static void interface_get_pci_ids(struct sfptpd_interface *interface,
-				  const char *sysfs_dir)
+static void interface_get_pci_ids(struct sfptpd_interface *interface)
 {
-	int id;
+	long long id;
 
 	assert(interface != NULL);
-	assert(sysfs_dir != NULL);
 
 	/* Get the PCI vendor and device ID for this interface */
-	if (sysfs_read_int(sysfs_dir, interface->name, "device/vendor", &id))
+	if (!sfptpd_read_int_from_fileat(interface->sysfs_device_dir_fd, "vendor", &id))
 		interface->pci_vendor_id = id;
 	else
 		interface->pci_vendor_id = 0;
-	if (sysfs_read_int(sysfs_dir, interface->name, "device/device", &id))
+	if (!sfptpd_read_int_from_fileat(interface->sysfs_device_dir_fd, "device", &id))
 		interface->pci_device_id = id;
 	else
 		interface->pci_device_id = 0;
@@ -793,12 +801,13 @@ static void interface_driver_stats_init(struct sfptpd_interface *interface)
 	struct ethtool_gstrings *gstrings = NULL;
 	unsigned int i, j, found;
 	int rc;
-	char path[PATH_MAX];
 
 	assert(interface != NULL);
 
 	TRACE_L4("interface %s: initialising driver stats-getting\n",
 		 interface->name);
+
+	interface_open_sysfs_device_dir(interface);
 
 	/* Method 1. Get strings from ethtool netlink */
 	if (interface->link.drv_stats_ids_state == QRY_POPULATED) {
@@ -858,12 +867,8 @@ skip_ioctl:
 	/* Method 3. Use sysfs for stats */
 	for (found = 0, j = 0; j < SFPTPD_DRVSTAT_MAX; j++) {
 		if (interface->drv_stat_method[j] == DRV_STAT_NOT_AVAILABLE) {
-
-			rc = snprintf(path, sizeof path, "/sys/class/net/%s/device/%s",
-				      interface->name, drv_stats[j].sysfs_name);
-			assert(rc > 0 && rc < sizeof path);
-
-			if (!access(path, R_OK)) {
+			if (!faccessat(interface->sysfs_device_dir_fd,
+				       drv_stats[j].sysfs_name, R_OK, 0)) {
 				interface->drv_stat_method[j] = DRV_STAT_SYSFS;
 				interface->drv_stat_methods |= 1 << DRV_STAT_SYSFS;
 				found++;
@@ -884,6 +889,8 @@ skip_ioctl:
 
 	if (interface->drv_stat_methods & (1 << DRV_STAT_ETHTOOL))
 		interface->ethtool_stats = (struct ethtool_stats *) malloc(sizeof(struct ethtool_stats) + interface->n_stats * 8);
+
+	interface_close_sysfs_dirs(interface);
 }
 
 
@@ -1020,7 +1027,7 @@ static int interface_assign_nic_id(struct sfptpd_interface *interface)
 	return 0;
 }
 
-static int interface_init(const struct sfptpd_link *link, const char *sysfs_dir,
+static int interface_init(const struct sfptpd_link *link,
 			  struct sfptpd_interface *interface,
 			  sfptpd_interface_class_t class)
 {
@@ -1031,7 +1038,6 @@ static int interface_init(const struct sfptpd_link *link, const char *sysfs_dir,
 	int if_index;
 
 	assert(link != NULL);
-	assert(sysfs_dir != NULL);
 	assert(interface != NULL);
 	assert(interface->magic == SFPTPD_INTERFACE_MAGIC);
 
@@ -1053,11 +1059,15 @@ static int interface_init(const struct sfptpd_link *link, const char *sysfs_dir,
 	interface->suitable = true;
 	interface->static_caps.stratum = SFPTPD_CLOCK_STRATUM_MAX;
 
+	/* Open sysfs directory */
+	if ((rc = interface_open_sysfs_device_dir(interface)))
+		return rc;
+
 	/* Get the permanent hardware address of the interface */
 	ret = interface_get_hw_address(interface);
 
 	/* Get the PCI IDs */
-	interface_get_pci_ids(interface, sysfs_dir);
+	interface_get_pci_ids(interface);
 
 	/* Get the driver and firmware versions */
 	rc = interface_get_versions(interface);
@@ -1108,9 +1118,10 @@ static void interface_delete(struct sfptpd_interface *interface,
 
 	if (interface->deleted)
 		return;
-
 	if (disable_timestamping)
 		sfptpd_interface_hw_timestamping_disable(interface);
+
+	interface_close_sysfs_dirs(interface);
 
 	interface->deleted = true;
 	interface->clock = NULL;
@@ -1134,6 +1145,7 @@ static int interface_alloc(struct sfptpd_interface **interface)
 	new->deleted = true;
 	new->if_index = -1;
 	new->nic_id = -1;
+	new->sysfs_device_dir_fd = -1;
 
 	*interface = new;
 	return 0;
@@ -1268,7 +1280,7 @@ int sfptpd_interface_initialise(struct sfptpd_config *config,
 
 		/* Check that the interface is suitable i.e. an ethernet device
 		 * that isn't wireless or a bridge or virtual etc */
-		if (!interface_check_suitability(link, SFPTPD_SYSFS_NET_PATH, &class))
+		if (!interface_check_suitability(link, &class))
 			continue;
 
 		/* Create a new interface */
@@ -1279,8 +1291,9 @@ int sfptpd_interface_initialise(struct sfptpd_config *config,
 			return rc;
 		}
 
-		rc = interface_init(link, SFPTPD_SYSFS_NET_PATH, new, class);
+		rc = interface_init(link, new, class);
 		if (rc != 0) {
+			interface_delete(new, false);
 			if (rc == ENOTSUP || rc == EOPNOTSUPP) {
 				WARNING("skipping over insufficiently capable interface %s\n",
 					link->if_name);
@@ -1415,6 +1428,9 @@ static int interface_handle_rename(struct sfptpd_interface *interface,
 
 	INFO("interface: handling detected rename: %s -> %s (if_index %d)\n",
 	     interface->name, if_name, interface->if_index);
+
+	interface_close_sysfs_dirs(interface);
+
 	other = interface_find_by_name(if_name);
 	if (other != NULL && other->deleted) {
 		TRACE_L3("interface: aliasing deleted interface %d to %d\n",
@@ -1481,7 +1497,7 @@ int sfptpd_interface_hotplug_insert(const struct sfptpd_link *link)
 
 	/* Check that the interface is suitable i.e. an ethernet device
 	 * that isn't wireless or a bridge or virtual etc */
-	if (!interface_check_suitability(link, SFPTPD_SYSFS_NET_PATH, &class)) {
+	if (!interface_check_suitability(link, &class)) {
 		TRACE_L4("interface: ignoring interface %s of irrelevant type\n", if_name);
 		sfptpd_strncpy(interface->name, if_name, sizeof(interface->name));
 		interface->if_index = if_index;
@@ -1490,7 +1506,7 @@ int sfptpd_interface_hotplug_insert(const struct sfptpd_link *link)
 		goto finish;
 	}
 
-	rc = interface_init(link, SFPTPD_SYSFS_NET_PATH, interface, class);
+	rc = interface_init(link, interface, class);
 	if (rc == ENODEV) {
 		WARNING("interface %s seems to have disappeared, deleting\n",
 			if_name);
@@ -2083,10 +2099,8 @@ int sfptpd_interface_driver_stats_read(struct sfptpd_interface *interface,
 {
 	int rc;
 	int i;
-	char path[PATH_MAX];
-	FILE *file;
+	long long sysfs_stat_value;
 	struct ethtool_stats *estats;
-	int sysfs_stat_value;
 
 	assert(interface != NULL);
 
@@ -2108,6 +2122,8 @@ int sfptpd_interface_driver_stats_read(struct sfptpd_interface *interface,
 			return errno;
 		}
 	}
+	if (interface->drv_stat_methods & (1 << DRV_STAT_SYSFS))
+		interface_open_sysfs_device_dir(interface);
 
 	for (i = 0; i < SFPTPD_DRVSTAT_MAX; i++) {
 		enum drv_stat_method method = interface->drv_stat_method[i];
@@ -2116,23 +2132,11 @@ int sfptpd_interface_driver_stats_read(struct sfptpd_interface *interface,
 			stats[i] = estats->data[interface->drv_stat_ethtool_index[i]];
 			break;
 		case DRV_STAT_SYSFS:
-			rc = snprintf(path, sizeof path, "/sys/class/net/%s/device/%s",
-				      interface->name, drv_stats[i].sysfs_name);
-			if (rc < 0 || rc >= sizeof path)
-				return ENAMETOOLONG;
-			file = fopen(path, "r");
-			if (file == NULL) {
-				TRACE_L1("failed to open PPS stats file %s, %s\n",
-					 path, errno);
-				return errno;
-			}
-			if (fscanf(file, "%d", &sysfs_stat_value) != 1) {
-				ERROR("couldn't read statistic from %s\n", path);
-				fclose(file);
-				return EIO;
-			}
-			stats[i] = sysfs_stat_value;
-			fclose(file);
+			if (sfptpd_read_int_from_fileat(
+					interface->sysfs_device_dir_fd,
+					drv_stats[i].sysfs_name,
+					&sysfs_stat_value) == 0)
+				stats[i] = sysfs_stat_value;
 			break;
 		case DRV_STAT_NOT_AVAILABLE:
 			TRACE_L4("no method available to collect %s stat\n",
@@ -2148,27 +2152,21 @@ int sfptpd_interface_driver_stats_read(struct sfptpd_interface *interface,
 
 static int interface_sysfs_stats_reset(struct sfptpd_interface *interface)
 {
-	char path[128];
-	FILE *file;
+	const char reset[] = "1\n";
+	const ssize_t len = strlen(reset);
+	int fd;
 	int rc;
 
 	assert(interface);
 
-	rc = snprintf(path, sizeof(path), "/sys/class/net/%s/device/ptp_stats",
-		      sfptpd_interface_get_name(interface));
-	if (rc > 0 && rc < sizeof(path)) {
-		file = fopen(path, "w");
-		if (file) {
-			rc = fputs("1\n", file) >= 0 ? 0 : errno;
-			fclose(file);
-		} else {
-			rc = errno;
-		}
-	} else {
-		rc = errno;
-	}
+	fd = openat(interface->sysfs_device_dir_fd, "ptp_stats", O_WRONLY);
+	if (fd == -1)
+		return errno;
 
-	return rc;
+	while ((rc = write(fd, reset, len) == -1 && errno == EINTR));
+
+	close(fd);
+	return rc < len ? errno : 0;
 }
 
 int sfptpd_interface_driver_stats_reset(struct sfptpd_interface *interface)

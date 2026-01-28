@@ -208,4 +208,32 @@ int sfptpd_find_running_programs(struct sfptpd_prog *others);
  */
 void sfptpd_debug_backtrace(void);
 
+/** Open a directory path for use with openat()-style functions.
+ * @param fmt format string
+ * @param ... arguments to format
+ * @return the file descriptor or -1 on error
+ */
+int sfptpd_open_dirf(const char *fmt, ...);
+
+/** Read an integer from a file descriptor.
+ * This is meant for when the whole file only contains an integer.
+ * No assumption can be made about whether any extra bytes have been consumed.
+ * Any whitespace character or EOF will be treated as a delimiter.
+ * Decimal and hexadecimal (introduced by 0x or 0X) numbers supported.
+ * @param fd the fd from which to read
+ * @param answer where to store the answer
+ * @return 0 on success, else errno
+ */
+int sfptpd_read_int_from_fd(int fd, long long *answer);
+
+/** Read an integer from a file by path relative to directory fd.
+ * See openat(2) for semantics of *at()-style functions.
+ * See sfptpd_read_int_from_fd() for reading/parsing behaviour.
+ * @param dir_fd the directory fd
+ * @param filename the path relative to the directory
+ * @param answer where to store the answer
+ * @return 0 on success, else errno
+ */
+int sfptpd_read_int_from_fileat(int dir_fd, const char *filename, long long *answer);
+
 #endif /* _SFPTPD_MISC_H */
