@@ -95,8 +95,8 @@ void sfptpd_acl_normalise_prefix(struct sfptpd_acl_prefix *prefix)
 	memset(prefix->in6.s6_addr + octets, '\0', 16 - octets);
 }
 
-const bool sfptpd_acl_prefix_match(const struct sfptpd_acl_prefix *prefix,
-				   struct in6_addr addr)
+bool sfptpd_acl_prefix_match(const struct sfptpd_acl_prefix *prefix,
+			     struct in6_addr addr)
 {
 	int spare_bits = prefix->length & 7;
 	int octets = prefix->length >> 3;

@@ -65,7 +65,7 @@ extern void sfptpd_acl_table_destroy(struct sfptpd_acl_table *table);
 
 extern void sfptpd_acl_normalise_prefix(struct sfptpd_acl_prefix *prefix);
 
-extern const bool sfptpd_acl_prefix_match(const struct sfptpd_acl_prefix *prefix,
+extern bool sfptpd_acl_prefix_match(const struct sfptpd_acl_prefix *prefix,
 					  struct in6_addr addr);
 
 extern const struct sfptpd_acl_prefix *sfptpd_acl_table_match(const struct sfptpd_acl_table *table,
