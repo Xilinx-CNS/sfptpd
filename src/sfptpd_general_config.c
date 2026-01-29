@@ -1243,7 +1243,7 @@ static int parse_openmetrics_rt_stats_buf(struct sfptpd_config_section *section,
 	struct sfptpd_config_metrics *metrics = &((sfptpd_config_general_t *)section)->openmetrics;
 	assert(num_params == 1);
 	int tokens, count;
-	const static int minimum = 16;
+	static const int minimum = 16;
 
 	tokens = sscanf(params[0], "%i", &count);
 	if (tokens != 1)

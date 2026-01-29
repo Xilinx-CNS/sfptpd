@@ -45,9 +45,9 @@
 #define MAX_FIELDS 10
 #define ARRAY_INITIAL_SIZE_BYTES 4096
 
-const static uint32_t MAGIC_TABLE = 0xf74931e2;
-const static uint32_t MAGIC_LL_HDR = 0x40e84c00;
-const static uint32_t MAGIC_AR_HDR = 0x40e84c01;
+static const uint32_t MAGIC_TABLE = 0xf74931e2;
+static const uint32_t MAGIC_LL_HDR = 0x40e84c00;
+static const uint32_t MAGIC_AR_HDR = 0x40e84c01;
 
 
 /****************************************************************************

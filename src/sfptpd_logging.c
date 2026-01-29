@@ -86,7 +86,7 @@ static ssize_t path_interpolate_time(char *buffer, size_t space, int id, void *c
  * %Ct  creation date and local time (ISO 8601)
  * %R   run directory
  */
-const static struct sfptpd_interpolation path_format_specifiers[] = {
+static const struct sfptpd_interpolation path_format_specifiers[] = {
 	{ PATH_FMT_HOSTNAME,		'H', false, path_interpolate },
 	{ PATH_FMT_HOSTID,		'I', false, path_interpolate },
 	{ PATH_FMT_PID,			'P', false, path_interpolate },
@@ -139,7 +139,7 @@ static bool config_log_attempted = false;
 /* JSON stats is block-buffered and we ensure lines get written whole. */
 static FILE *json_stats_fp = NULL;
 static char *json_stats_buf = NULL;
-const static size_t json_stats_bufsz = APPROX_RT_STATS_LENGTH * APPROX_RT_SERVOS * APPROX_RT_UPDATES;
+static const size_t json_stats_bufsz = APPROX_RT_STATS_LENGTH * APPROX_RT_SERVOS * APPROX_RT_UPDATES;
 static int json_stats_ptr = 0;
 
 static unsigned int trace_levels[SFPTPD_COMPONENT_ID_MAX] =

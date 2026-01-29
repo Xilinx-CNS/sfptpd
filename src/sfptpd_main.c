@@ -101,7 +101,7 @@ static const cap_value_t caps_for_root[] = {
 static struct sfptpd_config *config = NULL;
 static struct sfptpd_engine *engine = NULL;
 static struct sfptpd_nl_state *netlink = NULL;
-const static struct sfptpd_link_table *initial_link_table = NULL;
+static const struct sfptpd_link_table *initial_link_table = NULL;
 static int priv_helper_pidfd = -1;
 static int priv_helper_pid = -1;
 

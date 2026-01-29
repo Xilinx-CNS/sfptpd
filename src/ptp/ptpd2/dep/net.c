@@ -2208,7 +2208,7 @@ static int sendMessage(int sockfd, const void *buf, size_t length,
                        socklen_t controllen)
 {
 	int rc;
-	const static uint16_t zero = 0;
+	static const uint16_t zero = 0;
 	struct iovec iov[2] = {
 		{
 			.iov_base = (void *) buf,

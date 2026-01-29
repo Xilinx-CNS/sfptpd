@@ -176,7 +176,7 @@ const char *sfptpd_phc_diff_method_text[] = {
 	"none"
 };
 
-const static struct phc_diff_method phc_diff_method_defs[SFPTPD_DIFF_METHOD_MAX] = {
+static const struct phc_diff_method phc_diff_method_defs[SFPTPD_DIFF_METHOD_MAX] = {
 	{ phc_compare_using_precise_offset, },
 	{ NULL /* EFX method is set by user */, },
 	{ phc_compare_using_pps, },

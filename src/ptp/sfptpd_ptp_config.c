@@ -30,7 +30,7 @@
  * Defaults
  ****************************************************************************/
 
-const static struct sfptpd_ptp_profile_def ptp_profiles[] = {
+static const struct sfptpd_ptp_profile_def ptp_profiles[] = {
 	{ .name = "default-e2e",
 	  .uri = "https://standards.ieee.org/standard/1588-2019.html",
 	  .version = "1.0",
