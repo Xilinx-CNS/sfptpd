@@ -54,7 +54,9 @@ include mk/install.mk
 ### Build flags for all targets
 #
 CFLAGS += -MMD -MP \
-	-Wall -Werror \
+	-Wall -Werror -Wextra \
+	-Wno-missing-field-initializers \
+	-Wno-unused-parameter \
 	-Wundef -Wstrict-prototypes -Wnested-externs \
 	-g -pthread -fPIC -std=c11 \
 	-D_GNU_SOURCE \
