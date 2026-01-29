@@ -34,501 +34,13 @@
 
 
 /****************************************************************************
- * Config File Options
+ * Forward declarations
  ****************************************************************************/
-
-static int parse_sync_module(struct sfptpd_config_section *section, const char *option,
-			     unsigned int num_params, const char * const params[]);
-static int parse_selection_policy(struct sfptpd_config_section *section, const char *option,
-				  unsigned int num_params, const char * const params[]);
-static int parse_selection_policy_rules(struct sfptpd_config_section *section, const char *option,
-					unsigned int num_params, const char * const params[]);
-static int parse_phc_diff_method_order(struct sfptpd_config_section *section, const char *option,
-					unsigned int num_params, const char * const params[]);
-static int parse_selection_holdoff_interval(struct sfptpd_config_section *section, const char *option,
-					    unsigned int num_params, const char * const params[]);
-static int parse_message_log(struct sfptpd_config_section *section, const char *option,
-			     unsigned int num_params, const char * const params[]);
-static int parse_stats_log(struct sfptpd_config_section *section, const char *option,
-   			   unsigned int num_params, const char * const params[]);
-static int parse_user(struct sfptpd_config_section *section, const char *option,
-		      unsigned int num_params, const char * const params[]);
-static int parse_daemon(struct sfptpd_config_section *section, const char *option,
-			unsigned int num_params, const char * const params[]);
-static int parse_lock(struct sfptpd_config_section *section, const char *option,
-		      unsigned int num_params, const char * const params[]);
-static int parse_path(struct sfptpd_config_section *section, const char *option,
-		      unsigned int num_params, const char * const params[], int cookie);
-static int parse_access_mode(struct sfptpd_config_section *section, const char *option,
-			     unsigned int num_params, const char * const params[]);
-static int parse_sync_interval(struct sfptpd_config_section *section, const char *option,
-			       unsigned int num_params, const char * const params[]);
-static int parse_sync_threshold(struct sfptpd_config_section *section, const char *option,
-				 unsigned int num_params, const char * const params[]);
-static int parse_clock_control(struct sfptpd_config_section *section, const char *option,
-			       unsigned int num_params, const char * const params[]);
-static int parse_step_threshold(struct sfptpd_config_section *section, const char *option,
-			       unsigned int num_params, const char * const params[]);
-static int parse_epoch_guard(struct sfptpd_config_section *section, const char *option,
-			       unsigned int num_params, const char * const params[]);
-static int parse_clock_list(struct sfptpd_config_section *section, const char *option,
-			    unsigned int num_params, const char * const params[]);
-static int parse_clock_readonly(struct sfptpd_config_section *section, const char *option,
-				unsigned int num_params, const char * const params[]);
-static int parse_observe_readonly_clocks(struct sfptpd_config_section *section, const char *option,
-					 unsigned int num_params, const char * const params[]);
-static int parse_persistent_clock_correction(struct sfptpd_config_section *section, const char *option,
-					     unsigned int num_params, const char * const params[]);
-static int parse_non_solarflare_nics(struct sfptpd_config_section *section, const char *option,
-				     unsigned int num_params, const char * const params[]);
-static int parse_assume_one_phc_per_nic(struct sfptpd_config_section *section, const char *option,
-					unsigned int num_params, const char * const params[]);
-static int parse_phc_dedup(struct sfptpd_config_section *section, const char *option,
-			   unsigned int num_params, const char * const params[]);
-static int parse_avoid_efx_ioctl(struct sfptpd_config_section *section, const char *option,
-				 unsigned int num_params, const char * const params[]);
-static int parse_timestamping_interfaces(struct sfptpd_config_section *section, const char *option,
-					 unsigned int num_params, const char * const params[]);
-static int parse_timestamping_disable_on_exit(struct sfptpd_config_section *section, const char *option,
-					      unsigned int num_params, const char * const params[]);
-static int parse_pid_filter_kp(struct sfptpd_config_section *section, const char *option,
-			      unsigned int num_params, const char * const params[]);
-static int parse_pid_filter_ki(struct sfptpd_config_section *section, const char *option,
-			      unsigned int num_params, const char * const params[]);
-static int parse_fir_filter_size(struct sfptpd_config_section *section, const char *option,
-				 unsigned int num_params, const char * const params[]);
-static int parse_trace_level(struct sfptpd_config_section *section, const char *option,
-			     unsigned int num_params, const char * const params[]);
-static int parse_test_mode(struct sfptpd_config_section *section, const char *option,
-			   unsigned int num_params, const char * const params[]);
-static int parse_hotplug_detection_mode(struct sfptpd_config_section *section, const char *option,
-					unsigned int num_params, const char * const params[]);
-static int parse_reporting_intervals(struct sfptpd_config_section *section, const char *option,
-				     unsigned int num_params, const char * const params[]);
-static int parse_netlink_rescan_interval(struct sfptpd_config_section *section, const char *option,
-					 unsigned int num_params, const char * const params[]);
-static int parse_netlink_coalesce_ms(struct sfptpd_config_section *section, const char *option,
-				     unsigned int num_params, const char * const params[]);
-static int parse_clustering(struct sfptpd_config_section *section, const char *option,
-			    unsigned int num_params, const char * const params[]);
-static int parse_clustering_guard_threshold(struct sfptpd_config_section *section, const char *option,
-				   unsigned int num_params, const char * const params[]);
-static int parse_limit_freq_adj(struct sfptpd_config_section *section, const char *option,
-				unsigned int num_params, const char * const params[]);
-static int parse_phc_pps_methods(struct sfptpd_config_section *section, const char *option,
-				 unsigned int num_params, const char * const params[]);
-static int parse_ignore_critical(struct sfptpd_config_section *section, const char *option,
-				 unsigned int num_params, const char * const params[]);
-static int parse_rtc_adjust(struct sfptpd_config_section *section, const char *option,
-			    unsigned int num_params, const char * const params[]);
-static int parse_clock_display_fmts(struct sfptpd_config_section *section, const char *option,
-				    unsigned int num_params, const char * const params[]);
-static int parse_unique_clockid_bits(struct sfptpd_config_section *section, const char *option,
-				     unsigned int num_params, const char * const params[]);
-static int parse_legacy_clockids(struct sfptpd_config_section *section, const char *option,
-				  unsigned int num_params, const char * const params[]);
-static int parse_initial_clock_correction(struct sfptpd_config_section *section, const char *option,
-					  unsigned int num_params, const char * const params[]);
-static int parse_openmetrics_unix(struct sfptpd_config_section *section, const char *option,
-			     unsigned int num_params, const char * const params[]);
-static int parse_openmetrics_tcp(struct sfptpd_config_section *section, const char *option,
-				 unsigned int num_params, const char * const params[]);
-static int parse_openmetrics_rt_stats_buf(struct sfptpd_config_section *section, const char *option,
-					  unsigned int num_params, const char * const params[]);
-static int parse_openmetrics_options(struct sfptpd_config_section *section, const char *option,
-				     unsigned int num_params, const char * const params[]);
-static int parse_openmetrics_prefix(struct sfptpd_config_section *section, const char *option,
-				    unsigned int num_params, const char * const params[]);
-static int parse_openmetrics_acl_allow(struct sfptpd_config_section *section, const char *option,
-				       unsigned int num_params, const char * const params[]);
-static int parse_openmetrics_acl_deny(struct sfptpd_config_section *section, const char *option,
-				      unsigned int num_params, const char * const params[]);
-static int parse_openmetrics_acl_order(struct sfptpd_config_section *section, const char *option,
-				       unsigned int num_params, const char * const params[]);
-static int parse_servo_log_all_samples(struct sfptpd_config_section *section, const char *option,
-				       unsigned int num_params, const char * const params[]);
-static int parse_eligible_interface_types(struct sfptpd_config_section *section, const char *option,
-					  unsigned int num_params, const char * const params[]);
-static int parse_clock_adj_method(struct sfptpd_config_section *section, const char *option,
-				  unsigned int num_params, const char * const params[]);
 
 static int validate_config(struct sfptpd_config_section *section);
 
 static void destroy_interface_selection(struct sfptpd_config_interface_selection **selection);
 
-static const sfptpd_config_option_t config_general_options[] =
-{
-	/* Generic config options */
-	{"sync_module", "<freerun | ptp | pps | ntp | crny> [instance-names]",
-		"Create instances of the specified sync module",
-		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_sync_module},
-	{"selection_policy", "<automatic | manual | manual-startup> [initial-instance]",
-		"Use automatic (default), manual or manual followed by "
-		"automatic sync instance selection",
-		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_selection_policy},
-	{"selection_policy_rules", "<manual | ext-constraints | state | no-alarms | user-priority | clustering | clock-class | total-accuracy | allan-variance | steps-removed>*",
-		"Define the list of rules for the automatic selection policy",
-		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_selection_policy_rules},
-	{"phc_pps_methods", "<devpps | devptp>*",
-		"Define the order of non-proprietary PPS methods to try",
-		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_phc_pps_methods},
-	{"selection_holdoff_interval", "NUMBER",
-		"Specifies how long to wait after detecting a better instance "
-		"before selecting it",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_selection_holdoff_interval,
-		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_SELECTION_HOLDOFF_INTERVAL),
-		.unit = "seconds"},
-	{"message_log", "<syslog | stderr | filename>",
-		"Specifies where to send messages generated by the application",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_message_log,
-		.dfl = "By default messages are sent to stderr"},
-	{"stats_log", "<off | stdout | filename>",
-		"Specifies if and where to log statistics generated by the application",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_stats_log,
-		.dfl = "By default statistics logging is disabled"},
-	{"user", "USER [GROUP]",
-		"Drop to the user and group named USER and GROUP retaining "
-		"essential capabilities. Group defaults to USER's if not "
-		"specified",
-		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_user},
-	{"daemon", "",
-		"Run as a daemon.",
-		0, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_daemon,
-		.dfl = "Disabled by default"},
-	{"lock", "<off | on>",
-		"Specify whether to use a lock file to stop multiple simultaneous instances of the daemon",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_lock,
-		.dfl = "Enabled by default"},
-	{"state_path", "<path>",
-		"Directory in which to store sfptpd state data",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		(sfptpd_config_option_parser_t) parse_path,
-		.cookie = SFPTPD_PATH_STATE_DIR,
-		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_STATE_PATH)},
-	{"control_path", "<path>",
-		"Path for Unix domain control socket",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		(sfptpd_config_option_parser_t) parse_path,
-		.cookie = SFPTPD_PATH_CONTROL_SOCKET,
-		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_CONTROL_PATH)},
-	{"metrics_path", "<path>",
-		"Path for Unix domain socket serving OpenMetrics",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		(sfptpd_config_option_parser_t) parse_path,
-		.cookie = SFPTPD_PATH_METRICS_SOCKET,
-		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_METRICS_PATH)},
-	{"run_dir", "<path>",
-		"Path for run directory",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		(sfptpd_config_option_parser_t) parse_path,
-		.cookie = SFPTPD_PATH_RUN_DIR,
-		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_RUN_DIR)},
-	{"run_dir_mode", "MODE",
-		"Specifies MODE with which to create run directory, subject to umask",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_access_mode,
-		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_RUN_DIR_MODE)},
-	{"state_dir_mode", "MODE",
-		"Specifies MODE with which to create state directory, subject to umask",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_access_mode,
-		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_STATE_DIR_MODE)},
-	{"control_socket_mode", "MODE",
-		"Specifies access MODE to give control socket, subject to umask",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_access_mode,
-		.dfl = "By default, leave as created."},
-	{"metrics_socket_mode", "MODE",
-		"Specifies access MODE to give metrics socket, subject to umask",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_access_mode,
-		.dfl = "By default, leave as created."},
-	{"sync_interval", "NUMBER",
-		"Specifies the interval in 2^NUMBER seconds at which the clocks "
-		"are synchronized to the local reference clock, where NUMBER is "
-		"in the range ["
-		STRINGIFY(SFPTPD_MIN_SYNC_INTERVAL) ","
-		STRINGIFY(SFPTPD_MAX_SYNC_INTERVAL) "]",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_sync_interval,
-		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_SYNC_INTERVAL)},
-	{"local_sync_threshold", "NUMBER",
-		"Threshold in nanoseconds of the offset between the system clock and a NIC clock over a "
-		STRINGIFY(SFPTPD_STATS_CONVERGENCE_MIN_PERIOD_DEFAULT)
-		"s period to be considered in sync",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
-		parse_sync_threshold,
-		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_STATS_CONVERGENCE_MAX_OFFSET_DEFAULT)},
-	{"clock_control", "<slew-and-step | step-at-startup | no-step | no-adjust | step-forward | step-on-first-lock>",
-		"Specifies how the clocks are controlled",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_clock_control,
-		.dfl = "By default clocks are stepped and slewed as necessary"},
-	{"step_threshold", "NUMBER",
-		"Threshold in seconds of the offset between the clock and its reference clock for sfptpd to step",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
-		parse_step_threshold,
-		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_SERVO_CLOCK_STEP_THRESHOLD_S),
-		.unit = "s"},
-	{"epoch_guard", "<alarm-only | prevent-sync | correct-clock>",
-		"Guards against propagation of times near the epoch",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_epoch_guard,
-		.dfl = "The default is correct-clock"},
-	{"clock_list", "[<name | mac-address | clock-id | ifname>]*",
-		"Specifies the set of clocks that sfptpd should discipline",
-		~0, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_clock_list,
-		.dfl = "By default all clocks are disciplined"},
-	{"clock_readonly", "[<name | mac-address | clock-id | ifname>]",
-		"Specifies a set of clocks that sfptpd should never step or slew, under any circumstance. Use with care.",
-		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_clock_readonly},
-	{"observe_readonly_clocks", "<off | on>",
-		"Specifies whether to observe read-only clocks with passive servos",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_observe_readonly_clocks,
-		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_OBSERVE_READONLY_CLOCKS)},
-	{"persistent_clock_correction", "<off | on>",
-		"Specifies whether to used saved clock frequency corrections when disciplining clocks",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_persistent_clock_correction,
-		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_PERSISTENT_CLOCK_CORRECTION)},
-	{"non_solarflare_nics", "<off | on>",
-		"Specify whether to use timestamping and hardware clock "
-		"capabilities of non-Solarflare adapters",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_non_solarflare_nics,
-		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_NON_SFC_NICS)},
-	{"non_xilinx_nics", "<off | on>",
-		"Alias for non_solarflace_nics",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_non_solarflare_nics,
-		.hidden = true},
-	{"assume_one_phc_per_nic", "<off | on>",
-		"Specify whether multiple reported clock devices on a NIC "
-		"should be assumed to represent the same underlying clock",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_assume_one_phc_per_nic,
-		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_ASSUME_ONE_PHC_PER_NIC)},
-	{"phc_dedup", "<off | on>",
-		"Specify whether to identify duplicate PHC devices for the same clock",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_phc_dedup,
-		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_PHC_DEDUP)},
-	{"avoid_efx_ioctl", "<off | on>",
-		"Specify whether to avoid private SIOCEFX ioctl for Solarflare adapters. "
-		"This prevents use of the sync flag via Onload",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_avoid_efx_ioctl,
-		.dfl = SFPTPD_CONFIG_DFL_BOOL(false),
-		},
-	{"phc_diff_methods", "<sys-offset-precise | efx | pps | sys-offset-ext | sys-offset | read-time>*",
-		"Define the list of PHC diff methods used",
-		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_phc_diff_method_order},
-	{"timestamping_interfaces", "[<name | mac-address | *>]",
-		"Specifies set of interfaces on which general receive packet timestamping should be enabled",
-		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_timestamping_interfaces},
-	{"timestamping_disable_on_exit", "<off | on>",
-		"Specifies whether timestamping should be disabled when daemon exits",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_timestamping_disable_on_exit,
-		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_DISABLE_ON_EXIT)},
-	{"pid_filter_p", "NUMBER",
-		"Secondary servo PID filter proportional term coefficient",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
-		parse_pid_filter_kp,
-		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_SERVO_K_PROPORTIONAL)},
-	{"pid_filter_i", "NUMBER",
-		"Secondary servo PID filter integral term coefficient",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
-		parse_pid_filter_ki,
-		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_SERVO_K_INTEGRAL)},
-	{"fir_filter_size", "NUMBER",
-		"Number of data samples stored in the FIR filter. The "
-		"valid range is [" STRINGIFY(SFPTPD_FIR_FILTER_STIFFNESS_MIN)
-		"," STRINGIFY(SFPTPD_FIR_FILTER_STIFFNESS_MAX) "]. A value of "
-		"1 means that the filter is off while higher values will "
-		"reduce adaptability but increase stability. "
-		"Default is one second's worth of samples.",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
-		parse_fir_filter_size},
-	{"trace_level", "[<general | threading | bic | netlink | ntp | servo | clocks | most | all>] NUMBER",
-		"Specifies a module (of 'general' if omitted) trace level from 0 (none) to 6 (excessive)",
-		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_trace_level,
-		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_TRACE_LEVEL)},
-	{"test_mode", "",
-		"Enables features to aid testing",
-		0, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_test_mode,
-		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_TEST_MODE),
-		.hidden = true},
-	{"json_stats", "<filename>",
-		"Output realtime module statistics in JSON-lines format to this file (http://jsonlines.org)",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		(sfptpd_config_option_parser_t) parse_path,
-		.cookie = SFPTPD_PATH_JSON_STATS,
-		.dfl = "Disabled by default"},
-	{"json_remote_monitor", "<filename>",
-		"Write JSON lines to this file for data collected by the PTP "
-		"remote monitor (which is DEPRECATED in favour of sfptpmon)",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		(sfptpd_config_option_parser_t) parse_path,
-		.cookie = SFPTPD_PATH_JSON_REMOTE_MONITOR,
-		.dfl = "Disabled by default"},
-	{"hotplug_detection_mode", "<netlink | auto>",
-		"obsolete option to control how interface and bond changes are "
-		"detected. The option value is ignored and netlink used.",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_hotplug_detection_mode},
-	{"reporting_intervals", "<save_state|stats_log INTERVAL>*",
-		"Specifies period between saving state files and/or writing "
-		"stats log output",
-		~2, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_reporting_intervals,
-		.dfl = "Default is: \"save_state "
-		STRINGIFY(SFPTPD_DEFAULT_STATE_SAVE_INTERVAL) " stats_log "
-		STRINGIFY(SFPTPD_DEFAULT_STATISTICS_LOGGING_INTERVAL) "\""},
-	{"netlink_rescan_interval", "NUMBER",
-		"Specifies period between rescanning the link table with netlink. "
-		"Periodic rescans are disabled with zero",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_netlink_rescan_interval,
-		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_NETLINK_RESCAN_INTERVAL),
-		.unit = "seconds"},
-	{"netlink_coalesce_ms", "NUMBER",
-		"Specifies period after a significant change is communicated "
-		"by netlink to wait for further changes to avoid excessive "
-		"perturbation. Coalescing is disabled with zero",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_netlink_coalesce_ms,
-		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_NETLINK_COALESCE_MS),
-		.unit =  "ms"},
-	{"clustering", "discriminator <INSTANCE> <THRESHOLD> <NO_DISCRIMINATOR_SCORE>",
-		"Implements clustering based on MODE. Currently only supports "
-		"discriminator mode, which disqualifies sync instances that differ "
-		"from discriminator INSTANCE in excess of THRESHOLD ns. INSTANCE must "
-		"be a sync instance name. NO_DISCRIMINATOR_SCORE is the clustering "
-                "score returned when no discriminator is available.",
-		4, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_clustering},
-	{"clustering_guard", "<off | on> <THRESHOLD>",
-		"Specifies whether to turn on the clusterig guard feature, as well as "
-                "the threshold for clustering score to be compared to.",
-		2, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_clustering_guard_threshold},
-	{"limit_freq_adj", "NUMBER",
-		"Limit NIC clock frequency adjustment to the lesser of "
-		"advertised capability and NUMBER ppb.",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_limit_freq_adj},
-	{"ignore_critical", "<no-ptp-clock | no-ptp-subsystem | clock-control-conflict>*",
-		"Ignore certain critical warnings that would normally "
-		"terminate execution but may be expected in some niche "
-		"or diagnostic use cases.",
-		~1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_ignore_critical},
-	{"rtc_adjust", "<off | on>",
-		"Specify whether to let the kernel sync the RTC clock",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_rtc_adjust,
-		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_RTC_ADJUST)},
-	{"clock_display_fmts", "SHORT-FMT LONG-FMT HWID-FMT FNAM-FMT",
-		"Define formats for displaying clock properties, "
-		"of max expansion "
-		STRINGIFY(SFPTPD_CLOCK_SHORT_NAME_SIZE) ", "
-		STRINGIFY(SFPTPD_CLOCK_FULL_NAME_SIZE) ", "
-		STRINGIFY(SFPTPD_CLOCK_HW_ID_STRING_SIZE) " and "
-		STRINGIFY(SFPTPD_CLOCK_HW_ID_STRING_SIZE) " respectively. ",
-		4, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_clock_display_fmts,
-		.dfl = "Default is "
-			SFPTPD_DEFAULT_CLOCK_SHORT_FMT " "
-			SFPTPD_DEFAULT_CLOCK_LONG_FMT " "
-			SFPTPD_DEFAULT_CLOCK_HWID_FMT " "
-			SFPTPD_DEFAULT_CLOCK_FNAM_FMT "."},
-	{"unique_clockid_bits", "<OCTETS | pid | hostid | rand>",
-		"Colon-delimited octets providing the unique bits that pad the "
-		"LSBs of an EUI-64 clock identity constructed from an EUI-48 "
-		"MAC address",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_unique_clockid_bits,
-		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_UNIQUE_CLOCKID_BITS)},
-	{"legacy_clockids", "<off | on>",
-		"Use legacy 1588-2008 clock ids of the form :::ff:fe:::",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_legacy_clockids,
-		.dfl = SFPTPD_CONFIG_DFL_BOOL(false)},
-	{"initial_clock_correction", "<always | if-unset>",
-		"When to apply an initial clock correction to NIC clocks",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_initial_clock_correction,
-		.dfl = "Defaults to always"},
-	{"openmetrics_unix", "<off | on>",
-		"Whether to serve OpenMetrics exposition over socket in filesystem",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_unix,
-		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_OPENMETRICS_UNIX)},
-	{"openmetrics_tcp", "LISTEN-ADDR*",
-		"Addresses to listen on to serve OpenMetrics exposition over TCP",
-		~1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_tcp,
-		.dfl = "Defaults to no TCP listener"},
-	{"openmetrics_rt_stats_buf", "NUMBER",
-		"NUMBER of real time stats entries to buffer for OpenMetrics",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_rt_stats_buf,
-		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_OPENMETRICS_RT_STATS_BUF)},
-	{"openmetrics_options", "[alarm-stateset]",
-		"set openmetrics option flags",
-		~0, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_options},
-	{"openmetrics_prefix", "PREFIX",
-		"set prefix string to be prepended to OpenMetrics family names",
-		~0, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_prefix,
-		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_OPENMETRICS_PREFIX)},
-	{"openmetrics_acl_allow", "<ip-address-list>",
-		"Access control allow list for metrics connections. The format "
-		"is a series of network prefixes in a.b.c.d/x notation where "
-		"a.b.c.d is the subnet and x is the prefix length. For single "
-		"IP addresses, 32 or 128 should be specified for the length.",
-		~1, SFPTPD_CONFIG_SCOPE_INSTANCE,
-		parse_openmetrics_acl_allow},
-	{"openmetrics_acl_deny", "<ip-address-list>",
-		"Access control deny list for metrics connections.",
-		~1, SFPTPD_CONFIG_SCOPE_INSTANCE,
-		parse_openmetrics_acl_deny},
-	{"openmetrics_acl_order", "<allow-deny | deny-allow>",
-		"Access control list evaluation order for metrics connections. "
-		"Default allow-deny.",
-		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
-		parse_openmetrics_acl_order},
-	{"servo_log_all_samples", "<off | on>",
-		"Specify whether to log every sample from secondary servos",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_servo_log_all_samples,
-		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_SERVO_LOG_ALL_SAMPLES)},
-	{"eligible_interface_types", "([+|-]<$group|kind>[@prop|!prop]* )*",
-		"Specify list of eligible interface types by group, if_kind "
-		"and conditional properties",
-		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_eligible_interface_types,
-		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_PHYSICAL_INTERFACES)},
-	{"clock_adj_method", "<prefer-tickadj | prefer-freqadj>",
-		"Specify whether tick length or frequency adjustment should "
-		"be used for most of the frequency correction",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
-		parse_clock_adj_method,
-		.dfl = "prefer-tickadj"},
-};
-
-static const sfptpd_config_option_set_t config_general_option_set =
-{
-	.description = "Generic Configuration File Options",
-	.category = SFPTPD_CONFIG_CATEGORY_GENERAL,
-	.num_options = sizeof(config_general_options)/sizeof(config_general_options[0]),
-	.options = config_general_options,
-	.validator = validate_config,
-};
 
 static const char *config_general_name = "general";
 
@@ -2125,6 +1637,389 @@ static int parse_clock_adj_method(struct sfptpd_config_section *section, const c
 }
 
 
+/****************************************************************************
+ * Config File Options
+ ****************************************************************************/
+
+static const sfptpd_config_option_t config_general_options[] =
+{
+	/* Generic config options */
+	{"sync_module", "<freerun | ptp | pps | ntp | crny> [instance-names]",
+		"Create instances of the specified sync module",
+		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_sync_module},
+	{"selection_policy", "<automatic | manual | manual-startup> [initial-instance]",
+		"Use automatic (default), manual or manual followed by "
+		"automatic sync instance selection",
+		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_selection_policy},
+	{"selection_policy_rules", "<manual | ext-constraints | state | no-alarms | user-priority | clustering | clock-class | total-accuracy | allan-variance | steps-removed>*",
+		"Define the list of rules for the automatic selection policy",
+		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_selection_policy_rules},
+	{"phc_pps_methods", "<devpps | devptp>*",
+		"Define the order of non-proprietary PPS methods to try",
+		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_phc_pps_methods},
+	{"selection_holdoff_interval", "NUMBER",
+		"Specifies how long to wait after detecting a better instance "
+		"before selecting it",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_selection_holdoff_interval,
+		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_SELECTION_HOLDOFF_INTERVAL),
+		.unit = "seconds"},
+	{"message_log", "<syslog | stderr | filename>",
+		"Specifies where to send messages generated by the application",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_message_log,
+		.dfl = "By default messages are sent to stderr"},
+	{"stats_log", "<off | stdout | filename>",
+		"Specifies if and where to log statistics generated by the application",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_stats_log,
+		.dfl = "By default statistics logging is disabled"},
+	{"user", "USER [GROUP]",
+		"Drop to the user and group named USER and GROUP retaining "
+		"essential capabilities. Group defaults to USER's if not "
+		"specified",
+		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_user},
+	{"daemon", "",
+		"Run as a daemon.",
+		0, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_daemon,
+		.dfl = "Disabled by default"},
+	{"lock", "<off | on>",
+		"Specify whether to use a lock file to stop multiple simultaneous instances of the daemon",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_lock,
+		.dfl = "Enabled by default"},
+	{"state_path", "<path>",
+		"Directory in which to store sfptpd state data",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		(sfptpd_config_option_parser_t) parse_path,
+		.cookie = SFPTPD_PATH_STATE_DIR,
+		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_STATE_PATH)},
+	{"control_path", "<path>",
+		"Path for Unix domain control socket",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		(sfptpd_config_option_parser_t) parse_path,
+		.cookie = SFPTPD_PATH_CONTROL_SOCKET,
+		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_CONTROL_PATH)},
+	{"metrics_path", "<path>",
+		"Path for Unix domain socket serving OpenMetrics",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		(sfptpd_config_option_parser_t) parse_path,
+		.cookie = SFPTPD_PATH_METRICS_SOCKET,
+		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_METRICS_PATH)},
+	{"run_dir", "<path>",
+		"Path for run directory",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		(sfptpd_config_option_parser_t) parse_path,
+		.cookie = SFPTPD_PATH_RUN_DIR,
+		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_RUN_DIR)},
+	{"run_dir_mode", "MODE",
+		"Specifies MODE with which to create run directory, subject to umask",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_access_mode,
+		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_RUN_DIR_MODE)},
+	{"state_dir_mode", "MODE",
+		"Specifies MODE with which to create state directory, subject to umask",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_access_mode,
+		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_STATE_DIR_MODE)},
+	{"control_socket_mode", "MODE",
+		"Specifies access MODE to give control socket, subject to umask",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_access_mode,
+		.dfl = "By default, leave as created."},
+	{"metrics_socket_mode", "MODE",
+		"Specifies access MODE to give metrics socket, subject to umask",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_access_mode,
+		.dfl = "By default, leave as created."},
+	{"sync_interval", "NUMBER",
+		"Specifies the interval in 2^NUMBER seconds at which the clocks "
+		"are synchronized to the local reference clock, where NUMBER is "
+		"in the range ["
+		STRINGIFY(SFPTPD_MIN_SYNC_INTERVAL) ","
+		STRINGIFY(SFPTPD_MAX_SYNC_INTERVAL) "]",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_sync_interval,
+		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_SYNC_INTERVAL)},
+	{"local_sync_threshold", "NUMBER",
+		"Threshold in nanoseconds of the offset between the system clock and a NIC clock over a "
+		STRINGIFY(SFPTPD_STATS_CONVERGENCE_MIN_PERIOD_DEFAULT)
+		"s period to be considered in sync",
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_sync_threshold,
+		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_STATS_CONVERGENCE_MAX_OFFSET_DEFAULT)},
+	{"clock_control", "<slew-and-step | step-at-startup | no-step | no-adjust | step-forward | step-on-first-lock>",
+		"Specifies how the clocks are controlled",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_clock_control,
+		.dfl = "By default clocks are stepped and slewed as necessary"},
+	{"step_threshold", "NUMBER",
+		"Threshold in seconds of the offset between the clock and its reference clock for sfptpd to step",
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_step_threshold,
+		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_SERVO_CLOCK_STEP_THRESHOLD_S),
+		.unit = "s"},
+	{"epoch_guard", "<alarm-only | prevent-sync | correct-clock>",
+		"Guards against propagation of times near the epoch",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_epoch_guard,
+		.dfl = "The default is correct-clock"},
+	{"clock_list", "[<name | mac-address | clock-id | ifname>]*",
+		"Specifies the set of clocks that sfptpd should discipline",
+		~0, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_clock_list,
+		.dfl = "By default all clocks are disciplined"},
+	{"clock_readonly", "[<name | mac-address | clock-id | ifname>]",
+		"Specifies a set of clocks that sfptpd should never step or slew, under any circumstance. Use with care.",
+		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_clock_readonly},
+	{"observe_readonly_clocks", "<off | on>",
+		"Specifies whether to observe read-only clocks with passive servos",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_observe_readonly_clocks,
+		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_OBSERVE_READONLY_CLOCKS)},
+	{"persistent_clock_correction", "<off | on>",
+		"Specifies whether to used saved clock frequency corrections when disciplining clocks",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_persistent_clock_correction,
+		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_PERSISTENT_CLOCK_CORRECTION)},
+	{"non_solarflare_nics", "<off | on>",
+		"Specify whether to use timestamping and hardware clock "
+		"capabilities of non-Solarflare adapters",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_non_solarflare_nics,
+		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_NON_SFC_NICS)},
+	{"non_xilinx_nics", "<off | on>",
+		"Alias for non_solarflace_nics",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_non_solarflare_nics,
+		.hidden = true},
+	{"assume_one_phc_per_nic", "<off | on>",
+		"Specify whether multiple reported clock devices on a NIC "
+		"should be assumed to represent the same underlying clock",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_assume_one_phc_per_nic,
+		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_ASSUME_ONE_PHC_PER_NIC)},
+	{"phc_dedup", "<off | on>",
+		"Specify whether to identify duplicate PHC devices for the same clock",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_phc_dedup,
+		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_PHC_DEDUP)},
+	{"avoid_efx_ioctl", "<off | on>",
+		"Specify whether to avoid private SIOCEFX ioctl for Solarflare adapters. "
+		"This prevents use of the sync flag via Onload",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_avoid_efx_ioctl,
+		.dfl = SFPTPD_CONFIG_DFL_BOOL(false),
+		},
+	{"phc_diff_methods", "<sys-offset-precise | efx | pps | sys-offset-ext | sys-offset | read-time>*",
+		"Define the list of PHC diff methods used",
+		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_phc_diff_method_order},
+	{"timestamping_interfaces", "[<name | mac-address | *>]",
+		"Specifies set of interfaces on which general receive packet timestamping should be enabled",
+		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_timestamping_interfaces},
+	{"timestamping_disable_on_exit", "<off | on>",
+		"Specifies whether timestamping should be disabled when daemon exits",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_timestamping_disable_on_exit,
+		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_DISABLE_ON_EXIT)},
+	{"pid_filter_p", "NUMBER",
+		"Secondary servo PID filter proportional term coefficient",
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_pid_filter_kp,
+		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_SERVO_K_PROPORTIONAL)},
+	{"pid_filter_i", "NUMBER",
+		"Secondary servo PID filter integral term coefficient",
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_pid_filter_ki,
+		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_SERVO_K_INTEGRAL)},
+	{"fir_filter_size", "NUMBER",
+		"Number of data samples stored in the FIR filter. The "
+		"valid range is [" STRINGIFY(SFPTPD_FIR_FILTER_STIFFNESS_MIN)
+		"," STRINGIFY(SFPTPD_FIR_FILTER_STIFFNESS_MAX) "]. A value of "
+		"1 means that the filter is off while higher values will "
+		"reduce adaptability but increase stability. "
+		"Default is one second's worth of samples.",
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_fir_filter_size},
+	{"trace_level", "[<general | threading | bic | netlink | ntp | servo | clocks | most | all>] NUMBER",
+		"Specifies a module (of 'general' if omitted) trace level from 0 (none) to 6 (excessive)",
+		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_trace_level,
+		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_TRACE_LEVEL)},
+	{"test_mode", "",
+		"Enables features to aid testing",
+		0, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_test_mode,
+		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_TEST_MODE),
+		.hidden = true},
+	{"json_stats", "<filename>",
+		"Output realtime module statistics in JSON-lines format to this file (http://jsonlines.org)",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		(sfptpd_config_option_parser_t) parse_path,
+		.cookie = SFPTPD_PATH_JSON_STATS,
+		.dfl = "Disabled by default"},
+	{"json_remote_monitor", "<filename>",
+		"Write JSON lines to this file for data collected by the PTP "
+		"remote monitor (which is DEPRECATED in favour of sfptpmon)",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		(sfptpd_config_option_parser_t) parse_path,
+		.cookie = SFPTPD_PATH_JSON_REMOTE_MONITOR,
+		.dfl = "Disabled by default"},
+	{"hotplug_detection_mode", "<netlink | auto>",
+		"obsolete option to control how interface and bond changes are "
+		"detected. The option value is ignored and netlink used.",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_hotplug_detection_mode},
+	{"reporting_intervals", "<save_state|stats_log INTERVAL>*",
+		"Specifies period between saving state files and/or writing "
+		"stats log output",
+		~2, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_reporting_intervals,
+		.dfl = "Default is: \"save_state "
+		STRINGIFY(SFPTPD_DEFAULT_STATE_SAVE_INTERVAL) " stats_log "
+		STRINGIFY(SFPTPD_DEFAULT_STATISTICS_LOGGING_INTERVAL) "\""},
+	{"netlink_rescan_interval", "NUMBER",
+		"Specifies period between rescanning the link table with netlink. "
+		"Periodic rescans are disabled with zero",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_netlink_rescan_interval,
+		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_NETLINK_RESCAN_INTERVAL),
+		.unit = "seconds"},
+	{"netlink_coalesce_ms", "NUMBER",
+		"Specifies period after a significant change is communicated "
+		"by netlink to wait for further changes to avoid excessive "
+		"perturbation. Coalescing is disabled with zero",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_netlink_coalesce_ms,
+		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_NETLINK_COALESCE_MS),
+		.unit =  "ms"},
+	{"clustering", "discriminator <INSTANCE> <THRESHOLD> <NO_DISCRIMINATOR_SCORE>",
+		"Implements clustering based on MODE. Currently only supports "
+		"discriminator mode, which disqualifies sync instances that differ "
+		"from discriminator INSTANCE in excess of THRESHOLD ns. INSTANCE must "
+		"be a sync instance name. NO_DISCRIMINATOR_SCORE is the clustering "
+                "score returned when no discriminator is available.",
+		4, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_clustering},
+	{"clustering_guard", "<off | on> <THRESHOLD>",
+		"Specifies whether to turn on the clusterig guard feature, as well as "
+                "the threshold for clustering score to be compared to.",
+		2, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_clustering_guard_threshold},
+	{"limit_freq_adj", "NUMBER",
+		"Limit NIC clock frequency adjustment to the lesser of "
+		"advertised capability and NUMBER ppb.",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_limit_freq_adj},
+	{"ignore_critical", "<no-ptp-clock | no-ptp-subsystem | clock-control-conflict>*",
+		"Ignore certain critical warnings that would normally "
+		"terminate execution but may be expected in some niche "
+		"or diagnostic use cases.",
+		~1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_ignore_critical},
+	{"rtc_adjust", "<off | on>",
+		"Specify whether to let the kernel sync the RTC clock",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_rtc_adjust,
+		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_RTC_ADJUST)},
+	{"clock_display_fmts", "SHORT-FMT LONG-FMT HWID-FMT FNAM-FMT",
+		"Define formats for displaying clock properties, "
+		"of max expansion "
+		STRINGIFY(SFPTPD_CLOCK_SHORT_NAME_SIZE) ", "
+		STRINGIFY(SFPTPD_CLOCK_FULL_NAME_SIZE) ", "
+		STRINGIFY(SFPTPD_CLOCK_HW_ID_STRING_SIZE) " and "
+		STRINGIFY(SFPTPD_CLOCK_HW_ID_STRING_SIZE) " respectively. ",
+		4, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_clock_display_fmts,
+		.dfl = "Default is "
+			SFPTPD_DEFAULT_CLOCK_SHORT_FMT " "
+			SFPTPD_DEFAULT_CLOCK_LONG_FMT " "
+			SFPTPD_DEFAULT_CLOCK_HWID_FMT " "
+			SFPTPD_DEFAULT_CLOCK_FNAM_FMT "."},
+	{"unique_clockid_bits", "<OCTETS | pid | hostid | rand>",
+		"Colon-delimited octets providing the unique bits that pad the "
+		"LSBs of an EUI-64 clock identity constructed from an EUI-48 "
+		"MAC address",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_unique_clockid_bits,
+		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_UNIQUE_CLOCKID_BITS)},
+	{"legacy_clockids", "<off | on>",
+		"Use legacy 1588-2008 clock ids of the form :::ff:fe:::",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_legacy_clockids,
+		.dfl = SFPTPD_CONFIG_DFL_BOOL(false)},
+	{"initial_clock_correction", "<always | if-unset>",
+		"When to apply an initial clock correction to NIC clocks",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_initial_clock_correction,
+		.dfl = "Defaults to always"},
+	{"openmetrics_unix", "<off | on>",
+		"Whether to serve OpenMetrics exposition over socket in filesystem",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_unix,
+		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_OPENMETRICS_UNIX)},
+	{"openmetrics_tcp", "LISTEN-ADDR*",
+		"Addresses to listen on to serve OpenMetrics exposition over TCP",
+		~1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_tcp,
+		.dfl = "Defaults to no TCP listener"},
+	{"openmetrics_rt_stats_buf", "NUMBER",
+		"NUMBER of real time stats entries to buffer for OpenMetrics",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_rt_stats_buf,
+		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_DEFAULT_OPENMETRICS_RT_STATS_BUF)},
+	{"openmetrics_options", "[alarm-stateset]",
+		"set openmetrics option flags",
+		~0, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_options},
+	{"openmetrics_prefix", "PREFIX",
+		"set prefix string to be prepended to OpenMetrics family names",
+		~0, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_openmetrics_prefix,
+		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_OPENMETRICS_PREFIX)},
+	{"openmetrics_acl_allow", "<ip-address-list>",
+		"Access control allow list for metrics connections. The format "
+		"is a series of network prefixes in a.b.c.d/x notation where "
+		"a.b.c.d is the subnet and x is the prefix length. For single "
+		"IP addresses, 32 or 128 should be specified for the length.",
+		~1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_openmetrics_acl_allow},
+	{"openmetrics_acl_deny", "<ip-address-list>",
+		"Access control deny list for metrics connections.",
+		~1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_openmetrics_acl_deny},
+	{"openmetrics_acl_order", "<allow-deny | deny-allow>",
+		"Access control list evaluation order for metrics connections. "
+		"Default allow-deny.",
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_openmetrics_acl_order},
+	{"servo_log_all_samples", "<off | on>",
+		"Specify whether to log every sample from secondary servos",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_servo_log_all_samples,
+		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_DEFAULT_SERVO_LOG_ALL_SAMPLES)},
+	{"eligible_interface_types", "([+|-]<$group|kind>[@prop|!prop]* )*",
+		"Specify list of eligible interface types by group, if_kind "
+		"and conditional properties",
+		~1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_eligible_interface_types,
+		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_PHYSICAL_INTERFACES)},
+	{"clock_adj_method", "<prefer-tickadj | prefer-freqadj>",
+		"Specify whether tick length or frequency adjustment should "
+		"be used for most of the frequency correction",
+		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
+		parse_clock_adj_method,
+		.dfl = "prefer-tickadj"},
+};
+
+static const sfptpd_config_option_set_t config_general_option_set =
+{
+	.description = "Generic Configuration File Options",
+	.category = SFPTPD_CONFIG_CATEGORY_GENERAL,
+	.num_options = sizeof(config_general_options)/sizeof(config_general_options[0]),
+	.options = config_general_options,
+	.validator = validate_config,
+};
+
+
+/****************************************************************************
+ * Local Functions
+ ****************************************************************************/
+
 static int validate_config(struct sfptpd_config_section *general)
 {
 	struct sfptpd_config *config = general->config;
@@ -2150,11 +2045,6 @@ static int validate_config(struct sfptpd_config_section *general)
 
 	return 0;
 }
-
-
-/****************************************************************************
- * Local Functions
- ****************************************************************************/
 
 static void destroy_interface_selection(struct sfptpd_config_interface_selection **selection)
 {
