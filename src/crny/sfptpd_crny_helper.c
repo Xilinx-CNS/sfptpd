@@ -318,7 +318,7 @@ static int edit_env(enum chrony_clock_control_op op)
 		if (env_stream == NULL)
 			goto fail3;
 		rewind(env_stream);
-		for (ptr = 0; ptr < end; ptr++)
+		for (ptr = 0; map_sz && ptr < end; ptr++)
 			fputc(text[ptr] == '\0' ? '\n' : text[ptr], env_stream);
 		if (no_newline_at_eof)
 			fputc('\n', env_stream);

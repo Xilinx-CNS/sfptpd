@@ -2687,7 +2687,8 @@ int sfptpd_clock_deduplicate(void)
 
 	clock_lock();
 
-	clocks_table = clock_snapshot(&count, true);
+	if ((clocks_table = clock_snapshot(&count, true)) == NULL)
+		goto finish;
 
 	if (count < 2)
 		goto finish;

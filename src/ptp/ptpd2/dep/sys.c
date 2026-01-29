@@ -113,9 +113,9 @@ static int ether_ntohost_cache(char *hostname, size_t hostname_size,
 		}
 
 		/* clean possible commas from the string */
-		while (strchr(buf, ',') != NULL) {
-			*(strchr(buf, ',')) = '_';
-		}
+		char *s;
+		while ((s = strchr(buf, ',')) != NULL)
+			*s = '_';
 
 		prev_addr = *addr;
 	}

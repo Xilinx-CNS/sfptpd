@@ -915,7 +915,7 @@ int sfptpd_config_parse_file(struct sfptpd_config *config)
 	}
 
 	/* Validate the last section. */
-	if (config_options[section->category]->validator &&
+	if (section && config_options[section->category]->validator &&
 	    (rc = config_options[section->category]->validator(section)) != 0)
 		return rc;
 

@@ -1816,16 +1816,25 @@ int sfptpd_netlink_service_fds(struct sfptpd_nl_state *state,
 			sfptpd_link_log(NULL, old_link);
 			old_row++;
 			pifi = next_pifi;
-		} else if (link->event == SFPTPD_LINK_CHANGE) {
-			assert(old_link == link->priv);
-			sfptpd_link_log(link, (const struct sfptpd_link *) link->priv);
+		} else if (link && old_link) {
+			/* The above logic handles differences in which interfaces appear
+			 * in old and new lists. For the remainder of cases there should
+			 * be a direct mapping, if the logic that populated the lists
+			 * is correct. */
+			if (link->event == SFPTPD_LINK_CHANGE) {
+				if (old_link != link->priv)
+					goto inconsistency;
+				sfptpd_link_log(link, (const struct sfptpd_link *) link->priv);
+			}
 			row++, old_row++;
 			ifi = next_ifi;
 			pifi = next_pifi;
-		} else { /* no change */
-			row++, old_row++;
-			ifi = next_ifi;
-			pifi = next_pifi;
+		} else {
+		inconsistency:
+			CRITICAL("link: inconsistency in interface probing\n");
+			assert(link && old_link);
+			assert(link->event != SFPTPD_LINK_CHANGE || old_link == link->priv);
+			return -ENOTUNIQ;
 		}
 	}
 

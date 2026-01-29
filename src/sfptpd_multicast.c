@@ -420,7 +420,8 @@ int sfptpd_multicast_send(sfptpd_msg_hdr_t *hdr,
 	/* Allocate destinations */
 	dests = calloc(count, sizeof *dests);
 	i = 0;
-	SLIST_FOREACH(user, &group->subscribers, users) {
+	if (!dests) rc = errno;
+	else SLIST_FOREACH(user, &group->subscribers, users) {
 		assert(user->magic == MULTICAST_USER_MAGIC);
 		if (user->subscriber.receive_as == MULTICAST_RECEIVE_AS_MESSAGE) {
 			dests[i].thread = user->thread;

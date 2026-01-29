@@ -3918,7 +3918,7 @@ static void ptp_on_run(sfptpd_ptp_module_t *ptp)
 		rc = ptpd_get_intf_fds(interface->ptpd_intf_private, &interface->ptpd_intf_fds);
 		if (rc != 0) {
 			ERROR("ptp: failed to get PTPD interface %s fds, %s\n",
-			      instance->intf->bond_info.logical_if,
+			      interface->bond_info.logical_if,
 			      strerror(rc));
 			continue;
 		}
@@ -3926,7 +3926,7 @@ static void ptp_on_run(sfptpd_ptp_module_t *ptp)
 		rc = ptp_start_interface(interface);
 		if (rc != 0)
 			ERROR("ptp: failed to start interface %s, %s\n",
-			      instance->intf->bond_info.logical_if,
+			      interface->bond_info.logical_if,
 			      strerror(rc));
 	}
 

@@ -1318,6 +1318,8 @@ static int mode7_get_sys_info(struct sfptpd_ntpclient_state *ntpclient,
 	rc = mode7_query(ntpclient, REQ_SYS_INFO, false,
 			 0, 0, NULL,
 			 &num_items, sizeof(*info), (void **)&info);
+	if (rc == 0 && num_items < 1)
+		rc = ENOENT;
 	if (rc == 0) {
 		write_address(&sys_info->peer_address, &sys_info->peer_address_len,
 			      info->v6_flag, info->peer, &info->peer6);
