@@ -2431,7 +2431,7 @@ static void ptp_on_update_gm_info(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_m
 		if (ptr != (struct sfptpd_ptp_instance *)msg->u.update_gm_info_req.originator) {
 			ptpd_update_gm_info(ptr->ptpd_port_private, info->remote_clock,
 					    info->clock_id.id, clock_class,
-					    info->time_source, clock_accuracy,
+					    (uint8_t) info->time_source, clock_accuracy,
 					    allan_variance, info->steps_removed,
 					    info->time_traceable, info->freq_traceable);
 		}

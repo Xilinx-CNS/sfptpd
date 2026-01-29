@@ -41,6 +41,7 @@ struct sync_instance_record  single_slave [] =
 			64,
 			{
 				{},
+				true,
 				SFPTPD_CLOCK_CLASS_LOCKED,
 				SFPTPD_TIME_SOURCE_ATOMIC_CLOCK,
 				1.0,
@@ -71,6 +72,7 @@ struct sync_instance_record  single_alarmed [] =
 			64,
 			{
 				{},
+				true,
 				SFPTPD_CLOCK_CLASS_LOCKED,
 				SFPTPD_TIME_SOURCE_ATOMIC_CLOCK,
 				1.0,
