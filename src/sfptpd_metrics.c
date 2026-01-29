@@ -1618,7 +1618,7 @@ static int listen_unix(struct sfptpd_config_general *general_config)
 		.sun_family = AF_UNIX
 	};
 	char *metrics_path;
-	size_t sz;
+	ssize_t sz;
 	int fd = -1;
 	int rc;
 

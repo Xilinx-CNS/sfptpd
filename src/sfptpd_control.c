@@ -75,7 +75,7 @@ int sfptpd_control_socket_open(struct sfptpd_config *config)
 	struct sockaddr_un addr = {
 		.sun_family = AF_UNIX
 	};
-	size_t sz;
+	ssize_t sz;
 	int rc;
 
 	general_config = sfptpd_general_config_get(config);
