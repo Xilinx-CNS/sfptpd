@@ -2206,7 +2206,8 @@ int sfptpd_interface_driver_stats_reset(struct sfptpd_interface *interface)
 			}
 			if (sysfs_stats_reset)
 				break;
-			/* Fall through to virtual reset */
+			/* (else) fall through to virtual reset */
+			[[fallthrough]];
 		case DRV_STAT_ETHTOOL:
 			if (!stats_sampled && !read_failed) {
 				rc = sfptpd_interface_driver_stats_read(interface, sample);

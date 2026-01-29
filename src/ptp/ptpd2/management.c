@@ -274,7 +274,7 @@ ptpd_mgmt_error_e handleMMSlaveOnly(MsgManagement *incoming,
 		/* SET actions */
 		ptpClock->slaveOnly = (data->so != 0)? TRUE: FALSE;
 		ptpClock->record_update = TRUE;
-		/* intentionally fall through to GET case */
+		[[fallthrough]];
 	case PTPD_MGMT_ACTION_GET:
 		DBGV(" GET action\n");
 		outgoing->actionField = PTPD_MGMT_ACTION_RESPONSE;
@@ -318,7 +318,7 @@ ptpd_mgmt_error_e handleMMUserDescription(MsgManagement *incoming,
 			WARNING("management user description exceeds specification length \n");
 			return PTPD_MGMT_ERROR_WRONG_LENGTH;
 		}
-		/* intentionally fall through to GET case */
+		[[fallthrough]];
 	case PTPD_MGMT_ACTION_GET:
 		DBGV(" GET action\n");
 		outgoing->actionField = PTPD_MGMT_ACTION_RESPONSE;
@@ -611,7 +611,7 @@ ptpd_mgmt_error_e handleMMPriority1(MsgManagement *incoming,
 		/* SET actions */
 		ptpClock->priority1 = data->priority1;
 		ptpClock->record_update = TRUE;
-		/* intentionally fall through to GET case */
+		[[fallthrough]];
 	case PTPD_MGMT_ACTION_GET:
 		DBGV(" GET action\n");
 		outgoing->actionField = PTPD_MGMT_ACTION_RESPONSE;
@@ -647,7 +647,7 @@ ptpd_mgmt_error_e handleMMPriority2(MsgManagement *incoming,
 		/* SET actions */
 		ptpClock->priority2 = data->priority2;
 		ptpClock->record_update = TRUE;
-		/* intentionally fall through to GET case */
+		[[fallthrough]];
 	case PTPD_MGMT_ACTION_GET:
 		DBGV(" GET action\n");
 		outgoing->actionField = PTPD_MGMT_ACTION_RESPONSE;
@@ -683,7 +683,7 @@ ptpd_mgmt_error_e handleMMDomain(MsgManagement *incoming,
 		/* SET actions */
 		ptpClock->domainNumber = data->domainNumber;
 		ptpClock->record_update = TRUE;
-		/* intentionally fall through to GET case */
+		[[fallthrough]];
 	case PTPD_MGMT_ACTION_GET:
 		DBGV(" GET action\n");
 		outgoing->actionField = PTPD_MGMT_ACTION_RESPONSE;
@@ -719,7 +719,7 @@ ptpd_mgmt_error_e handleMMLogAnnounceInterval(MsgManagement *incoming,
 		/* SET actions */
 		ptpClock->logAnnounceInterval = data->logAnnounceInterval;
 		ptpClock->record_update = TRUE;
-		/* intentionally fall through to GET case */
+		[[fallthrough]];
 	case PTPD_MGMT_ACTION_GET:
 		DBGV(" GET action\n");
 		outgoing->actionField = PTPD_MGMT_ACTION_RESPONSE;
@@ -755,7 +755,7 @@ ptpd_mgmt_error_e handleMMAnnounceReceiptTimeout(MsgManagement *incoming,
 		/* SET actions */
 		ptpClock->announceReceiptTimeout = data->announceReceiptTimeout;
 		ptpClock->record_update = TRUE;
-		/* intentionally fall through to GET case */
+		[[fallthrough]];
 	case PTPD_MGMT_ACTION_GET:
 		DBGV(" GET action\n");
 		outgoing->actionField = PTPD_MGMT_ACTION_RESPONSE;
@@ -796,7 +796,7 @@ ptpd_mgmt_error_e handleMMLogSyncInterval(MsgManagement *incoming,
 				   powl(2, ptpClock->logSyncInterval));
 
 		ptpClock->record_update = TRUE;
-		/* intentionally fall through to GET case */
+		[[fallthrough]];
 	case PTPD_MGMT_ACTION_GET:
 		DBGV(" GET action\n");
 		outgoing->actionField = PTPD_MGMT_ACTION_RESPONSE;
@@ -917,7 +917,7 @@ ptpd_mgmt_error_e handleMMTime(MsgManagement *incoming,
 			/* SET actions */
 			/* TODO: add currentTime */
 		}
-		/* intentionally fall through to GET case */
+		[[fallthrough]];
 	case PTPD_MGMT_ACTION_GET:
 		DBGV(" GET action\n");
 		outgoing->actionField = PTPD_MGMT_ACTION_RESPONSE;
@@ -962,7 +962,7 @@ ptpd_mgmt_error_e handleMMClockAccuracy(MsgManagement *incoming,
 			ptpClock->clockQuality.clockAccuracy = data->clockAccuracy;
 			ptpClock->record_update = TRUE;
 		}
-		/* intentionally fall through to GET case */
+		[[fallthrough]];
 	case PTPD_MGMT_ACTION_GET:
 		DBGV(" GET action\n");
 		outgoing->actionField = PTPD_MGMT_ACTION_RESPONSE;
@@ -1006,7 +1006,7 @@ ptpd_mgmt_error_e handleMMUtcProperties(MsgManagement *incoming,
 			ptpClock->timePropertiesDS.leap61 = IS_SET(data->utcv_li59_li61, PTPD_LI61);
 			ptpClock->record_update = TRUE;
 		}
-		/* intentionally fall through to GET case */
+		[[fallthrough]];
 	case PTPD_MGMT_ACTION_GET:
 		DBGV(" GET action\n");
 		outgoing->actionField = PTPD_MGMT_ACTION_RESPONSE;
@@ -1051,7 +1051,7 @@ ptpd_mgmt_error_e handleMMTraceabilityProperties(MsgManagement *incoming,
 			ptpClock->timePropertiesDS.timeTraceable = IS_SET(data->ftra_ttra, PTPD_TTRA);
 			ptpClock->record_update = TRUE;
 		}
-		/* intentionally fall through to GET case */
+		[[fallthrough]];
 	case PTPD_MGMT_ACTION_GET:
 		DBGV(" GET action\n");
 		outgoing->actionField = PTPD_MGMT_ACTION_RESPONSE;
@@ -1089,7 +1089,7 @@ ptpd_mgmt_error_e handleMMDelayMechanism(MsgManagement *incoming,
 		/* SET actions */
 		ptpClock->delayMechanism = data->delayMechanism;
 		ptpClock->record_update = TRUE;
-		/* intentionally fall through to GET case */
+		[[fallthrough]];
 	case PTPD_MGMT_ACTION_GET:
 		DBGV(" GET action\n");
 		outgoing->actionField = PTPD_MGMT_ACTION_RESPONSE;
@@ -1125,7 +1125,7 @@ ptpd_mgmt_error_e handleMMLogMinPdelayReqInterval(MsgManagement *incoming,
 		/* SET actions */
 		ptpClock->logMinPdelayReqInterval = data->logMinPdelayReqInterval;
 		ptpClock->record_update = TRUE;
-		/* intentionally fall through to GET case */
+		[[fallthrough]];
 	case PTPD_MGMT_ACTION_GET:
 		DBGV(" GET action\n");
 		outgoing->actionField = PTPD_MGMT_ACTION_RESPONSE;

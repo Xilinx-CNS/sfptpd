@@ -661,6 +661,7 @@ int sfptpd_config_parse_command_line_pass1(struct sfptpd_config *config,
 		switch (chr) {
 		case 'h':
 			config_display_help();
+			[[fallthrough]];
 		case OPT_VERSION:
 			/* Terminate early: not an error */
 			return ESHUTDOWN;

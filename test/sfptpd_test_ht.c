@@ -78,6 +78,7 @@ void random_addr(char addr[TEST_HOST_ADDR_LEN])
 		snprintf(intf, sizeof intf,
 			 "%%enp%ds%df%d",
 			 random_num(15), random_num(15), random_num(15));
+		[[fallthrough]];
 	case IPv6:
 		snprintf(addr, TEST_HOST_ADDR_LEN,
 			 "%x:%x:%x:%x:%x:%x:%x:%x%s",
