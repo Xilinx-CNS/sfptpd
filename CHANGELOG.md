@@ -8,10 +8,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added
+
+- Chrony integration improvements
+  - WIP: changes to how chrony offset is tracked. (SWPTP-1611)
+  - chrony + PPS example removed while combination is unsupported. (SWPTP-1611)
+  - restore chrony config on exit. (SWPTP-1612)
+  - new edit-chrony-cmdline script edits in place and is therefore compatible
+    with the built-in manipulation in sfptpd, unlike old script. (SWPTP-1613)
+  - add chrony clock control enable for when initially disabled. (SWPTP-1614)
+  - fix to report the chrony offset actually used in stats. (SWPTP-1616)
+  - understand non-NTP chrony peers, controlled by `allow_refclk`. (SWPTP-1618)
+
 ### Fixed
 
+- Issue SWPTP-1634
+  - Fix top clockfeed module that could cause assertion failure if engine
+    thread paused.
 - Issue SWPTP-1645
-    Fix parsing of phc_pps_methods configuration.
+  - Fix parsing of `phc_pps_methods` configuration.
 
 ## [3.9.0.1007] - 2025-11-07
 
