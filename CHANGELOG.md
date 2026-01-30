@@ -4,7 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-(c) Copyright 2012-2025 Advanced Micro Devices, Inc.
+(c) Copyright 2012-2026 Advanced Micro Devices, Inc.
+
+## Unreleased
+
+### Fixed
+
+- Issue SWPTP-1645
+    Fix parsing of phc_pps_methods configuration.
 
 ## [3.9.0.1007] - 2025-11-07
 
