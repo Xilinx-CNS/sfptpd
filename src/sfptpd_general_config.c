@@ -541,7 +541,7 @@ static int parse_phc_pps_methods(struct sfptpd_config_section *section, const ch
         }
 
         if (i < SFPTPD_PPS_METHOD_MAX)
-                general->selection_policy.rules[i++] = SFPTPD_PPS_METHOD_MAX;
+                general->phc_pps_method[i++] = SFPTPD_PPS_METHOD_MAX;
 
         return 0;
 }
