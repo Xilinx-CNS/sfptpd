@@ -16,7 +16,7 @@ nm.slack_notify() {
     }
 
     stage('build') {
-      sh('make')
+      sh('scl enable gcc-toolset-10 make')
     }
 
     stage('check') {
