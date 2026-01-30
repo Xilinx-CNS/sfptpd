@@ -44,7 +44,7 @@ sed -i -E 's,(-p )?-u[ _]sfptpd ?,,g' scripts/systemd/sfptpd.service
 
 %build
 export prefix=%{_prefix}
-scl enable devtoolset-8 '%make_build'
+scl enable devtoolset-10 '%make_build'
 
 %install
 export CC='false # no compilation at installation stage #'

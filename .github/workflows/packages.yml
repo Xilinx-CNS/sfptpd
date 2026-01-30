@@ -23,7 +23,7 @@ jobs:
             extra_build_deps: systemd-rpm-macros
           - dist: el8
             build_os: almalinux/8
-            extra_build_deps: systemd-rpm-macros gcc-toolset-10
+            extra_build_deps: systemd-rpm-macros gcc-toolset-10-gcc
     runs-on: ubuntu-latest
     env:
       BUILD_DEPS: rpm-build git gcc make libmnl-devel libcap-devel python3-devel
@@ -80,7 +80,7 @@ jobs:
           SFPTPD_ARCH=$(uname -i)
           SFPTPD_VERSION=$(scripts/sfptpd_versioning read)
           SFPTPD_STAGING=sfptpd-${SFPTPD_VERSION}.${SFPTPD_ARCH}
-          make flat_install DESTDIR=${SFPTPD_STAGING} EXTRA_CFLAGS="-O2"
+          scl enable gcc-toolset-10 'make flat_install DESTDIR=${SFPTPD_STAGING} EXTRA_CFLAGS="-O2"'
           echo 'Built on EL8 to support glibc 2.28 or later' > README.ThisBuild
           mkdir TGZ
           tar cvzf TGZ/${SFPTPD_STAGING}.tgz ${SFPTPD_STAGING} README.ThisBuild
