@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - add chrony clock control enable for when initially disabled. (SWPTP-1614)
   - fix to report the chrony offset actually used in stats. (SWPTP-1616)
   - understand non-NTP chrony peers, controlled by `allow_refclk`. (SWPTP-1618)
+- Add `--cpu` option to affinitise all or some threads. (SWPTP-1626)
 
 ### Fixed
 
