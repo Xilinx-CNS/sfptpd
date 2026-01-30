@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-(c) Copyright 2012-2025 Advanced Micro Devices, Inc.
+(c) Copyright 2012-2026 Advanced Micro Devices, Inc.
 
 ## Unreleased
 
@@ -14,6 +14,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Avoid aborting when a clock name would exceed 63 characters.
 - Issue SWPTP-1570
   - Ensure multicast used when multiple PTP instances per interface.
+- Issue SWPTP-1597
+  - Eliminate risk of file descriptor leak in check for incompatible
+    programs running.
+- Issue SWPTP-1645
+    Fix parsing of phc_pps_methods configuration.
 
 ## [3.8.1.1004] - 2025-02-14
 
