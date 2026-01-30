@@ -33,4 +33,5 @@ jobs:
       - name: build-ndebug
         run: |
           cd $GITHUB_WORKSPACE/sfptpd-src
-          CFLAGS="-DNDEBUG=1" make -j 2 clean all
+          make clean
+          CFLAGS="-DNDEBUG=1" make -j 2 all
