@@ -29,3 +29,8 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/sfptpd-src
           make -j 2 fast_test
+
+      - name: build-ndebug
+        run: |
+          cd $GITHUB_WORKSPACE/sfptpd-src
+          CFLAGS="-DNDEBUG=1" make -j 2 clean all
