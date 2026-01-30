@@ -23,7 +23,7 @@ jobs:
             extra_build_deps: systemd-rpm-macros
           - dist: el8
             build_os: almalinux/8
-            extra_build_deps: systemd-rpm-macros
+            extra_build_deps: systemd-rpm-macros gcc-toolset-10
     runs-on: ubuntu-latest
     env:
       BUILD_DEPS: rpm-build git gcc make libmnl-devel libcap-devel python3-devel
