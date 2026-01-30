@@ -23,7 +23,7 @@ jobs:
             extra_build_deps: systemd-rpm-macros
           - dist: el8
             build_os: almalinux/8
-            extra_build_deps: systemd-rpm-macros gcc-toolset-10-gcc
+            extra_build_deps: systemd-rpm-macros gcc-toolset-10
     runs-on: ubuntu-latest
     env:
       BUILD_DEPS: rpm-build git gcc make libmnl-devel libcap-devel python3-devel
@@ -57,39 +57,6 @@ jobs:
         with:
           name: sfptpd-${{ env.SFPTPD_VERSION }}-${{ matrix.dist }}-rpms
           path: ~/rpmbuild/RPMS/
-          if-no-files-found: error
-
-  bin-tgz:
-    name: binary tarball
-    runs-on: ubuntu-latest
-    env:
-      BUILD_DEPS: gcc git make libmnl-devel libcap-devel
-    container:
-      image: ghcr.io/almalinux/8-base:latest
-    steps:
-      - name: install build prerequisites
-        run: yum install -y ${BUILD_DEPS}
-      - name: checkout sfptpd
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: build binary
-        run: |
-          git config --global --add safe.directory $(pwd)
-          make patch_version
-          SFPTPD_ARCH=$(uname -i)
-          SFPTPD_VERSION=$(scripts/sfptpd_versioning read)
-          SFPTPD_STAGING=sfptpd-${SFPTPD_VERSION}.${SFPTPD_ARCH}
-          scl enable gcc-toolset-10 'make flat_install DESTDIR=${SFPTPD_STAGING} EXTRA_CFLAGS="-O2"'
-          echo 'Built on EL8 to support glibc 2.28 or later' > README.ThisBuild
-          mkdir TGZ
-          tar cvzf TGZ/${SFPTPD_STAGING}.tgz ${SFPTPD_STAGING} README.ThisBuild
-          printf "SFPTPD_VERSION=$SFPTPD_VERSION" >> "$GITHUB_ENV"
-      - name: publish binary archive
-        uses: actions/upload-artifact@v4
-        with:
-          name: sfptpd-${{ env.SFPTPD_VERSION }}-bin
-          path: TGZ
           if-no-files-found: error
 
   deb:
