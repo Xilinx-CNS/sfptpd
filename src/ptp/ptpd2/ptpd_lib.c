@@ -403,15 +403,15 @@ void ptpd_destroy(struct ptpd_global_context *ptpd)
 {
 	struct ptpd_intf_context *interface, *next;
 
+	if (ptpd == NULL) {
+		ERROR("null ptpd context supplied\n");
+		return;
+	}
+
 	/* Destroy interfaces */
 	for (interface = ptpd->interfaces; interface; interface = next) {
 		next = interface->next;
 		ptpd_interface_destroy(interface);
-	}
-
-	if (ptpd == NULL) {
-		ERROR("null ptpd context supplied\n");
-		return;
 	}
 
 	free(ptpd);
