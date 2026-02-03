@@ -72,7 +72,7 @@ struct freerun_instance {
  ****************************************************************************/
 
 static int parse_interface(struct sfptpd_config_section *section, const char *option,
-			   unsigned int num_params, const char * const params[])
+			   unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_freerun_module_config_t *fr = (sfptpd_freerun_module_config_t *)section;
 	assert(num_params == 1);
@@ -83,7 +83,7 @@ static int parse_interface(struct sfptpd_config_section *section, const char *op
 }
 
 static int parse_priority(struct sfptpd_config_section *section, const char *option,
-			  unsigned int num_params, const char * const params[])
+			  unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_freerun_module_config_t *fr = (sfptpd_freerun_module_config_t *)section;
 	int tokens, priority;
@@ -98,7 +98,7 @@ static int parse_priority(struct sfptpd_config_section *section, const char *opt
 }
 
 static int parse_clock_class(struct sfptpd_config_section *section, const char *option,
-			     unsigned int num_params, const char * const params[])
+			     unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_freerun_module_config_t *fr = (sfptpd_freerun_module_config_t *)section;
@@ -118,7 +118,7 @@ static int parse_clock_class(struct sfptpd_config_section *section, const char *
 }
 
 static int parse_clock_accuracy(struct sfptpd_config_section *section, const char *option,
-				unsigned int num_params, const char * const params[])
+				unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_freerun_module_config_t *fr = (sfptpd_freerun_module_config_t *)section;
 	int tokens;
@@ -138,7 +138,7 @@ static int parse_clock_accuracy(struct sfptpd_config_section *section, const cha
 
 
 static int parse_clock_traceability(struct sfptpd_config_section *section, const char *option,
-				    unsigned int num_params, const char * const params[])
+				    unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_freerun_module_config_t *fr = (sfptpd_freerun_module_config_t *)section;

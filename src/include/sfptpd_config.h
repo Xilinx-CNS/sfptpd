@@ -551,9 +551,6 @@ typedef struct sfptpd_config {
 /* Config option parsers have an optional final cookie argument */
 typedef int (*sfptpd_config_option_parser_t)(
 		struct sfptpd_config_section *, const char *option,
-		unsigned int num_params, const char * const *params);
-typedef int (*sfptpd_config_option_parser_real_t)(
-		struct sfptpd_config_section *, const char *option,
 		unsigned int num_params, const char * const *params,
 		int cookie);
 

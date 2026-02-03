@@ -94,7 +94,7 @@ const struct sfptpd_ptp_profile_def *sfptpd_ptp_get_profile_def(enum sfptpd_ptp_
  ****************************************************************************/
 
 static int parse_ptp_profile(struct sfptpd_config_section *section, const char *option,
-	                     unsigned int num_params, const char * const params[])
+	                     unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
@@ -123,7 +123,7 @@ static int parse_ptp_profile(struct sfptpd_config_section *section, const char *
 }
 
 static int parse_ptp_version(struct sfptpd_config_section *section, const char *option,
-	                     unsigned int num_params, const char * const params[])
+	                     unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
@@ -141,7 +141,7 @@ static int parse_ptp_version(struct sfptpd_config_section *section, const char *
 }
 
 static int parse_ptp_mode(struct sfptpd_config_section *section, const char *option,
-			  unsigned int num_params, const char * const params[])
+			  unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
@@ -171,7 +171,7 @@ static int parse_ptp_mode(struct sfptpd_config_section *section, const char *opt
 }
 
 static int parse_interface(struct sfptpd_config_section *section, const char *option,
-			   unsigned int num_params, const char * const params[])
+			   unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
@@ -181,7 +181,7 @@ static int parse_interface(struct sfptpd_config_section *section, const char *op
 }
 
 static int parse_transport(struct sfptpd_config_section *section, const char *option,
-			   unsigned int num_params, const char * const params[])
+			   unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
@@ -199,7 +199,7 @@ static int parse_transport(struct sfptpd_config_section *section, const char *op
 }
 
 static int parse_scope(struct sfptpd_config_section *section, const char *option,
-		       unsigned int num_params, const char * const params[])
+		       unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
@@ -217,7 +217,7 @@ static int parse_scope(struct sfptpd_config_section *section, const char *option
 }
 
 static int parse_priority(struct sfptpd_config_section *section, const char *option,
-			  unsigned int num_params, const char * const params[])
+			  unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	int tokens, priority;
@@ -232,7 +232,7 @@ static int parse_priority(struct sfptpd_config_section *section, const char *opt
 }
 
 static int parse_sync_threshold(struct sfptpd_config_section *section, const char *option,
-				unsigned int num_params, const char * const params[])
+				unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	int tokens;
@@ -248,7 +248,7 @@ static int parse_sync_threshold(struct sfptpd_config_section *section, const cha
 }
 
 static int parse_timestamping(struct sfptpd_config_section *section, const char *option,
-			      unsigned int num_params, const char * const params[])
+			      unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
@@ -268,7 +268,7 @@ static int parse_timestamping(struct sfptpd_config_section *section, const char 
 }
 
 static int parse_pkt_dump(struct sfptpd_config_section *section, const char *option,
-			  unsigned int num_params, const char * const params[])
+			  unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	ptp->ptpd_intf.displayPackets = TRUE;
@@ -276,7 +276,7 @@ static int parse_pkt_dump(struct sfptpd_config_section *section, const char *opt
 }
 
 static int parse_pps_log(struct sfptpd_config_section *section, const char *option,
-			 unsigned int num_params, const char * const params[])
+			 unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	ptp->pps_logging = true;
@@ -284,7 +284,7 @@ static int parse_pps_log(struct sfptpd_config_section *section, const char *opti
 }
 
 static int parse_tx_latency(struct sfptpd_config_section *section, const char *option,
-			    unsigned int num_params, const char * const params[])
+			    unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
@@ -301,7 +301,7 @@ static int parse_tx_latency(struct sfptpd_config_section *section, const char *o
 }
 
 static int parse_rx_latency(struct sfptpd_config_section *section, const char *option,
-			    unsigned int num_params, const char * const params[])
+			    unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
@@ -317,7 +317,7 @@ static int parse_rx_latency(struct sfptpd_config_section *section, const char *o
 }
 
 static int parse_delay_mechanism(struct sfptpd_config_section *section, const char *option,
-				 unsigned int num_params, const char * const params[])
+				 unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
@@ -343,7 +343,7 @@ static int parse_delay_mechanism(struct sfptpd_config_section *section, const ch
 }
 
 static int parse_network_mode(struct sfptpd_config_section *section, const char *option,
-			      unsigned int num_params, const char * const params[])
+			      unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
@@ -365,7 +365,7 @@ static int parse_network_mode(struct sfptpd_config_section *section, const char 
 }
 
 static int parse_multicast_ttl(struct sfptpd_config_section *section, const char *option,
-			       unsigned int num_params, const char * const params[])
+			       unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
@@ -379,7 +379,7 @@ static int parse_multicast_ttl(struct sfptpd_config_section *section, const char
 }
 
 static int parse_utc_offset(struct sfptpd_config_section *section, const char *option,
-			    unsigned int num_params, const char * const params[])
+			    unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
@@ -401,7 +401,7 @@ static int parse_utc_offset(struct sfptpd_config_section *section, const char *o
 }
 
 static int parse_utc_valid_handling(struct sfptpd_config_section *section, const char *option,
-				    unsigned int num_params, const char * const params[])
+				    unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params >= 1);
@@ -455,7 +455,7 @@ static int parse_utc_valid_handling(struct sfptpd_config_section *section, const
 
 
 static int parse_ptp_timescale(struct sfptpd_config_section *section, const char *option,
-			       unsigned int num_params, const char * const params[])
+			       unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
@@ -474,7 +474,7 @@ static int parse_ptp_timescale(struct sfptpd_config_section *section, const char
 
 
 static int parse_ptp_domain(struct sfptpd_config_section *section, const char *option,
-			    unsigned int num_params, const char * const params[])
+			    unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
@@ -495,7 +495,7 @@ static int parse_ptp_domain(struct sfptpd_config_section *section, const char *o
 }
 
 static int parse_ptp_mgmt_msgs(struct sfptpd_config_section *section, const char *option,
-			       unsigned int num_params, const char * const params[])
+			       unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
@@ -515,7 +515,7 @@ static int parse_ptp_mgmt_msgs(struct sfptpd_config_section *section, const char
 }
 
 static int parse_ptp_timing_acl_allow(struct sfptpd_config_section *section, const char *option,
-				       unsigned int num_params, const char * const params[])
+				       unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params >= 1);
@@ -526,7 +526,7 @@ static int parse_ptp_timing_acl_allow(struct sfptpd_config_section *section, con
 }
 
 static int parse_ptp_timing_acl_deny(struct sfptpd_config_section *section, const char *option,
-				     unsigned int num_params, const char * const params[])
+				     unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params >= 1);
@@ -537,7 +537,7 @@ static int parse_ptp_timing_acl_deny(struct sfptpd_config_section *section, cons
 }
 
 static int parse_ptp_mgmt_acl_allow(struct sfptpd_config_section *section, const char *option,
-				     unsigned int num_params, const char * const params[])
+				     unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params >= 1);
@@ -548,7 +548,7 @@ static int parse_ptp_mgmt_acl_allow(struct sfptpd_config_section *section, const
 }
 
 static int parse_ptp_mgmt_acl_deny(struct sfptpd_config_section *section, const char *option,
-				   unsigned int num_params, const char * const params[])
+				   unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params >= 1);
@@ -559,7 +559,7 @@ static int parse_ptp_mgmt_acl_deny(struct sfptpd_config_section *section, const 
 }
 
 static int parse_ptp_mon_acl_allow(struct sfptpd_config_section *section, const char *option,
-				    unsigned int num_params, const char * const params[])
+				    unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params >= 1);
@@ -570,7 +570,7 @@ static int parse_ptp_mon_acl_allow(struct sfptpd_config_section *section, const 
 }
 
 static int parse_ptp_mon_acl_deny(struct sfptpd_config_section *section, const char *option,
-				  unsigned int num_params, const char * const params[])
+				  unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params >= 1);
@@ -581,7 +581,7 @@ static int parse_ptp_mon_acl_deny(struct sfptpd_config_section *section, const c
 }
 
 static int parse_ptp_timing_acl_order(struct sfptpd_config_section *section, const char *option,
-				      unsigned int num_params, const char * const params[])
+				      unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
@@ -590,7 +590,7 @@ static int parse_ptp_timing_acl_order(struct sfptpd_config_section *section, con
 }
 
 static int parse_ptp_mgmt_acl_order(struct sfptpd_config_section *section, const char *option,
-				    unsigned int num_params, const char * const params[])
+				    unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
@@ -599,7 +599,7 @@ static int parse_ptp_mgmt_acl_order(struct sfptpd_config_section *section, const
 }
 
 static int parse_ptp_mon_acl_order(struct sfptpd_config_section *section, const char *option,
-				   unsigned int num_params, const char * const params[])
+				   unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
@@ -608,7 +608,7 @@ static int parse_ptp_mon_acl_order(struct sfptpd_config_section *section, const 
 }
 
 static int parse_mon_meinberg_netsync(struct sfptpd_config_section *section, const char *option,
-				      unsigned int num_params, const char * const params[])
+				      unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	ptp->ptpd_port.monMeinbergNetSync = TRUE;
@@ -616,7 +616,7 @@ static int parse_mon_meinberg_netsync(struct sfptpd_config_section *section, con
 }
 
 static int parse_announce_pkt_interval(struct sfptpd_config_section *section, const char *option,
-				       unsigned int num_params, const char * const params[])
+				       unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	const sfptpd_ptp_profile_def_t *profile = sfptpd_ptp_get_profile_def(ptp->profile);
@@ -639,7 +639,7 @@ static int parse_announce_pkt_interval(struct sfptpd_config_section *section, co
 }
 
 static int parse_announce_pkt_timeout(struct sfptpd_config_section *section, const char *option,
-				      unsigned int num_params, const char * const params[])
+				      unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	const sfptpd_ptp_profile_def_t *profile = sfptpd_ptp_get_profile_def(ptp->profile);
@@ -662,7 +662,7 @@ static int parse_announce_pkt_timeout(struct sfptpd_config_section *section, con
 }
 
 static int parse_sync_pkt_interval(struct sfptpd_config_section *section, const char *option,
-				   unsigned int num_params, const char * const params[])
+				   unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	const sfptpd_ptp_profile_def_t *profile = sfptpd_ptp_get_profile_def(ptp->profile);
@@ -688,7 +688,7 @@ static int parse_sync_pkt_interval(struct sfptpd_config_section *section, const 
 }
 
 static int parse_sync_pkt_timeout(struct sfptpd_config_section *section, const char *option,
-				  unsigned int num_params, const char * const params[])
+				  unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
@@ -710,7 +710,7 @@ static int parse_sync_pkt_timeout(struct sfptpd_config_section *section, const c
 }
 
 static int parse_delayreq_pkt_interval(struct sfptpd_config_section *section, const char *option,
-				       unsigned int num_params, const char * const params[])
+				       unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	const sfptpd_ptp_profile_def_t *profile = sfptpd_ptp_get_profile_def(ptp->profile);
@@ -739,7 +739,7 @@ static int parse_delayreq_pkt_interval(struct sfptpd_config_section *section, co
 }
 
 static int parse_delayresp_pkt_timeout(struct sfptpd_config_section *section, const char *option,
-				       unsigned int num_params, const char * const params[])
+				       unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
@@ -761,7 +761,7 @@ static int parse_delayresp_pkt_timeout(struct sfptpd_config_section *section, co
 }
 
 static int parse_max_missing_delayresps(struct sfptpd_config_section *section, const char *option,
-				        unsigned int num_params, const char * const params[])
+				        unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	int tokens;
@@ -790,7 +790,7 @@ static int parse_max_missing_delayresps(struct sfptpd_config_section *section, c
 }
 
 static int parse_max_foreign_records(struct sfptpd_config_section *section, const char *option,
-				     unsigned int num_params, const char * const params[])
+				     unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
@@ -812,7 +812,7 @@ static int parse_max_foreign_records(struct sfptpd_config_section *section, cons
 }
 
 static int parse_bmc_priority1(struct sfptpd_config_section *section, const char *option,
-			       unsigned int num_params, const char * const params[])
+			       unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
@@ -834,7 +834,7 @@ static int parse_bmc_priority1(struct sfptpd_config_section *section, const char
 }
 
 static int parse_bmc_priority2(struct sfptpd_config_section *section, const char *option,
-			       unsigned int num_params, const char * const params[])
+			       unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
@@ -856,7 +856,7 @@ static int parse_bmc_priority2(struct sfptpd_config_section *section, const char
 }
 
 static int parse_trace_level(struct sfptpd_config_section *section, const char *option,
-			     unsigned int num_params, const char * const params[])
+			     unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
@@ -872,7 +872,8 @@ static int parse_trace_level(struct sfptpd_config_section *section, const char *
 
 static int parse_ptp_delay_resp_ignore_port_id(struct sfptpd_config_section *section, const char *option,
                                                unsigned int num_params,
-                                               const char * const params[])
+                                               const char * const params[],
+					       int)
 {
 	int rc = 0;
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
@@ -889,7 +890,7 @@ static int parse_ptp_delay_resp_ignore_port_id(struct sfptpd_config_section *sec
 }
 
 static int parse_pid_filter_kp(struct sfptpd_config_section *section, const char *option,
-			       unsigned int num_params, const char * const params[])
+			       unsigned int num_params, const char * const params[], int)
 {
 	assert(section != NULL);
 	int tokens;
@@ -910,7 +911,7 @@ static int parse_pid_filter_kp(struct sfptpd_config_section *section, const char
 }
 
 static int parse_pid_filter_ki(struct sfptpd_config_section *section, const char *option,
-			       unsigned int num_params, const char * const params[])
+			       unsigned int num_params, const char * const params[], int)
 {
 	assert(section != NULL);
 	int tokens;
@@ -931,7 +932,7 @@ static int parse_pid_filter_ki(struct sfptpd_config_section *section, const char
 }
 
 static int parse_outlier_filter_size(struct sfptpd_config_section *section, const char *option,
-				unsigned int num_params, const char * const params[])
+				unsigned int num_params, const char * const params[], int)
 {
 	assert(section != NULL);
 	int tokens, outlier_filter_size;
@@ -953,7 +954,7 @@ static int parse_outlier_filter_size(struct sfptpd_config_section *section, cons
 }
 
 static int parse_outlier_filter_adaption(struct sfptpd_config_section *section, const char *option,
-				unsigned int num_params, const char * const params[])
+				unsigned int num_params, const char * const params[], int)
 {
 	assert(section != NULL);
 	int tokens;
@@ -975,7 +976,7 @@ static int parse_outlier_filter_adaption(struct sfptpd_config_section *section, 
 }
 
 static int parse_outlier_filter_drift(struct sfptpd_config_section *section, const char *option,
-				      unsigned int num_params, const char * const params[])
+				      unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
@@ -993,7 +994,7 @@ static int parse_outlier_filter_drift(struct sfptpd_config_section *section, con
 }
 
 static int parse_mpd_filter_size(struct sfptpd_config_section *section, const char *option,
-				 unsigned int num_params, const char * const params[])
+				 unsigned int num_params, const char * const params[], int)
 {
 	assert(section != NULL);
 	int tokens, path_delay_filter_size;
@@ -1015,7 +1016,7 @@ static int parse_mpd_filter_size(struct sfptpd_config_section *section, const ch
 }
 
 static int parse_mpd_filter_ageing(struct sfptpd_config_section *section, const char *option,
-				   unsigned int num_params, const char * const params[])
+				   unsigned int num_params, const char * const params[], int)
 {
 	assert(section != NULL);
 	int tokens;
@@ -1036,7 +1037,7 @@ static int parse_mpd_filter_ageing(struct sfptpd_config_section *section, const 
 }
 
 static int parse_fir_filter_size(struct sfptpd_config_section *section, const char *option,
-				 unsigned int num_params, const char * const params[])
+				 unsigned int num_params, const char * const params[], int)
 {
 	assert(section != NULL);
 	int tokens, filter_size;
@@ -1059,7 +1060,7 @@ static int parse_fir_filter_size(struct sfptpd_config_section *section, const ch
 
 
 static int parse_remote_monitor(struct sfptpd_config_section *section, const char *option,
-				unsigned int num_params, const char * const params[])
+				unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 0);
@@ -1070,7 +1071,7 @@ static int parse_remote_monitor(struct sfptpd_config_section *section, const cha
 
 
 static int parse_mon_monitor_address(struct sfptpd_config_section *section, const char *option,
-				     unsigned int num_params, const char * const params[])
+				     unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	unsigned int i, j;
@@ -1102,7 +1103,7 @@ static int parse_mon_monitor_address(struct sfptpd_config_section *section, cons
 
 
 static int parse_mon_rx_sync_timing_data(struct sfptpd_config_section *section, const char *option,
-					 unsigned int num_params, const char * const params[])
+					 unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	int tokens, logging_skip;
@@ -1125,7 +1126,7 @@ static int parse_mon_rx_sync_timing_data(struct sfptpd_config_section *section, 
 
 
 static int parse_mon_rx_sync_computed_data(struct sfptpd_config_section *section, const char *option,
-					   unsigned int num_params, const char * const params[])
+					   unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	int tokens, logging_skip;
@@ -1148,7 +1149,7 @@ static int parse_mon_rx_sync_computed_data(struct sfptpd_config_section *section
 
 
 static int parse_mon_tx_event_timestamps(struct sfptpd_config_section *section, const char *option,
-					 unsigned int num_params, const char * const params[])
+					 unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	int tokens, logging_skip;
@@ -1171,7 +1172,7 @@ static int parse_mon_tx_event_timestamps(struct sfptpd_config_section *section, 
 
 
 static int parse_mon_slave_status(struct sfptpd_config_section *section, const char *option,
-				  unsigned int num_params, const char * const params[])
+				  unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 0);
@@ -1181,7 +1182,7 @@ static int parse_mon_slave_status(struct sfptpd_config_section *section, const c
 }
 
 static int parse_announce_comm_caps(struct sfptpd_config_section *section, const char *option,
-				    unsigned int num_params, const char * const params[])
+				    unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
@@ -1207,7 +1208,7 @@ static int parse_announce_comm_caps(struct sfptpd_config_section *section, const
 }
 
 static int parse_onload_ext(struct sfptpd_config_section *section, const char *option,
-			    unsigned int num_params, const char * const params[])
+			    unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
@@ -1224,7 +1225,7 @@ static int parse_onload_ext(struct sfptpd_config_section *section, const char *o
 }
 
 static int parse_bmc_discriminator(struct sfptpd_config_section *section, const char *option,
-				   unsigned int num_params, const char * const params[])
+				   unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	long double threshold;
@@ -1250,7 +1251,7 @@ static int parse_bmc_discriminator(struct sfptpd_config_section *section, const 
 }
 
 static int parse_lacp_bypass(struct sfptpd_config_section *section, const char *option,
-			     unsigned int num_params, const char * const params[])
+			     unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	assert(num_params == 1);
@@ -1271,7 +1272,7 @@ static int parse_lacp_bypass(struct sfptpd_config_section *section, const char *
 }
 
 static int parse_on_alarm_trace_ptp(struct sfptpd_config_section *section, const char *option,
-				    unsigned int num_params, const char * const params[])
+				    unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_ptp_module_config_t *ptp = (sfptpd_ptp_module_config_t *)section;
 	ptp->on_alarm_trace_ptp = TRUE;

@@ -193,7 +193,7 @@ static void ntp_send_clustering_input(ntp_module_t *ntp);
  ****************************************************************************/
 
 static int parse_priority(struct sfptpd_config_section *section, const char *option,
-			  unsigned int num_params, const char * const params[])
+			  unsigned int num_params, const char * const params[], int cookie)
 {
 	sfptpd_ntp_module_config_t *ntp = (sfptpd_ntp_module_config_t *)section;
 	int tokens, priority;
@@ -209,7 +209,7 @@ static int parse_priority(struct sfptpd_config_section *section, const char *opt
 
 
 static int parse_sync_threshold(struct sfptpd_config_section *section, const char *option,
-				unsigned int num_params, const char * const params[])
+				unsigned int num_params, const char * const params[], int cookie)
 {
 	sfptpd_ntp_module_config_t *ntp = (sfptpd_ntp_module_config_t *)section;
 	int tokens;
@@ -225,7 +225,7 @@ static int parse_sync_threshold(struct sfptpd_config_section *section, const cha
 }
 
 static int parse_ntp_poll_interval(struct sfptpd_config_section *section, const char *option,
-				   unsigned int num_params, const char * const params[])
+				   unsigned int num_params, const char * const params[], int cookie)
 {
 	int tokens, interval;
 	sfptpd_ntp_module_config_t *ntp = (sfptpd_ntp_module_config_t *)section;
@@ -246,7 +246,7 @@ static int parse_ntp_poll_interval(struct sfptpd_config_section *section, const 
 }
 
 static int parse_ntp_key(struct sfptpd_config_section *section, const char *option,
-			 unsigned int num_params, const char * const params[])
+			 unsigned int num_params, const char * const params[], int cookie)
 {
 	sfptpd_ntp_module_config_t *ntp = (sfptpd_ntp_module_config_t *)section;
 	assert(num_params == 2);

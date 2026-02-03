@@ -370,7 +370,7 @@ static int config_parse_option(struct sfptpd_config *config,
 			}
 
 			/* Parse the option! */
-			rc = ((sfptpd_config_option_parser_real_t)opt->parse)(section, opt->option,
+			rc = opt->parse(section, opt->option,
 					num_params, tokens + 1, opt->cookie);
 
 			if (rc == EINVAL) {
@@ -398,7 +398,7 @@ static int config_parse_option(struct sfptpd_config *config,
 				     s != NULL;
 				     s = sfptpd_config_category_next_instance(s)) {
 					rc = opt->parse(s, opt->option,
-							num_params, tokens + 1);
+							num_params, tokens + 1, opt->cookie);
 					assert(rc == 0);
 					TRACE_L3("config [%s]: %s %c %s\n",
 						 s->name, opt->option,

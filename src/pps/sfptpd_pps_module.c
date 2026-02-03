@@ -252,7 +252,7 @@ static const struct sfptpd_timespec pps_alarm_interval = {1, 100000000};
  ****************************************************************************/
 
 static int parse_interface(struct sfptpd_config_section *section, const char *option,
-			   unsigned int num_params, const char * const params[])
+			   unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
 	assert(num_params == 1);
@@ -263,7 +263,7 @@ static int parse_interface(struct sfptpd_config_section *section, const char *op
 }
 
 static int parse_pps_delay(struct sfptpd_config_section *section, const char *option,
-			   unsigned int num_params, const char * const params[])
+			   unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
 	assert(num_params == 1);
@@ -277,7 +277,7 @@ static int parse_pps_delay(struct sfptpd_config_section *section, const char *op
 }
 
 static int parse_pin(struct sfptpd_config_section *section, const char *option,
-		     unsigned int num_params, const char * const params[])
+		     unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
 	int tokens, pin;
@@ -292,7 +292,7 @@ static int parse_pin(struct sfptpd_config_section *section, const char *option,
 }
 
 static int parse_function(struct sfptpd_config_section *section, const char *option,
-			  unsigned int num_params, const char * const params[])
+			  unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
 	assert(num_params == 1);
@@ -302,7 +302,7 @@ static int parse_function(struct sfptpd_config_section *section, const char *opt
 }
 
 static int parse_priority(struct sfptpd_config_section *section, const char *option,
-			  unsigned int num_params, const char * const params[])
+			  unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
 	int tokens, priority;
@@ -318,7 +318,7 @@ static int parse_priority(struct sfptpd_config_section *section, const char *opt
 
 
 static int parse_sync_threshold(struct sfptpd_config_section *section, const char *option,
-				unsigned int num_params, const char * const params[])
+				unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
 	int tokens;
@@ -335,7 +335,7 @@ static int parse_sync_threshold(struct sfptpd_config_section *section, const cha
 
 
 static int parse_time_of_day(struct sfptpd_config_section *section, const char *option,
-			     unsigned int num_params, const char * const params[])
+			     unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
 	assert(num_params == 1);
@@ -352,7 +352,7 @@ static int parse_time_of_day(struct sfptpd_config_section *section, const char *
 
 
 static int parse_master_clock_class(struct sfptpd_config_section *section, const char *option,
-				    unsigned int num_params, const char * const params[])
+				    unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
@@ -373,7 +373,7 @@ static int parse_master_clock_class(struct sfptpd_config_section *section, const
 
 
 static int parse_master_time_source(struct sfptpd_config_section *section, const char *option,
-				    unsigned int num_params, const char * const params[])
+				    unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
@@ -398,7 +398,7 @@ static int parse_master_time_source(struct sfptpd_config_section *section, const
 
 
 static int parse_master_accuracy(struct sfptpd_config_section *section, const char *option,
-				 unsigned int num_params, const char * const params[])
+				 unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
 	int tokens;
@@ -418,7 +418,7 @@ static int parse_master_accuracy(struct sfptpd_config_section *section, const ch
 
 
 static int parse_master_traceability(struct sfptpd_config_section *section, const char *option,
-				     unsigned int num_params, const char * const params[])
+				     unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
@@ -441,7 +441,7 @@ static int parse_master_traceability(struct sfptpd_config_section *section, cons
 
 
 static int parse_steps_removed(struct sfptpd_config_section *section, const char *option,
-			       unsigned int num_params, const char * const params[])
+			       unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
 	int tokens, steps_removed;
@@ -457,7 +457,7 @@ static int parse_steps_removed(struct sfptpd_config_section *section, const char
 
 
 static int parse_pid_filter_kp(struct sfptpd_config_section *section, const char *option,
-			       unsigned int num_params, const char * const params[])
+			       unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
 	int tokens;
@@ -480,7 +480,7 @@ static int parse_pid_filter_kp(struct sfptpd_config_section *section, const char
 
 
 static int parse_pid_filter_ki(struct sfptpd_config_section *section, const char *option,
-			       unsigned int num_params, const char * const params[])
+			       unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
 	int tokens;
@@ -503,7 +503,7 @@ static int parse_pid_filter_ki(struct sfptpd_config_section *section, const char
 
 
 static int parse_outlier_filter_type(struct sfptpd_config_section *section, const char *option,
-				     unsigned int num_params, const char * const params[])
+				     unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
@@ -522,7 +522,7 @@ static int parse_outlier_filter_type(struct sfptpd_config_section *section, cons
 
 
 static int parse_outlier_filter_size(struct sfptpd_config_section *section, const char *option,
-				     unsigned int num_params, const char * const params[])
+				     unsigned int num_params, const char * const params[], int)
 {
 	int tokens, size;
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
@@ -546,7 +546,7 @@ static int parse_outlier_filter_size(struct sfptpd_config_section *section, cons
 
 
 static int parse_outlier_adaption(struct sfptpd_config_section *section, const char *option,
-				  unsigned int num_params, const char * const params[])
+				  unsigned int num_params, const char * const params[], int)
 {
 	int tokens;
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
@@ -568,7 +568,7 @@ static int parse_outlier_adaption(struct sfptpd_config_section *section, const c
 
 
 static int parse_outlier_filter_drift(struct sfptpd_config_section *section, const char *option,
-				      unsigned int num_params, const char * const params[])
+				      unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
@@ -587,7 +587,7 @@ static int parse_outlier_filter_drift(struct sfptpd_config_section *section, con
 
 
 static int parse_fir_filter_size(struct sfptpd_config_section *section, const char *option,
-				 unsigned int num_params, const char * const params[])
+				 unsigned int num_params, const char * const params[], int)
 {
 	int tokens, size;
 	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;

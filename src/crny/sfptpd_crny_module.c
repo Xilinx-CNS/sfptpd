@@ -290,7 +290,7 @@ static void ntp_send_clustering_input(crny_module_t *ntp, struct ntp_state *stat
  ****************************************************************************/
 
 static int parse_priority(struct sfptpd_config_section *section, const char *option,
-			  unsigned int num_params, const char * const params[])
+			  unsigned int num_params, const char * const params[], int cookie)
 {
 	sfptpd_crny_module_config_t *ntp = (sfptpd_crny_module_config_t *)section;
 	int tokens, priority;
@@ -306,7 +306,7 @@ static int parse_priority(struct sfptpd_config_section *section, const char *opt
 
 
 static int parse_sync_threshold(struct sfptpd_config_section *section, const char *option,
-				unsigned int num_params, const char * const params[])
+				unsigned int num_params, const char * const params[], int cookie)
 {
 	sfptpd_crny_module_config_t *ntp = (sfptpd_crny_module_config_t *)section;
 	int tokens;
@@ -322,7 +322,7 @@ static int parse_sync_threshold(struct sfptpd_config_section *section, const cha
 }
 
 static int parse_ntp_poll_interval(struct sfptpd_config_section *section, const char *option,
-				   unsigned int num_params, const char * const params[])
+				   unsigned int num_params, const char * const params[], int cookie)
 {
 	int tokens, interval;
 	sfptpd_crny_module_config_t *ntp = (sfptpd_crny_module_config_t *)section;
@@ -346,7 +346,8 @@ static int parse_ntp_poll_interval(struct sfptpd_config_section *section, const 
 static int parse_clock_control(struct sfptpd_config_section *section,
 			       const char *option,
 			       unsigned int num_params,
-			       const char * const params[])
+			       const char * const params[],
+			       int cookie)
 {
 	sfptpd_crny_module_config_t *ntp = (sfptpd_crny_module_config_t *)section;
 	assert(num_params == 1);
@@ -365,7 +366,8 @@ static int parse_clock_control(struct sfptpd_config_section *section,
 static int parse_control_script(struct sfptpd_config_section *section,
 				const char *option,
 				unsigned int num_params,
-				const char * const params[])
+				const char * const params[],
+				int cookie)
 {
 	sfptpd_crny_module_config_t *ntp = (sfptpd_crny_module_config_t *)section;
 	regex_t legacy_path;
@@ -403,7 +405,8 @@ static int parse_control_script(struct sfptpd_config_section *section,
 static int parse_allow_refclk(struct sfptpd_config_section *section,
 			      const char *option,
 			      unsigned int num_params,
-			      const char * const params[])
+			      const char * const params[],
+			      int cookie)
 {
 	sfptpd_crny_module_config_t *ntp = (sfptpd_crny_module_config_t *)section;
 	assert(num_params == 1);

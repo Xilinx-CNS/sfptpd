@@ -50,7 +50,7 @@ static const char *config_general_name = "general";
  ****************************************************************************/
 
 static int parse_sync_module(struct sfptpd_config_section *section, const char *option,
-			     unsigned int num_params, const char * const params[])
+			     unsigned int num_params, const char * const params[], int)
 {
 	struct sfptpd_config *config;
 	struct sfptpd_config_section *parent, *new;
@@ -117,7 +117,7 @@ static int parse_sync_module(struct sfptpd_config_section *section, const char *
 }
 
 static int parse_selection_policy(struct sfptpd_config_section *section, const char *option,
-				  unsigned int num_params, const char * const params[])
+				  unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params >= 1);
@@ -152,7 +152,7 @@ static int parse_selection_policy(struct sfptpd_config_section *section, const c
 
 
 static int parse_selection_policy_rules(struct sfptpd_config_section *section, const char *option,
-					unsigned int num_params, const char * const params[])
+					unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	unsigned int i, j, k;
@@ -192,7 +192,7 @@ static int parse_selection_policy_rules(struct sfptpd_config_section *section, c
 
 
 static int parse_phc_diff_method_order(struct sfptpd_config_section *section, const char *option,
-					unsigned int num_params, const char * const params[])
+					unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	unsigned int i, j, k;
@@ -232,7 +232,7 @@ static int parse_phc_diff_method_order(struct sfptpd_config_section *section, co
 
 
 static int parse_phc_pps_methods(struct sfptpd_config_section *section, const char *option,
-                                 unsigned int num_params, const char * const params[])
+                                 unsigned int num_params, const char * const params[], int)
 {
         sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
         unsigned int i, j, k;
@@ -273,7 +273,7 @@ static int parse_phc_pps_methods(struct sfptpd_config_section *section, const ch
 
 
 static int parse_selection_holdoff_interval(struct sfptpd_config_section *section, const char *option,
-					    unsigned int num_params, const char * const params[])
+					    unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
@@ -296,7 +296,7 @@ static int parse_selection_holdoff_interval(struct sfptpd_config_section *sectio
 
 
 static int parse_message_log(struct sfptpd_config_section *section, const char *option,
-			     unsigned int num_params, const char * const params[])
+			     unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
@@ -317,7 +317,7 @@ static int parse_message_log(struct sfptpd_config_section *section, const char *
 
 
 static int parse_stats_log(struct sfptpd_config_section *section, const char *option,
-			   unsigned int num_params, const char * const params[])
+			   unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
@@ -340,7 +340,7 @@ static int parse_stats_log(struct sfptpd_config_section *section, const char *op
 
 
 static int parse_user(struct sfptpd_config_section *section, const char *option,
-		      unsigned int num_params, const char * const params[])
+		      unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	struct passwd pwd, *presult = NULL;
@@ -470,7 +470,7 @@ finish:
 
 
 static int parse_daemon(struct sfptpd_config_section *section, const char *option,
-			unsigned int num_params, const char * const params[])
+			unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	general->daemon = true;
@@ -479,7 +479,7 @@ static int parse_daemon(struct sfptpd_config_section *section, const char *optio
 
 
 static int parse_lock(struct sfptpd_config_section *section, const char *option,
-		      unsigned int num_params, const char * const params[])
+		      unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
@@ -510,7 +510,7 @@ static int parse_path(struct sfptpd_config_section *section, const char *option,
 
 
 static int parse_access_mode(struct sfptpd_config_section *section, const char *option,
-			     unsigned int num_params, const char * const params[])
+			     unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
@@ -536,7 +536,7 @@ static int parse_access_mode(struct sfptpd_config_section *section, const char *
 }
 
 static int parse_sync_interval(struct sfptpd_config_section *section, const char *option,
-			       unsigned int num_params, const char * const params[])
+			       unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
@@ -559,7 +559,7 @@ static int parse_sync_interval(struct sfptpd_config_section *section, const char
 
 
 static int parse_sync_threshold(struct sfptpd_config_section *section, const char *option,
-				unsigned int num_params, const char * const params[])
+				unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	int tokens;
@@ -576,7 +576,7 @@ static int parse_sync_threshold(struct sfptpd_config_section *section, const cha
 
 
 static int parse_clock_control(struct sfptpd_config_section *section, const char *option,
-			       unsigned int num_params, const char * const params[])
+			       unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
@@ -603,7 +603,7 @@ static int parse_clock_control(struct sfptpd_config_section *section, const char
 }
 
 static int parse_step_threshold(struct sfptpd_config_section *section, const char *option,
-				unsigned int num_params, const char * const params[])
+				unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	int tokens;
@@ -626,7 +626,7 @@ static int parse_step_threshold(struct sfptpd_config_section *section, const cha
 }
 
 static int parse_epoch_guard(struct sfptpd_config_section *section, const char *option,
-			       unsigned int num_params, const char * const params[])
+			       unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
@@ -647,7 +647,7 @@ static int parse_epoch_guard(struct sfptpd_config_section *section, const char *
 }
 
 static int parse_initial_clock_correction(struct sfptpd_config_section *section, const char *option,
-					  unsigned int num_params, const char * const params[])
+					  unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
@@ -666,7 +666,7 @@ static int parse_initial_clock_correction(struct sfptpd_config_section *section,
 }
 
 static int parse_openmetrics_unix(struct sfptpd_config_section *section, const char *option,
-			     unsigned int num_params, const char * const params[])
+				  unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	struct sfptpd_config_metrics *metrics = &((sfptpd_config_general_t *)section)->openmetrics;
@@ -685,7 +685,7 @@ static int parse_openmetrics_unix(struct sfptpd_config_section *section, const c
 }
 
 static int parse_openmetrics_tcp(struct sfptpd_config_section *section, const char *option,
-				 unsigned int num_params, const char * const params[])
+				 unsigned int num_params, const char * const params[], int)
 {
 	struct sfptpd_config_metrics *metrics = &((sfptpd_config_general_t *)section)->openmetrics;
 	int rc = 0;
@@ -710,7 +710,7 @@ static int parse_openmetrics_tcp(struct sfptpd_config_section *section, const ch
 }
 
 static int parse_openmetrics_rt_stats_buf(struct sfptpd_config_section *section, const char *option,
-					  unsigned int num_params, const char * const params[])
+					  unsigned int num_params, const char * const params[], int)
 {
 	struct sfptpd_config_metrics *metrics = &((sfptpd_config_general_t *)section)->openmetrics;
 	assert(num_params == 1);
@@ -733,7 +733,7 @@ static int parse_openmetrics_rt_stats_buf(struct sfptpd_config_section *section,
 }
 
 static int parse_openmetrics_options(struct sfptpd_config_section *section, const char *option,
-				     unsigned int num_params, const char * const params[])
+				     unsigned int num_params, const char * const params[], int)
 {
 	struct sfptpd_config_metrics *metrics = &((sfptpd_config_general_t *)section)->openmetrics;
 	enum sfptpd_metrics_option opt;
@@ -758,7 +758,7 @@ static int parse_openmetrics_options(struct sfptpd_config_section *section, cons
 }
 
 static int parse_openmetrics_prefix(struct sfptpd_config_section *section, const char *option,
-				    unsigned int num_params, const char * const params[])
+				    unsigned int num_params, const char * const params[], int)
 {
 	struct sfptpd_config_metrics *metrics = &((sfptpd_config_general_t *)section)->openmetrics;
 	assert(num_params == 1);
@@ -770,7 +770,7 @@ static int parse_openmetrics_prefix(struct sfptpd_config_section *section, const
 }
 
 static int parse_openmetrics_acl_allow(struct sfptpd_config_section *section, const char *option,
-				       unsigned int num_params, const char * const params[])
+				       unsigned int num_params, const char * const params[], int)
 {
 	struct sfptpd_config_metrics *metrics = &((sfptpd_config_general_t *)section)->openmetrics;
 
@@ -784,7 +784,7 @@ static int parse_openmetrics_acl_allow(struct sfptpd_config_section *section, co
 }
 
 static int parse_openmetrics_acl_deny(struct sfptpd_config_section *section, const char *option,
-				      unsigned int num_params, const char * const params[])
+				      unsigned int num_params, const char * const params[], int)
 {
 	struct sfptpd_config_metrics *metrics = &((sfptpd_config_general_t *)section)->openmetrics;
 
@@ -798,7 +798,7 @@ static int parse_openmetrics_acl_deny(struct sfptpd_config_section *section, con
 }
 
 static int parse_openmetrics_acl_order(struct sfptpd_config_section *section, const char *option,
-				       unsigned int num_params, const char * const params[])
+				       unsigned int num_params, const char * const params[], int)
 {
 	struct sfptpd_config_metrics *metrics = &((sfptpd_config_general_t *)section)->openmetrics;
 
@@ -807,7 +807,7 @@ static int parse_openmetrics_acl_order(struct sfptpd_config_section *section, co
 }
 
 static int parse_clock_list(struct sfptpd_config_section *section, const char *option,
-			    unsigned int num_params, const char * const params[])
+			    unsigned int num_params, const char * const params[], int)
 {
 	unsigned int i, max_clocks;
 	sfptpd_config_clocks_t *c;
@@ -839,7 +839,7 @@ static int parse_clock_list(struct sfptpd_config_section *section, const char *o
 
 
 static int parse_clock_readonly(struct sfptpd_config_section *section, const char *option,
-				unsigned int num_params, const char * const params[])
+				unsigned int num_params, const char * const params[], int)
 {
 	unsigned int i, max_clocks;
 	sfptpd_config_clocks_t *c;
@@ -876,7 +876,7 @@ static int parse_clock_readonly(struct sfptpd_config_section *section, const cha
 
 
 static int parse_observe_readonly_clocks(struct sfptpd_config_section *section, const char *option,
-					 unsigned int num_params, const char * const params[])
+					 unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
@@ -894,7 +894,7 @@ static int parse_observe_readonly_clocks(struct sfptpd_config_section *section, 
 
 
 static int parse_persistent_clock_correction(struct sfptpd_config_section *section, const char *option,
-					     unsigned int num_params, const char * const params[])
+					     unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
@@ -912,7 +912,7 @@ static int parse_persistent_clock_correction(struct sfptpd_config_section *secti
 
 
 static int parse_non_solarflare_nics(struct sfptpd_config_section *section, const char *option,
-				     unsigned int num_params, const char * const params[])
+				     unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
@@ -930,7 +930,7 @@ static int parse_non_solarflare_nics(struct sfptpd_config_section *section, cons
 
 
 static int parse_assume_one_phc_per_nic(struct sfptpd_config_section *section, const char *option,
-					unsigned int num_params, const char * const params[])
+					unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
@@ -948,7 +948,7 @@ static int parse_assume_one_phc_per_nic(struct sfptpd_config_section *section, c
 
 
 static int parse_phc_dedup(struct sfptpd_config_section *section, const char *option,
-			   unsigned int num_params, const char * const params[])
+			   unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
@@ -966,7 +966,7 @@ static int parse_phc_dedup(struct sfptpd_config_section *section, const char *op
 
 
 static int parse_avoid_efx_ioctl(struct sfptpd_config_section *section, const char *option,
-				 unsigned int num_params, const char * const params[])
+				 unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
@@ -984,7 +984,7 @@ static int parse_avoid_efx_ioctl(struct sfptpd_config_section *section, const ch
 
 
 static int parse_timestamping_interfaces(struct sfptpd_config_section *section, const char *option,
-					 unsigned int num_params, const char * const params[])
+					 unsigned int num_params, const char * const params[], int)
 {
 	unsigned int i, max_interfaces;
 	sfptpd_config_timestamping_t *ts;
@@ -1018,7 +1018,7 @@ static int parse_timestamping_interfaces(struct sfptpd_config_section *section, 
 
 
 static int parse_timestamping_disable_on_exit(struct sfptpd_config_section *section, const char *option,
-					      unsigned int num_params, const char * const params[])
+					      unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
@@ -1036,7 +1036,7 @@ static int parse_timestamping_disable_on_exit(struct sfptpd_config_section *sect
 
 
 static int parse_pid_filter_kp(struct sfptpd_config_section *section, const char *option,
-			       unsigned int num_params, const char * const params[])
+			       unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	int tokens;
@@ -1059,7 +1059,7 @@ static int parse_pid_filter_kp(struct sfptpd_config_section *section, const char
 
 
 static int parse_pid_filter_ki(struct sfptpd_config_section *section, const char *option,
-			       unsigned int num_params, const char * const params[])
+			       unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	int tokens;
@@ -1081,7 +1081,7 @@ static int parse_pid_filter_ki(struct sfptpd_config_section *section, const char
 }
 
 static int parse_fir_filter_size(struct sfptpd_config_section *section, const char *option,
-				 unsigned int num_params, const char * const params[])
+				 unsigned int num_params, const char * const params[], int)
 {
 	int tokens, size;
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
@@ -1104,7 +1104,7 @@ static int parse_fir_filter_size(struct sfptpd_config_section *section, const ch
 }
 
 static int parse_trace_level(struct sfptpd_config_section *section, const char *option,
-			     unsigned int num_params, const char * const params[])
+			     unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	int tokens;
@@ -1161,7 +1161,7 @@ static int parse_trace_level(struct sfptpd_config_section *section, const char *
 }
 
 static int parse_test_mode(struct sfptpd_config_section *section, const char *option,
-			   unsigned int num_params, const char * const params[])
+			   unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	general->test_mode = true;
@@ -1170,7 +1170,7 @@ static int parse_test_mode(struct sfptpd_config_section *section, const char *op
 }
 
 static int parse_hotplug_detection_mode(struct sfptpd_config_section *section, const char *option,
-					unsigned int num_params, const char * const params[])
+					unsigned int num_params, const char * const params[], int)
 {
 	assert(num_params == 1);
 
@@ -1184,7 +1184,7 @@ static int parse_hotplug_detection_mode(struct sfptpd_config_section *section, c
 
 
 static int parse_reporting_intervals(struct sfptpd_config_section *section, const char *option,
-				     unsigned int num_params, const char * const params[])
+				     unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params >= 2);
@@ -1222,7 +1222,7 @@ static int parse_reporting_intervals(struct sfptpd_config_section *section, cons
 
 
 static int parse_netlink_rescan_interval(struct sfptpd_config_section *section, const char *option,
-					 unsigned int num_params, const char * const params[])
+					 unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
@@ -1245,7 +1245,7 @@ static int parse_netlink_rescan_interval(struct sfptpd_config_section *section, 
 
 
 static int parse_netlink_coalesce_ms(struct sfptpd_config_section *section, const char *option,
-				     unsigned int num_params, const char * const params[])
+				     unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
@@ -1268,7 +1268,7 @@ static int parse_netlink_coalesce_ms(struct sfptpd_config_section *section, cons
 
 
 static int parse_clustering(struct sfptpd_config_section *section, const char *option,
-				   unsigned int num_params, const char * const params[])
+			    unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 4);
@@ -1307,7 +1307,7 @@ static int parse_clustering(struct sfptpd_config_section *section, const char *o
 
 
 static int parse_clustering_guard_threshold(struct sfptpd_config_section *section, const char *option,
-				   unsigned int num_params, const char * const params[])
+					    unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 2);
@@ -1338,7 +1338,7 @@ static int parse_clustering_guard_threshold(struct sfptpd_config_section *sectio
 
 
 static int parse_limit_freq_adj(struct sfptpd_config_section *section, const char *option,
-				unsigned int num_params, const char * const params[])
+				unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	int tokens;
@@ -1355,7 +1355,7 @@ static int parse_limit_freq_adj(struct sfptpd_config_section *section, const cha
 
 
 static int parse_ignore_critical(struct sfptpd_config_section *section, const char *option,
-			         unsigned int num_params, const char * const params[])
+			         unsigned int num_params, const char * const params[], int)
 {
 	int rc = 0;
 	unsigned int i;
@@ -1379,7 +1379,7 @@ static int parse_ignore_critical(struct sfptpd_config_section *section, const ch
 
 
 static int parse_rtc_adjust(struct sfptpd_config_section *section, const char *option,
-			    unsigned int num_params, const char * const params[])
+			    unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
@@ -1397,7 +1397,7 @@ static int parse_rtc_adjust(struct sfptpd_config_section *section, const char *o
 
 
 static int parse_clock_display_fmts(struct sfptpd_config_section *section, const char *option,
-				    unsigned int num_params, const char * const params[])
+				    unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 4);
@@ -1422,7 +1422,7 @@ static int parse_clock_display_fmts(struct sfptpd_config_section *section, const
 
 
 static int parse_unique_clockid_bits(struct sfptpd_config_section *section, const char *option,
-				     unsigned int num_params, const char * const params[])
+				     unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
@@ -1459,7 +1459,7 @@ static int parse_unique_clockid_bits(struct sfptpd_config_section *section, cons
 
 
 static int parse_legacy_clockids(struct sfptpd_config_section *section, const char *option,
-				 unsigned int num_params, const char * const params[])
+				 unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
@@ -1477,7 +1477,7 @@ static int parse_legacy_clockids(struct sfptpd_config_section *section, const ch
 
 
 static int parse_servo_log_all_samples(struct sfptpd_config_section *section, const char *option,
-				       unsigned int num_params, const char * const params[])
+				       unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
@@ -1519,7 +1519,7 @@ static int parse_servo_log_all_samples(struct sfptpd_config_section *section, co
  *   - virtual:  for virtual interfaces
  */
 static int parse_eligible_interface_types(struct sfptpd_config_section *section, const char *option,
-					  unsigned int num_params, const char * const params[])
+					  unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	struct sfptpd_config_interface_selection *ss = general->eligible_interface_types;
@@ -1618,7 +1618,7 @@ fail:
 
 
 static int parse_clock_adj_method(struct sfptpd_config_section *section, const char *option,
-				  unsigned int num_params, const char * const params[])
+				  unsigned int num_params, const char * const params[], int)
 {
 	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
 	assert(num_params == 1);
@@ -2205,7 +2205,7 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 
 			num_tokens = tokenize(default_str, SFPTPD_CONFIG_TOKENS_MAX, tokens);
 			rc = parse_eligible_interface_types((struct sfptpd_config_section *) new,
-							    NULL, num_tokens, (const char *const *)tokens);
+							    NULL, num_tokens, (const char *const *)tokens, 0);
 			free(default_str);
 			/* assert not error because built-in defaults should always parse validly */
 			assert(rc == 0);
@@ -2348,7 +2348,7 @@ int sfptpd_config_general_set_user(struct sfptpd_config *config,
 
 	assert(user);
 
-	return parse_user(general, "user", group ? 2 : 1, options);
+	return parse_user(general, "user", group ? 2 : 1, options, 0);
 }
 
 void sfptpd_config_general_set_daemon(struct sfptpd_config *config,
