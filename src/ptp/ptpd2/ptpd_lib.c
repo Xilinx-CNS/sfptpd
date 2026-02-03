@@ -361,10 +361,11 @@ void ptpd_interface_destroy(struct ptpd_intf_context *ptpd_if)
 
 void ptpd_destroy(struct ptpd_global_context *ptpd)
 {
-	struct ptpd_intf_context *interface;
+	struct ptpd_intf_context *interface, *next;
 
 	/* Destroy interfaces */
-	for (interface = ptpd->interfaces; interface; interface = interface->next) {
+	for (interface = ptpd->interfaces; interface; interface = next) {
+		next = interface->next;
 		ptpd_interface_destroy(interface);
 	}
 
