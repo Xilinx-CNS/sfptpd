@@ -637,14 +637,6 @@ bmcStateDecision(ForeignMasterRecord *bestForeignMaster,
 					    &bestForeignMaster->header.sourcePortIdentity,
 					    "new best master selected:");
 			ptpClock->counters.masterChanges++;
-
-			/* If hybrid mode was previously successful number
-			 * of failures will be negative so need to reset
-			 * to zero when master changes */
-			ptpClock->unicast_delay_resp_failures = 0;
-
-			if (ptpClock->portState == PTPD_SLAVE)
-				displayStatus(ptpClock, "state: ");
 		}
 		return PTPD_SLAVE;
 	}
@@ -672,14 +664,6 @@ bmcStateDecision(ForeignMasterRecord *bestForeignMaster,
 						    &bestForeignMaster->header.sourcePortIdentity,
 						    "new best master selected:");
 				ptpClock->counters.masterChanges++;
-
-				/* If hybrid mode was previously successful number
-				 * of failures will be negative so need to reset
-				 * to zero when master changes */
-				ptpClock->unicast_delay_resp_failures = 0;
-
-				if(ptpClock->portState == PTPD_PASSIVE)
-					displayStatus(ptpClock, "state: ");
 			}
 			return PTPD_PASSIVE;
 		} else {
@@ -696,14 +680,6 @@ bmcStateDecision(ForeignMasterRecord *bestForeignMaster,
 						    &bestForeignMaster->header.sourcePortIdentity,
 						    "new best master selected:");
 				ptpClock->counters.masterChanges++;
-
-				/* If hybrid mode was previously successful number
-				 * of failures will be negative so need to reset
-				 * to zero when master changes */
-				ptpClock->unicast_delay_resp_failures = 0;
-
-				if(ptpClock->portState == PTPD_SLAVE)
-					displayStatus(ptpClock, "state: ");
 			}
 			return PTPD_SLAVE;
 		} else {

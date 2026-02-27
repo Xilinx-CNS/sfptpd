@@ -103,6 +103,7 @@ static void issueDelayRespWithMonitoring(struct sfptpd_timespec *time, MsgHeader
 static void issueSyncForMonitoring(RunTimeOpts*, PtpClock*, UInteger16 sequenceId);
 static void issueFollowupForMonitoring(const struct sfptpd_timespec*, RunTimeOpts*, PtpClock*, const UInteger16);
 static void processMonitoringSyncFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock, const UInteger16 sequenceId);
+static void updateSlaveComms(const RunTimeOpts *rtOpts, PtpClock *ptpClock);
 static void
 processTxTimestamp(PtpInterface *interface,
 		   struct sfptpd_ts_user ts_user,
@@ -358,17 +359,7 @@ toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		ptpClock->delay_state.tx_ts_pending = false;
 		ptpClock->delay_state.rx_msg_pending = false;
 
-		/* Copy announced communication capabilities from foreign master record */
-		ptpClock->partner_comm_caps =
-			ptpClock->foreign.records[ptpClock->foreign.best_index].comm_caps;
-		/* Mask local and remote communication capability sets */
-		ptpClock->effective_comm_caps.syncCapabilities =
-			ptpClock->partner_comm_caps.syncCapabilities &
-			rtOpts->comm_caps.syncCapabilities;
-
-		ptpClock->effective_comm_caps.delayRespCapabilities =
-			ptpClock->partner_comm_caps.delayRespCapabilities &
-			rtOpts->comm_caps.delayRespCapabilities;
+		updateSlaveComms(rtOpts, ptpClock);
 
 		if (ptpClock->effective_comm_caps.syncCapabilities == 0) {
 			WARNING("ptp %s: no common sync message capabilities\n", rtOpts->name);
@@ -377,8 +368,6 @@ toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		if (ptpClock->effective_comm_caps.delayRespCapabilities == 0) {
 			WARNING("ptp %s: no common delay resp capabilities\n", rtOpts->name);
 		}
-
-		ptpClock->unicast_delay_resp_failures = 0;
 
 		timerStart(OPERATOR_MESSAGES_TIMER,
 			   OPERATOR_MESSAGES_INTERVAL,
@@ -432,6 +421,28 @@ toState(ptpd_state_e state, RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		ptpClock->portState = state;
 		displayStatus(ptpClock, "now in state: ");
 	}
+}
+
+static void
+updateSlaveComms(const RunTimeOpts *rtOpts, PtpClock *ptpClock)
+{
+	/* Default to our configured communication capabilities */
+	ptpClock->effective_comm_caps = rtOpts->comm_caps;
+
+	/* Copy announced communication capabilities from foreign master record */
+	ptpClock->partner_comm_caps =
+		ptpClock->foreign.records[ptpClock->foreign.best_index].comm_caps;
+	/* Mask local and remote communication capability sets */
+	ptpClock->effective_comm_caps.syncCapabilities =
+		ptpClock->partner_comm_caps.syncCapabilities &
+		rtOpts->comm_caps.syncCapabilities;
+	ptpClock->effective_comm_caps.delayRespCapabilities =
+		ptpClock->partner_comm_caps.delayRespCapabilities &
+		rtOpts->comm_caps.delayRespCapabilities;
+	/* If hybrid mode was previously successful number
+	 * of failures will be negative so need to reset
+	 * to zero */
+	ptpClock->unicast_delay_resp_failures = 0;
 }
 
 void
@@ -562,6 +573,7 @@ void
 doTimerTick(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 {
 	UInteger8 state;
+	UInteger32 prev_master_changes;
 
 	/* Update the timers */
 	timerTick(ptpClock->itimer);
@@ -583,9 +595,15 @@ doTimerTick(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		if (ptpClock->record_update) {
 			DBG2("event STATE_DECISION_EVENT\n");
 			ptpClock->record_update = FALSE;
+			prev_master_changes = ptpClock->counters.masterChanges;
 			state = bmc(&ptpClock->foreign, rtOpts, ptpClock);
 			if (state != ptpClock->portState)
 				toState(state, rtOpts, ptpClock);
+			else if (ptpClock->counters.masterChanges != prev_master_changes &&
+			    (state == PTPD_SLAVE || state == PTPD_PASSIVE)) {
+				updateSlaveComms(rtOpts, ptpClock);
+				displayStatus(ptpClock, "state: ");
+			}
 		}
 		break;
 
