@@ -1068,14 +1068,12 @@ static int parse_addr_string(struct sockaddr_storage *sockaddr,
 		/* assume [ipv6]:port */
 		address++;
 		address_len--;
-		while (address[i] != ']') {
-			if (i >= address_len) {
-				DBG_L5("ntpclient: mode6: parse_addr_string: "
-				       "address starting with '[' terminated "
-				       "without matching ']'\n");
-				return EINVAL;
-			}
-			i++;
+		for (i = 0; i < address_len && address[i] != ']'; i++);
+		if (i >= address_len) {
+			DBG_L5("ntpclient: mode6: parse_addr_string: "
+			       "address starting with '[' terminated "
+			       "without matching ']'\n");
+			return EINVAL;
 		}
 		address[i] = '\0';
 	} else {
