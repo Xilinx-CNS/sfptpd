@@ -27,6 +27,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     thread paused.
 - Issue SWPTP-1645
   - Fix parsing of `phc_pps_methods` configuration.
+- Issue SWPTP-1646
+  - Fix possible use-after-free on shutdown.
 
 ## [3.9.0.1007] - 2025-11-07
 
