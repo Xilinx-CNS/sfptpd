@@ -58,7 +58,7 @@ CFLAGS += -MMD -MP \
 	-Wno-missing-field-initializers \
 	-Wno-unused-parameter \
 	-Wundef -Wstrict-prototypes -Wnested-externs \
-	-g -pthread -fPIC -std=c11 \
+	-g -pthread -fPIC -std=c2x \
 	-D_GNU_SOURCE \
 	$(CONDITIONAL_DEFS) \
 	-DINST_PREFIX=$(prefix) \

@@ -21,6 +21,8 @@ For a **quick start** (operating PTP on bond0, domain 100), see
 
 ## Building and running from source
 
+Sfptpd uses elements of C23 compatible with gcc-11 and later.
+
 1. Change directory to the root of the sfptpd source repository or package
 2. Type `make all`
 3. The executable daemon is `sfptpd` in the `build/` directory
