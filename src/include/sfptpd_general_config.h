@@ -23,7 +23,7 @@
 /** Default configuration values */
 #define SFPTPD_DEFAULT_MESSAGE_LOG                 (SFPTPD_MSG_LOG_TO_STDERR)
 #define SFPTPD_DEFAULT_STATS_LOG                   (SFPTPD_STATS_LOG_OFF)
-#define SFPTPD_DEFAULT_STATE_PATH                  SFPTPD_STATE_PATH
+#define SFPTPD_DEFAULT_STATE_PATH                  SFPTPD_STATE_PATH "-%U"
 #define SFPTPD_DEFAULT_CONTROL_PATH                SFPTPD_CONTROL_SOCKET_PATH
 #define SFPTPD_DEFAULT_METRICS_PATH                SFPTPD_METRICS_SOCKET_PATH
 #define SFPTPD_DEFAULT_RUN_DIR                     SFPTPD_RUN_DIR
