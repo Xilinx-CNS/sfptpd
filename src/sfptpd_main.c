@@ -412,16 +412,29 @@ static void lock_delete(int lock_fd)
 static int rundir_create(struct sfptpd_config *config)
 {
 	sfptpd_config_general_t *gconf;
-	const char *path;
+	char *configured_path;
+	char *generated_path = NULL;
+	char *path;
 	int rc;
 
 	assert(config != NULL);
 
 	gconf = sfptpd_general_config_get(config);
-	path = sfptpd_general_config_get(config)->run_dir;
-
-	if (path[0] == '\0')
-		return 0;
+	configured_path = gconf->run_dir;
+	if (configured_path[0] == '\0') {
+		/* Default run directory is based on unique clock id LSBs */
+		rc = asprintf(&generated_path, "%s-%04hx", SFPTPD_RUN_DIR,
+			      sfptpd_config_general_get_clockid_lsbs(config));
+		if (rc == -1) {
+			CRITICAL("failed to format run path: %s\n", strerror(rc = errno));
+			return rc;
+		}
+		path = generated_path;
+		free(configured_path);
+		gconf->run_dir = path;
+	} else {
+		path = configured_path;
+	}
 
 	rc = mkdir(path, gconf->run_dir_mode);
 	if (rc == -1) {
@@ -433,10 +446,16 @@ static int rundir_create(struct sfptpd_config *config)
 		}
 	}
 
-	if (gconf->uid != 0 && gconf->gid != 0 &&
-	    chown(path, gconf->uid, gconf->gid))
+	if (chmod(path, gconf->run_dir_mode))
+		WARNING("could not set run directory mode: %s\n", strerror(errno));
+
+	if (chown(path, gconf->uid, gconf->gid))
 		WARNING("could not set run directory to uid/gid %d/%d, %s\n",
 			gconf->uid, gconf->gid, strerror(errno));
+
+	/* Best effort: create an alias to this directory */
+	if (generated_path && access(SFPTPD_RUN_DIR, F_OK))
+		symlink(path, SFPTPD_RUN_DIR);
 
 	return 0;
 }
@@ -445,6 +464,26 @@ static int rundir_create(struct sfptpd_config *config)
 static void rundir_delete(struct sfptpd_config *config)
 {
 	const char *path = sfptpd_general_config_get(config)->run_dir;
+	struct stat statbuf;
+	int rc;
+
+	if (path[0] == '\0')
+		return;
+
+	/* Best effort: manage symlink alias */
+	rc = lstat(SFPTPD_RUN_DIR, &statbuf);
+	if (rc == 0 && S_ISLNK(statbuf.st_mode)) {
+		char *link_target;
+		ssize_t len;
+
+		len = strlen(path);
+		if ((link_target = malloc(len + 1)) != NULL) {
+			rc = readlink(SFPTPD_RUN_DIR, link_target, len + 1);
+			if (rc == len && !strncmp(link_target, path, len))
+				unlink(SFPTPD_RUN_DIR);
+			free(link_target);
+		}
+	}
 
 	if (path[0] != '\0') {
 		/* Failure if non-empty or non-existent is ok. */

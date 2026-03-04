@@ -2094,7 +2094,7 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		new->state_path = strdup(SFPTPD_DEFAULT_STATE_PATH);
 		new->control_path = strdup(SFPTPD_DEFAULT_CONTROL_PATH);
 		new->metrics_path = strdup(SFPTPD_DEFAULT_METRICS_PATH);
-		new->run_dir = strdup(SFPTPD_DEFAULT_RUN_DIR);
+		new->run_dir = strdup("");
 		new->state_dir_mode = SFPTPD_DEFAULT_STATE_DIR_MODE;
 		new->run_dir_mode = SFPTPD_DEFAULT_RUN_DIR_MODE;
 		new->control_socket_mode = (mode_t) -1;
