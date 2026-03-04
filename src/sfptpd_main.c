@@ -263,18 +263,6 @@ static int runtime_checks(struct sfptpd_config *config)
 
 	rc = uname(&name);
 
-	/* sfptpd has to be run as root. */
-	if (geteuid() != 0) {
-#ifdef HAVE_CAPS
-		WARNING("sfptpd normally needs to be launched as root. "
-			"Attempting to run with available capabilities and "
-			"permissions.\n");
-#else
-		CRITICAL("sfptpd must be run as root\n");
-		return EACCES;
-#endif
-	}
-
 	if (gconf->lock) {
 		struct sfptpd_prog competitors[] = {
 			{ "ptpd*" },
