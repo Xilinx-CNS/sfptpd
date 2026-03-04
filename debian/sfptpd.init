@@ -19,4 +19,4 @@ DESCRIPTION="AMD Solarflare Enhanced PTP Daemon"
 DAEMON=/usr/sbin/sfptpd
 DAEMON_ARGS="--no-daemon -p -u_sfptpd -f /etc/sfptpd.conf"
 START_ARGS="--notify-await --notify-timeout 15 --background"
-PIDFILE="/run/kernel_clock"
+PIDFILE="/run/ptp-clockid-0000.lock"

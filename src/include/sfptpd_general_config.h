@@ -396,4 +396,11 @@ int sfptpd_config_general_set_user(struct sfptpd_config *config,
 void sfptpd_config_general_set_daemon(struct sfptpd_config *config,
 				      bool daemon);
 
+static inline uint16_t sfptpd_config_general_get_clockid_lsbs(struct sfptpd_config *config) {
+	sfptpd_config_general_t *gconf = sfptpd_general_config_get(config);
+
+	return gconf->unique_clockid_bits[6] << 8 |
+	       gconf->unique_clockid_bits[7];
+}
+
 #endif /* _SFPTPD_GENERAL_CONFIG_H */

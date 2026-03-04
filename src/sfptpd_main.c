@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <grp.h>
+#include <sys/file.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/stat.h>
@@ -78,8 +79,9 @@ static int pidfd_open(pid_t pid, unsigned int flags)
  * Local Data
  ****************************************************************************/
 
-static const char *lock_filename = "/run/kernel_clock";
+static const char *lock_path_pattern = "/run/ptp-clockid-%04x.lock";
 static const mode_t lock_mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+static char *lock_filename;
 
 #ifdef HAVE_CAPS
 static const cap_value_t caps_essential[] = {
@@ -320,17 +322,32 @@ static void wait_priv_helper(void)
 	}
 }
 
+static int lock_update_pid(int fd)
+{
+	char pid[16];
+	int rc;
+
+	if (fd == -1)
+		return 0;
+
+	/* Truncating the file does not set the file offset so if the file
+	 * already existed then the file offset will not be zero. Explicitly
+	 * set the seek position back to the start of the file. No need to
+	 * distinguish errors between different stages. */
+	if (-1 == ftruncate(fd, 0) ||
+	    -1 == lseek(fd, 0, SEEK_SET) ||
+	    -1 == sprintf(pid, "%ld\n", (long)getpid()) ||
+	    -1 == write(fd, pid, strlen(pid)+1)) {
+		CRITICAL("failed to write to lock file: %s\n", strerror(rc = errno));
+		return rc;
+	}
+	return 0;
+}
 
 static int lock_create(struct sfptpd_config *config, int *lock_fd)
 {
-	int fd;
-	char pid[16];
-	struct flock file_lock = {
-		.l_type = F_WRLCK,
-		.l_start = 0,
-		.l_whence = SEEK_SET,
-		.l_len = 0
-	};
+	int fd = -1;
+	int rc;
 	sfptpd_config_general_t *gconf;
 
 	assert(config != NULL);
@@ -342,46 +359,53 @@ static int lock_create(struct sfptpd_config *config, int *lock_fd)
 	if (!gconf->lock)
 		return 0;
 
+	/* Lock per unique PTP clock id bits. Combined with individual clock
+	 * locking and separate run directories we then have everything
+	 * covered and do not need to lock 'for sfptpd' */
+	rc = asprintf(&lock_filename, lock_path_pattern,
+		      sfptpd_config_general_get_clockid_lsbs(config));
+	if (rc == -1) {
+		CRITICAL("failed to format lock path: %s\n", strerror(rc = errno));
+		return rc;
+	}
+
 	fd = open(lock_filename, O_CREAT | O_RDWR, lock_mode);
 	if (fd < 0) {
-		CRITICAL("failed to open %s: %s\n", lock_filename, strerror(errno));
-		return errno;
+		CRITICAL("failed to open %s: %s\n", lock_filename, strerror(rc = errno));
+		goto fail;
 	}
 
-	if (fcntl(fd, F_SETLK, &file_lock) < 0) {
-		CRITICAL("failed to lock %s: %s\n", lock_filename, strerror(errno));
-		close(fd);
-		return errno;
+	if (flock(fd, LOCK_NB | LOCK_EX) < 0) {
+		CRITICAL("failed to lock %s: %s\n", lock_filename, strerror(rc = errno));
+		goto fail;
 	}
 
-	/* Truncating the file does not set the file offset so if the file
-	 * already existed (still not unlinked following during daemonize) then
-	 * the file offset will not be zero. Explicitly set the seek position
-	 * back to the start of the file. Ignore unlikely errors at this stage. */
-	if (-1 == ftruncate(fd, 0) ||
-	    -1 == lseek(fd, 0, SEEK_SET) ||
-	    -1 == sprintf(pid, "%ld\n", (long)getpid()) ||
-	    -1 == write(fd, pid, strlen(pid)+1)) {
-		CRITICAL("failed to write to lock file: %s\n", strerror(errno));
-		close(fd);
-		return errno;
-	}
+	if ((rc = lock_update_pid(fd)) != 0)
+		goto fail;
 
 	if (gconf->uid != 0 && gconf->gid != 0 &&
-	    chown(lock_filename, gconf->uid, gconf->gid))
+	    fchown(fd, gconf->uid, gconf->gid))
 		WARNING("could not set lock file to uid/gid %d/%d, %s\n",
 			gconf->uid, gconf->gid, strerror(errno));
 
 	*lock_fd = fd;
 	return 0;
-}
 
+fail:
+	if (fd != -1)
+		close(fd);
+	return rc;
+}
 
 static void lock_delete(int lock_fd)
 {
 	if (lock_fd != -1) {
 		close(lock_fd);
 		unlink(lock_filename);
+	}
+	if (lock_filename) {
+		free(lock_filename);
+		lock_filename = NULL;
 	}
 }
 
@@ -490,19 +514,13 @@ static int netlink_start(void) {
 }
 
 
-static int daemonize(struct sfptpd_config *config, int *lock_fd)
+static int daemonize(struct sfptpd_config *config, int lock_fd)
 {
 	assert(config != NULL);
-	assert(lock_fd != NULL);
 
 	/* If not configured to daemonize the app, just return */
 	if (!sfptpd_general_config_get(config)->daemon)
 		return 0;
-
-	/* To avoid a race condition where the parent does not exit (and
-	 * release the lock) before we try to retake the lock, release the
-	 * lock before forking the child process */
-	lock_delete(*lock_fd);
 
 	if (daemon(0, 1) < 0) {
 		CRITICAL("failed to daemonize sfptpd, %s\n", strerror(errno));
@@ -511,9 +529,8 @@ static int daemonize(struct sfptpd_config *config, int *lock_fd)
 
 	INFO("running as a daemon\n");
 
-	/* If locking is enabled, recreate the lock file with our new PID */
-	if (sfptpd_general_config_get(config)->lock)
-		return lock_create(config, lock_fd);
+	/* If locking is enabled, update the lock file with our new PID */
+	lock_update_pid(lock_fd);
 
 	return 0;
 }
@@ -917,15 +934,15 @@ int main(int argc, char **argv)
 	if (rc != 0)
 		goto fail;
 
+	/* Create a lock */
+	rc = lock_create(config, &lock_fd);
+	if (rc != 0)
+		goto fail;
+
 	/* Create the run dir */
 	rc = rundir_create(config);
 	if (rc != 0)
 		goto fail;
-
-	/* Create a lock */
-	rc = lock_create(config, &lock_fd);
-	if (rc != 0)
-		goto fail2;
 
 	/* Set up logging */
 	rc = sfptpd_log_open(config);
@@ -974,7 +991,7 @@ int main(int argc, char **argv)
 #endif
 
 	/* If configured to do so, daemonize the application */
-	rc = daemonize(config, &lock_fd);
+	rc = daemonize(config, lock_fd);
 	if (rc != 0)
 		goto exit;
 
@@ -1006,10 +1023,9 @@ exit:
 		sfptpd_netlink_finish(netlink);
 	sfptpd_control_socket_close();
 	sfptpd_log_close();
-	lock_delete(lock_fd);
-fail2:
 	rundir_delete(config);
 fail:
+	lock_delete(lock_fd);
 	if (rc == ESHUTDOWN)
 		rc = 0;
 	sfptpd_log_config_abandon();
