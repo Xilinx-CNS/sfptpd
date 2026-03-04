@@ -262,15 +262,6 @@ static int runtime_checks(struct sfptpd_config *config)
 	assert(config != NULL);
 
 	rc = uname(&name);
-#if defined(__i386__)
-	/* If this is a 32bit binary, check that we are running on a 32bit kernel */
-	if (rc == 0 &&
-	    strcmp(name.machine, "i686") != 0 &&
-	    !gconf->avoid_efx) {
-		gconf->avoid_efx = true;
-		NOTICE("disabling private sfc clock ioctls with 32-bit userspace on 64-bit kernel\n");
-	}
-#endif
 
 	/* sfptpd has to be run as root. */
 	if (geteuid() != 0) {
