@@ -253,7 +253,6 @@ static int drop_user(struct sfptpd_config *config)
 
 static int runtime_checks(struct sfptpd_config *config)
 {
-	struct sfptpd_config_general *gconf = sfptpd_general_config_get(config);
 	char source[10] = "";
 	struct utsname name;
 	FILE *clock_src;
@@ -262,27 +261,6 @@ static int runtime_checks(struct sfptpd_config *config)
 	assert(config != NULL);
 
 	rc = uname(&name);
-
-	if (gconf->lock) {
-		struct sfptpd_prog competitors[] = {
-			{ "ptpd*" },
-			{ "sfptpd" },
-			{ NULL }
-		};
-
-		if (sfptpd_find_running_programs(competitors) != 0) {
-			struct sfptpd_prog *prog;
-
-			for (prog = &competitors[0]; prog->pattern; prog++) {
-				if (prog->matches > 0)
-					CRITICAL("%s is already running (%d)\n",
-						 prog->a_program, prog->a_pid);
-			}
-
-			return EBUSY;
-		}
-	}
-
 	if (strcmp(name.machine, "x86_64") == 0) {
 		/* If the amd64 kernel isn't using TSC, print a warning but don't abort. */
 		clock_src = fopen("/sys/devices/system/clocksource/clocksource0/current_clocksource", "r");
