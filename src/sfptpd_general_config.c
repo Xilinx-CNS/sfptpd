@@ -1465,24 +1465,6 @@ static int parse_unique_clockid_bits(struct sfptpd_config_section *section, cons
 }
 
 
-static int parse_legacy_clockids(struct sfptpd_config_section *section, const char *option,
-				 unsigned int num_params, const char * const params[], int)
-{
-	sfptpd_config_general_t *general = (sfptpd_config_general_t *)section;
-	assert(num_params == 1);
-
-	if (strcmp(params[0], "off") == 0) {
-		general->legacy_clockids = false;
-	} else if (strcmp(params[0], "on") == 0) {
-		general->legacy_clockids = true;
-	} else {
-		return EINVAL;
-	}
-
-	return 0;
-}
-
-
 static int parse_servo_log_all_samples(struct sfptpd_config_section *section, const char *option,
 				       unsigned int num_params, const char * const params[], int)
 {
@@ -1944,10 +1926,6 @@ static const sfptpd_config_option_t config_general_options[] =
 		"MAC address",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_unique_clockid_bits,
 		.dfl = SFPTPD_CONFIG_DFL_STR(SFPTPD_DEFAULT_UNIQUE_CLOCKID_BITS)},
-	{"legacy_clockids", "<off | on>",
-		"Use legacy 1588-2008 clock ids of the form :::ff:fe:::",
-		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_legacy_clockids,
-		.dfl = SFPTPD_CONFIG_DFL_BOOL(false)},
 	{"initial_clock_correction", "<always | if-unset>",
 		"When to apply an initial clock correction to NIC clocks",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL, parse_initial_clock_correction,
@@ -2183,7 +2161,6 @@ static struct sfptpd_config_section *general_config_create(const char *name,
 		sfptpd_strncpy(new->clocks.format_long, SFPTPD_DEFAULT_CLOCK_LONG_FMT, sizeof new->clocks.format_long);
 		sfptpd_strncpy(new->clocks.format_hwid, SFPTPD_DEFAULT_CLOCK_HWID_FMT, sizeof new->clocks.format_hwid);
 		sfptpd_strncpy(new->clocks.format_fnam, SFPTPD_DEFAULT_CLOCK_FNAM_FMT, sizeof new->clocks.format_fnam);
-		new->legacy_clockids = false;
 		new->declared_sync_modules = 0;
 
 		new->servo_log_all_samples = SFPTPD_DEFAULT_SERVO_LOG_ALL_SAMPLES;

@@ -325,7 +325,6 @@ typedef struct sfptpd_config_general {
 	bool ignore_critical[SFPTPD_CRITICAL_MAX];
 	unsigned long declared_sync_modules;
 	uint8_t unique_clockid_bits[8];
-	bool legacy_clockids;
 	struct sfptpd_config_metrics openmetrics;
 	bool servo_log_all_samples;
 	struct sfptpd_config_interface_selection *eligible_interface_types;
