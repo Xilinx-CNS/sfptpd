@@ -195,7 +195,7 @@ struct metrics_state {
 	struct rt_stats_buf rt_stats;
 	bool initialised;
 	struct listener *listeners;
-
+	char *path;
 	char *exemplars;
 	size_t exemplars_len;
 	struct query_state query[MAX_QUERIES];
@@ -1533,6 +1533,11 @@ void sfptpd_metrics_listener_close(void)
 			close(metrics.query[qi].fd);
 			metrics.active_queries &= ~(1 << qi);
 		}
+		if (metrics.path) {
+			unlink(metrics.path);
+			free(metrics.path);
+			metrics.path = NULL;
+		}
 	}
 }
 
@@ -1617,7 +1622,6 @@ static int listen_unix(struct sfptpd_config_general *general_config)
 	struct sockaddr_un addr = {
 		.sun_family = AF_UNIX
 	};
-	char *metrics_path;
 	ssize_t sz;
 	int fd = -1;
 	int rc;
@@ -1632,27 +1636,27 @@ static int listen_unix(struct sfptpd_config_general *general_config)
 	if (sz < 0)
 		return errno;
 
-	metrics_path = malloc(++sz);
-	if (metrics_path == NULL)
+	metrics.path = malloc(++sz);
+	if (metrics.path == NULL)
 		return errno;
 
 	/* Format path */
 	rc = sfptpd_format(sfptpd_log_get_format_specifiers(), NULL,
-			   metrics_path, sz,
+			   metrics.path, sz,
 			   general_config->metrics_path);
 	if (rc < 0)
 		goto fail;
 
-	if (strlen(metrics_path) >= sizeof addr.sun_path) {
+	if (strlen(metrics.path) >= sizeof addr.sun_path) {
 		errno = ENAMETOOLONG;
 		rc = -1;
 		goto fail;
 	}
 
-	sfptpd_strncpy(addr.sun_path, metrics_path, sizeof addr.sun_path);
+	sfptpd_strncpy(addr.sun_path, metrics.path, sizeof addr.sun_path);
 
 	/* Remove any existing socket, ignoring errors */
-	unlink(metrics_path);
+	unlink(metrics.path);
 
 	/* Create a Unix domain socket for receiving metrics requests */
 	fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -1672,7 +1676,7 @@ static int listen_unix(struct sfptpd_config_general *general_config)
 	rc = bind(fd, (const struct sockaddr *) &addr, sizeof addr);
 	if (rc == -1) {
 		ERROR(PREFIX "couldn't bind socket to %s, %s\n",
-		      metrics_path, strerror(errno));
+		      metrics.path, strerror(errno));
 	        goto fail;
 	}
 
@@ -1684,7 +1688,8 @@ fail:
 		rc = errno;
 
 	/* Tidy up any claimed resources. */
-	free(metrics_path);
+	free(metrics.path);
+	metrics.path = NULL;
 	if (rc != 0 && fd != -1) {
 		close(fd);
 		fd = -1;
