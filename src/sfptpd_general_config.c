@@ -1679,7 +1679,8 @@ static const sfptpd_config_option_t config_general_options[] =
 		parse_daemon,
 		.dfl = "Disabled by default"},
 	{"lock", "<off | on>",
-		"Specify whether to use a lock file to stop multiple simultaneous instances of the daemon",
+		"Prevent multiple invocations with same unique clock id bits (on) "
+		"or pick a free set of unique clock id bits (off)",
 		1, SFPTPD_CONFIG_SCOPE_GLOBAL,
 		parse_lock,
 		.dfl = "Enabled by default"},
@@ -2338,5 +2339,10 @@ void sfptpd_config_general_set_daemon(struct sfptpd_config *config,
 	general->daemon = daemon;
 }
 
+void sfptpd_config_general_set_run_unique(struct sfptpd_config *config,
+					  bool run_unique)
+{
+	sfptpd_general_config_get(config)->lock = !run_unique;
+}
 
 /* fin */

@@ -79,7 +79,7 @@ static int pidfd_open(pid_t pid, unsigned int flags)
  * Local Data
  ****************************************************************************/
 
-static const char *lock_path_pattern = "/run/ptp-clockid-%04x.lock";
+static const char *lock_path_pattern = "/run/ptp-clockid-%04hx.lock";
 static const mode_t lock_mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 static char *lock_filename;
 
@@ -346,6 +346,9 @@ static int lock_update_pid(int fd)
 
 static int lock_create(struct sfptpd_config *config, int *lock_fd)
 {
+	const uint16_t id_start = sfptpd_config_general_get_clockid_lsbs(config);
+	const char *why;
+	uint16_t id;
 	int fd = -1;
 	int rc;
 	sfptpd_config_general_t *gconf;
@@ -355,33 +358,45 @@ static int lock_create(struct sfptpd_config *config, int *lock_fd)
 	*lock_fd = -1;
 	gconf = sfptpd_general_config_get(config);
 
-	/* If locking is disabled, return straight-away */
-	if (!gconf->lock)
-		return 0;
-
 	/* Lock per unique PTP clock id bits. Combined with individual clock
 	 * locking and separate run directories we then have everything
 	 * covered and do not need to lock 'for sfptpd' */
-	rc = asprintf(&lock_filename, lock_path_pattern,
-		      sfptpd_config_general_get_clockid_lsbs(config));
-	if (rc == -1) {
-		CRITICAL("failed to format lock path: %s\n", strerror(rc = errno));
-		return rc;
-	}
 
-	fd = open(lock_filename, O_CREAT | O_RDWR, lock_mode);
-	if (fd < 0) {
-		CRITICAL("failed to open %s: %s\n", lock_filename, strerror(rc = errno));
-		goto fail;
-	}
+	id = id_start;
+	do {
 
-	if (flock(fd, LOCK_NB | LOCK_EX) < 0) {
-		CRITICAL("failed to lock %s: %s\n", lock_filename, strerror(rc = errno));
+		free(lock_filename);
+		rc = asprintf(&lock_filename, lock_path_pattern, id);
+		if (rc == -1) {
+			CRITICAL("failed to format lock path: %s\n", strerror(rc = errno));
+			return rc;
+		}
+		rc = 0;
+
+		fd = open(lock_filename, O_CREAT | O_RDWR, lock_mode);
+		if (fd < 0) {
+			rc = errno, why = "open";
+		} else if (flock(fd, LOCK_NB | LOCK_EX) < 0) {
+			rc = errno, why = "flock";
+		}
+	} while ((rc == EWOULDBLOCK || rc == EAGAIN)
+		 && !gconf->lock && ++id != id_start);
+
+	if (rc != 0) {
+		CRITICAL("could not %s() lock \"%s\" on unique clock id: %s\n",
+			 why, lock_filename, strerror(rc));
 		goto fail;
 	}
 
 	if ((rc = lock_update_pid(fd)) != 0)
 		goto fail;
+
+	if (id != id_start) {
+		NOTICE("unique clock id bits %04hx already in use, claimed %04hx instead\n",
+		       id_start, id);
+		gconf->unique_clockid_bits[7] = id & 0xff;
+		gconf->unique_clockid_bits[6] = id >> 8;
+	}
 
 	if (gconf->uid != 0 && gconf->gid != 0 &&
 	    fchown(fd, gconf->uid, gconf->gid))

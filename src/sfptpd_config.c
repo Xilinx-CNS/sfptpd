@@ -40,7 +40,7 @@
 
 #define CONFIG_REDACTION_STRING "********"
 
-static const char *command_line_options_short = "hf:i:D:tvu:p::";
+static const char *command_line_options_short = "hf:i:D:tvu:p::L";
 static const struct option command_line_options_long[] = 
 {
 	{"help", 0, NULL, (int)'h'},
@@ -56,6 +56,7 @@ static const struct option command_line_options_long[] =
 	{"console", 0, NULL, OPT_CONSOLE},
 	{"cpu", 1, NULL, OPT_CPU},
 	{"priv-helper", 2, NULL, (int)'p'},
+	{"no-lock", 0, NULL, (int)'L'},
 	{NULL, 0, NULL, 0}
 };
 
@@ -109,6 +110,7 @@ static void config_display_help(void)
 		"                             Affinitise THREAD to given CPU ranges\n"
 		"    --no-daemon              Do not run as a daemon, overriding config file\n"
 		"    --daemon                 Run as a daemon, overriding config file\n"
+		"-L, --no-lock                Claim unique clock id bits\n"
 		"-v, --verbose                Verbose: enable stats, trace and send output to stdout/stderr\n"
 		"    --console                Send output to stdout/stderr\n"
 		"    --version                Show version number and exit\n"
@@ -680,6 +682,10 @@ int sfptpd_config_parse_command_line_pass1(struct sfptpd_config *config,
 			sfptpd_config_general_set_verbose(config, ++verbosity);
 			break;
 
+		case 'L':
+			sfptpd_config_general_set_run_unique(config, true);
+			break;
+
 		case OPT_CONSOLE:
 			sfptpd_config_general_set_console_logging(config);
 			break;
@@ -755,6 +761,7 @@ int sfptpd_config_parse_command_line_pass2(struct sfptpd_config *config,
 		case 'i':
 		case 'D':
 		case 'u':
+		case 'L':
 		case OPT_VERSION:
 		case OPT_CPU:
 		case 'p':
