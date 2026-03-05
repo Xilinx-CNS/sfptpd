@@ -42,6 +42,7 @@
 #include "sfptpd_misc.h"
 #include "sfptpd_thread.h"
 #include "sfptpd_phc.h"
+#include "sfptpd_priv.h"
 
 
 /****************************************************************************
@@ -111,6 +112,9 @@ static const struct sfptpd_clock_spec sfptpd_clock_specifications[] =
 
 /* Threshold for reporting failed clock comparisons */
 #define CLOCK_BAD_COMPARE_WARN_THRESHOLD (16)
+
+/* Location of lock file for system clock */
+#define SYSTEM_CLOCK_LOCK_PATH           "/run/kernel_clock"
 
 /* Stats ids */
 enum clock_stats_ids {
@@ -199,6 +203,9 @@ struct sfptpd_clock_system {
 
 	/* Master copy of kernel status flags */
 	int kernel_status;
+
+	/* fd of posix lock */
+	int lock_fd;
 };
 
 
@@ -687,6 +694,35 @@ void fixup_readonly_and_clock_lists()
         }
 }
 
+static bool clock_have_lock(struct sfptpd_clock *clock)
+{
+	if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM)
+		return clock->u.system.lock_fd != -1;
+	else
+		return clock->u.nic.phc != NULL &&
+		       sfptpd_phc_have_lock(clock->u.nic.phc);
+}
+
+static bool clock_try_claim_lock(struct sfptpd_clock *clock)
+{
+	if (clock_have_lock(clock))
+		return true;
+
+	if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM) {
+		int fd;
+		if ((fd = sfptpd_priv_lockfile(SYSTEM_CLOCK_LOCK_PATH, true)) >= 0) {
+			if (sfptpd_pidfile(fd, true) == 0)
+				clock->u.system.lock_fd = fd;
+			else
+				close(fd);
+		}
+		return clock->u.system.lock_fd != -1;
+	} else {
+		return clock->u.nic.phc != NULL &&
+		       sfptpd_phc_try_claim_lock(clock->u.nic.phc);
+	}
+}
+
 static int new_system_clock(struct sfptpd_config_general *config,
 			    struct sfptpd_clock **clock)
 {
@@ -711,6 +747,7 @@ static int new_system_clock(struct sfptpd_config_general *config,
 	}
 
 	new->posix_id = CLOCK_REALTIME;
+	new->u.system.lock_fd = -1;
 
 	sfptpd_strncpy(new->short_name, "system", sizeof(new->short_name));
 	sfptpd_strncpy(new->long_name, "system", sizeof(new->long_name));
@@ -745,6 +782,15 @@ static int new_system_clock(struct sfptpd_config_general *config,
 	sfptpd_clock_system = new;
 
 	configure_new_clock(new, config);
+
+	/* Take a lock on the clock */
+	if (!new->read_only &&
+	    !clock_try_claim_lock(new)) {
+		NOTICE("clock %s: could not lock system clock: blocking clock\n",
+		       new->short_name);
+		sfptpd_clock_set_blocked(new, true, SFPTPD_CLOCK_BLOCK_REASON_LOCKED);
+	}
+
 	if (!config->clocks.no_initial_correction)
 		sfptpd_clock_correct_new(new);
 
@@ -1097,6 +1143,10 @@ static void clock_delete(struct sfptpd_clock *clock)
 	/* If this is not the system clock we need to close the PHC device */
 	if ((clock->type != SFPTPD_CLOCK_TYPE_SYSTEM) && (clock->u.nic.phc != NULL)) {
 		sfptpd_phc_close(clock->u.nic.phc);
+	} else if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM && clock->u.system.lock_fd != -1) {
+		sfptpd_priv_lockfile(SYSTEM_CLOCK_LOCK_PATH, false);
+		close(clock->u.system.lock_fd);
+		clock->u.system.lock_fd = -1;
 	}
 
 	sfptpd_stats_collection_free(&clock->stats);
@@ -2827,12 +2877,10 @@ bool sfptpd_clock_try_claim_locks(void)
 
 	clock_lock();
 	for (clock = sfptpd_clock_list_head; clock != NULL; clock = clock->next) {
-		if (clock->type != SFPTPD_CLOCK_TYPE_SYSTEM &&
-		    !clock->read_only &&
-		    clock->u.nic.phc != NULL &&
-		    !sfptpd_phc_have_lock(clock->u.nic.phc)) {
-			if (sfptpd_phc_try_claim_lock(clock->u.nic.phc)) {
-				NOTICE("clock %s: acquired lock on PHC device: unblocking clock\n", clock->short_name);
+		if (!clock->read_only &&
+		    !clock_have_lock(clock)) {
+			if (clock_try_claim_lock(clock)) {
+				NOTICE("clock %s: acquired lock: unblocking clock\n", clock->short_name);
 				sfptpd_clock_set_blocked(clock, false, SFPTPD_CLOCK_BLOCK_REASON_LOCKED);
 			} else {
 				any_still_locked = true;

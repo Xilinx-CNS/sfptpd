@@ -46,6 +46,7 @@
 #include "sfptpd_statistics.h"
 #include "sfptpd_multicast.h"
 #include "sfptpd_priv.h"
+#include "sfptpd_misc.h"
 
 #ifdef HAVE_CAPS
 #include <sys/capability.h>
@@ -80,7 +81,6 @@ static int pidfd_open(pid_t pid, unsigned int flags)
  ****************************************************************************/
 
 static const char *lock_path_pattern = "/run/ptp-clockid-%04hx.lock";
-static const mode_t lock_mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 static char *lock_filename;
 
 #ifdef HAVE_CAPS
@@ -322,32 +322,9 @@ static void wait_priv_helper(void)
 	}
 }
 
-static int lock_update_pid(int fd)
-{
-	char pid[16];
-	int rc;
-
-	if (fd == -1)
-		return 0;
-
-	/* Truncating the file does not set the file offset so if the file
-	 * already existed then the file offset will not be zero. Explicitly
-	 * set the seek position back to the start of the file. No need to
-	 * distinguish errors between different stages. */
-	if (-1 == ftruncate(fd, 0) ||
-	    -1 == lseek(fd, 0, SEEK_SET) ||
-	    -1 == sprintf(pid, "%ld\n", (long)getpid()) ||
-	    -1 == write(fd, pid, strlen(pid))) {
-		CRITICAL("failed to write to lock file: %s\n", strerror(rc = errno));
-		return rc;
-	}
-	return 0;
-}
-
 static int lock_create(struct sfptpd_config *config, int *lock_fd)
 {
 	const uint16_t id_start = sfptpd_config_general_get_clockid_lsbs(config);
-	const char *why;
 	uint16_t id;
 	int fd = -1;
 	int rc;
@@ -364,7 +341,6 @@ static int lock_create(struct sfptpd_config *config, int *lock_fd)
 
 	id = id_start;
 	do {
-
 		free(lock_filename);
 		rc = asprintf(&lock_filename, lock_path_pattern, id);
 		if (rc == -1) {
@@ -372,24 +348,22 @@ static int lock_create(struct sfptpd_config *config, int *lock_fd)
 			return rc;
 		}
 		rc = 0;
-
-		fd = open(lock_filename, O_CREAT | O_RDWR, lock_mode);
-		if (fd < 0) {
-			rc = errno, why = "open";
-		} else if (flock(fd, LOCK_NB | LOCK_EX) < 0) {
-			rc = errno, why = "flock";
+		if ((fd = sfptpd_lockfile(lock_filename)) < 0) {
+			rc = -fd;
 		}
 	} while ((rc == EWOULDBLOCK || rc == EAGAIN)
 		 && !gconf->lock && ++id != id_start);
 
 	if (rc != 0) {
-		CRITICAL("could not %s() lock \"%s\" on unique clock id: %s\n",
-			 why, lock_filename, strerror(rc));
+		CRITICAL("could not create lock \"%s\" on unique clock id: %s\n",
+			 lock_filename, strerror(rc));
 		goto fail;
 	}
 
-	if ((rc = lock_update_pid(fd)) != 0)
+	if ((rc = sfptpd_pidfile(fd, false)) != 0) {
+		CRITICAL("failed to write to lock file: %s\n", strerror(rc));
 		goto fail;
+	}
 
 	if (id != id_start) {
 		NOTICE("unique clock id bits %04hx already in use, claimed %04hx instead\n",
@@ -415,8 +389,8 @@ fail:
 static void lock_delete(int lock_fd)
 {
 	if (lock_fd != -1) {
-		close(lock_fd);
 		unlink(lock_filename);
+		close(lock_fd);
 	}
 	if (lock_filename) {
 		free(lock_filename);
@@ -583,8 +557,9 @@ static int daemonize(struct sfptpd_config *config, int lock_fd)
 
 	INFO("running as a daemon\n");
 
-	/* If locking is enabled, update the lock file with our new PID */
-	lock_update_pid(lock_fd);
+	/* If locking is enabled, update the lock file with our new PID.
+	 * We retain the lock from the parent. */
+	sfptpd_pidfile(lock_fd, false);
 
 	return 0;
 }

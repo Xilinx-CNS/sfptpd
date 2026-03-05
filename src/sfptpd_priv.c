@@ -18,6 +18,7 @@
 #include "sfptpd_thread.h"
 #include "sfptpd_crny_proto.h"
 #include "sfptpd_crny_helper.h"
+#include "sfptpd_misc.h"
 
 
 /* Simplified lifecycle of a request through the privileged helper client
@@ -379,7 +380,7 @@ int sfptpd_priv_open_dev(const char *path)
 		if (rc == -1)
 			rc = -errno;
 	} else {
-		ERROR("priv: open_chrony: error calling helper, %s\n", strerror(rc));
+		ERROR("priv: open_dev: error calling helper, %s\n", strerror(rc));
 	}
 	return rc;
 }
@@ -399,6 +400,36 @@ int sfptpd_priv_chrony_control(enum chrony_clock_control_op op)
 		rc = -sfptpd_crny_helper_control(op);
 	} else {
 		ERROR("priv: chrony_control: error calling helper, %s\n", strerror(rc));
+	}
+	return rc;
+}
+
+int sfptpd_priv_lockfile(const char *path, bool create)
+{
+	struct sfptpd_priv_req_msg req = { .req = SFPTPD_PRIV_REQ_LOCKFILE };
+	struct sfptpd_priv_resp_msg resp = { 0 };
+	const size_t max_path = sizeof req.lockfile.path;
+	int rc;
+	int fds[1];
+
+	if (strnlen(path, max_path) == max_path)
+		return -ENAMETOOLONG;
+	sfptpd_strncpy(req.lockfile.path, path, max_path);
+	req.lockfile.create = create;
+
+	rc = sfptpd_priv_rpc(&priv_state, &req, &resp, fds);
+	if (rc > 0) {
+		TRACE_L5("priv: posix-lock: got fd %d from helper\n", fds[0]);
+		rc = fds[0];
+	} else if (rc == 0) {
+		rc = -resp.lockfile.rc;
+	} else if (rc == -ENOTCONN) {
+		if (create)
+			rc = sfptpd_lockfile(path);
+		else
+			rc = (-1 == unlink(path)) ? -errno : 0;
+	} else {
+		ERROR("priv: lockfile: error calling helper, %s\n", strerror(rc));
 	}
 	return rc;
 }

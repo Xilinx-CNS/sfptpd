@@ -39,4 +39,8 @@ int sfptpd_priv_open_dev(const char *path);
  * Returns 0 on success, -errno on error. */
 int sfptpd_priv_chrony_control(enum chrony_clock_control_op op);
 
+/* Create or remove a (flock(2)ed) lockfile.
+ * Returns fd or 0 on success or -errno on error. */
+int sfptpd_priv_lockfile(const char *path, bool lock);
+
 #endif /* _SFPTPD_PRIV_H */

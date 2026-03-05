@@ -18,6 +18,7 @@ enum sfptpd_priv_req {
 	SFPTPD_PRIV_REQ_OPEN_CHRONY,
 	SFPTPD_PRIV_REQ_OPEN_DEV,
 	SFPTPD_PRIV_REQ_CHRONY_CONTROL,
+	SFPTPD_PRIV_REQ_LOCKFILE,
 };
 
 enum sfptpd_priv_resp {
@@ -25,6 +26,7 @@ enum sfptpd_priv_resp {
 	SFPTPD_PRIV_RESP_OPEN_CHRONY,
 	SFPTPD_PRIV_RESP_OPEN_DEV,
 	SFPTPD_PRIV_RESP_CHRONY_CONTROL,
+	SFPTPD_PRIV_RESP_LOCKFILE,
 };
 
 struct sfptpd_priv_req_open_dev {
@@ -35,11 +37,17 @@ struct sfptpd_priv_req_chrony_control {
 	enum chrony_clock_control_op op;
 };
 
+struct sfptpd_priv_req_lockfile {
+	char path[120];
+	bool create;
+};
+
 struct sfptpd_priv_req_msg {
 	enum sfptpd_priv_req req;
 	union {
 		struct sfptpd_priv_req_open_dev open_dev;
 		struct sfptpd_priv_req_chrony_control chrony_control;
+		struct sfptpd_priv_req_lockfile lockfile;
 	};
 };
 
@@ -56,12 +64,17 @@ struct sfptpd_priv_resp_chrony_control {
 	int rc;
 };
 
+struct sfptpd_priv_resp_lockfile {
+	int rc;
+};
+
 struct sfptpd_priv_resp_msg {
 	enum sfptpd_priv_resp resp;
 	union {
 		struct sfptpd_priv_resp_open_chrony open_chrony;
 		struct sfptpd_priv_resp_open_dev open_dev;
 		struct sfptpd_priv_resp_chrony_control chrony_control;
+		struct sfptpd_priv_resp_lockfile lockfile;
 	};
 };
 

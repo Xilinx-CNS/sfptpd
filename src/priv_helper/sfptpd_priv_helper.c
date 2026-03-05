@@ -20,6 +20,7 @@
 #include "sfptpd_priv_ops.h"
 #include "sfptpd_crny_proto.h"
 #include "sfptpd_crny_helper.h"
+#include "sfptpd_misc.h"
 
 #include "glibc_compat.h"
 
@@ -34,6 +35,7 @@ static const struct option opts_long[] = {
 	{ NULL, 0, NULL, 0 }
 };
 static const char *permitted_devices = "^/dev/(pps|ptp)[[:digit:]]+$";
+static const char *permitted_locks = "^/run/kernel_clock$";
 
 
 /****************************************************************************
@@ -47,6 +49,7 @@ static const char *permitted_devices = "^/dev/(pps|ptp)[[:digit:]]+$";
 
 static bool verbose = false;
 static regex_t permitted_devices_re;
+static regex_t permitted_locks_re;
 
 
 /****************************************************************************
@@ -64,6 +67,12 @@ static int do_init(void)
 		fprintf(stderr, "priv: regcomp: %s\n", errbuf);
 		return EINVAL;
 	}
+	rc = regcomp(&permitted_locks_re, permitted_locks, REG_EXTENDED | REG_NOSUB);
+	if (rc != 0) {
+		regerror(rc, &permitted_locks_re, errbuf, sizeof errbuf);
+		fprintf(stderr, "priv: regcomp: %s\n", errbuf);
+		return EINVAL;
+	}
 
 	return 0;
 }
@@ -71,6 +80,7 @@ static int do_init(void)
 static void do_finit(void)
 {
 	regfree(&permitted_devices_re);
+	regfree(&permitted_locks_re);
 }
 
 static void usage(FILE *stream)
@@ -137,6 +147,42 @@ static int op_open_dev(struct sfptpd_priv_resp_msg *resp_msg,
 	return fd;
 }
 
+static int op_lockfile(struct sfptpd_priv_resp_msg *resp_msg,
+		       const struct sfptpd_priv_req_msg *req_msg)
+{
+	const size_t max_path = sizeof req_msg->lockfile.path;
+	int fd;
+
+	assert(resp_msg);
+	assert(req_msg);
+
+	resp_msg->resp = SFPTPD_PRIV_RESP_LOCKFILE;
+
+	if (strnlen(req_msg->lockfile.path, max_path) == max_path) {
+		resp_msg->lockfile.rc = ENAMETOOLONG;
+		return -1;
+	}
+
+	if (regexec(&permitted_locks_re, req_msg->lockfile.path,
+		    0, NULL, 0) != 0) {
+		resp_msg->lockfile.rc = EPERM;
+		return -1;
+	}
+
+	if (req_msg->lockfile.create) {
+		if ((fd = sfptpd_lockfile(req_msg->lockfile.path)) < 0) {
+			resp_msg->lockfile.rc = -fd;
+			fd = -1;
+		} else {
+			resp_msg->lockfile.rc = 0;
+		}
+	} else {
+		fd = -1;
+		resp_msg->lockfile.rc = unlink(req_msg->lockfile.path) ? errno : 0;
+	}
+	return fd;
+}
+
 static void op_chrony_control(struct sfptpd_priv_resp_msg *resp_msg,
 			      const struct sfptpd_priv_req_msg *req_msg)
 {
@@ -200,6 +246,9 @@ static int server(int unix_fd)
 			break;
 		case SFPTPD_PRIV_REQ_CHRONY_CONTROL:
 			op_chrony_control(&resp_msg, &req_msg);
+			break;
+		case SFPTPD_PRIV_REQ_LOCKFILE:
+			fd = op_lockfile(&resp_msg, &req_msg);
 			break;
 		}
 

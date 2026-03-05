@@ -4,13 +4,20 @@
 #ifndef _SFPTPD_MISC_H
 #define _SFPTPD_MISC_H
 
+#include <errno.h>
+#include <fcntl.h>
 #include <time.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 #include <pthread.h>
+#include <sys/file.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <linux/taskstats.h>
+#include <unistd.h>
 
 #include "sfptpd_time.h"
 
@@ -247,5 +254,56 @@ int sfptpd_read_int_from_fileat(int dir_fd, const char *filename, long long *ans
 char *sfptpd_bitset_format(sfptpd_bitset_t set,
 			   const char** strings,
 			   unsigned int max);
+
+/* Create a lock file using flock().
+ * @param lock_filename The path to the lock file.
+ * @return fd on success, else -errno. */
+static inline int sfptpd_lockfile(const char *lock_filename)
+{
+	static const mode_t lock_mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+	int fd;
+
+	fd = open(lock_filename, O_CREAT | O_RDWR, lock_mode);
+	if (-1 == fd)
+		return -errno;
+
+	if (-1 == flock(fd, LOCK_NB | LOCK_EX)) {
+		int rc = -errno;
+		close(fd);
+		return rc;
+	}
+
+	return fd;
+}
+
+/* Populate a lock file with process PID, optionally taking a POSIX lock.
+ * @param fd The file descriptor of open lockfile.
+ * @param posix_lock Whether to take a POSIX lock on the lockfile.
+ * @return 0 on success, else errno. */
+static inline int sfptpd_pidfile(int fd, bool posix_lock)
+{
+	struct flock file_lock = {
+	        .l_type = F_WRLCK,
+	        .l_start = 0,
+	        .l_whence = SEEK_SET,
+	        .l_len = 0
+	};
+	char pid[16];
+
+	if (-1 == fd)
+		return ENOENT;
+
+	if (posix_lock &&
+	    -1 == fcntl(fd, F_SETLK, &file_lock))
+		return errno;
+
+	if (-1 == ftruncate(fd, 0) ||
+	    -1 == lseek(fd, 0, SEEK_SET) ||
+	    -1 == sprintf(pid, "%ld\n", (long)getpid()) ||
+	    -1 == write(fd, pid, strlen(pid)))
+	        return errno;
+
+	return 0;
+}
 
 #endif /* _SFPTPD_MISC_H */
