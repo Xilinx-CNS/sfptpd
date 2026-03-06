@@ -160,7 +160,7 @@ static int server(int unix_fd)
 		int fds[1];
 		int num_fds = 0;
 		union {
-				/* For alignment. See cmsg(3) */
+			/* For alignment. See cmsg(3) */
 			char buf[CMSG_SPACE(sizeof fds)];
 			struct cmsghdr align;
 		} send_cmsg_data = { .buf = { 0 } };
@@ -178,13 +178,12 @@ static int server(int unix_fd)
 			if (rc != EAGAIN && rc != EINTR) {
 				perror("sfptpd_priv_helper:recv");
 				running = false;
-			} else {
-				continue;
 			}
+			continue;
+		} else if (req_len == 0) {
+			running = false;
+			continue;
 		}
-
-		if (req_len == 0)
-			break;
 
 		/* Service commmand */
 		switch (req_msg.req) {
