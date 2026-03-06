@@ -18,6 +18,7 @@
 .Op Fl f Ar sfptpd.conf
 .Op Fl u Ar user[:group]
 .Op Fl p Ns Op priv-helper-path
+.Op Fl L
 .Op Fl -no-daemon | -daemon
 .Op Fl -console
 .Op Fl -cpu Po Oo thread= Oc Ns Po from Ns Oo -to Oc Pc Ns Oo ,... Oc Pc Ns Oo ;... Oc
@@ -207,51 +208,62 @@ The NTP sync module monitors and potentially controls an external NTP daemon
 either as a time-of-day source for PPS or, typically, a fallback time source
 should preferred PTP or PPS sources fail.
 .Sh CONSIDERATIONS
-.Ss Running multiple instances
+.Ss Running multiple invocations
 .Nm
 is designed to use a single process to control multiple sources and sinks
 across different PTP domains and synchronisation technologies. However, in
-some circumstances, such as for debugging, diagnostics, monitoring or to
+some circumstances, such as for debugging, diagnostics, monitoring,
+constructing elaborate test cases on small networks, or to
 partition the time domains within a host, it may be required to run multiple
 instances.
-The lock file
-.Ql kernel_clock
-is used by default to ensure only one instance of
+.Pp
+Fine-grained resource locking for the system and NIC clocks is performed to
+support multiple simultaneous invocations of
 .Nm
-or ptpd is running simultaneously.
+but the allocation of 16 bits to disambiguate clock ids formed from MAC
+addresses prevents multiple invocations from succeeding without additional
+options.
 The
 .Ql lock off
-option can be used to disable this lock.
-If multiple instances are in operation in the same host then the following
-additional options should be considered:
-.Bl -bullet -compact
-.It
-.Ql state_path
-.It
-.Ql control_path
-.It
-.Ql unique_clockid_bits
-.El
-The list of clocks that are controlled by the different instances should also
+configuration option or
+.Fl L
+or
+.Fl -no-lock
+command line options cause another set of bits to be chosen to form unique
+clock ids and these are then locked.
+.Pp
+When such additional instances are run, the
+.Pa /var/lib/sfptpd
+and
+.Pa /run/sfptpd
+symlinks only point to the first instance started.
+When multiple instances are run simultaneously,
+the list of clocks that are controlled by the different instances should also
 be partitioned using
 .Ql clock_list
 or
-.Ql clock_readonly
-.
+.Ql clock_readonly .
 .Sh FILES
 .Bl -tag -width /etc/sfptpd.conf
 .It Pa /etc/sfptpd.conf
-typical configuration file
+Typical configuration file location.
+.It Pa /run/ptp-clockid-NNNN.lock
+A lock file for the unique clock id bits NNNN.
 .It Pa /var/lib/sfptpd
+A symlink to the state directory for the first running sfptpd invocation.
+.It Pa /var/lib/sfptpd-NNNN
 location of files giving instantaneous sfptpd status, long term
-statistics and diagnostics
+statistics and diagnostics for the running sfptpd invocation using unique
+clock id bits NNNN.
 .It Pa /run/kernel_clock
 lock file preventing multiple instances of
 .Nm
-and ptpd running unintentionally.
-.It Pa /run/sfptpd/metrics.sock
+or ptpd trying to adjust the system clock simultaneously.
+.It Pa /run/sfptpd
+A symlink to the runtime directory for the first running sfptpd invocation.
+.It Pa /run/sfptpd-NNNN/metrics.sock
 stream socket serving OpenMetrics stats over HTTP
-.It Pa /run/sfptpd/control-v1.sock
+.It Pa /run/sfptpd-NNNN/control-v1.sock
 datagram socket accepting control packets from
 .Nm sfptpdctl
 .El
