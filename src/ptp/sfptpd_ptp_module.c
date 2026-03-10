@@ -137,6 +137,9 @@ struct sfptpd_ptp_instance {
 	/* Snapshot of PTPD public state */
 	struct ptpd_port_snapshot ptpd_port_snapshot;
 
+	/* Snapshot of blocked state */
+	bool blocked_snapshot;
+
 	/* Cache information derived from post snapshot */
 	struct {
 		/* Cache updated */
@@ -1957,7 +1960,7 @@ static bool ptp_update_instance_state(struct sfptpd_ptp_instance *instance,
 	struct sfptpd_ptp_module *module;
 	struct ptpd_port_snapshot snapshot;
 	sfptpd_time_t ofm;
-	bool state_changed, leap_second_changed, instance_changed, offset_changed;
+	bool state_changed, leap_second_changed, instance_changed, offset_changed, blocked_changed;
 	int rc;
 
 	assert(instance!= NULL);
@@ -2097,8 +2100,13 @@ static bool ptp_update_instance_state(struct sfptpd_ptp_instance *instance,
 					       finitel(ofm) && ofm != 0.0L);
 	}
 
+	/* Check for blocked state change */
+	if ((blocked_changed = (sfptpd_clock_is_blocked(instance->ptpd_port_private->clock)
+				!= instance->blocked_snapshot)))
+		instance->blocked_snapshot = !instance->blocked_snapshot;
+
 	/* Send realtime stats update if anything changed */
-	if (state_changed || bond_changed || instance_changed || offset_changed) {
+	if (state_changed || bond_changed || instance_changed || offset_changed || blocked_changed) {
 		struct sfptpd_timespec log_time = sfptpd_log_timestamp();
 		ptp_send_instance_rt_stats_update(module->engine, instance, &log_time);
 	}
@@ -2261,7 +2269,7 @@ static void ptp_send_instance_rt_stats_update(struct sfptpd_engine *engine,
 				SFPTPD_CONFIG_GET_NAME(instance->config),
 				"gm", NULL, instance->ptpd_port_private->clock,
 				(instance->ctrl_flags & SYNC_MODULE_SELECTED),
-				false,
+				instance->blocked_snapshot,
 				instance->synchronized,
 				ptp_get_alarms_snapshot(instance),
 				STATS_KEY_OFFSET, ofm_ns,
@@ -2283,7 +2291,7 @@ static void ptp_send_instance_rt_stats_update(struct sfptpd_engine *engine,
 				SFPTPD_CONFIG_GET_NAME(instance->config),
 				"gm", NULL, instance->ptpd_port_private->clock,
 				(instance->ctrl_flags & SYNC_MODULE_SELECTED),
-				false,
+				instance->blocked_snapshot,
 				instance->synchronized,
 				ptp_get_alarms_snapshot(instance),
 				STATS_KEY_OFFSET, ofm_ns,
