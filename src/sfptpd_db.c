@@ -117,6 +117,17 @@ struct array {
 	void *data;               /*!< Array of capacity*stride bytes */
 };
 
+static inline struct store *store_impl_ret(void *store, size_t subclass)
+{
+	assert(subclass == 0);
+	return store;
+}
+
+#define store_super(store) \
+	_Generic(store, \
+		struct       array *: store_impl_ret(store, offsetof(struct array, base)), \
+		struct linked_list *: store_impl_ret(store, offsetof(struct linked_list, base)));
+
 
 /****************************************************************************
  * Function prototypes
@@ -282,8 +293,10 @@ static void query_result_refs_free(struct sfptpd_db_query_result_refs *query_res
 static struct store *linked_list_create(void)
 {
 	struct linked_list *new = calloc(1, sizeof *new);
-	new->base.ops = &linked_list_ops;
-	return &new->base;
+	if (new != NULL) {
+		new->base.ops = &linked_list_ops;
+	}
+	return store_super(new);
 }
 
 
@@ -292,19 +305,25 @@ static struct sfptpd_db_record_ref linked_list_insert(struct sfptpd_db_table *ta
 {
 	struct linked_list *ll = (struct linked_list *) table->store;
 	struct linked_list_header *header;
+	struct sfptpd_db_record_ref ref = { .table = table };
 
 	assert(table != NULL);
 	assert(record != NULL);
 	assert(table->magic == MAGIC_TABLE);
 	assert(ll->head == NULL || ll->head->magic == MAGIC_LL_HDR);
 
-	header = malloc(sizeof *header + ll->base.record_size);
-	header->magic = MAGIC_LL_HDR;
-	header->next = ll->head;
-	memcpy(header + 1, record, ll->base.record_size);
-	ll->head = header;
+	if ((header = malloc(sizeof *header + ll->base.record_size))) {
+		header->magic = MAGIC_LL_HDR;
+		header->next = ll->head;
+		memcpy(header + 1, record, ll->base.record_size);
+		ll->head = header;
+		ref.store_element = header;
+		ref.valid = true;
+	} else {
+		ERROR("db: linked_list_insert, %s\n", strerror(errno));
+	}
 
-	return (struct sfptpd_db_record_ref) { .table = table, .store_element = header, .valid = true };
+	return ref;
 }
 
 
@@ -428,7 +447,8 @@ static struct store *array_create(size_t initial_capacity, size_t record_size)
 	size_t alignment;
 	size_t element_size;
 
-	assert(new);
+	if (!new)
+		return NULL;
 
 	alignment = __alignof__(struct array_header);
 	element_size = sizeof(struct array_header) + record_size;
@@ -439,7 +459,7 @@ static struct store *array_create(size_t initial_capacity, size_t record_size)
 	new->data = calloc(initial_capacity, new->stride);
 	assert(new->data);
 
-	return &new->base;
+	return store_super(new);
 }
 
 
@@ -638,6 +658,10 @@ struct sfptpd_db_table *sfptpd_db_table_new(struct sfptpd_db_table_def *def,
 	assert(def != NULL);
 
 	new = calloc(1, sizeof *new);
+	if (new == NULL) {
+		ERROR("db: creating table, %s\n", strerror(errno));
+		return NULL;
+	}
 
 	new->def = def;
 	new->magic = MAGIC_TABLE;
@@ -651,6 +675,12 @@ struct sfptpd_db_table *sfptpd_db_table_new(struct sfptpd_db_table_def *def,
 		break;
 	default:
 		assert(0);
+	}
+
+	if (new->store == NULL) {
+		ERROR("db: creating table store, %s\n", strerror(errno));
+		free(new);
+		return NULL;
 	}
 
 	new->store->record_size = def->record_size;

@@ -61,6 +61,17 @@ struct stats_count_history
 	sfptpd_stats_count_t history[SFPTPD_STATS_PERIOD_MAX][SFPTPD_STATS_HISTORY_MAX];
 };
 
+static inline struct sfptpd_stats_item *stats_item_ret(void *item, size_t subclass)
+{
+	assert(subclass == 0);
+	return item;
+}
+
+#define stats_item_super(item) \
+	_Generic(item, \
+		struct stats_count_history *: stats_item_ret(item, offsetof(struct stats_count_history, parent)), \
+		struct stats_range_history *: stats_item_ret(item, offsetof(struct stats_range_history, parent)));
+
 
 /****************************************************************************
  * Constants
@@ -407,7 +418,7 @@ static sfptpd_stats_item_t *stats_range_history_alloc(const char *name,
 	for (p = 0; p < sizeof(stat->history)/sizeof(stat->history[0]); p++)
 		sfptpd_stats_range_init(&stat->history[p][SFPTPD_STATS_HISTORY_CURRENT]);
 
-	return &stat->parent;
+	return stats_item_super(stat);
 }
 
 
@@ -705,7 +716,7 @@ static sfptpd_stats_item_t *stats_count_history_alloc(const char *name,
 		sfptpd_stats_count_init(&stat->history[p][SFPTPD_STATS_HISTORY_CURRENT]);
 	}
 
-	return &stat->parent;
+	return stats_item_super(stat);
 }
 
 
