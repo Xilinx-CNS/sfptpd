@@ -27,8 +27,6 @@ static inline void invalidateBondBypassSocket(struct ptpd_transport *transport, 
 void createBondSocks(struct ptpd_transport *transport, int transportAF)
 {
 	int i;
-	int sockCount = transport->bond_info->num_physical_ifs *
-			SFPTP_BOND_BYPASS_PER_INTF_SOCK_COUNT;
 	struct sockaddr_in localAddr;
 	int one = 1;
 	int level = (transportAF == AF_INET) ? IPPROTO_IP : IPPROTO_IPV6;
@@ -44,6 +42,9 @@ void createBondSocks(struct ptpd_transport *transport, int transportAF)
 	    transport->bond_info->bond_mode != SFPTPD_BOND_MODE_LACP ||
 	    transport->bond_info->num_physical_ifs <= 1)
 		return;
+
+	const int sockCount = transport->bond_info->num_physical_ifs *
+			      SFPTP_BOND_BYPASS_PER_INTF_SOCK_COUNT;
 
 	memcpy((struct sockaddr_storage*)&localAddr, &transport->interfaceAddr,
 	       transport->interfaceAddrLen);
