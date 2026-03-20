@@ -464,7 +464,7 @@ void sfptpd_ht_clear_entries(struct sfptpd_hash_table *table)
 	assert(table != NULL);
 
 	struct sfptpd_ht_entry *entry, *temp;
-	unsigned int index, counter = 0;
+	unsigned int index;
 	void *user;
 
 	sfptpd_ht_get_lock(table);
@@ -472,7 +472,6 @@ void sfptpd_ht_clear_entries(struct sfptpd_hash_table *table)
 	for (index = 0; index < table->table_size; index++) {
 		entry = table->entries[index];
 		while (entry != NULL) {
-			++counter;
 			temp = entry;
 			entry = temp->next;
 			user = temp->user;
