@@ -375,6 +375,11 @@ struct sync_instance_record *sfptpd_bic_choose(const struct sfptpd_selection_pol
 
 	/* Create a list of records to sort */
 	list = malloc(num_instances * sizeof *list);
+	if (list == NULL) {
+		int rc = errno;
+		CRITICAL("selection: allocating memory, %s\n", strerror(rc));
+		return old_candidate;
+	}
 	for (i = 0; i < num_instances; i++) {
 		list[i].record = &instance_records[i];
 	}
