@@ -2669,9 +2669,9 @@ appendSlaveRxSyncTimingDataTLV(SlaveRxSyncTimingDataTLV *data,
 	int tlv_start = getHeaderLength(buf);
 	int offset = tlv_start;
 	int i;
-	TLV tlv;
-
-	tlv.tlvType = PTPD_TLV_SLAVE_RX_SYNC_TIMING_DATA;
+	TLV tlv = {
+		.tlvType = PTPD_TLV_SLAVE_RX_SYNC_TIMING_DATA,
+	};
 
 	TLV_BOUNDARY_CHECK(offset, space);
 
@@ -2799,9 +2799,9 @@ appendSlaveRxSyncComputedDataTLV(SlaveRxSyncComputedData *data,
 	int tlv_start = getHeaderLength(buf);
 	int offset = tlv_start;
 	int i;
-	TLV tlv;
-
-	tlv.tlvType = PTPD_TLV_SLAVE_RX_SYNC_COMPUTED_DATA;
+	TLV tlv = {
+		.tlvType = PTPD_TLV_SLAVE_RX_SYNC_COMPUTED_DATA,
+	};
 
 	TLV_BOUNDARY_CHECK(offset, space);
 
@@ -2928,9 +2928,9 @@ appendSlaveTxEventTimestampsTLV(SlaveTxEventTimestamps *data,
 	int tlv_start = getHeaderLength(buf);
 	int offset = tlv_start;
 	int i;
-	TLV tlv;
-
-	tlv.tlvType = PTPD_TLV_SLAVE_TX_EVENT_TIMESTAMPS;
+	TLV tlv = {
+		.tlvType = PTPD_TLV_SLAVE_TX_EVENT_TIMESTAMPS,
+	};
 
 	TLV_BOUNDARY_CHECK(offset, space);
 
