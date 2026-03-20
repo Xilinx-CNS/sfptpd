@@ -372,12 +372,18 @@ static int parse_user(struct sfptpd_config_section *section, const char *option,
 
 	buf_sz = MAX(sysconf(_SC_GETPW_R_SIZE_MAX), 1024);
 	buf = malloc(buf_sz);
-	assert(buf != NULL);
+	if (buf == NULL)
+		return errno;
 
 	rc = getpwnam_r(params[0], &pwd, buf, buf_sz, &presult);
 	while (rc == ERANGE) {
 		buf_sz <<= 1;
-		buf = realloc(buf, buf_sz);
+		char *newbuf = realloc(buf, buf_sz);
+		if (newbuf == NULL) {
+			rc = errno;
+			goto finish;
+		}
+		buf = newbuf;
 		rc = getpwnam_r(params[0], &pwd, buf, buf_sz, &presult);
 	}
 	if (rc == 0 && presult != &pwd)
