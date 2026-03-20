@@ -218,7 +218,7 @@ static int multicast_add_user(struct sfptpd_multicast *module,
 			  user, users);
 
 fail:
-	if (rc != 0) {
+	if (group == NULL) {
 		multicast_user_finit(user);
 		free(user);
 	}
