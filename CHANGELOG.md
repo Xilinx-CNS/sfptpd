@@ -21,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Fix parsing of phc_pps_methods configuration.
 - Issue SWPTP-1646:
   - Fix possible use-after-free on shutdown.
+- Issue SWPTP-1658:
+  - Fix possible (implementation-dependent) leak of vararg lists.
 
 ## [3.8.1.1004] - 2025-02-14
 
