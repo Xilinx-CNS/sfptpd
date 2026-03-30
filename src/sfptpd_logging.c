@@ -210,6 +210,7 @@ static int construct_log_paths(struct sfptpd_log *log,
 	va_list aq;
 	size_t space;
 	unsigned int ptr;
+	int rc = ENOMEM;
 
 	assert(log != NULL);
 	assert(filename_pattern != NULL);
@@ -220,23 +221,26 @@ static int construct_log_paths(struct sfptpd_log *log,
 	space = sizeof log->final_path;
 	ptr = snprintf(log->final_path, space, "%s", state_file_format);
 	if (ptr >= space)
-		return ENOMEM;
+		goto fail;
 	space -= ptr;
 	ptr = vsnprintf(log->final_path + ptr, space, filename_pattern, ap);
 	if (ptr >= space)
-		return ENOMEM;
+		goto fail;
 
 	/* Write temporary path */
 	space = sizeof log->temp_path;
 	ptr = snprintf(log->temp_path, space, "%s", state_next_file_format);
 	if (ptr >= space)
-		return ENOMEM;
+		goto fail;
 	space -= ptr;
 	ptr = vsnprintf(log->temp_path + ptr, space, filename_pattern, aq);
 	if (ptr >= space)
-		return ENOMEM;
+		goto fail;
 
-	return 0;
+	rc = 0;
+fail:
+	va_end(aq);
+	return rc;
 }
 
 
@@ -716,10 +720,8 @@ void sfptpd_log_trace(sfptpd_component_id_e component, unsigned int level,
 	 * diagnostics at runtime. */
 
 	/* For trace, we suppress the output if above the current trace level. */
-	if (level > trace_levels[component])
-		return;
-
-	sfptpd_log_vmessage(level + LOG_INFO, format, ap);
+	if (level <= trace_levels[component])
+		sfptpd_log_vmessage(level + LOG_INFO, format, ap);
 
 	va_end(ap);
 }

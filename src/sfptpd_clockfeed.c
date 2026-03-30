@@ -638,9 +638,11 @@ static void clockfeed_on_shutdown(void *context)
 	DBG_L4("inactivated all %d active sources\n", count);
 
 	/* Reap zombies */
-	for (s = module->inactive; s; s = s->next)
+	struct clockfeed_source *next;
+	for (s = module->inactive; s; s = next) {
+		next = s->next;
 		clockfeed_reap_zombies(module, s);
-
+	}
 
 	if (module->inactive)
 		WARNING("clockfeed: clock source subscribers remaining on shutdown\n");
