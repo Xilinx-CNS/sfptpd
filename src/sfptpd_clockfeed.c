@@ -118,8 +118,13 @@ struct clockfeed_subscribe_resp {
  * It is a synchronous message.
  */
 #define CLOCKFEED_MSG_UNSUBSCRIBE   CLOCKFEED_MSG(4)
-struct clockfeed_unsubscribe {
+struct clockfeed_unsubscribe_req {
 	struct sfptpd_clockfeed_sub *sub;
+	bool if_dead;
+};
+struct clockfeed_unsubscribe_resp {
+	struct sfptpd_clockfeed_sub *sub;
+	bool unsubscribed;
 };
 
 /* Notification that a cycle of processing all ready clock feeds has
@@ -144,7 +149,8 @@ typedef struct clockfeed_msg {
 		struct clockfeed_remove_clock remove_clock;
 		struct clockfeed_subscribe_req subscribe_req;
 		struct clockfeed_subscribe_resp subscribe_resp;
-		struct clockfeed_unsubscribe unsubscribe;
+		struct clockfeed_unsubscribe_req unsubscribe_req;
+		struct clockfeed_unsubscribe_resp unsubscribe_resp;
 	} u;
 } sfptpd_clockfeed_msg_t;
 
@@ -543,22 +549,14 @@ static void clockfeed_on_subscribe(struct sfptpd_clockfeed *module,
 	     source = source->next)
 		assert(source->magic == CLOCKFEED_SOURCE_MAGIC);
 
-	if (source == NULL)
-		for (source = module->inactive;
-		     source && source->clock != msg->u.subscribe_req.clock;
-		     source = source->next)
-			assert(source->magic == CLOCKFEED_SOURCE_MAGIC);
-
 	if (source == NULL) {
-		ERROR("clockfeed: non-existent clock subscribed to: %s\n",
-		      sfptpd_clock_get_short_name(msg->u.subscribe_req.clock));
+		DBG_L3("clockfeed: ignoring subscribe request for currently unregistered clock: %s\n",
+		       sfptpd_clock_get_short_name(msg->u.subscribe_req.clock));
 		msg->u.subscribe_resp.sub = NULL;
 	} else {
 		subscriber = calloc(1, sizeof *subscriber);
 		assert(subscriber);
-
-		if (source->inactive)
-			WARNING("clockfeed: subscribed to inactive source\n");
+		assert(!source->inactive);
 
 		subscriber->magic = CLOCKFEED_SUBSCRIBER_MAGIC;
 		subscriber->source = source;
@@ -580,11 +578,14 @@ static void clockfeed_on_unsubscribe(struct sfptpd_clockfeed *module,
 
 	assert(module != NULL);
 	assert(msg != NULL);
-	assert(msg->u.unsubscribe.sub != NULL);
+	assert(msg->u.unsubscribe_req.sub != NULL);
 
 	DBG_L3("received unsubscribe message\n");
 
-	sub = msg->u.unsubscribe.sub;
+	sub = msg->u.unsubscribe_req.sub;
+	msg->u.unsubscribe_resp.unsubscribed = false;
+	if (!sub->source->inactive && msg->u.unsubscribe_req.if_dead)
+		goto nop;
 
 	assert(sub->magic == CLOCKFEED_SUBSCRIBER_MAGIC);
 
@@ -596,12 +597,13 @@ static void clockfeed_on_unsubscribe(struct sfptpd_clockfeed *module,
 		ERROR(PREFIX "non-existent clock subscription\n");
 	} else {
 		*nextp = s->next;
+		msg->u.unsubscribe_resp.unsubscribed = true;
 	}
 
 	clockfeed_reap_zombies(module, sub->source);
 	sub->magic = CLOCKFEED_DELETED_MAGIC;
 	free(sub);
-
+nop:
 	SFPTPD_MSG_REPLY(msg);
 }
 
@@ -833,31 +835,40 @@ int sfptpd_clockfeed_subscribe(struct sfptpd_clockfeed *clockfeed,
 	rc = SFPTPD_MSG_SEND_WAIT(&msg, clockfeed->thread,
 				  CLOCKFEED_MSG_SUBSCRIBE);
 	if (rc == 0) {
-		assert(msg.u.subscribe_resp.sub);
-		assert(msg.u.subscribe_resp.sub->magic == CLOCKFEED_SUBSCRIBER_MAGIC);
+		assert(!msg.u.subscribe_resp.sub ||
+		       msg.u.subscribe_resp.sub->magic == CLOCKFEED_SUBSCRIBER_MAGIC);
 		*sub = msg.u.subscribe_resp.sub;
 	}
 
 	return rc;
 }
 
-void sfptpd_clockfeed_unsubscribe(struct sfptpd_clockfeed *clockfeed,
-				 struct sfptpd_clockfeed_sub *subscriber)
+bool sfptpd_clockfeed_unsubscribe(struct sfptpd_clockfeed *clockfeed,
+				  struct sfptpd_clockfeed_sub **sub,
+				  bool if_dead)
 {
+	struct sfptpd_clockfeed_sub *subscriber = *sub;
 	struct clockfeed_msg msg;
+	int rc;
 
 	assert(clockfeed);
 	assert(clockfeed->magic == CLOCKFEED_MODULE_MAGIC);
 
 	if (subscriber == NULL)
-		return;
+		return false;
 
 	assert(subscriber->magic == CLOCKFEED_SUBSCRIBER_MAGIC);
 
 	SFPTPD_MSG_INIT(msg);
-	msg.u.unsubscribe.sub = subscriber;
-	SFPTPD_MSG_SEND_WAIT(&msg, clockfeed->thread,
-			     CLOCKFEED_MSG_UNSUBSCRIBE);
+	msg.u.unsubscribe_req.sub = subscriber;
+	msg.u.unsubscribe_req.if_dead = if_dead;
+	rc = SFPTPD_MSG_SEND_WAIT(&msg, clockfeed->thread,
+				  CLOCKFEED_MSG_UNSUBSCRIBE);
+	if (rc == 0 && msg.u.unsubscribe_resp.unsubscribed)
+		*sub = NULL;
+	else
+		return false;
+	return true;
 }
 
 static int clockfeed_compare_to_sys(struct sfptpd_clockfeed_sub *sub,

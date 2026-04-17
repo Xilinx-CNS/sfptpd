@@ -72,19 +72,24 @@ void sfptpd_clockfeed_remove_clock(struct sfptpd_clockfeed *clockfeed,
 /* Subscribe to the feed for a given clock.
  * @param clockfeed Handle to the clock feed state.
  * @param clock The clock to which to subscribe.
- * @param shm Pointer to which to write the subscription handle.
+ * @param subscription Pointer to which to write the subscription handle.
  * @return 0 on success, else errno.
  */
 int sfptpd_clockfeed_subscribe(struct sfptpd_clockfeed *clockfeed,
 			       struct sfptpd_clock *clock,
-			       struct sfptpd_clockfeed_sub **shm);
+			       struct sfptpd_clockfeed_sub **subscription);
 
 /* Unsubscribe from the feed for a given clock.
  * @param clockfeed Handle to the clock feed state.
- * @param clock The clock to which to subscribe.
+ * @param subscription Mutable pointer to the subscription from which
+ * to unsubscribe.
+ * @param if_dead Whether to unsubscribe only if the source is dead.
+ * @return true if unsubscribed, false if if_dead was true and the source
+ * was alive.
  */
-void sfptpd_clockfeed_unsubscribe(struct sfptpd_clockfeed *clockfeed,
-				  struct sfptpd_clockfeed_sub *clock);
+bool sfptpd_clockfeed_unsubscribe(struct sfptpd_clockfeed *clockfeed,
+				  struct sfptpd_clockfeed_sub **subscription,
+				  bool if_dead);
 
 /* Compare two clocks using clock feed samples.
  * @param feed1 The first clock feed.

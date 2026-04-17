@@ -235,9 +235,9 @@ void sfptpd_servo_destroy(struct sfptpd_servo *servo)
 	assert(servo != NULL);
 
 	if (servo->master != NULL)
-		sfptpd_clockfeed_unsubscribe(servo->clockfeed, servo->clock1_feed);
+		sfptpd_clockfeed_unsubscribe(servo->clockfeed, &servo->clock1_feed, false);
 	if (servo->slave != NULL)
-		sfptpd_clockfeed_unsubscribe(servo->clockfeed, servo->clock2_feed);
+		sfptpd_clockfeed_unsubscribe(servo->clockfeed, &servo->clock2_feed, false);
 
 	/* Free the servo */
 	free(servo);
@@ -283,6 +283,20 @@ void sfptpd_servo_prepare(struct sfptpd_servo *servo)
 	sfptpd_clockfeed_require_fresh(servo->clock2_feed);
 }
 
+/* Return a feed that is a live subscription to the new source */
+static void servo_resubscribe(struct sfptpd_clockfeed *clockfeed,
+			      struct sfptpd_clock *old,
+			      struct sfptpd_clock *new,
+			      struct sfptpd_clockfeed_sub **feed)
+{
+	/* The unsubscribe call's third argument is an 'if_dead' flag: when
+	 * old == new we ask the clockfeed module to drop the existing
+	 * subscription only if its underlying source has gone inactive;
+	 * when old != new we always drop it. */
+	sfptpd_clockfeed_unsubscribe(clockfeed, feed, old == new);
+	if (!*feed)
+		sfptpd_clockfeed_subscribe(clockfeed, new, feed);
+}
 
 void sfptpd_servo_set_clocks(struct sfptpd_servo *servo, struct sfptpd_clock *master, struct sfptpd_clock *slave)
 {
@@ -292,17 +306,8 @@ void sfptpd_servo_set_clocks(struct sfptpd_servo *servo, struct sfptpd_clock *ma
 	assert(master != NULL);
 	assert(slave != NULL);
 
-	if (master != servo->master) {
-		if (servo->master != NULL)
-			sfptpd_clockfeed_unsubscribe(servo->clockfeed, servo->clock1_feed);
-		sfptpd_clockfeed_subscribe(servo->clockfeed, master, &servo->clock1_feed);
-	}
-
-	if (slave != servo->slave) {
-		if (servo->slave != NULL)
-			sfptpd_clockfeed_unsubscribe(servo->clockfeed, servo->clock2_feed);
-		sfptpd_clockfeed_subscribe(servo->clockfeed, slave, &servo->clock2_feed);
-	}
+	servo_resubscribe(servo->clockfeed, servo->master, master, &servo->clock1_feed);
+	servo_resubscribe(servo->clockfeed, servo->slave, slave, &servo->clock2_feed);
 
 	if ((servo->master != master) || (servo->slave != slave)) {
 

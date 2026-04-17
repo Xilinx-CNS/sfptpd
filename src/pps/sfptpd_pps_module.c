@@ -994,8 +994,7 @@ static void pps_destroy_instance(pps_module_t *pps,
 
 	if (instance->feed != NULL) {
 		sfptpd_clockfeed_unsubscribe(sfptpd_engine_get_clockfeed(pps->engine),
-					     instance->feed);
-		instance->feed = NULL;
+					     &instance->feed, false);
 	}
 
 	/* Disable PPS events in the driver */
