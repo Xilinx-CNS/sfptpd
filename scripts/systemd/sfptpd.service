@@ -18,7 +18,7 @@ Restart=on-failure
 RestartSec=5s
 
 # Source configuration shared with other init systems
-Environment=OPTIONS="-f /etc/sfptpd.conf"
+Environment="OPTIONS=-f /etc/sfptpd.conf"
 EnvironmentFile=-/etc/sysconfig/sfptpd
 
 # Override any 'daemon' setting in configuration file as it is systemd's
