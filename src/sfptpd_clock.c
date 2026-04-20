@@ -908,7 +908,6 @@ static int renew_clock(struct sfptpd_clock *clock)
 		 * supported flag and device index. */
 		clock->u.nic.primary_if = primary;
 		clock->u.nic.supports_sync_status_reporting = !clock->cfg_avoid_efx;
-		clock->u.nic.supports_efx_pps = !clock->cfg_avoid_efx;
 		clock->u.nic.device_idx = phc_idx;
 		clock->u.nic.supports_efx = !clock->cfg_avoid_efx;
 
@@ -1081,6 +1080,7 @@ static int new_nic_clock(int nic_id, sfptpd_clock_type_t type,
 
 	new->u.nic.nic_id = nic_id;
 	new->u.nic.phc = NULL;
+	new->u.nic.supports_efx_pps = !config->avoid_efx;
 
 	rc = renew_clock(new);
 	if (rc != 0) {
