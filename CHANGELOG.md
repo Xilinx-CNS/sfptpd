@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - fix to report the chrony offset actually used in stats. (SWPTP-1616)
   - understand non-NTP chrony peers, controlled by `allow_refclk`. (SWPTP-1618)
 - Add `--cpu` option to affinitise all or some threads. (SWPTP-1626)
+- Retry hybrid mode (unicast delay requests) on change of master. (SWPTP-1653)
 
 ### Removed
 
