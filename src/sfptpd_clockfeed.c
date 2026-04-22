@@ -248,15 +248,16 @@ struct sfptpd_clockfeed {
 
 
 /****************************************************************************
- * Global variables
+ * Inline functions and helper macros
  ****************************************************************************/
 
+/* Diagnostics helper macros */
 
+#define FMT_SOURCE "ClockFeedSource(%s)"
+#define FARGS_SOURCE(source) sfptpd_clock_get_short_name(source->clock)
 
-/****************************************************************************
- * Function prototypes
- ****************************************************************************/
-
+#define FMT_SUB "ClockFeedSubscription(" FMT_SOURCE ",%d)"
+#define FARGS_SUB(sub) FARGS_SOURCE(sub->source), ({unsigned u = 0; for(struct sfptpd_clockfeed_sub *s = sub; s->next; s = s->next) u++; u;})
 
 
 /****************************************************************************
@@ -310,8 +311,7 @@ static void clockfeed_reap_zombies(struct sfptpd_clockfeed *module,
 	if (source->inactive && source->subscribers == NULL) {
 		struct clockfeed_source **nextp;
 
-		DBG_L3("removing source %s\n",
-			 sfptpd_clock_get_short_name(source->clock));
+		DBG_L3("removing " FMT_SOURCE "\n", FARGS_SOURCE(source));
 
 		for (nextp = &module->inactive;
 		     *nextp && (*nextp != source);
@@ -374,9 +374,9 @@ static void clockfeed_on_timer(void *user_context, unsigned int id)
 			else
 				sfptpd_time_zero(&record->snapshot);
 
-			DBG_L6("%s: cycle %llu: write_counter %llu: rc %d: "
+			DBG_L6(FMT_SOURCE ": cycle %llu: write_counter %llu: rc %d: "
 			       SFPTPD_FMT_SFTIMESPEC " " SFPTPD_FMT_SFTIMESPEC "\n",
-			       sfptpd_clock_get_short_name(source->clock),
+			       FARGS_SOURCE(source),
 			       source->cycles, source->shm.write_counter, record->rc,
 			       SFPTPD_ARGS_SFTIMESPEC(record->system),
 			       SFPTPD_ARGS_SFTIMESPEC(record->snapshot));
@@ -464,7 +464,8 @@ static void clockfeed_on_add_clock(struct sfptpd_clockfeed *module,
 	assert(module->magic == CLOCKFEED_MODULE_MAGIC);
 	assert(msg != NULL);
 
-	DBG_L3("received add_clock message\n");
+	DBG_L3("received add_clock message for %s\n",
+	       sfptpd_clock_get_short_name(msg->u.add_clock.clock));
 
 	source = calloc(1, sizeof *source);
 	assert(source);
@@ -488,8 +489,8 @@ static void clockfeed_on_add_clock(struct sfptpd_clockfeed *module,
 	source->next = module->active;
 	module->active = source;
 
-	DBG_L1("added source %s with log2 sync interval %d\n",
-		sfptpd_clock_get_short_name(source->clock),
+	DBG_L1("added " FMT_SOURCE " with log2 sync interval %d\n",
+		FARGS_SOURCE(source),
 		source->poll_period_log2);
 
 	SFPTPD_MSG_REPLY(msg);
@@ -505,7 +506,8 @@ static void clockfeed_on_remove_clock(struct sfptpd_clockfeed *module,
 	assert(msg != NULL);
 	assert(msg->u.remove_clock.clock != NULL);
 
-	DBG_L3("received remove_clock message\n");
+	DBG_L3("received remove_clock message for %s\n",
+	       sfptpd_clock_get_short_name(msg->u.remove_clock.clock));
 
 	for (source = &module->active;
 	     *source && (*source)->clock != msg->u.remove_clock.clock;
@@ -522,10 +524,7 @@ static void clockfeed_on_remove_clock(struct sfptpd_clockfeed *module,
 		s->next = module->inactive;
 		s->inactive = true;
 		module->inactive = s;
-
-		DBG_L4("marked source inactive: %s\n",
-			 sfptpd_clock_get_short_name(s->clock));
-
+		DBG_L4("marked inactive: " FMT_SOURCE "\n", FARGS_SOURCE(s));
 		clockfeed_reap_zombies(module, s);
 	}
 
@@ -541,8 +540,6 @@ static void clockfeed_on_subscribe(struct sfptpd_clockfeed *module,
 	assert(module != NULL);
 	assert(msg != NULL);
 	assert(msg->u.subscribe_req.clock != NULL);
-
-	DBG_L3("received subscribe message\n");
 
 	for (source = module->active;
 	     source && source->clock != msg->u.subscribe_req.clock;
@@ -566,6 +563,7 @@ static void clockfeed_on_subscribe(struct sfptpd_clockfeed *module,
 		source->subscribers = subscriber;
 
 		msg->u.subscribe_resp.sub = subscriber;
+		DBG_L3("handled subscription request: " FMT_SUB "\n", FARGS_SUB(subscriber));
 	}
 
 	SFPTPD_MSG_REPLY(msg);
@@ -580,9 +578,8 @@ static void clockfeed_on_unsubscribe(struct sfptpd_clockfeed *module,
 	assert(msg != NULL);
 	assert(msg->u.unsubscribe_req.sub != NULL);
 
-	DBG_L3("received unsubscribe message\n");
-
 	sub = msg->u.unsubscribe_req.sub;
+	DBG_L3("received unsubscribe message for: " FMT_SUB "\n", FARGS_SUB(sub));
 	msg->u.unsubscribe_resp.unsubscribed = false;
 	if (!sub->source->inactive && msg->u.unsubscribe_req.if_dead)
 		goto nop;
@@ -888,8 +885,8 @@ static int clockfeed_compare_to_sys(struct sfptpd_clockfeed_sub *sub,
 
 	sfptpd_time_zero(diff);
 
-	DBG_L5("consumer: comparing %s (%p shm) to sys\n",
-		sfptpd_clock_get_short_name(sub->source->clock), shm);
+	DBG_L5(FMT_SUB " consumer: comparing (%p shm) to sys\n",
+	       FARGS_SUB(sub), shm);
 
 	clock = sub->source->clock;
 	writer1 = shm->write_counter;
@@ -1019,9 +1016,8 @@ void sfptpd_clockfeed_require_fresh(struct sfptpd_clockfeed_sub *sub)
 
 	assert(sub->magic == CLOCKFEED_SUBSCRIBER_MAGIC);
 
-	DBG_L6("%s: updating minimum read counter from %d to %d\n",
-		sfptpd_clock_get_short_name(sub->source->clock),
-		sub->min_counter, sub->read_counter + 1);
+	DBG_L6(FMT_SUB ": updating minimum read counter from %d to %d\n",
+	       FARGS_SUB(sub), sub->min_counter, sub->read_counter + 1);
 
 	sub->min_counter = sub->read_counter + 1;
 }
