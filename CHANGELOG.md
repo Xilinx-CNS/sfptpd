@@ -48,9 +48,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Issue SWPTP-1659
   - Do not revert to trying legacy private ioctl for PPS after hotplug event,
     causing continuous failing queries.
+- Issue SWPTP-1662
+  - Fix failure of secondary servos after hotplug event due to failure to
+    clean up state.
 - Issue SWPTP-1664
   - Quote whole of Environment= fallback option in systemd unit.
-- Issue SWPTP-1669:
+- Issue SWPTP-1669
   - Avoid excessive selection churn by quantising source accuracy.
 
 ## [3.9.0.1007] - 2025-11-07
