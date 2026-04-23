@@ -183,6 +183,9 @@ static int server(int unix_fd)
 			}
 		}
 
+		if (req_len == 0)
+			break;
+
 		/* Service commmand */
 		switch (req_msg.req) {
 		case SFPTPD_PRIV_REQ_SYNC:
