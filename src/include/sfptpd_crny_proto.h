@@ -44,14 +44,25 @@ struct crny_addr {
 	uint16_t addr_family;
 	char padding[2];
 };
-
 static_assert(sizeof(struct crny_addr) == 20, "structure matches protocol");
+
+struct crny_time {
+	uint32_t s_hi;
+	uint32_t s_lo;
+	uint32_t ns;
+};
+static_assert(sizeof(struct crny_time) == 12, "structure matches protocol");
 
 struct crny_tracking {
 	uint32_t ref_id;
 	struct crny_addr ip_addr;
-	uint32_t ignore[4];
+	uint32_t ignore1;
+	struct crny_time ref_time;
 	uint32_t tracking_f;
+	uint32_t ignore2[4];
+	uint32_t skew_f;
+	uint32_t root_delay_f;
+	uint32_t root_disp_f;
 };
 
 struct crny_source {

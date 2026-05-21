@@ -127,7 +127,10 @@ struct ntp_state {
 	long double offset_from_master;
 
 	/* Root dispersion of master or infinity if no peer selected */
-	long double root_dispersion;
+	double root_dispersion;
+
+	/* Root delay of master or infinity if no peer selected */
+	double root_delay;
 
 	/* Stratum of master or 0 if no peer selected */
 	unsigned int stratum;
@@ -137,8 +140,17 @@ struct ntp_state {
 	 * invalidated until the NTP daemon next polls its peers */
 	bool offset_unsafe;
 
-	/* System time at which offset was last updated */
+	/* Our system time at which our record of offset was last updated */
 	struct sfptpd_timespec offset_timestamp;
+
+	/* Chrony's cooked system time at which it updated its offset */
+	struct sfptpd_timespec ref_time;
+
+	/* Chrony's cooked system time at which it previously updated its offset */
+	struct sfptpd_timespec ref_time_prev;
+
+	/* Chrony's decision as to validity of offset */
+	bool offset_valid;
 
 	/* Boolean indicating whether we consider the slave clock to be
 	 * synchonized to the master */
@@ -239,6 +251,8 @@ typedef struct sfptpd_crny_module {
 #define NTP_POLL_TIMER_ID (0)
 
 #define REPLY_TIMEOUT (2000000000)
+
+#define MAX_ROOT_DISTANCE 3.0e9
 
 static const struct sfptpd_stats_collection_defn ntp_stats_defns[] =
 {
@@ -790,15 +804,22 @@ void crny_parse_state(crny_module_t *ntp, struct ntp_state *state, int rc, bool 
 		reset_offset_id(state);
 	}
 
+	/* Apply gate on tracking offset corresponding to chrony's own
+	 * check for root distance */
+	bool root_distance_ok = ((state->root_delay / 2 +
+				  state->root_dispersion) <= MAX_ROOT_DISTANCE);
+
 	/* We will only report being in the slave state if there is a selected
 	 * peer and the offset is safe i.e. there has been an update since the
 	 * clocks were stepped. */
-	if ((state->selected_peer_idx != -1) && !offset_unsafe) {
+	if ((state->selected_peer_idx != -1) &&
+	     !offset_unsafe &&
+	     state->offset_valid &&
+	     root_distance_ok) {
 		peer = &state->peer_info.peers[state->selected_peer_idx];
 
 		state->state = SYNC_MODULE_STATE_SLAVE;
 		state->offset_from_master = sfptpd_ntpclient_offset(peer);
-		state->root_dispersion = sfptpd_ntpclient_error(peer);
 		state->stratum = peer->stratum;
 	} else {
 		state->state = candidates?
@@ -1152,7 +1173,23 @@ static int handle_get_sys_info(crny_module_t *ntp)
 
 	next_state->sys_info = sys_info;
 	next_state->ref_id = ref_id;
-	next_state->tracking_offset = sfptpd_crny_tofloat(ntohl(answer->tracking_f)) * -1.0e9;
+	next_state->ref_time_prev = next_state->ref_time;
+	sfptpd_time_init(&next_state->ref_time,
+			 ((uint64_t) ntohl(answer->ref_time.s_hi)) << 32 |
+			 ((uint64_t) ntohl(answer->ref_time.s_lo)),
+			 ntohl(answer->ref_time.ns), 0);
+
+	next_state->offset_valid = sfptpd_crny_tofloat(ntohl(answer->skew_f)) > 0.0;
+
+	if (next_state->offset_valid) {
+		next_state->tracking_offset = sfptpd_crny_tofloat(ntohl(answer->tracking_f)) * -1.0e9;
+		next_state->root_dispersion = sfptpd_crny_tofloat(ntohl(answer->root_disp_f)) * 1.0e9;
+		next_state->root_delay = sfptpd_crny_tofloat(ntohl(answer->root_delay_f)) * 1.0e9;
+	} else {
+		next_state->tracking_offset = NAN;
+		next_state->root_dispersion = NAN;
+		next_state->root_delay = NAN;
+	}
 
 	return 0;
 }
