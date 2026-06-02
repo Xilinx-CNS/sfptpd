@@ -4,6 +4,7 @@
 #ifndef _SFPTPD_NTPD_CLIENT_H
 #define _SFPTPD_NTPD_CLIENT_H
 
+#include <math.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <time.h>
@@ -85,6 +86,8 @@ struct sfptpd_ntpclient_peer {
 	bool shortlist;
 	bool candidate;
 	bool self;
+	/* Sentinel for offsets is NAN */
+	/* Sentinel for errors is INFINITY */
 	long double offset;
 	long double root_dispersion;
 	long double smoothed_offset;
@@ -202,9 +205,9 @@ void sfptpd_ntpclient_print_peers(struct sfptpd_ntpclient_peer_info *peer_info,
  */
 static inline sfptpd_time_t sfptpd_ntpclient_offset(struct sfptpd_ntpclient_peer *peer)
 {
-	return isnormal(peer->tracking_offset) ? peer->tracking_offset :
-			(isnormal(peer->smoothed_offset) ? peer->smoothed_offset :
-			 peer->offset);
+	return !isnan(peer->tracking_offset) ? peer->tracking_offset :
+		(!isnan(peer->smoothed_offset) ? peer->smoothed_offset :
+		 peer->offset);
 }
 
 
@@ -214,15 +217,16 @@ static inline sfptpd_time_t sfptpd_ntpclient_offset(struct sfptpd_ntpclient_peer
  */
 static inline sfptpd_time_t sfptpd_ntpclient_error(struct sfptpd_ntpclient_peer *peer)
 {
-	return isnormal(peer->smoothed_root_dispersion) ? peer->smoothed_root_dispersion : peer->root_dispersion;
+	return !isinf(peer->smoothed_root_dispersion) ? peer->smoothed_root_dispersion : peer->root_dispersion;
 }
 
 static inline struct sfptpd_ntpclient_peer sfptpd_ntpclient_peer_null(void) {
 	return (struct sfptpd_ntpclient_peer) {
 		.offset = NAN,
-		.root_dispersion = NAN,
+		.root_dispersion = INFINITY,
 		.smoothed_offset = NAN,
-		.smoothed_root_dispersion = NAN,
+		.smoothed_root_dispersion = INFINITY,
+		.tracking_offset = NAN,
 	};
 }
 

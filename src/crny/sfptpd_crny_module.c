@@ -102,7 +102,6 @@ struct ntp_state {
 	   The offset is invalid if 'valid' is false. */
 	struct {
 		struct sockaddr_storage peer;
-		int pkts_received;
 		bool valid;
 	} __attribute__((packed)) offset_id_tuple;
 
@@ -146,8 +145,11 @@ struct ntp_state {
 	/* Chrony's cooked system time at which it updated its offset */
 	struct sfptpd_timespec ref_time;
 
-	/* Chrony's cooked system time at which it previously updated its offset */
-	struct sfptpd_timespec ref_time_prev;
+	/* Last observed ref time from Chrony since our step */
+	struct sfptpd_timespec step_ref_time;
+
+	/* Number of distinct Chrony ref_time snapshots since sfptpd stepped */
+	unsigned int step_advance_count;
 
 	/* Chrony's decision as to validity of offset */
 	bool offset_valid;
@@ -669,21 +671,15 @@ static void set_offset_id(struct ntp_state *state, struct sfptpd_ntpclient_peer 
 		memcpy(&state->offset_id_tuple.peer,
 		       &peer->remote_address,
 		       peer->remote_address_len);
-		state->offset_id_tuple.pkts_received = peer->pkts_received;
-		state->offset_id_tuple.valid = true;
+		state->offset_id_tuple.valid = state->offset_valid;
 	}
 }
 
-
-static bool offset_ids_equal(struct ntp_state *state1, struct ntp_state *state2) {
+static bool offset_ids_equal(struct ntp_state *state1, struct ntp_state *state2)
+{
 	return (memcmp(&state1->offset_id_tuple,
 		       &state2->offset_id_tuple,
 		       sizeof state1->offset_id_tuple) == 0);
-}
-
-
-static bool offset_id_is_valid(struct ntp_state *state) {
-	return state->offset_id_tuple.valid;
 }
 
 static void chrony_req_initialize(struct crny_cmd_request* req, uint16_t cmd)
@@ -1118,6 +1114,34 @@ static int issue_get_sys_info(crny_module_t *ntp)
 	return rc;
 }
 
+static void step_advance(struct ntp_state *new_state)
+{
+	if (sfptpd_time_cmp(&new_state->ref_time, &new_state->step_ref_time)) {
+		new_state->step_ref_time = new_state->ref_time;
+		if (new_state->step_advance_count < UINT_MAX)
+			++new_state->step_advance_count;
+	}
+}
+
+static bool offset_became_safe(struct ntp_state *state)
+{
+	return state->offset_valid &&
+	       state->step_advance_count >= 2;
+}
+
+static void attempt_to_clear_step(struct ntp_state *new_state)
+{
+	if (new_state->offset_unsafe) {
+		if (offset_became_safe(new_state)) {
+			new_state->offset_unsafe = false;
+			INFO("crny: new NTP offset clears our step\n");
+			sfptpd_clock_get_time(sfptpd_clock_get_system_clock(),
+					      &new_state->offset_timestamp);
+		} else {
+			DBG_L4("crny: new NTP offset deemed unsafe following our step\n");
+		}
+	}
+}
 
 static int handle_get_sys_info(crny_module_t *ntp)
 {
@@ -1173,13 +1197,13 @@ static int handle_get_sys_info(crny_module_t *ntp)
 
 	next_state->sys_info = sys_info;
 	next_state->ref_id = ref_id;
-	next_state->ref_time_prev = next_state->ref_time;
 	sfptpd_time_init(&next_state->ref_time,
 			 ((uint64_t) ntohl(answer->ref_time.s_hi)) << 32 |
 			 ((uint64_t) ntohl(answer->ref_time.s_lo)),
 			 ntohl(answer->ref_time.ns), 0);
-
+	step_advance(next_state);
 	next_state->offset_valid = sfptpd_crny_tofloat(ntohl(answer->skew_f)) > 0.0;
+	attempt_to_clear_step(next_state);
 
 	if (next_state->offset_valid) {
 		next_state->tracking_offset = sfptpd_crny_tofloat(ntohl(answer->tracking_f)) * -1.0e9;
@@ -1187,8 +1211,8 @@ static int handle_get_sys_info(crny_module_t *ntp)
 		next_state->root_delay = sfptpd_crny_tofloat(ntohl(answer->root_delay_f)) * 1.0e9;
 	} else {
 		next_state->tracking_offset = NAN;
-		next_state->root_dispersion = NAN;
-		next_state->root_delay = NAN;
+		next_state->root_dispersion = INFINITY;
+		next_state->root_delay = INFINITY;
 	}
 
 	return 0;
@@ -1241,9 +1265,8 @@ int issue_get_source_datum(crny_module_t *ntp)
 {
 	struct sfptpd_ntpclient_peer *peer = &ntp->next_state.peer_info.peers[ntp->query.src_idx];
 
-	memset(peer, '\0', sizeof *peer);
-	peer->smoothed_offset = NAN;
-	peer->smoothed_root_dispersion = NAN;
+	*peer = sfptpd_ntpclient_peer_null();
+
 	chrony_req_initialize(&ntp->crny_comm.req, CRNY_REQ_SOURCE_DATA_ITEM);
 	*((int32_t *) &ntp->crny_comm.req.cmd2) = htonl(ntp->query.src_idx);
 
@@ -1932,18 +1955,6 @@ static void ntp_on_clock_control_change(crny_module_t *ntp, struct ntp_state *ne
 }
 
 
-static void ntp_on_offset_id_change(crny_module_t *ntp, struct ntp_state *new_state)
-{
-	DBG_L3("crny: offset ID changed\n");
-
-	if (new_state->offset_unsafe && !offset_id_is_valid(new_state)) {
-		new_state->offset_unsafe = false;
-		INFO("crny: new NTP offset detected\n");
-		sfptpd_clock_get_time(sfptpd_clock_get_system_clock(), &new_state->offset_timestamp);
-	}
-}
-
-
 static void ntp_on_get_status(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 {
 	struct sfptpd_sync_instance_status *status;
@@ -2046,6 +2057,8 @@ static void ntp_on_step_clock(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 
 	/* Invalidate offset until NTP next queries the peers. */
 	ntp->state.offset_unsafe = true;
+	ntp->state.step_ref_time = ntp->state.ref_time;
+	ntp->state.step_advance_count = 0;
 	INFO("crny: clock step- ignoring ntp offset until next update\n");
 
 	SFPTPD_MSG_REPLY(msg);
@@ -2246,9 +2259,9 @@ static void update_state(crny_module_t *ntp)
 	if (ntp_convergence_update(ntp, new_state))
 		any_change = true;
 
-	/* Handle a change in either the source ID or offset */
+	/* Handling for offset ID change; now just logging */
 	if (!offset_ids_equal(new_state, &ntp->state)) {
-		ntp_on_offset_id_change(ntp, new_state);
+		DBG_L3("crny: offset ID changed\n");
 		any_change = true;
 	}
 
@@ -2677,6 +2690,7 @@ int sfptpd_crny_module_create(struct sfptpd_config *config,
 
 	/* Initialise state */
 	ntp->crny_comm.sock = -1;
+	reset_offset_id(&ntp->state);
 
 	/* Find the NTP global configuration. If this doesn't exist then
 	 * something has gone badly wrong. */
