@@ -11,8 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Chrony integration improvements
-  - WIP: changes to how chrony offset is tracked. (SWPTP-1611)
-  - chrony + PPS example removed while combination is unsupported. (SWPTP-1611)
+  - significant change to how chrony offsets are handled - see fixes.
   - restore chrony config on exit. (SWPTP-1612)
   - new edit-chrony-cmdline script edits in place and is therefore compatible
     with the built-in manipulation in sfptpd, unlike old script. (SWPTP-1613)
@@ -33,6 +32,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Issue SWPTP-1611
+  - Use chrony 'tracking offset' instead of NTP peer offset as measure
+  - Mirror chrony's method for determining the validity of its offset
+  - Require two fresh chrony samples following a step by sfptpd
 - Issue SWPTP-1634
   - Fix top clockfeed module that could cause assertion failure if engine
     thread paused.
@@ -40,12 +43,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Fix parsing of `phc_pps_methods` configuration.
 - Issue SWPTP-1646
   - Fix possible use-after-free on shutdown.
-- Issue SWPTP-1658:
+- Issue SWPTP-1658
   - Fix possible (implementation-dependent) leak of vararg lists.
-- Issue SWPTP-1659:
+- Issue SWPTP-1659
   - Do not revert to trying legacy private ioctl for PPS after hotplug event,
     causing continuous failing queries.
-- Issue SWPTP-1664:
+- Issue SWPTP-1664
   - Quote whole of Environment= fallback option in systemd unit.
 
 ## [3.9.0.1007] - 2025-11-07

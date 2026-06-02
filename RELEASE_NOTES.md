@@ -103,11 +103,16 @@ Known Issues
      unaffected. For more details see:
      <https://adaptivesupport.amd.com/s/article/000036427>
 
-- Issue SWPTP-1611
-   - Sfptpd cannot reliably determine the validity of any offset obtained
-     passively from chronyd to use as the time-of-day for a PPS
-     source and in particular, relative to any clock step that may have had
-     to have been recently executed. The options for using PPS are:
+- Issue SWPTP-1611 (related)
+   - Version 4.7 or later of chrony is required for using chronyd as
+     a time of day source for sfptpd, otherwise sfptpd cannot correctly
+     determine chronyd's offset and its validity.
+
+     As a workaround, using `chronyd -q` as a one-shot operation to sync
+     clocks before sfptpd is started may help but is not a recommended
+     solution.
+
+     There are no known issues with the following alternative approaches:
 
       1. Use an NTP sync instance with the 'ntpsec' package, available in
          Debian, Ubuntu and EPEL9.
