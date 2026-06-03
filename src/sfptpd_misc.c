@@ -751,4 +751,98 @@ fail:
 	return NULL;
 }
 
+static int pidfile_write(int fd, bool posix_lock)
+{
+	struct flock file_lock = {
+	        .l_type = F_WRLCK,
+	        .l_start = 0,
+	        .l_whence = SEEK_SET,
+	        .l_len = 0
+	};
+	char pid[16];
+
+	if (-1 == fd)
+		return ENOENT;
+
+	if (posix_lock &&
+	    -1 == fcntl(fd, F_SETLK, &file_lock))
+		return errno;
+
+	if (-1 == ftruncate(fd, 0) ||
+	    -1 == lseek(fd, 0, SEEK_SET) ||
+	    -1 == sprintf(pid, "%ld\n", (long)getpid()) ||
+	    -1 == write(fd, pid, strlen(pid)))
+	        return errno;
+
+	return 0;
+}
+
+struct sfptpd_pidfile {
+	struct sfptpd_pidfile *next;
+	int fd;
+	bool posix_lock;
+};
+
+/* Pointer to registry list head or NULL if none or drained and sealed. */
+static sfptpd_pidfile_registry_t *pidfile_registry_ref;
+
+int sfptpd_pidfile(int fd, bool posix_lock)
+{
+	if (pidfile_registry_ref) {
+		struct sfptpd_pidfile **registry = pidfile_registry_ref;
+		struct sfptpd_pidfile *entry;
+
+		/* Replace any existing entry */
+		for (entry = *registry; entry && entry->fd != fd; entry = entry->next);
+
+		/* Otherwise allocate and insert new entry */
+		if (!entry) {
+			if ((entry = calloc(1, sizeof *entry)) == NULL) {
+				int rc = errno;
+				CRITICAL("could not register pidfile, %s", strerror(errno));
+				return rc;
+			} else {
+				entry->next = *registry;
+				entry->fd = fd;
+				*registry = entry;
+			}
+		}
+
+		entry->posix_lock = posix_lock;
+	}
+
+	return pidfile_write(fd, posix_lock);
+}
+
+void sfptpd_pidfile_registry_open(sfptpd_pidfile_registry_t *registry)
+{
+	assert(*registry == NULL);
+
+	pidfile_registry_ref = registry;
+}
+
+void sfptpd_pidfile_registry_close(bool did_we_need_to_fork)
+{
+	if (pidfile_registry_ref) {
+		struct sfptpd_pidfile *entry = *pidfile_registry_ref;
+		struct sfptpd_pidfile *next;
+
+		/* Nullify the actual list head to avoid confusion. */
+		*pidfile_registry_ref = NULL;
+
+		/* More importantly, close the registry now so we
+		   don't keep adding to it! */
+		pidfile_registry_ref = NULL;
+
+		/* Drain the list regardless of whether we need to act on entries */
+		for (; entry; entry = next) {
+			next = entry->next;
+			if (did_we_need_to_fork)
+				pidfile_write(entry->fd, entry->posix_lock);
+			free(entry);
+		}
+
+	}
+}
+
 /* fin */

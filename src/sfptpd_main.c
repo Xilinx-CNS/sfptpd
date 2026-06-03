@@ -107,6 +107,7 @@ static const struct sfptpd_link_table *initial_link_table = NULL;
 static int priv_helper_pidfd = -1;
 static int priv_helper_pid = -1;
 static int notify_fd = -1;
+static sfptpd_pidfile_registry_t pidfile_registry;
 
 /* The hardware state lock protects data structures that shadow
    the state of the hardware so that they are internally consistent.
@@ -542,25 +543,20 @@ static int netlink_start(void) {
 }
 
 
-static int daemonize(struct sfptpd_config *config, int lock_fd)
+static int daemonize(struct sfptpd_config *config)
 {
-	assert(config != NULL);
+	bool requested = sfptpd_general_config_get(config)->daemon;
 
-	/* If not configured to daemonize the app, just return */
-	if (!sfptpd_general_config_get(config)->daemon)
-		return 0;
-
-	if (daemon(0, 1) < 0) {
-		CRITICAL("failed to daemonize sfptpd, %s\n", strerror(errno));
-		return errno;
+	if (requested) {
+		if (daemon(0, 1) < 0) {
+			CRITICAL("failed to daemonize sfptpd, %s\n", strerror(errno));
+			return errno;
+		}
+		INFO("running as a daemon\n");
 	}
 
-	INFO("running as a daemon\n");
-
-	/* If locking is enabled, update the lock file with our new PID.
-	 * We retain the lock from the parent. */
-	sfptpd_pidfile(lock_fd, false);
-
+	/* Rewrite/reclaim pidfiles/lockfiles if needed and close registry */
+	sfptpd_pidfile_registry_close(requested);
 	return 0;
 }
 
@@ -964,6 +960,7 @@ int main(int argc, char **argv)
 		goto fail;
 
 	/* Create a lock */
+	sfptpd_pidfile_registry_open(&pidfile_registry);
 	rc = lock_create(config, &lock_fd);
 	if (rc != 0)
 		goto fail;
@@ -1020,7 +1017,7 @@ int main(int argc, char **argv)
 #endif
 
 	/* If configured to do so, daemonize the application */
-	rc = daemonize(config, lock_fd);
+	rc = daemonize(config);
 	if (rc != 0)
 		goto exit;
 
@@ -1055,6 +1052,7 @@ exit:
 	rundir_delete(config);
 fail:
 	lock_delete(lock_fd);
+	sfptpd_pidfile_registry_close(false);
 	if (rc == ESHUTDOWN)
 		rc = 0;
 	sfptpd_log_config_abandon();

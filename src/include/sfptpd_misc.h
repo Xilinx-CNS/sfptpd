@@ -102,6 +102,14 @@ struct sfptpd_prog {
 
 typedef unsigned long sfptpd_bitset_t;
 
+/* Opaque structure holding a register pidfile entry */
+struct sfptpd_pidfile;
+
+/* Opaque type to be allocated by owner of a pidfile
+ * registry. This is a list head pointer but the owner
+ * does not need to know that. */
+typedef struct sfptpd_pidfile *sfptpd_pidfile_registry_t;
+
 
 /****************************************************************************
  * Function Prototypes
@@ -277,33 +285,25 @@ static inline int sfptpd_lockfile(const char *lock_filename)
 }
 
 /* Populate a lock file with process PID, optionally taking a POSIX lock.
+ * If a pidfile registry is globally defined and we have not yet forked
+ * to daemonise, stash a reference in a registry to rewrite PID and
+ * reclaim POSIX locks. During this period the caller, who always
+ * owns the fd, must not close it.
+ * Only call this once.
+ * @param registry Registry of pre-fork lockfiles or NULL.
  * @param fd The file descriptor of open lockfile.
  * @param posix_lock Whether to take a POSIX lock on the lockfile.
  * @return 0 on success, else errno. */
-static inline int sfptpd_pidfile(int fd, bool posix_lock)
-{
-	struct flock file_lock = {
-	        .l_type = F_WRLCK,
-	        .l_start = 0,
-	        .l_whence = SEEK_SET,
-	        .l_len = 0
-	};
-	char pid[16];
+int sfptpd_pidfile(int fd, bool posix_lock);
 
-	if (-1 == fd)
-		return ENOENT;
+/* Open the pidfile registry, supplying pointer to opaque state allocated
+ * by the caller that must be pre-initialised to zeros. Causes pidfiles
+ * to be tracked so they can be updated upon daemonisation. There can
+ * only be 0 or 1 such registries in the application. */
+void sfptpd_pidfile_registry_open(sfptpd_pidfile_registry_t *registry);
 
-	if (posix_lock &&
-	    -1 == fcntl(fd, F_SETLK, &file_lock))
-		return errno;
-
-	if (-1 == ftruncate(fd, 0) ||
-	    -1 == lseek(fd, 0, SEEK_SET) ||
-	    -1 == sprintf(pid, "%ld\n", (long)getpid()) ||
-	    -1 == write(fd, pid, strlen(pid)))
-	        return errno;
-
-	return 0;
-}
+/* Close the pidfile registry if it is open, freeing the underlying list,
+ * updating and relocking any pidfiles if necessary due to daemonisation. */
+void sfptpd_pidfile_registry_close(bool did_we_need_to_fork);
 
 #endif /* _SFPTPD_MISC_H */
