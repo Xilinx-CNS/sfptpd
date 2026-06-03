@@ -337,7 +337,7 @@ static int lock_update_pid(int fd)
 	if (-1 == ftruncate(fd, 0) ||
 	    -1 == lseek(fd, 0, SEEK_SET) ||
 	    -1 == sprintf(pid, "%ld\n", (long)getpid()) ||
-	    -1 == write(fd, pid, strlen(pid)+1)) {
+	    -1 == write(fd, pid, strlen(pid))) {
 		CRITICAL("failed to write to lock file: %s\n", strerror(rc = errno));
 		return rc;
 	}
