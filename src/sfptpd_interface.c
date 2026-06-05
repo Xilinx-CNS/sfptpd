@@ -1209,13 +1209,6 @@ static struct sfptpd_interface *interface_find_by_if_index(int index)
 	return FIND_ANY(INTF_KEY_IF_INDEX, &index);
 }
 
-
-static struct sfptpd_interface *interface_find_by_name(const char *name)
-{
-	return FIND_ANY(INTF_KEY_NAME, name);
-}
-
-
 struct sfptpd_interface *sfptpd_interface_find_first_by_nic(int nic_id)
 {
 	struct sfptpd_interface *intf;
@@ -1448,7 +1441,7 @@ static int interface_handle_rename(struct sfptpd_interface *interface,
 
 	interface_close_sysfs_dirs(interface);
 
-	other = interface_find_by_name(if_name);
+	other = FIND_ANY(INTF_KEY_NAME, if_name);
 	if (other != NULL && other->deleted) {
 		TRACE_L3("interface: aliasing deleted interface %d to %d\n",
 			 other->if_index, interface->if_index);
@@ -1574,7 +1567,7 @@ int sfptpd_interface_hotplug_remove(const struct sfptpd_link *link)
 	if (if_index >= 0) {
 		interface = interface_find_by_if_index(if_index);
 	} else {
-		interface = interface_find_by_name(if_name);
+		interface = FIND_ANY(INTF_KEY_NAME, if_name);
 	}
 
 	if (interface == NULL) {
@@ -1613,7 +1606,8 @@ struct sfptpd_interface *sfptpd_interface_find_by_name(const char *name)
 	struct sfptpd_interface *interface;
 
 	interface_lock();
-	interface = interface_find_by_name(name);
+	interface = FIND_ANY(INTF_KEY_NAME, name,
+			     INTF_KEY_DELETED, &(int){ false });
 	interface_unlock();
 
 	return interface;
