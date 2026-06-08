@@ -650,10 +650,7 @@ static int interface_get_hw_address(struct sfptpd_interface *interface)
 		/* Method 1. Already have acquired via netlink. */
 		TRACE_L4("interface %s: got permanent hardware address via netlink\n",
 			 interface->name);
-
-		assert(interface->link.perm_addr.len <= sizeof interface->mac_addr.addr);
-		interface->mac_addr.len = interface->link.perm_addr.len;
-		memcpy(interface->mac_addr.addr, interface->link.perm_addr.addr, interface->link.perm_addr.len);
+		interface->mac_addr = sfptpd_mac_from_l2(interface->link.perm_addr);
 		sfptpd_strncpy(interface->mac_string, interface->link.perm_addr.string, sizeof interface->mac_string);
 	} else {
 		uint8_t buf[sizeof(struct ethtool_perm_addr) + ETH_ALEN];
@@ -982,51 +979,39 @@ static int interface_assign_nic_id(struct sfptpd_interface *interface)
 				 other_intf->ts_info.phc_index);
 			interface->nic_id = other_intf->nic_id;
 		} else {
-			/* Then look for any DEAD interfaces with the same mac address */
-			other_intf = FIND_ANY(INTF_KEY_MAC, &interface->mac_addr,
-					      SFPTPD_DB_SEL_NOT,
-					      INTF_KEY_IF_INDEX, &interface->if_index);
-			if (other_intf != NULL &&
+			/* At this point we could look for deleted interfaces
+			 * with the same MAC address, but we already mopped
+			 * such cases up at hotplug_insert() time by reusing
+			 * those records so there is no need to look. */
+
+			/* Now look for any LIVE interfaces with the same bus address,
+			   not considering function. */
+			if (interface->bus_addr_nic[0] &&
+			    sfptpd_general_config_get(sfptpd_interface_config)->assume_one_phc_per_nic &&
+			    (other_intf = FIND_ANY(INTF_KEY_BUS_ADDR_NIC,
+						   &interface->bus_addr_nic,
+						   SFPTPD_DB_SEL_NOT,
+						   INTF_KEY_IF_INDEX, &interface->if_index,
+						   INTF_KEY_DELETED,
+						   &my_false)) != NULL &&
 			    other_intf->ts_info.phc_index != -1) {
 				TRACE_L4("while trying to assign a permanently-unique nic id to new "
-					 "interface %s, found a previously-deleted interface %s (%d) "
-					 "with the same mac address (%s) and therefore part of the same nic (%d)\n",
+					 "interface %s, found an already-active interface %s (%d) with the same bus "
+					 "address (%s) and therefore part of the same nic (%d)\n",
 					 interface->name,
 					 other_intf->name,
 					 other_intf->if_index,
-					 other_intf->mac_string,
+					 other_intf->bus_addr_nic,
 					 other_intf->nic_id);
 				interface->nic_id = other_intf->nic_id;
-			} else {
-				/* Then look for any LIVE interfaces with the same bus address,
-				   not considering function. */
-				if (interface->bus_addr_nic[0] &&
-				    sfptpd_general_config_get(sfptpd_interface_config)->assume_one_phc_per_nic &&
-				    (other_intf = FIND_ANY(INTF_KEY_BUS_ADDR_NIC,
-							   &interface->bus_addr_nic,
-							   SFPTPD_DB_SEL_NOT,
-							   INTF_KEY_IF_INDEX, &interface->if_index,
-							   INTF_KEY_DELETED,
-							   &my_false)) != NULL &&
-				    other_intf->ts_info.phc_index != -1) {
-					TRACE_L4("while trying to assign a permanently-unique nic id to new "
-						 "interface %s, found an already-active interface %s (%d) with the same bus "
-						 "address (%s) and therefore part of the same nic (%d)\n",
-						 interface->name,
-						 other_intf->name,
-						 other_intf->if_index,
-						 other_intf->bus_addr_nic,
-						 other_intf->nic_id);
-					interface->nic_id = other_intf->nic_id;
-					if (!other_intf->clock_supports_phc) {
-						interface->ts_info.phc_index = other_intf->ts_info.phc_index;
-						interface->clock_supports_phc = false;
-					}
-				} else {
-					interface->nic_id = sfptpd_next_nic_id++;
-					TRACE_L4("interface %s: allocated new nic id (%d)\n",
-						 interface->name, interface->nic_id);
+				if (!other_intf->clock_supports_phc) {
+					interface->ts_info.phc_index = other_intf->ts_info.phc_index;
+					interface->clock_supports_phc = false;
 				}
+			} else {
+				interface->nic_id = sfptpd_next_nic_id++;
+				TRACE_L4("interface %s: allocated new nic id (%d)\n",
+					 interface->name, interface->nic_id);
 			}
 		}
 	}
@@ -1200,13 +1185,6 @@ static bool interface_get_canonical_with_lock(struct sfptpd_interface **interfac
 	}
 	interface_unlock();
 	return false;
-}
-
-
-/* Finds the interface with the given OS interface index */
-static struct sfptpd_interface *interface_find_by_if_index(int index)
-{
-	return FIND_ANY(INTF_KEY_IF_INDEX, &index);
 }
 
 struct sfptpd_interface *sfptpd_interface_find_first_by_nic(int nic_id)
@@ -1472,30 +1450,52 @@ int sfptpd_interface_hotplug_insert(const struct sfptpd_link *link)
 
 	interface_lock();
 
-	interface = interface_find_by_if_index(if_index);
+	/* If the physical interface was previously known to sfptpd then
+	 * the restoration, reporting and diagnostics will be cleaner if
+	 * we can re-associate with the previous record, particularly
+	 * for brief outages.
+	 *
+	 * It is not safe to reassociate by name because
+	 *  1) All Linux network interface identification by name is
+	 *     inherently racy.
+	 *  2) Additional race risk, nay, near certainty, is introduced
+	 *     by ubiquitous interface renaming, as newly (re-)introduced
+	 *     interfaces always accrue the 'eth0' label.
+	 *
+	 * if_index is not reused, so first we will try to associate that
+	 * way. This is how _changes_ are handled.
+	 *
+	 * The mainstay of interface resurrection will be matching against
+	 * permanent MAC address.
+	 */
+
+	interface = FIND_ANY(INTF_KEY_IF_INDEX, &if_index);
 	if (interface == NULL) {
+		const sfptpd_mac_addr_t mac = sfptpd_mac_from_l2(link->perm_addr);
+
 		/* Avoid searching by name - that would be unreliable */
 		INFO("interface: hotplug insert for %s (%d)\n", if_name, if_index);
+
+		if (mac.len)
+			interface = FIND_ANY(INTF_KEY_MAC, &mac);
 		if (interface != NULL) {
-
-			/* Handle the case of an old interface in the list with the same name */
 			if (interface->deleted) {
-
-				/* Overwrite this interface object for the new interface */
-				INFO("interface: replacing deleted interface %d\n", interface->if_index);
+				INFO("interface: %s (%d) is replug of deleted interface %s (%d)\n",
+				     if_name, if_index,
+				     interface->name, interface->if_index);
 			} else {
-				WARNING("interface: cannot process insertion of interface %s (%d) while undeleted interface of the same name (%d) still exists\n",
+				WARNING("interface: cannot process insertion of interface %s (%d) "
+					"while undeleted interface of the same MAC address (%d) still exists\n",
 					 if_name, if_index, interface->if_index);
 				rc = EINVAL;
 				goto finish;
 			}
 		} else {
-
 			/* Create the new interface object */
 			rc = interface_alloc(&interface);
 			if (rc != 0) {
-				CRITICAL("failed to allocate interface object for %d, %s\n",
-					 if_name, strerror(rc));
+				CRITICAL("failed to allocate interface object for %s (%d), %s\n",
+					 if_name, if_index, strerror(rc));
 				goto finish;
 			}
 
@@ -1565,7 +1565,7 @@ int sfptpd_interface_hotplug_remove(const struct sfptpd_link *link)
 	/* If the ifindex has been provided, find the interface by index. If not,
 	 * try to find the interface by name. */
 	if (if_index >= 0) {
-		interface = interface_find_by_if_index(if_index);
+		interface = FIND_ANY(INTF_KEY_IF_INDEX, &if_index);
 	} else {
 		interface = FIND_ANY(INTF_KEY_NAME, if_name);
 	}
@@ -1595,7 +1595,9 @@ struct sfptpd_interface *sfptpd_interface_find_by_if_index(int if_index)
 {
 	struct sfptpd_interface *interface;
 
-	interface = interface_find_by_if_index(if_index);
+	interface_lock();
+	interface = FIND_ANY(INTF_KEY_IF_INDEX, &if_index);
+	interface_unlock();
 
 	return interface;
 }

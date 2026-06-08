@@ -6,6 +6,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 #include <time.h>
 #include <net/ethernet.h>
 #include <linux/if_ether.h>
@@ -39,6 +40,12 @@ typedef struct {
 	uint8_t addr[SFPTPD_L2ADDR_MAX];
 } __attribute__ ((packed)) sfptpd_mac_addr_t;
 
+static inline sfptpd_mac_addr_t sfptpd_mac_from_l2(struct sfptpd_l2addr l2)
+{
+	sfptpd_mac_addr_t mac = { .len = l2.len > sizeof mac.addr ? 0 : l2.len };
+	memcpy(mac.addr, l2.addr, mac.len);
+	return mac;
+}
 
 /** Bitmask of interface timestamping capabilities */
 typedef uint32_t sfptpd_interface_ts_caps_t;
@@ -87,12 +94,6 @@ struct sfptpd_interface *sfptpd_interface_find_by_if_index(int if_index);
  * @return A pointer to the interface or NULL if not found.
  */
 struct sfptpd_interface *sfptpd_interface_find_by_name(const char *name);
-
-/** Find an interface by MAC address
- * @param mac Pointer to MAC address
- * @return A pointer to the interface instance or NULL if not found.
- */
-struct sfptpd_interface *sfptpd_interface_find_by_mac_addr(sfptpd_mac_addr_t *mac);
 
 /** Get the name of an interface
  * @param interface  Pointer to interface instance

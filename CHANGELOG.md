@@ -53,6 +53,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     clean up state.
 - Issue SWPTP-1664
   - Quote whole of Environment= fallback option in systemd unit.
+- Issue SWPTP-1668
+  - Fix reassociation of replugged network interface, e.g. under driver reload
 - Issue SWPTP-1669
   - Avoid excessive selection churn by quantising source accuracy.
 
