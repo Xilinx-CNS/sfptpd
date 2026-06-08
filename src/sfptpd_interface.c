@@ -1452,7 +1452,12 @@ static int interface_handle_rename(struct sfptpd_interface *interface,
 	if (other != NULL && other->deleted) {
 		TRACE_L3("interface: aliasing deleted interface %d to %d\n",
 			 other->if_index, interface->if_index);
-		other->name[0] = '\0';
+		memset(other->name, '\0', sizeof other->name);
+		memset(&other->mac_addr, '\0', sizeof other->mac_addr);
+		memset(other->bus_addr, '\0', sizeof other->bus_addr);
+		memset(other->bus_addr_nic, '\0', sizeof other->bus_addr_nic);
+		other->nic_id = -1;
+		other->ts_info.phc_index = -1;
 		other->canonical = interface;
 	} else if (other != NULL) {
 		CRITICAL("interface: renamed interface apparently still active as if_index %d\n",
