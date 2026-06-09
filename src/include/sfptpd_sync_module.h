@@ -300,9 +300,10 @@ const char *sfptpd_sync_module_name(enum sfptpd_config_category type);
 /** Compare two Grandmaster Info structures.
  * @param gm1 Pointer to Grandmaster Info structure
  * @param gm2 Pointer to Grandmaster Info structure
- * @return True if the two structure are equal
+ * @return True if the two structure are equivalent modulo the bucketing
+ * of continuous values.
  */
-bool sfptpd_sync_module_gm_info_equal(struct sfptpd_grandmaster_info *gm1,
+bool sfptpd_sync_module_gm_info_equiv(struct sfptpd_grandmaster_info *gm1,
 				      struct sfptpd_grandmaster_info *gm2);
 
 /** Create a sync module with the specified name based on the configuration supplied

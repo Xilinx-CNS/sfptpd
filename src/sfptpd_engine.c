@@ -731,7 +731,7 @@ static void write_sync_instances(struct sfptpd_engine *engine)
 				     (double) record->status.user_priority,
 				     record->status.clustering_score,
 				     sfptpd_clock_class_text(record->status.master.clock_class),
-				     record->status.master.accuracy + record->status.local_accuracy,
+				     sfptpd_total_accuracy(record->status.master.accuracy, record->status.local_accuracy),
 				     record->status.master.allan_variance,
 				     record->status.master.steps_removed);
 	}
@@ -1999,7 +1999,7 @@ static void on_sync_instance_state_changed(struct sfptpd_engine *engine,
 	if (instance_record == engine->selected) {
 		/* If the clock characteristics have changed, ensure that all
 		 * master instances know about it. */
-		if (!sfptpd_sync_module_gm_info_equal(&instance_record->status.master,
+		if (!sfptpd_sync_module_gm_info_equiv(&instance_record->status.master,
 						      &status->master)) {
 			propagate_grandmaster_info(engine, &instance_record->info,
 						   &status->master);

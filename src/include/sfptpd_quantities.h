@@ -17,4 +17,30 @@
 typedef float sfptpd_accuracy_t;
 
 
+/****************************************************************************
+ * Constant declarations
+****************************************************************************/
+
+extern const sfptpd_accuracy_t sfptpd_accuracy_buckets[];
+
+
+/****************************************************************************
+ * Function declarations
+****************************************************************************/
+
+sfptpd_accuracy_t sfptpd_accuracy_bucket_ceil(sfptpd_accuracy_t accuracy);
+sfptpd_accuracy_t sfptpd_accuracy_bucket_midpoint(sfptpd_accuracy_t accuracy);
+
+
+/****************************************************************************
+ * Inline functions
+****************************************************************************/
+
+static inline sfptpd_accuracy_t sfptpd_total_accuracy(sfptpd_accuracy_t master,
+						      sfptpd_accuracy_t local)
+{
+	return sfptpd_accuracy_bucket_ceil(sfptpd_accuracy_bucket_midpoint(master) + local);
+}
+
+
 #endif

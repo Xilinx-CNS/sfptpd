@@ -286,7 +286,7 @@ const char *sfptpd_sync_module_name(enum sfptpd_config_category type)
 }
 
 
-bool sfptpd_sync_module_gm_info_equal(struct sfptpd_grandmaster_info *gm1,
+bool sfptpd_sync_module_gm_info_equiv(struct sfptpd_grandmaster_info *gm1,
 				      struct sfptpd_grandmaster_info *gm2)
 {
 	assert(gm1 != NULL);
@@ -295,7 +295,7 @@ bool sfptpd_sync_module_gm_info_equal(struct sfptpd_grandmaster_info *gm1,
 	return sfptpd_clock_ids_equal(&gm1->clock_id, &gm2->clock_id) &&
 	       (gm1->clock_class == gm2->clock_class) &&
 	       (gm1->time_source == gm2->time_source) &&
-	       (gm1->accuracy == gm2->accuracy) &&
+	       sfptpd_accuracy_equiv(gm1->accuracy, gm2->accuracy) &&
 	       (gm1->allan_variance == gm2->allan_variance ||
 		(isnan(gm1->allan_variance) && isnan(gm2->allan_variance))) &&
 	       (gm1->steps_removed == gm2->steps_removed);

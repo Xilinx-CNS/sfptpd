@@ -265,8 +265,8 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 			}
 			break;
 		case SELECTION_RULE_TOTAL_ACCURACY:
-			total_accuracy_a = status_a->master.accuracy + status_a->local_accuracy;
-			total_accuracy_b = status_b->master.accuracy + status_b->local_accuracy;
+			total_accuracy_a = sfptpd_total_accuracy(status_a->master.accuracy, status_a->local_accuracy);
+			total_accuracy_b = sfptpd_total_accuracy(status_b->master.accuracy, status_b->local_accuracy);
 
 			DBG_L3("selection%s:   comparing %s: %f, %f\n",
 			       phase, rule_name,
