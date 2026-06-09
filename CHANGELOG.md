@@ -50,6 +50,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     causing continuous failing queries.
 - Issue SWPTP-1664
   - Quote whole of Environment= fallback option in systemd unit.
+- Issue SWPTP-1669:
+  - Avoid excessive selection churn by quantising source accuracy.
 
 ## [3.9.0.1007] - 2025-11-07
 

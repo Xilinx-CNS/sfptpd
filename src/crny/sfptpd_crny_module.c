@@ -39,6 +39,7 @@
 #include "sfptpd_time.h"
 #include "sfptpd_ntpd_client.h"
 #include "sfptpd_engine.h"
+#include "sfptpd_quantities.h"
 
 #include "sfptpd_crny_helper.h"
 #include "sfptpd_crny_module.h"
@@ -1701,7 +1702,7 @@ static bool ntp_handle_state_change(crny_module_t *ntp,
 	if ((new_state->state != ntp->state.state) ||
 	    (new_state->alarms != ntp->state.alarms) ||
 	    (new_state->offset_from_master != ntp->state.offset_from_master) ||
-	    (new_state->root_dispersion != ntp->state.root_dispersion) ||
+	    (!sfptpd_accuracy_equiv(new_state->root_dispersion, ntp->state.root_dispersion)) ||
 	    (new_state->stratum != ntp->state.stratum)) {
 
 		/* Send a status update to the sync engine to let it know

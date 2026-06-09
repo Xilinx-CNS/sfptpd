@@ -33,6 +33,7 @@
 #include "sfptpd_time.h"
 #include "sfptpd_ntpd_client.h"
 #include "sfptpd_engine.h"
+#include "sfptpd_quantities.h"
 
 #include "sfptpd_ntp_module.h"
 
@@ -893,7 +894,7 @@ static void ntp_handle_state_change(ntp_module_t *ntp, struct ntp_state *new_sta
 	    (new_state->alarms != ntp->state.alarms) ||
 	    (new_state->constraints != ntp->state.constraints) ||
 	    (new_state->offset_from_master != ntp->state.offset_from_master) ||
-	    (new_state->root_dispersion != ntp->state.root_dispersion) ||
+	    (!sfptpd_accuracy_equiv(new_state->root_dispersion, ntp->state.root_dispersion)) ||
 	    (new_state->stratum != ntp->state.stratum)) {
 		ntp_send_instance_status(ntp, new_state);
 	}
