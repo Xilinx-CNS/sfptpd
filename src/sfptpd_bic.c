@@ -146,8 +146,8 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 {
 	struct sfptpd_sync_instance_status *status_a;
 	struct sfptpd_sync_instance_status *status_b;
-	double total_accuracy_a;
-	double total_accuracy_b;
+	sfptpd_accuracy_t total_accuracy_a;
+	sfptpd_accuracy_t total_accuracy_b;
 	int state_priority_a;
 	int state_priority_b;
 	struct sync_instance_record *choice;
@@ -268,7 +268,7 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 			total_accuracy_a = status_a->master.accuracy + status_a->local_accuracy;
 			total_accuracy_b = status_b->master.accuracy + status_b->local_accuracy;
 
-			DBG_L3("selection%s:   comparing %s: %lf, %lf\n",
+			DBG_L3("selection%s:   comparing %s: %f, %f\n",
 			       phase, rule_name,
 			       total_accuracy_a, total_accuracy_b);
 

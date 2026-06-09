@@ -686,7 +686,7 @@ static void write_sync_instances(struct sfptpd_engine *engine)
 {
 	const char *header[] = { "R", "instance", "S", "M", "X", "state", "O", "A", "priority", "C", "gm class", "accuracy", "allan var", "steps" };
 	const char *format_header = "| %2s | %-12s%1s | %1s%1s |%-9s %1s | %1s | %8s | %1s | %-11s | %8s | %9s | %5s |\n";
-	const char *format_record = "| %2d | %-12s%1s | %c%c |%-9s %1d | %1s | %8.3g | %1d | %-11s | %8.3llg | %9.3llg | %5d |\n";
+	const char *format_record = "| %2d | %-12s%1s | %c%c |%-9s %1d | %1s | %8.3g | %1d | %-11s | %8.3g | %9.3Lg | %5d |\n";
 	const struct sfptpd_selection_policy *policy;
 	struct sfptpd_log *log;
 	FILE *stream;
@@ -819,7 +819,7 @@ static void propagate_grandmaster_info(struct sfptpd_engine *engine,
 
 	TRACE_L2("new grandmaster info: instance = %s, id = "
 		 "%02hhx%02hhx:%02hhx%02hhx:%02hhx%02hhx:%02hhx%02hhx, "
-		 "remote = %s, clock class = %s, time source = %s, accuracy = %Lf, steps removed = %d\n",
+		 "remote = %s, clock class = %s, time source = %s, accuracy = %.3g, steps removed = %d\n",
 		 info->name,
 		 master->clock_id.id[0], master->clock_id.id[1],
 		 master->clock_id.id[2], master->clock_id.id[3],

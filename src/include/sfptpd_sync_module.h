@@ -17,6 +17,7 @@
 #include "sfptpd_clock.h"
 #include "sfptpd_time.h"
 #include "sfptpd_link.h"
+#include "sfptpd_quantities.h"
 
 
 /****************************************************************************
@@ -187,7 +188,7 @@ struct sfptpd_grandmaster_info {
 	bool remote_clock;
 	enum sfptpd_clock_class clock_class;
 	enum sfptpd_time_source time_source;
-	long double accuracy;
+	sfptpd_accuracy_t accuracy;
 	long double allan_variance;
 	unsigned int steps_removed;
 	bool time_traceable;
@@ -214,7 +215,7 @@ typedef struct sfptpd_sync_instance_status {
 	struct sfptpd_timespec offset_from_master;
 	unsigned int user_priority;
 	struct sfptpd_grandmaster_info master;
-	long double local_accuracy;
+	sfptpd_accuracy_t local_accuracy;
 	int clustering_score;
 } sfptpd_sync_instance_status_t;
 

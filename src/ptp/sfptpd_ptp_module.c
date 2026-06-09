@@ -255,11 +255,6 @@ struct sfptpd_ptp_module {
 	struct sfptpd_link_table link_table;
 };
 
-struct sfptpd_ptp_accuracy_map {
-	ptpd_clock_accuracy_e enumeration;
-	long double float_ns;
-};
-
 /****************************************************************************
  * Constants
  ****************************************************************************/
@@ -292,33 +287,6 @@ static const struct sfptpd_stats_collection_defn ptp_stats_defns[] =
 	{PTP_STATS_ID_TX_PKT_NO_TIMESTAMP,     SFPTPD_STATS_TYPE_COUNT, "tx-pkt-no-timestamp"},
 	{PTP_STATS_ID_RX_PKT_NO_TIMESTAMP,     SFPTPD_STATS_TYPE_COUNT, "rx-pkt-no-timestamp"},
 	{PTP_STATS_ID_NUM_PTP_NODES,           SFPTPD_STATS_TYPE_RANGE, "num-ptp-nodes", NULL, 0}
-};
-
-/* Note that this table must be in order of increasing values for the translations
- * functions to operate correctly. */
-static const struct sfptpd_ptp_accuracy_map ptp_accuracy_map[] =
-{
-	{PTPD_ACCURACY_WITHIN_25NS, 2.5e1},
-	{PTPD_ACCURACY_WITHIN_100NS, 1.0e2},
-	{PTPD_ACCURACY_WITHIN_250NS, 2.5e2},
-	{PTPD_ACCURACY_WITHIN_1US, 1.0e3},
-	{PTPD_ACCURACY_WITHIN_2US5, 2.5e3},
-	{PTPD_ACCURACY_WITHIN_10US, 1.0e4},
-	{PTPD_ACCURACY_WITHIN_25US, 2.5e4},
-	{PTPD_ACCURACY_WITHIN_100US, 1.0e5},
-	{PTPD_ACCURACY_WITHIN_250US, 2.5e5},
-	{PTPD_ACCURACY_WITHIN_1MS, 1.0e6},
-	{PTPD_ACCURACY_WITHIN_2MS5, 2.5e6},
-	{PTPD_ACCURACY_WITHIN_10MS, 1.0e7},
-	{PTPD_ACCURACY_WITHIN_25MS, 2.5e7},
-	{PTPD_ACCURACY_WITHIN_100MS, 1.0e8},
-	{PTPD_ACCURACY_WITHIN_250MS, 2.5e8},
-	{PTPD_ACCURACY_WITHIN_1S, 1.0e9},
-	{PTPD_ACCURACY_WITHIN_10S, 1.0e10},
-	{PTPD_ACCURACY_UNKNOWN, INFINITY},
-	/* Note that the 'more than 10s' enum goes last so that we will
-	 * prefer 'unknown'. This enum value is moronic. */
-	{PTPD_ACCURACY_MORE_THAN_10S, INFINITY}
 };
 
 
@@ -441,33 +409,6 @@ static enum sfptpd_clock_class ptp_translate_clock_class_from_ieee1588(uint8_t c
 }
 
 
-static ptpd_clock_accuracy_e ptp_translate_accuracy_to_enum(long double accuracy_ns)
-{
-	unsigned int i;
-	
-	for (i = 0; i < sizeof(ptp_accuracy_map)/sizeof(ptp_accuracy_map[0]); i++) {
-		if ((accuracy_ns >= -ptp_accuracy_map[i].float_ns) &&
-		    (accuracy_ns <= ptp_accuracy_map[i].float_ns))
-			return ptp_accuracy_map[i].enumeration;
-	}
-
-	return PTPD_ACCURACY_UNKNOWN;
-}
-
-
-static long double ptp_translate_accuracy_to_float(ptpd_clock_accuracy_e accuracy_enum)
-{
-	unsigned int i;
-	
-	for (i = 0; i < sizeof(ptp_accuracy_map)/sizeof(ptp_accuracy_map[0]); i++) {
-		if (accuracy_enum == ptp_accuracy_map[i].enumeration)
-			return ptp_accuracy_map[i].float_ns;
-	}
-
-	return INFINITY;
-}
-
-
 static uint16_t ptp_translate_allan_variance_to_ieee1588(long double variance)
 {
 	/* Refer to section to 7.6.3.3 of the IEEE1588 spec for information on
@@ -491,7 +432,7 @@ static void ptp_translate_master_characteristics(struct sfptpd_ptp_instance *ins
 {
 	uint16_t variance = instance->ptpd_port_snapshot.parent.grandmaster_offset_scaled_log_variance;
 	uint8_t clock_class = instance->ptpd_port_snapshot.parent.grandmaster_clock_class;
-	ptpd_clock_accuracy_e accuracy = instance->ptpd_port_snapshot.parent.grandmaster_clock_accuracy;
+	Enumeration8 accuracy = instance->ptpd_port_snapshot.parent.grandmaster_clock_accuracy;
 
 	memcpy(status->master.clock_id.id,
 	       instance->ptpd_port_snapshot.parent.grandmaster_id,
@@ -499,7 +440,7 @@ static void ptp_translate_master_characteristics(struct sfptpd_ptp_instance *ins
 	status->master.remote_clock = (status->state == SYNC_MODULE_STATE_SLAVE);
 	status->master.clock_class = ptp_translate_clock_class_from_ieee1588(clock_class);
 	status->master.time_source = instance->ptpd_port_snapshot.parent.grandmaster_time_source;
-	status->master.accuracy = ptp_translate_accuracy_to_float(accuracy);
+	status->master.accuracy = ptpd_accuracy_from_wire(accuracy);
 	status->master.allan_variance = status->master.remote_clock ? ptp_translate_allan_variance_from_ieee1588(variance) : NAN;
 	status->master.time_traceable = instance->ptpd_port_snapshot.time.time_traceable;
 	status->master.freq_traceable = instance->ptpd_port_snapshot.time.freq_traceable;
@@ -2419,7 +2360,6 @@ static void ptp_on_update_gm_info(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_m
 	struct sfptpd_ptp_instance *ptr;
 	struct sfptpd_grandmaster_info *info;
 	uint8_t clock_class;
-	ptpd_clock_accuracy_e clock_accuracy;
 	unsigned int allan_variance;
 
 	assert(ptp != NULL);
@@ -2428,7 +2368,6 @@ static void ptp_on_update_gm_info(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_m
 	info = &msg->u.update_gm_info_req.info;
 
 	clock_class = ptp_translate_clock_class_to_ieee1588(info->clock_class);
-	clock_accuracy = ptp_translate_accuracy_to_enum(info->accuracy);
 	allan_variance = ptp_translate_allan_variance_to_ieee1588(info->allan_variance);
 
 	/* Update all instances except the originator */
@@ -2436,7 +2375,7 @@ static void ptp_on_update_gm_info(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_m
 		if (ptr != (struct sfptpd_ptp_instance *)msg->u.update_gm_info_req.originator) {
 			ptpd_update_gm_info(ptr->ptpd_port_private, info->remote_clock,
 					    info->clock_id.id, clock_class,
-					    (uint8_t) info->time_source, clock_accuracy,
+					    (uint8_t) info->time_source, info->accuracy,
 					    allan_variance, info->steps_removed,
 					    info->time_traceable, info->freq_traceable);
 		}
@@ -2611,7 +2550,7 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 				"slave-only: %s\n"
 				"grandmaster-id: " SFPTPD_FORMAT_EUI64 "\n"
 				"grandmaster-clock-class: %d\n"
-				"grandmaster-clock-accuracy: %d (<%0.0Lfns)\n"
+				"grandmaster-clock-accuracy: %d (<%0.0fns)\n"
 				"grandmaster-bmc-priority1: %d\n"
 				"grandmaster-bmc-priority2: %d\n"
 				"timescale: %s\n"
@@ -2654,7 +2593,7 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 				gm_id[4], gm_id[5], gm_id[6], gm_id[7],
 				snapshot->parent.grandmaster_clock_class,
 				snapshot->parent.grandmaster_clock_accuracy,
-				ptp_translate_accuracy_to_float(snapshot->parent.grandmaster_clock_accuracy),
+				ptpd_accuracy_from_wire(snapshot->parent.grandmaster_clock_accuracy),
 				snapshot->parent.grandmaster_priority1,
 				snapshot->parent.grandmaster_priority2,
 				snapshot->time.ptp_timescale? "tai": "utc",
@@ -2688,7 +2627,7 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 				"two-step: %s\n"
 				"grandmaster-id: " SFPTPD_FORMAT_EUI64 "\n"
 				"clock-class: %d\n"
-				"clock-accuracy: %d (<%0.0Lfns)\n"
+				"clock-accuracy: %d (<%0.0fns)\n"
 				"bmc-priority1: %d\n"
 				"bmc-priority2: %d\n"
 				"timescale: %s\n"
@@ -2721,7 +2660,7 @@ static void ptp_on_save_state(sfptpd_ptp_module_t *ptp, sfptpd_sync_module_msg_t
 				gm_id[4], gm_id[5], gm_id[6], gm_id[7],
 				snapshot->parent.grandmaster_clock_class,
 				snapshot->parent.grandmaster_clock_accuracy,
-				ptp_translate_accuracy_to_float(snapshot->parent.grandmaster_clock_accuracy),
+				ptpd_accuracy_from_wire(snapshot->parent.grandmaster_clock_accuracy),
 				snapshot->parent.grandmaster_priority1,
 				snapshot->parent.grandmaster_priority2,
 				snapshot->time.ptp_timescale? "tai": "utc",

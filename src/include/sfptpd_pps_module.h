@@ -61,7 +61,7 @@ typedef struct sfptpd_pps_module_config {
 	/* Clock class, time source and accuracy */
 	enum sfptpd_clock_class master_clock_class;
 	enum sfptpd_time_source master_time_source;
-	long double master_accuracy;
+	sfptpd_accuracy_t master_accuracy;
 	bool master_time_traceable;
 	bool master_freq_traceable;
 

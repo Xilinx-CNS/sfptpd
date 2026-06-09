@@ -129,7 +129,7 @@ static int parse_clock_accuracy(struct sfptpd_config_section *section, const cha
 		return 0;
 	}
 
-	tokens = sscanf(params[0], "%Lf", &(fr->clock_accuracy));
+	tokens = sscanf(params[0], "%f", &(fr->clock_accuracy));
 	if (tokens != 1)
 		return EINVAL;
 
@@ -279,8 +279,8 @@ struct phy_search_result {
 	const struct sfptpd_link *link;
 	struct sfptpd_interface *interface;
 	struct sfptpd_clock *clock;
-	long double holdover;
-	long double accuracy;
+	sfptpd_accuracy_t holdover;
+	sfptpd_accuracy_t accuracy;
 	enum sfptpd_clock_stratum stratum;
 };
 

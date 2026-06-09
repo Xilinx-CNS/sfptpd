@@ -890,7 +890,7 @@ struct ptpd_port_context {
 	/* Dynamic members */
 	Boolean boundaryGrandmasterDefined;
 	ClockIdentity boundaryGrandmasterIdentity;
-	ClockQuality clockQuality;
+	ClockQuality clockQuality; /* Wire values */
 	struct sfptpd_interface *physIface; /* The preferred physical interface, not necessarily used for PTP traffic */
 	struct sfptpd_clock *clock;
 

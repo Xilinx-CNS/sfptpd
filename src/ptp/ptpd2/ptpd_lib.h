@@ -16,6 +16,7 @@
 #include "datatypes.h"
 #include "constants.h"
 
+#include "sfptpd_quantities.h"
 #include "sfptpd_sync_module.h"
 
 
@@ -138,7 +139,7 @@ void ptpd_update_gm_info(struct ptpd_port_context *ptpd,
 			 uint8_t clock_id[8],
 			 uint8_t clock_class,
 			 ptpd_time_source_e time_source,
-			 ptpd_clock_accuracy_e clock_accuracy,
+			 sfptpd_accuracy_t clock_accuracy,
 			 unsigned int offset_scaled_log_variance,
 			 unsigned int steps_removed,
 			 bool time_traceable,
@@ -251,5 +252,16 @@ int ptpd_translate_alarms_from_msg_type_bitfield(int *msg_alarms);
  * @return The alarm bits in protocol format */
 int ptpd_translate_alarms_from_protocol(int *other_alarms);
 
+/** Encode accuracy to IEEE1588 wire value
+ * @param accuracy the accuracy
+ * @return the wire value for the corresponding bucket.
+ */
+Enumeration8 ptpd_accuracy_to_wire(sfptpd_accuracy_t accuracy);
+
+/** Decode accuracy from IEEE1588 wire value
+ * @param wire the wire value
+ * @return the upper bound for accuracy
+ */
+sfptpd_accuracy_t ptpd_accuracy_from_wire(Enumeration8 wire);
 
 #endif /* _PTPD_LIB_H */

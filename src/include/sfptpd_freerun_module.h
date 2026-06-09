@@ -27,7 +27,7 @@ typedef struct sfptpd_freerun_module_config {
 
 	/* Clock class and accuracy */
 	enum sfptpd_clock_class clock_class;
-	long double clock_accuracy;
+	sfptpd_accuracy_t clock_accuracy;
 	bool clock_time_traceable;
 	bool clock_freq_traceable;
 

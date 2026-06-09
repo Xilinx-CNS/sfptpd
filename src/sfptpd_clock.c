@@ -64,8 +64,8 @@
 struct sfptpd_clock_spec {
 	const char *name;
 	enum sfptpd_clock_stratum stratum;
-	long double accuracy;
-	long double holdover;
+	sfptpd_accuracy_t accuracy;
+	sfptpd_accuracy_t holdover;
 };
 
 static const struct sfptpd_clock_spec sfptpd_clock_specifications[] =
@@ -1007,7 +1007,7 @@ static int renew_clock(struct sfptpd_clock *clock)
 		clock_determine_max_freq_adj(clock);
 
 		if (change) {
-			TRACE_L3("clock %s: stratum %s, accuracy %.3Lf ppb, holdover %.3Lf ppb\n",
+			TRACE_L3("clock %s: stratum %s, accuracy %.3f ppb, holdover %.3f ppb\n",
 				 clock->short_name, clock->spec->name,
 				 clock->spec->accuracy, clock->spec->holdover);
 			TRACE_L3("clock %s: id %s, max freq adj %.3Lf ppb\n",
@@ -1879,8 +1879,8 @@ struct sfptpd_interface *sfptpd_clock_get_primary_interface(const struct sfptpd_
 /* Not locked. TODO: re-evaluate whether this is safe. */
 void sfptpd_clock_get_accuracy(struct sfptpd_clock *clock,
 			       enum sfptpd_clock_stratum *stratum,
-			       long double *accuracy,
-			       long double *holdover)
+			       sfptpd_accuracy_t *accuracy,
+			       sfptpd_accuracy_t *holdover)
 {
 	assert(clock != NULL);
 	assert(clock->magic == SFPTPD_CLOCK_MAGIC);

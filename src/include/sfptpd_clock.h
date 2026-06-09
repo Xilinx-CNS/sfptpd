@@ -11,6 +11,7 @@
 
 #include <sfptpd_time.h>
 #include <sfptpd_phc.h>
+#include <sfptpd_quantities.h>
 
 /* ANSI/T1.101-1987
  *  Synchronization Interface Standards for Digital Networks */
@@ -342,8 +343,8 @@ struct sfptpd_interface *sfptpd_clock_get_primary_interface(const struct sfptpd_
  */
 void sfptpd_clock_get_accuracy(struct sfptpd_clock *clock,
 			       enum sfptpd_clock_stratum *stratum,
-			       long double *accuracy,
-			       long double *holdover);
+			       sfptpd_accuracy_t *accuracy,
+			       sfptpd_accuracy_t *holdover);
 
 /** Get the maximum frequency adjustment that this clock supports.
  * @param clock  Pointer to clock instance

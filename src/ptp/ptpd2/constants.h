@@ -72,15 +72,6 @@ section 7.6.2.4, page 55:
 #define DEFAULT_CLOCK_CLASS					248
 #define SLAVE_ONLY_CLOCK_CLASS					255
 
-/*
- * section 7.6.2.5, page 56:
- * 0x20      Time accurate to 25ns
- * ...
- * 0x31      Time accurate to > 10s
- * 0xFE      Unkown accuracy
- */
-#define DEFAULT_CLOCK_ACCURACY   0xFE
-
 #define DEFAULT_PRIORITY1		128
 #define DEFAULT_PRIORITY2		128        /* page 238, default priority is the midpoint, to allow easy control of the BMC algorithm */
 
@@ -150,31 +141,6 @@ typedef enum {
 	PTPD_NETWORK_PROTOCOL_CONTROL_NET,
 	PTPD_NETWORK_PROTOCOL_PROFINET
 } ptpd_network_protocol_e;
-
-/**
- * \brief Clock accuracy enumeration (Table 6 in the spec)
- */
-typedef enum {
-	PTPD_ACCURACY_WITHIN_25NS = 0x20,
-	PTPD_ACCURACY_WITHIN_100NS = 0x21,
-	PTPD_ACCURACY_WITHIN_250NS = 0x22,
-	PTPD_ACCURACY_WITHIN_1US = 0x23,
-	PTPD_ACCURACY_WITHIN_2US5 = 0x24,
-	PTPD_ACCURACY_WITHIN_10US = 0x25,
-	PTPD_ACCURACY_WITHIN_25US = 0x26,
-	PTPD_ACCURACY_WITHIN_100US = 0x27,
-	PTPD_ACCURACY_WITHIN_250US = 0x28,
-	PTPD_ACCURACY_WITHIN_1MS = 0x29,
-	PTPD_ACCURACY_WITHIN_2MS5 = 0x2A,
-	PTPD_ACCURACY_WITHIN_10MS = 0x2B,
-	PTPD_ACCURACY_WITHIN_25MS = 0x2C,
-	PTPD_ACCURACY_WITHIN_100MS = 0x2D,
-	PTPD_ACCURACY_WITHIN_250MS = 0x2E,
-	PTPD_ACCURACY_WITHIN_1S = 0x2F,
-	PTPD_ACCURACY_WITHIN_10S = 0x30,
-	PTPD_ACCURACY_MORE_THAN_10S = 0x31,
-	PTPD_ACCURACY_UNKNOWN = 0xFE
-} ptpd_clock_accuracy_e;
 
 /**
  * \brief Time source enumeration (Table 8 in the spec)

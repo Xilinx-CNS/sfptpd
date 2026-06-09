@@ -409,7 +409,7 @@ static int parse_master_accuracy(struct sfptpd_config_section *section, const ch
 		return 0;
 	}
 
-	tokens = sscanf(params[0], "%Lf", &(pps->master_accuracy));
+	tokens = sscanf(params[0], "%f", &(pps->master_accuracy));
 	if (tokens != 1)
 		return EINVAL;
 

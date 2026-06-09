@@ -45,7 +45,7 @@ void ptpd_config_port_initialise(struct ptpd_port_config *config,
 	config->outlier_filter_drift = DEFAULT_OUTLIER_FILTER_DRIFT;
 	config->fir_filter_size = DEFAULT_FIR_FILTER_SIZE;
 
-	config->clockQuality.clockAccuracy = DEFAULT_CLOCK_ACCURACY;
+	config->clockQuality.clockAccuracy = ptpd_accuracy_to_wire(INFINITY);
 	config->clockQuality.clockClass = DEFAULT_CLOCK_CLASS;
 	config->clockQuality.offsetScaledLogVariance = DEFAULT_CLOCK_VARIANCE;
 	config->priority1 = DEFAULT_PRIORITY1;
@@ -479,13 +479,61 @@ void ptpd_control(struct ptpd_port_context *ptpd,
 	servo_control(&ptpd->servo, ctrl_flags);
 }
 
+/* Accuracy bounds used on the wire in IEEE1588.
+ * Ordering critical: indexes used for translation functions.
+ * From section 7.6.2.5, page 56:
+ * 0x20      Time accurate to 25ns
+ * ...
+ * 0x31      Time accurate to > 10s
+ * 0xFE      Unknown accuracy
+ */
+static const sfptpd_accuracy_t accuracy_bounds[] = {
+               2.5e1,
+        1.0e2, 2.5e2,
+        1.0e3, 2.5e3,
+        1.0e4, 2.5e4,
+        1.0e5, 2.5e5,
+        1.0e6, 2.5e6,
+        1.0e7, 2.5e7,
+        1.0e8, 2.5e8,
+        1.0e9, /* <1s is last regular bound */
+	INFINITY
+};
+
+Enumeration8 ptpd_accuracy_to_wire(sfptpd_accuracy_t accuracy)
+{
+	const sfptpd_accuracy_t *bound;
+
+	/* Convert INFINITY to 'unknown' because 0x31 is for large finite
+	   estimates. */
+	if (isnan(accuracy) || isinf(accuracy) || accuracy < 0)
+		return 0xFE;
+	for (bound = accuracy_bounds; isfinite(*bound) && accuracy > *bound; bound++);
+	if (isfinite(*bound))
+		return 0x20 + bound - accuracy_bounds;
+	if (accuracy <= 1.0e10)
+		return 0x30;
+	return 0x31;
+}
+
+sfptpd_accuracy_t ptpd_accuracy_from_wire(Enumeration8 wire)
+{
+	if (wire < 0x20 || wire >= 0x32)
+		return INFINITY;
+	if (wire == 0x31)
+		return 2.5e10; /* Finite value beyond top bucket. */
+	if (wire == 0x30)
+		return 1.0e10;
+	static_assert(sizeof(accuracy_bounds) / sizeof(*accuracy_bounds) == 0x31 - 0x20, "accuracy map right-sized");
+	return accuracy_bounds[wire - 0x20];
+}
 
 void ptpd_update_gm_info(struct ptpd_port_context *ptpd,
 			 bool remote_grandmaster,
 			 uint8_t clock_id[8],
 			 uint8_t clock_class,
 			 ptpd_time_source_e time_source,
-			 ptpd_clock_accuracy_e clock_accuracy,
+			 sfptpd_accuracy_t clock_accuracy,
 			 unsigned int offset_scaled_log_variance,
 			 unsigned int steps_removed,
 			 bool time_traceable,
@@ -503,7 +551,7 @@ void ptpd_update_gm_info(struct ptpd_port_context *ptpd,
 	 * The grandmasterClockQuality is only updated during the transition to
 	 * master state, so if we are in master state, we need to update these. */
 	ptpd->rtOpts.clockQuality.clockClass = clock_class;
-	ptpd->rtOpts.clockQuality.clockAccuracy = clock_accuracy;
+	ptpd->rtOpts.clockQuality.clockAccuracy = ptpd_accuracy_to_wire(clock_accuracy);
 	ptpd->rtOpts.clockQuality.offsetScaledLogVariance = offset_scaled_log_variance;
 	ptpd->clockQuality = ptpd->rtOpts.clockQuality;
 	if (ptpd->portState == PTPD_MASTER) {
@@ -742,7 +790,7 @@ int ptpd_get_snapshot(struct ptpd_port_context *ptpd, struct ptpd_port_snapshot 
 		memset(snapshot->parent.grandmaster_id, 0,
 		       sizeof(snapshot->parent.grandmaster_id));
 		snapshot->parent.grandmaster_clock_class = DEFAULT_CLOCK_CLASS;
-		snapshot->parent.grandmaster_clock_accuracy = PTPD_ACCURACY_UNKNOWN;
+		snapshot->parent.grandmaster_clock_accuracy = ptpd_accuracy_to_wire(INFINITY);
 		snapshot->parent.grandmaster_offset_scaled_log_variance = 0;
 		snapshot->parent.grandmaster_priority1 = 0;
 		snapshot->parent.grandmaster_priority2 = 0;
