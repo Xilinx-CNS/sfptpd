@@ -91,7 +91,7 @@ enum ntp_stats_ids {
 };
 
 /* State for debouncing perturbations following a qualitative event,
- * namely a step caused by sfptpd making chrony's offset unsafe. */
+ * such as a step caused by sfptpd making chrony's offset unsafe. */
 struct debounce {
 	/* const: short event label */
 	const char *name;
@@ -158,6 +158,11 @@ struct ntp_state {
 	 * that the recorded NTP offset may not be correct. The offset will
 	 * be invalidated until the NTP daemon next polls its peers */
 	struct debounce our_step;
+
+	/* Debounce state for samples following a discontinuity in chrony's
+	 * reference id. This catches a transition from 'unsynced' or between
+	 * sources. */
+	struct debounce ref_discontinuity;
 
 	/* Our system time at which our record of offset was last updated */
 	struct sfptpd_timespec offset_timestamp;
@@ -874,6 +879,7 @@ static void crny_parse_state(crny_module_t *ntp, struct ntp_state *state, int rc
 	 * clocks were stepped. */
 	if ((state->selected_peer_idx != -1) &&
 	     !debounce_unsafe(&state->our_step) &&
+	     !debounce_unsafe(&state->ref_discontinuity) &&
 	     state->offset_valid &&
 	     root_distance_ok) {
 		peer = &state->peer_info.peers[state->selected_peer_idx];
@@ -1230,15 +1236,26 @@ static int handle_get_sys_info(crny_module_t *ntp)
 		       rc == 0 ? host : gai_strerror(rc));
 	}
 
+	/* Capture change of reference ID here so it can feed into
+	 * debounce logic. Really this should all be happening downstream,
+	 * 'parsing' the new chrony state object versus the old one,
+	 * but the breakdown of responsibilities within this module is
+	 * slightly fudged. It's an aesthetic consideration; this works. */
+	bool ref_changed = (ref_id != next_state->ref_id);
+
 	next_state->sys_info = sys_info;
 	next_state->ref_id = ref_id;
 	sfptpd_time_init(&next_state->ref_time,
 			 ((uint64_t) ntohl(answer->ref_time.s_hi)) << 32 |
 			 ((uint64_t) ntohl(answer->ref_time.s_lo)),
 			 ntohl(answer->ref_time.ns), 0);
+	if (ref_changed)
+		debounce_event(next_state, &next_state->ref_discontinuity);
 	debounce_advance(next_state, &next_state->our_step);
+	debounce_advance(next_state, &next_state->ref_discontinuity);
 	next_state->offset_valid = sfptpd_crny_tofloat(ntohl(answer->skew_f)) > 0.0;
 	debounce_attempt_to_clear(next_state, &next_state->our_step);
+	debounce_attempt_to_clear(next_state, &next_state->ref_discontinuity);
 
 	if (next_state->offset_valid) {
 		next_state->tracking_offset = sfptpd_crny_tofloat(ntohl(answer->tracking_f)) * -1.0e9;
@@ -2715,6 +2732,7 @@ int sfptpd_crny_module_create(struct sfptpd_config *config,
 	ntp->crny_comm.sock = -1;
 	reset_offset_id(&ntp->state);
 	debounce_init(&ntp->state.our_step, "clock step", 2);
+	debounce_init(&ntp->state.ref_discontinuity, "ref discontinuity", 2);
 
 	/* Find the NTP global configuration. If this doesn't exist then
 	 * something has gone badly wrong. */
