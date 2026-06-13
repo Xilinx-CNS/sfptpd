@@ -733,7 +733,7 @@ void crny_stats_update(crny_module_t *ntp)
 }
 
 
-void crny_parse_state(crny_module_t *ntp, struct ntp_state *state, int rc, bool offset_unsafe)
+static void crny_parse_state(crny_module_t *ntp, struct ntp_state *state, int rc)
 {
 	unsigned int i;
 	bool candidates;
@@ -810,7 +810,7 @@ void crny_parse_state(crny_module_t *ntp, struct ntp_state *state, int rc, bool 
 	 * peer and the offset is safe i.e. there has been an update since the
 	 * clocks were stepped. */
 	if ((state->selected_peer_idx != -1) &&
-	     !offset_unsafe &&
+	     !state->offset_unsafe &&
 	     state->offset_valid &&
 	     root_distance_ok) {
 		peer = &state->peer_info.peers[state->selected_peer_idx];
@@ -1490,7 +1490,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 		} else if (rc == EINPROGRESS) {
 			next_query_state = NTP_QUERY_STATE_CONNECT_WAIT;
 		} else {
-			crny_parse_state(ntp, next_state, rc, next_state->offset_unsafe);
+			crny_parse_state(ntp, next_state, rc);
 			next_query_state = NTP_QUERY_STATE_SLEEP_DISCONNECTED;
 		}
 		break;
@@ -1545,7 +1545,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 			rc = handle_get_source_datum(ntp);
 			if (rc == ENOENT) {
 				if (++ntp->query.src_idx == next_state->peer_info.num_peers) {
-					crny_parse_state(ntp, next_state, 0, next_state->offset_unsafe);
+					crny_parse_state(ntp, next_state, 0);
 					update = true;
 					sfptpd_ntpclient_print_peers(&next_state->peer_info, MODULE);
 					next_query_state = NTP_QUERY_STATE_SLEEP_CONNECTED;
@@ -1567,7 +1567,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 			rc = handle_get_source_stats(ntp);
 			if (rc == ENOENT) {
 				if (++ntp->query.src_idx == next_state->peer_info.num_peers) {
-					crny_parse_state(ntp, next_state, 0, next_state->offset_unsafe);
+					crny_parse_state(ntp, next_state, 0);
 					update = true;
 					sfptpd_ntpclient_print_peers(&next_state->peer_info, MODULE);
 					next_query_state = NTP_QUERY_STATE_SLEEP_CONNECTED;
@@ -1588,7 +1588,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 		if (event == NTP_QUERY_EVENT_TRAFFIC) {
 			rc = handle_get_ntp_datum(ntp);
 			if (++ntp->query.src_idx == next_state->peer_info.num_peers) {
-				crny_parse_state(ntp, next_state, 0, next_state->offset_unsafe);
+				crny_parse_state(ntp, next_state, 0);
 				update = true;
 				sfptpd_ntpclient_print_peers(&next_state->peer_info, MODULE);
 				next_query_state = NTP_QUERY_STATE_SLEEP_CONNECTED;
@@ -1612,7 +1612,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 			if (ntp->chrony_running)
 				next_query_state = NTP_QUERY_STATE_CONNECT;
 			else
-				crny_parse_state(ntp, next_state, ENOPROTOOPT, next_state->offset_unsafe);
+				crny_parse_state(ntp, next_state, ENOPROTOOPT);
 			ntp->next_poll_time.sec += ntp->config->poll_interval;
 		}
 		break;
