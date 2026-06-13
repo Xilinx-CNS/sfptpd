@@ -90,6 +90,25 @@ enum ntp_stats_ids {
 	NTP_STATS_ID_SYNCHRONIZED
 };
 
+/* State for debouncing perturbations following a qualitative event,
+ * namely a step caused by sfptpd making chrony's offset unsafe. */
+struct debounce {
+	/* const: short event label */
+	const char *name;
+
+	/* const: debounce threshold */
+	unsigned int threshold;
+
+	/* Current state of gate */
+	bool unsafe;
+
+	/* Last observed ref time from Chrony since 'the event' */
+	struct sfptpd_timespec event_ref_time;
+
+	/* Number of distinct Chrony ref_time snapshots since 'the event' */
+	unsigned int advance_count;
+};
+
 struct ntp_state {
 	/* NTP module state */
 	sfptpd_sync_module_state_t state;
@@ -135,22 +154,16 @@ struct ntp_state {
 	/* Stratum of master or 0 if no peer selected */
 	unsigned int stratum;
 
-	/* Boolean indicating that the clock has been stepped and that the
-	 * recorded NTP offset may not be correct. The offset will be
-	 * invalidated until the NTP daemon next polls its peers */
-	bool offset_unsafe;
+	/* Debounce state for offset after the clock has been stepped, meaning
+	 * that the recorded NTP offset may not be correct. The offset will
+	 * be invalidated until the NTP daemon next polls its peers */
+	struct debounce our_step;
 
 	/* Our system time at which our record of offset was last updated */
 	struct sfptpd_timespec offset_timestamp;
 
 	/* Chrony's cooked system time at which it updated its offset */
 	struct sfptpd_timespec ref_time;
-
-	/* Last observed ref time from Chrony since our step */
-	struct sfptpd_timespec step_ref_time;
-
-	/* Number of distinct Chrony ref_time snapshots since sfptpd stepped */
-	unsigned int step_advance_count;
 
 	/* Chrony's decision as to validity of offset */
 	bool offset_valid;
@@ -732,6 +745,56 @@ void crny_stats_update(crny_module_t *ntp)
 	sfptpd_stats_collection_update_count(stats, NTP_STATS_ID_SYNCHRONIZED, ntp->state.synchronized? 1: 0);
 }
 
+static void debounce_init(struct debounce *debounce,
+			  const char *event, unsigned int threshold)
+{
+	*debounce = (struct debounce) {
+		.name = event,
+		.threshold = threshold,
+		.unsafe = false,
+		.event_ref_time = sfptpd_time_null(),
+		.advance_count = 0
+	};
+}
+
+static void debounce_event(struct ntp_state *state, struct debounce *debounce)
+{
+	if (!debounce->unsafe)
+		INFO("crny: %s - ignoring ntp offset until debounced\n", debounce->name);
+	debounce->unsafe = true;
+	debounce->event_ref_time = state->ref_time;
+	debounce->advance_count = 0;
+}
+
+static void debounce_advance(struct ntp_state *new_state, struct debounce *debounce)
+{
+	if (sfptpd_time_cmp(&new_state->ref_time, &debounce->event_ref_time)) {
+		debounce->event_ref_time = new_state->ref_time;
+		if (debounce->advance_count < UINT_MAX)
+			++debounce->advance_count;
+	}
+}
+
+static void debounce_attempt_to_clear(struct ntp_state *state,
+				      struct debounce *debounce)
+{
+	if (debounce->unsafe) {
+		if (state->offset_valid &&
+		    debounce->advance_count >= debounce->threshold) {
+			debounce->unsafe = false;
+			INFO("crny: new NTP offset clears %s condition\n", debounce->name);
+			sfptpd_clock_get_time(sfptpd_clock_get_system_clock(),
+					      &state->offset_timestamp);
+		} else {
+			DBG_L4("crny: new NTP offset deemed unsafe following %s\n", debounce->name);
+		}
+	}
+}
+
+static inline bool debounce_unsafe(struct debounce *debounce)
+{
+	return debounce->unsafe;
+}
 
 static void crny_parse_state(crny_module_t *ntp, struct ntp_state *state, int rc)
 {
@@ -810,7 +873,7 @@ static void crny_parse_state(crny_module_t *ntp, struct ntp_state *state, int rc
 	 * peer and the offset is safe i.e. there has been an update since the
 	 * clocks were stepped. */
 	if ((state->selected_peer_idx != -1) &&
-	     !state->offset_unsafe &&
+	     !debounce_unsafe(&state->our_step) &&
 	     state->offset_valid &&
 	     root_distance_ok) {
 		peer = &state->peer_info.peers[state->selected_peer_idx];
@@ -1115,35 +1178,6 @@ static int issue_get_sys_info(crny_module_t *ntp)
 	return rc;
 }
 
-static void step_advance(struct ntp_state *new_state)
-{
-	if (sfptpd_time_cmp(&new_state->ref_time, &new_state->step_ref_time)) {
-		new_state->step_ref_time = new_state->ref_time;
-		if (new_state->step_advance_count < UINT_MAX)
-			++new_state->step_advance_count;
-	}
-}
-
-static bool offset_became_safe(struct ntp_state *state)
-{
-	return state->offset_valid &&
-	       state->step_advance_count >= 2;
-}
-
-static void attempt_to_clear_step(struct ntp_state *new_state)
-{
-	if (new_state->offset_unsafe) {
-		if (offset_became_safe(new_state)) {
-			new_state->offset_unsafe = false;
-			INFO("crny: new NTP offset clears our step\n");
-			sfptpd_clock_get_time(sfptpd_clock_get_system_clock(),
-					      &new_state->offset_timestamp);
-		} else {
-			DBG_L4("crny: new NTP offset deemed unsafe following our step\n");
-		}
-	}
-}
-
 static int handle_get_sys_info(crny_module_t *ntp)
 {
 	int rc;
@@ -1202,9 +1236,9 @@ static int handle_get_sys_info(crny_module_t *ntp)
 			 ((uint64_t) ntohl(answer->ref_time.s_hi)) << 32 |
 			 ((uint64_t) ntohl(answer->ref_time.s_lo)),
 			 ntohl(answer->ref_time.ns), 0);
-	step_advance(next_state);
+	debounce_advance(next_state, &next_state->our_step);
 	next_state->offset_valid = sfptpd_crny_tofloat(ntohl(answer->skew_f)) > 0.0;
-	attempt_to_clear_step(next_state);
+	debounce_attempt_to_clear(next_state, &next_state->our_step);
 
 	if (next_state->offset_valid) {
 		next_state->tracking_offset = sfptpd_crny_tofloat(ntohl(answer->tracking_f)) * -1.0e9;
@@ -2044,21 +2078,16 @@ static void ntp_on_control(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 	SFPTPD_MSG_REPLY(msg);
 }
 
-
 static void ntp_on_step_clock(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 {
 	assert(ntp != NULL);
 	assert(msg != NULL);
 
 	/* Invalidate offset until NTP next queries the peers. */
-	ntp->state.offset_unsafe = true;
-	ntp->state.step_ref_time = ntp->state.ref_time;
-	ntp->state.step_advance_count = 0;
-	INFO("crny: clock step- ignoring ntp offset until next update\n");
+	debounce_event(&ntp->state, &ntp->state.our_step);
 
 	SFPTPD_MSG_REPLY(msg);
 }
-
 
 static void ntp_on_log_stats(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 {
@@ -2312,7 +2341,6 @@ static void ntp_on_run(crny_module_t *ntp)
 	/* Determine the time when we should next poll the NTP daemon */
 	(void)sfclock_gettime(CLOCK_MONOTONIC, &ntp->next_poll_time);
 	ntp->query.state = NTP_QUERY_STATE_SLEEP_DISCONNECTED;
-	ntp->state.offset_unsafe = false;
 
 	rc = EOPNOTSUPP;
 	if (ntp->ctrl_flags & SYNC_MODULE_CLOCK_CTRL &&
@@ -2686,6 +2714,7 @@ int sfptpd_crny_module_create(struct sfptpd_config *config,
 	/* Initialise state */
 	ntp->crny_comm.sock = -1;
 	reset_offset_id(&ntp->state);
+	debounce_init(&ntp->state.our_step, "clock step", 2);
 
 	/* Find the NTP global configuration. If this doesn't exist then
 	 * something has gone badly wrong. */
