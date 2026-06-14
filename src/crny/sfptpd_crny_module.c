@@ -456,6 +456,27 @@ static int parse_allow_refclk(struct sfptpd_config_section *section,
 	return 0;
 }
 
+static int parse_discontinuity_debounce(struct sfptpd_config_section *section, const char *option,
+					unsigned int num_params, const char * const params[], int cookie)
+{
+	sfptpd_crny_module_config_t *ntp = (sfptpd_crny_module_config_t *)section;
+	int tokens;
+	int threshold;
+	assert(num_params == 1);
+
+	tokens = sscanf(params[0], "%i", &threshold);
+	if (tokens != 1)
+		return EINVAL;
+
+	if (threshold < 0) {
+		CFG_ERROR(section, "negative invalid debounce limit %s is meaningless.\n",
+		          params[0]);
+		return ERANGE;
+	}
+
+	ntp->debounce_threshold = threshold;
+	return 0;
+}
 
 static const sfptpd_config_option_t ntp_config_options[] =
 {
@@ -491,6 +512,12 @@ static const sfptpd_config_option_t ntp_config_options[] =
 		"sources. Needed when chrony handles PPS",
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE, parse_allow_refclk,
 		.dfl = SFPTPD_CONFIG_DFL_BOOL(SFPTPD_CRNY_DEFAULT_ALLOW_REFCLK)},
+	{"min_ignored_samples_after_new_ref", "NUMBER",
+		"Number of samples required to accept new offset from chrony "
+		"after a change of ref id or 0 to disable this debouncing.",
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_discontinuity_debounce,
+		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_CRNY_DEFAULT_DEBOUNCE)},
 };
 
 static int crny_validate_config(struct sfptpd_config_section *section)
@@ -764,6 +791,8 @@ static void debounce_init(struct debounce *debounce,
 
 static void debounce_event(struct ntp_state *state, struct debounce *debounce)
 {
+	if (debounce->threshold == 0)
+		return; /* debounce disabled */
 	if (!debounce->unsafe)
 		INFO("crny: %s - ignoring ntp offset until debounced\n", debounce->name);
 	debounce->unsafe = true;
@@ -2648,6 +2677,7 @@ static struct sfptpd_config_section *ntp_config_create(const char *name,
 		new->poll_interval = 2;
 		new->clock_control = false;
 		new->allow_refclk = SFPTPD_CRNY_DEFAULT_ALLOW_REFCLK;
+		new->debounce_threshold = SFPTPD_CRNY_DEFAULT_DEBOUNCE;
 	}
 
 	/* If this is an implicitly created sync instance, give it the lowest
@@ -2728,12 +2758,6 @@ int sfptpd_crny_module_create(struct sfptpd_config *config,
 	/* Keep a handle to the sync engine */
 	ntp->engine = engine;
 
-	/* Initialise state */
-	ntp->crny_comm.sock = -1;
-	reset_offset_id(&ntp->state);
-	debounce_init(&ntp->state.our_step, "clock step", 2);
-	debounce_init(&ntp->state.ref_discontinuity, "ref discontinuity", 2);
-
 	/* Find the NTP global configuration. If this doesn't exist then
 	 * something has gone badly wrong. */
 	ntp->config = sfptpd_crny_module_get_config(config);
@@ -2747,6 +2771,13 @@ int sfptpd_crny_module_create(struct sfptpd_config *config,
 	instance_config = (struct sfptpd_crny_module_config *)
 		sfptpd_config_category_first_instance(config,
 						      SFPTPD_CONFIG_CATEGORY_CRNY);
+
+	/* Initialise state */
+	ntp->crny_comm.sock = -1;
+	reset_offset_id(&ntp->state);
+	debounce_init(&ntp->state.our_step, "clock step", 2);
+	debounce_init(&ntp->state.ref_discontinuity, "ref discontinuity",
+		      instance_config->debounce_threshold);
 
 	/* Set up the clustering evaluator */
 	ntp->state.clustering_evaluator.calc_fn = sfptpd_engine_calculate_clustering_score;
