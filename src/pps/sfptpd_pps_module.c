@@ -70,6 +70,25 @@ enum pps_stats_ids {
 
 struct sfptpd_pps_instance;
 
+/* Time of day provided by third party source sync module e.g. NTP */
+struct time_of_day {
+	/* Handle of sync module */
+	struct sfptpd_sync_instance_info source;
+
+	/* Next poll time */
+	struct sfptpd_timespec next_poll_time;
+
+	/* State of the sync module */
+	sfptpd_sync_instance_status_t status;
+
+	/* Unbucketed accuracy bound in ns, strictly paired with offset.
+	 *  > threshold means reject as not good enough.
+	 *  0.0 accuracy if we have no ToD (0.0 offset) means keep the same ToD.
+	 *  Net effect is same, only offset != 0.0 and accuracy < threshold will
+	 *  result in change of time of day. */
+	sfptpd_accuracy_t accuracy;
+};
+
 typedef struct sfptpd_pps_module {
 	/* Pointer to sync-engine */
 	struct sfptpd_engine *engine;
@@ -77,24 +96,8 @@ typedef struct sfptpd_pps_module {
 	/* Linked list of instances */
 	struct sfptpd_pps_instance *instances;
 
-	/* Time of day provided by third party source sync module e.g. NTP */
-	struct {
-		/* Handle of sync module */
-		struct sfptpd_sync_instance_info source;
-
-		/* Next poll time */
-		struct sfptpd_timespec next_poll_time;
-
-		/* State of the sync module */
-		sfptpd_sync_instance_status_t status;
-
-		/* Unbucketed accuracy bound in ns, strictly paired with offset.
-		 *  > threshold means reject as not good enough.
-		 *  0.0 if we have no ToD means keep the same ToD.
-		 *  Net effect is same, only > 0 and < threshold will
-		 *  result in change of time of day. */
-		sfptpd_accuracy_t accuracy;
-	} time_of_day;
+	/* Time of day state */
+	struct time_of_day time_of_day;
 
 	bool timers_started;
 } pps_module_t;
@@ -789,6 +792,14 @@ static int pps_test_mode_bogus_event(pps_module_t *pps,
 	return EAGAIN;
 }
 
+static void tod_reset(struct time_of_day *tod)
+{
+	sfptpd_time_zero(&tod->status.offset_from_master);
+
+	/* When ToD offset is zeroed, it means "continue as you are", so
+	 * it is OK to claim accurate. */
+	tod->accuracy = 0.0;
+}
 
 static void pps_servo_reset(pps_module_t *pps,
 			    struct sfptpd_pps_instance *instance)
@@ -803,12 +814,8 @@ static void pps_servo_reset(pps_module_t *pps,
 	instance->freq_adjust_ppb = instance->freq_adjust_base;
 	instance->offset_from_master_ns = 0.0;
 
-	sfptpd_time_zero(&pps->time_of_day.status.offset_from_master);
+	tod_reset(&pps->time_of_day);
 	sfptpd_time_zero(&instance->pps_timestamp);
-
-	/* When ToD offset is zeroed, it means "continue as you are", so
-	 * it is OK to claim accurate. */
-	pps->time_of_day.accuracy = 0.0;
 
 	instance->pps_period_ns = 0.0;
 
@@ -862,15 +869,15 @@ static void pps_servo_step_clock(pps_module_t *pps,
 
 static void pps_servo_update(pps_module_t *pps,
 			     struct sfptpd_pps_instance *instance,
-			     struct sfptpd_timespec *pps_timestamp,
-			     struct sfptpd_timespec tod_offset,
-			     sfptpd_accuracy_t tod_accuracy)
+			     struct sfptpd_timespec *pps_timestamp)
 {
 	int rc;
 	sfptpd_time_t diff_ns, mean;
 	struct sfptpd_config_general *general_config;
 	enum sfptpd_clock_ctrl clock_ctrl;
 	struct sfptpd_timespec diff = { 0 };
+	struct sfptpd_timespec tod_offset = pps->time_of_day.status.offset_from_master;
+	sfptpd_accuracy_t tod_accuracy = pps->time_of_day.accuracy;
 
 	assert(pps != NULL);
 	assert(pps_timestamp != NULL);
@@ -1634,9 +1641,7 @@ static void pps_on_pps_event(pps_module_t *pps,
 			}
 
 			if (rc == 0) {
-				pps_servo_update(pps, instance, time,
-						 pps->time_of_day.status.offset_from_master,
-						 pps->time_of_day.accuracy);
+				pps_servo_update(pps, instance, time);
 
 				/* Send updated stats and clustering input to engine */
 				struct sfptpd_timespec log_time = sfptpd_log_timestamp();
@@ -1668,9 +1673,14 @@ static void pps_on_pps_event(pps_module_t *pps,
 }
 
 
-static int pps_time_of_day_init(pps_module_t *pps)
+static struct time_of_day pps_time_of_day_init(const pps_module_t *pps)
 {
-	assert(pps != NULL);
+	struct time_of_day tod = {
+		.source = { NULL, NULL, NULL },
+		.status = { .state = SYNC_MODULE_STATE_LISTENING },
+	};
+	(void)sfclock_gettime(CLOCK_MONOTONIC, &tod.next_poll_time);
+	tod_reset(&tod);
 
 	/* Get the handle of the time-of-day module */
 	if (pps->instances->config->tod_name[0] != '\0') {
@@ -1679,25 +1689,18 @@ static int pps_time_of_day_init(pps_module_t *pps)
 			pps->engine,
 			pps->instances->config->tod_name);
 		if (info)
-			pps->time_of_day.source = *info;
+			tod.source = *info;
 	} else {
-		pps->time_of_day.source.module = sfptpd_engine_get_ntp_module(
-			pps->engine);
-		pps->time_of_day.source.handle = NULL;
-		pps->time_of_day.source.name = "auto";
+		tod.source.module = sfptpd_engine_get_ntp_module(pps->engine);
+		tod.source.handle = NULL;
+		tod.source.name = "auto";
 	}
 
-	if (pps->time_of_day.source.module == NULL) {
+	if (tod.source.module == NULL) {
 		TRACE_L4("pps: no sync module for time-of-day; will try again later\n");
-		return ENOENT;
 	}
 
-	(void)sfclock_gettime(CLOCK_MONOTONIC, &pps->time_of_day.next_poll_time);
-	pps->time_of_day.status.state = SYNC_MODULE_STATE_LISTENING;
-	sfptpd_time_zero(&pps->time_of_day.status.offset_from_master);
-	pps->time_of_day.accuracy = 0.0;
-
-	return 0;
+	return tod;
 }
 
 
@@ -1706,41 +1709,37 @@ static void pps_time_of_day_poll(pps_module_t *pps,
 {
 	struct sfptpd_timespec time_now, time_left;
 	struct sfptpd_timespec system_to_nic;
+	struct time_of_day tod = pps->time_of_day;
 	int rc;
 
 	assert(pps != NULL);
 
 	/* Check whether it's time to poll for time of day again */
 	(void)sfclock_gettime(CLOCK_MONOTONIC, &time_now);
-	sfptpd_time_subtract(&time_left, &pps->time_of_day.next_poll_time, &time_now);
+	sfptpd_time_subtract(&time_left, &tod.next_poll_time, &time_now);
 	if (time_left.sec >= 0)
 		return;
 
-	pps->time_of_day.next_poll_time.sec += 1;
+	tod.next_poll_time.sec += 1;
 
-	if (pps->time_of_day.source.module == NULL) {
-
-		/* If we failed to get the time of day sync module before,
-		   look for it again. */
-		rc = pps_time_of_day_init(pps);
-
-		assert((rc == 0 && pps->time_of_day.source.module != NULL) ||
-		       rc == ENOENT);
-	}
+	/* If we failed to get the time of day sync module before,
+	   look for it again. */
+	if (tod.source.module == NULL)
+		tod = pps_time_of_day_init(pps);
 
 	/* Inaccurate until proven otherwise! */
-	pps->time_of_day.accuracy = INFINITY;
+	tod.accuracy = INFINITY;
 
-	if (pps->time_of_day.source.module != NULL) {
+	if (tod.source.module != NULL) {
 
 		/* Get the offset from the sync module. If the offset is valid (non zero)
 		 * then work out the offset from the master to our NIC.
 		 * NOTE there is an assumption that the offset here is from the master to
 		 * the system clock- true for NTP but not true generally. */
-		rc = sfptpd_sync_module_get_status(pps->time_of_day.source.module,
-						   pps->time_of_day.source.handle,
-						   &pps->time_of_day.status);
-		if (rc == 0 && !sfptpd_time_is_zero(&pps->time_of_day.status.offset_from_master)) {
+		rc = sfptpd_sync_module_get_status(tod.source.module,
+						   tod.source.handle,
+						   &tod.status);
+		if (rc == 0 && !sfptpd_time_is_zero(&tod.status.offset_from_master)) {
 			sfptpd_clockfeed_require_fresh(instance->feed);
 			rc = sfptpd_clockfeed_compare(instance->feed,
 						      NULL,
@@ -1750,27 +1749,27 @@ static void pps_time_of_day_poll(pps_module_t *pps,
 				TRACE_L5("pps %s: ntp->sys " SFPTPD_FORMAT_FLOAT
 					 ", sys->nic " SFPTPD_FORMAT_FLOAT "\n",
 					 SFPTPD_CONFIG_GET_NAME(instance->config),
-					 sfptpd_time_timespec_to_float_ns(&pps->time_of_day.status.offset_from_master),
+					 sfptpd_time_timespec_to_float_ns(&tod.status.offset_from_master),
 					 sfptpd_time_timespec_to_float_ns(&system_to_nic));
 
 				/* It is imperative to follow this write up with
 				 * an accuracy value. */
-				sfptpd_time_add(&pps->time_of_day.status.offset_from_master,
-						&pps->time_of_day.status.offset_from_master,
+				sfptpd_time_add(&tod.status.offset_from_master,
+						&tod.status.offset_from_master,
 						&system_to_nic);
 
 				/* Do not quantise total accuracy; bucketing it
 				 * corrupts our intended gate. */
-				pps->time_of_day.accuracy = pps->time_of_day.status.master.accuracy +
-							    pps->time_of_day.status.local_accuracy;
+				tod.accuracy = tod.status.master.accuracy +
+					       tod.status.local_accuracy;
 			}
 		}
 	}
 
 	/* If the state of the time of day module is not slave then we don't
 	 * have access to a time of day- sound the alarm! */
-	if ((pps->time_of_day.status.state == SYNC_MODULE_STATE_SLAVE) ||
-	    (pps->time_of_day.status.state == SYNC_MODULE_STATE_SELECTION)) {
+	if ((tod.status.state == SYNC_MODULE_STATE_SLAVE) ||
+	    (tod.status.state == SYNC_MODULE_STATE_SELECTION)) {
 		SYNC_MODULE_ALARM_CLEAR(instance->alarms, NO_TIME_OF_DAY);
 	} else if (!SYNC_MODULE_ALARM_TEST(instance->alarms, NO_TIME_OF_DAY)) {
 		WARNING("pps %s: time-of-day module error\n", 
@@ -1781,9 +1780,11 @@ static void pps_time_of_day_poll(pps_module_t *pps,
 	TRACE_L5("pps %s: time-of-day state %d, offset " SFPTPD_FORMAT_FLOAT
 		 ", accuracy %.3g\n",
 		 SFPTPD_CONFIG_GET_NAME(instance->config),
-		 pps->time_of_day.status.state,
-		 sfptpd_time_timespec_to_float_ns(&pps->time_of_day.status.offset_from_master),
-		 pps->time_of_day.accuracy);
+		 tod.status.state,
+		 sfptpd_time_timespec_to_float_ns(&tod.status.offset_from_master),
+		 tod.accuracy);
+
+	pps->time_of_day = tod;
 }
 
 
@@ -2453,10 +2454,7 @@ static int pps_on_startup(void *context)
 	}
 
 	/* Initialise the time of day support */
-	rc = pps_time_of_day_init(pps);
-	if (rc != 0 && rc != ENOENT)
-		goto fail;
-
+	pps->time_of_day = pps_time_of_day_init(pps);
 	return 0;
 
 fail:
