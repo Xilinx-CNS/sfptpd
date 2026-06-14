@@ -1710,6 +1710,8 @@ static void pps_time_of_day_poll(pps_module_t *pps,
 	struct sfptpd_timespec time_now, time_left;
 	struct sfptpd_timespec system_to_nic;
 	struct time_of_day tod = pps->time_of_day;
+	struct time_of_day tod_prev = tod;
+	bool have_offset = false;
 	int rc;
 
 	assert(pps != NULL);
@@ -1739,7 +1741,8 @@ static void pps_time_of_day_poll(pps_module_t *pps,
 		rc = sfptpd_sync_module_get_status(tod.source.module,
 						   tod.source.handle,
 						   &tod.status);
-		if (rc == 0 && !sfptpd_time_is_zero(&tod.status.offset_from_master)) {
+		have_offset = rc == 0 && !sfptpd_time_is_zero(&tod.status.offset_from_master);
+		if (have_offset) {
 			sfptpd_clockfeed_require_fresh(instance->feed);
 			rc = sfptpd_clockfeed_compare(instance->feed,
 						      NULL,
@@ -1771,10 +1774,14 @@ static void pps_time_of_day_poll(pps_module_t *pps,
 	if ((tod.status.state == SYNC_MODULE_STATE_SLAVE) ||
 	    (tod.status.state == SYNC_MODULE_STATE_SELECTION)) {
 		SYNC_MODULE_ALARM_CLEAR(instance->alarms, NO_TIME_OF_DAY);
-	} else if (!SYNC_MODULE_ALARM_TEST(instance->alarms, NO_TIME_OF_DAY)) {
-		WARNING("pps %s: time-of-day module error\n", 
-			SFPTPD_CONFIG_GET_NAME(instance->config));
-		SYNC_MODULE_ALARM_SET(instance->alarms, NO_TIME_OF_DAY);
+	} else {
+		have_offset = false;
+
+		if (!SYNC_MODULE_ALARM_TEST(instance->alarms, NO_TIME_OF_DAY)) {
+			WARNING("pps %s: time-of-day module error\n", 
+				SFPTPD_CONFIG_GET_NAME(instance->config));
+			SYNC_MODULE_ALARM_SET(instance->alarms, NO_TIME_OF_DAY);
+		}
 	}
 
 	TRACE_L5("pps %s: time-of-day state %d, offset " SFPTPD_FORMAT_FLOAT
@@ -1783,6 +1790,18 @@ static void pps_time_of_day_poll(pps_module_t *pps,
 		 tod.status.state,
 		 sfptpd_time_timespec_to_float_ns(&tod.status.offset_from_master),
 		 tod.accuracy);
+
+	/* Log transitions into and out of accurate ToD */
+	bool prev_ok = tod_prev.status.state == SYNC_MODULE_STATE_SLAVE &&
+		       !sfptpd_time_is_zero(&tod_prev.status.offset_from_master) &&
+		       tod_prev.accuracy < tod_required_accuracy;
+	bool ok = have_offset &&
+		  tod.accuracy < tod_required_accuracy;
+	if (prev_ok != ok)
+		INFO("pps %s: time-of-day %s to sufficient accuracy to disambiguate seconds (%.3g)\n",
+		     SFPTPD_CONFIG_GET_NAME(instance->config),
+		     ok ? "became known" : "became unknown",
+		     tod.accuracy);
 
 	pps->time_of_day = tod;
 }
