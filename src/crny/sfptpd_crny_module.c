@@ -59,6 +59,12 @@
 #define DBG_L5(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 5, x, ##__VA_ARGS__)
 #define DBG_L6(x, ...)  TRACE(SFPTPD_COMPONENT_ID_NTP, 6, x, ##__VA_ARGS__)
 
+#define DEBOUNCE_DIAG_FMT "%s (%u/%u)"
+#define DEBOUNCE_DIAG_ARGS(v) \
+	(debounce_unsafe(&v) ? "held" : "clear"), \
+	(!debounce_unsafe(&v) ? (v).threshold : (v).advance_count), \
+	(v).threshold
+
 
 /****************************************************************************
  * Types
@@ -2214,13 +2220,17 @@ static void ntp_on_save_state(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 			"constraints: %s\n"
 			"control-flags: %s\n"
 			"num-peers: %d\n"
-			"num-candidates: %d\n",
+			"num-candidates: %d\n"
+			"debounce-step: " DEBOUNCE_DIAG_FMT "\n"
+			"debounce-ref-id: " DEBOUNCE_DIAG_FMT "\n",
 			SFPTPD_CONFIG_GET_NAME(ntp->config),
 			sfptpd_clock_get_long_name(clock),
 			crny_state_text(ntp->state.state, 0),
 			alarms, constraints, flags,
 			ntp->state.peer_info.num_peers,
-			num_candidates);
+			num_candidates,
+			DEBOUNCE_DIAG_ARGS(ntp->state.our_step),
+			DEBOUNCE_DIAG_ARGS(ntp->state.ref_discontinuity));
 	}
 
 	SFPTPD_MSG_FREE(msg);
