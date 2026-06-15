@@ -93,6 +93,10 @@ struct sync_instance_record {
 	/* Manual selection */
 	bool selected;
 
+	/* Incumbency for selection hysteresis - not guaranteed to be
+	 * valid except for and while choosing a best sync instance. */
+	bool incumbent;
+
 	/* Last received realtime stats (may be empty) */
 	struct sfptpd_sync_instance_rt_stats_entry latest_rt_stats;
 

@@ -77,6 +77,15 @@ typedef enum sfptpd_sync_module_state {
 	SYNC_MODULE_STATE_DISABLED,
 	SYNC_MODULE_STATE_FAULTY,
 	SYNC_MODULE_STATE_SELECTION,
+
+	/* SETTLING state pertains to a period after a qualifying
+	   discontinuity event in the source that would lead to the
+	   transition to a SLAVE state being withheld for a period
+	   to affirm qualitative stability. The state should be exited
+	   at the earlier of when such stability is reached or a source
+	   class-appropriate time period elapses. */
+	SYNC_MODULE_STATE_SETTLING,
+
 	SYNC_MODULE_STATE_MAX
 } sfptpd_sync_module_state_t;
 

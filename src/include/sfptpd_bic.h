@@ -62,7 +62,8 @@ enum sfptpd_clustering_mode {
 
 extern const char *sfptpd_selection_rule_names[SELECTION_RULE_MAX];
 extern const struct sfptpd_selection_policy sfptpd_default_selection_policy;
-extern const int sfptpd_state_priorities[SYNC_MODULE_STATE_MAX];
+extern const int sfptpd_state_promotions[SYNC_MODULE_STATE_MAX];
+extern const int sfptpd_state_demotions[SYNC_MODULE_STATE_MAX];
 
 /****************************************************************************
  * Function Prototypes

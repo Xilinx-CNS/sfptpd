@@ -1773,13 +1773,13 @@ static void pps_time_of_day_poll(pps_module_t *pps,
 
 	/* If the state of the time of day module is not slave then we don't
 	 * have access to a time of day- sound the alarm! */
-	if ((tod.status.state == SYNC_MODULE_STATE_SLAVE) ||
-	    (tod.status.state == SYNC_MODULE_STATE_SELECTION)) {
+	if ((tod.status.state == SYNC_MODULE_STATE_SLAVE)) {
 		SYNC_MODULE_ALARM_CLEAR(instance->alarms, NO_TIME_OF_DAY);
 	} else {
 		have_offset = false;
 
-		if (!SYNC_MODULE_ALARM_TEST(instance->alarms, NO_TIME_OF_DAY)) {
+		if (!SYNC_MODULE_ALARM_TEST(instance->alarms, NO_TIME_OF_DAY) &&
+		    tod.status.state != SYNC_MODULE_STATE_SETTLING) {
 			WARNING("pps %s: time-of-day module error\n", 
 				SFPTPD_CONFIG_GET_NAME(instance->config));
 			SYNC_MODULE_ALARM_SET(instance->alarms, NO_TIME_OF_DAY);

@@ -113,6 +113,7 @@ const char *sync_module_state_text[] = {
     "disabled",         /* SYNC_MODULE_STATE_DISABLED */
     "faulty",           /* SYNC_MODULE_STATE_FAULTY */
     "selection",        /* SYNC_MODULE_STATE_SELECTION */
+    "settling",
 };
 
 static_assert(sizeof(sync_module_state_text) / sizeof(*sync_module_state_text) == SYNC_MODULE_STATE_MAX,

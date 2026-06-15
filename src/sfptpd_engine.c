@@ -726,7 +726,9 @@ static void write_sync_instances(struct sfptpd_engine *engine)
 				     record->selected ? 'M' : '-',
 				     constraint,
 				     sync_module_state_text[record->status.state],
-				     sfptpd_state_priorities[record->status.state],
+				     record->incumbent ?
+					sfptpd_state_demotions[record->status.state] :
+					sfptpd_state_promotions[record->status.state],
 				     record->status.alarms == 0 ? " " : "A",
 				     (double) record->status.user_priority,
 				     record->status.clustering_score,
@@ -871,6 +873,7 @@ static int select_sync_instance(struct sfptpd_engine *engine,
 
 	/* Stop the old instance from doing things. */
 	if (the_old != NULL) {
+		the_old->incumbent = false;
 		rc = sfptpd_sync_module_control(the_old->info.module,
 						the_old->info.handle,
 						0,
@@ -889,6 +892,7 @@ static int select_sync_instance(struct sfptpd_engine *engine,
 
 	/* Change the engine's record */
 	engine->selected = the_new;
+	the_new->incumbent = true;
 
 	/* Start the new instance doing things. */
 	rc = sfptpd_sync_module_control(the_new->info.module,

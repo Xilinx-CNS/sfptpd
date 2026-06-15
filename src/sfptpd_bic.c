@@ -83,15 +83,30 @@ const char *sfptpd_selection_rule_names[SELECTION_RULE_MAX] = {
 };
 
 /* When making a comparison, the state of each sync module is converted
- * to a priority where a lower value signifies a higher priority. */
-const int sfptpd_state_priorities[SYNC_MODULE_STATE_MAX] = {
+ * to a priority where a lower value signifies a higher priority.
+ * There are separate mappings for promotion and demotion to
+ * support hysteresis. */
+
+const int sfptpd_state_promotions[SYNC_MODULE_STATE_MAX] = {
 	[SYNC_MODULE_STATE_LISTENING] = 1,
 	[SYNC_MODULE_STATE_SLAVE] = 0,
 	[SYNC_MODULE_STATE_MASTER] = 2,
 	[SYNC_MODULE_STATE_PASSIVE] = 2,
 	[SYNC_MODULE_STATE_DISABLED] = 3,
 	[SYNC_MODULE_STATE_FAULTY] = 3,
-	[SYNC_MODULE_STATE_SELECTION] = 1
+	[SYNC_MODULE_STATE_SELECTION] = 1,
+	[SYNC_MODULE_STATE_SETTLING] = 1,
+};
+
+const int sfptpd_state_demotions[SYNC_MODULE_STATE_MAX] = {
+	[SYNC_MODULE_STATE_LISTENING] = 1,
+	[SYNC_MODULE_STATE_SLAVE] = 0,
+	[SYNC_MODULE_STATE_MASTER] = 2,
+	[SYNC_MODULE_STATE_PASSIVE] = 2,
+	[SYNC_MODULE_STATE_DISABLED] = 3,
+	[SYNC_MODULE_STATE_FAULTY] = 3,
+	[SYNC_MODULE_STATE_SELECTION] = 1,
+	[SYNC_MODULE_STATE_SETTLING] = 0,
 };
 
 
@@ -127,6 +142,12 @@ static int ext_constraint_priority(sfptpd_sync_module_constraints_t constraints)
 		return 0;
 }
 
+/* Get effective state priority, given incumbency status */
+static int state_score(const struct sync_instance_record *record)
+{
+	const int *map = record->incumbent ? sfptpd_state_demotions : sfptpd_state_promotions;
+	return map[record->status.state];
+}
 
 /** Select between two instances for the "best" clock
  *
@@ -205,8 +226,8 @@ static struct sync_instance_record *sfptpd_bic_select(const struct sfptpd_select
 				choice = instance_record_b;
 			break;
 		case SELECTION_RULE_STATE:
-			state_priority_a = sfptpd_state_priorities[status_a->state];
-			state_priority_b = sfptpd_state_priorities[status_b->state];
+			state_priority_a = state_score(instance_record_a);
+			state_priority_b = state_score(instance_record_b);
 
 			DBG_L3("selection%s:   comparing %s: %s (%d), %s (%d)\n",
 			       phase, rule_name,

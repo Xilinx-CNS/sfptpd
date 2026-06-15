@@ -549,6 +549,7 @@ const char *crny_state_text(sfptpd_sync_module_state_t state, unsigned int alarm
 		"ntp-disabled",		/* SYNC_MODULE_STATE_DISABLED */
 		"ntp-faulty",		/* SYNC_MODULE_STATE_FAULTY */
 		"ntp-selection",	/* SYNC_MODULE_STATE_SELECTION */
+		"ntp-settling",
 	};
 
 	assert(state < SYNC_MODULE_STATE_MAX);
@@ -896,11 +897,13 @@ static void crny_parse_state(struct ntp_state *state, int rc)
 		!debounce_unsafe(&state->our_step) &&
 		!debounce_unsafe(&state->ref_discontinuity);
 
-	if (plausible_source &&
-	    debounced_ok) {
+	if (plausible_source) {
 		peer = &state->peer_info.peers[state->selected_peer_idx];
-		state->state = SYNC_MODULE_STATE_SLAVE;
+		state->state = debounced_ok ? SYNC_MODULE_STATE_SLAVE
+					    : SYNC_MODULE_STATE_SETTLING;
 		state->offset_from_master = sfptpd_ntpclient_offset(peer);
+		/* There is a school of thought that we should set root
+		 * dispersion to INFINITY here. */
 		state->stratum = peer->stratum;
 	} else {
 		state->state = candidates?
@@ -1756,6 +1759,7 @@ static bool ntp_handle_state_change(crny_module_t *ntp,
 		case SYNC_MODULE_STATE_LISTENING:
 		case SYNC_MODULE_STATE_SELECTION:
 		case SYNC_MODULE_STATE_SLAVE:
+		case SYNC_MODULE_STATE_SETTLING:
 			/* Nothing to do here */
 			break; 
 
@@ -1793,12 +1797,18 @@ static bool ntp_handle_state_change(crny_module_t *ntp,
 		status.master.steps_removed = new_state->stratum;
 
 		/* Report the clock class according to the state */
-		if (status.state == SYNC_MODULE_STATE_SLAVE) {
+		switch (status.state) {
+		case SYNC_MODULE_STATE_SLAVE:
 			status.master.remote_clock = true;
 			status.master.clock_class = SFPTPD_CLOCK_CLASS_LOCKED;
 			status.master.time_source = SFPTPD_TIME_SOURCE_NTP;
-
-		} else {
+			break;
+		case SYNC_MODULE_STATE_SETTLING:
+			status.master.remote_clock = true;
+			status.master.clock_class = SFPTPD_CLOCK_CLASS_HOLDOVER;
+			status.master.time_source = SFPTPD_TIME_SOURCE_NTP;
+			break;
+		default:
 			status.master.remote_clock = false;
 			status.master.clock_class = SFPTPD_CLOCK_CLASS_FREERUNNING;
 			status.master.time_source = SFPTPD_TIME_SOURCE_INTERNAL_OSCILLATOR;
@@ -2043,9 +2053,13 @@ static void ntp_on_get_status(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 
 	status->master.clock_id = SFPTPD_CLOCK_ID_UNINITIALISED;
 
-	if (ntp->state.state == SYNC_MODULE_STATE_SLAVE) {
+	if (ntp->state.state == SYNC_MODULE_STATE_SLAVE ||
+	    ntp->state.state == SYNC_MODULE_STATE_SETTLING) {
 		status->master.remote_clock = true;
-		status->master.clock_class = SFPTPD_CLOCK_CLASS_LOCKED;
+		status->master.clock_class =
+			ntp->state.state == SYNC_MODULE_STATE_SLAVE ?
+			SFPTPD_CLOCK_CLASS_LOCKED :
+			SFPTPD_CLOCK_CLASS_HOLDOVER;
 		status->master.time_source = SFPTPD_TIME_SOURCE_NTP;
 		status->master.accuracy = ntp->state.root_dispersion;
 		status->master.allan_variance = NAN;
@@ -2257,6 +2271,7 @@ static void ntp_on_write_topology(crny_module_t *ntp, sfptpd_sync_module_msg_t *
 	switch (ntp->state.state) {
 	case SYNC_MODULE_STATE_LISTENING:
 	case SYNC_MODULE_STATE_SELECTION:
+	case SYNC_MODULE_STATE_SETTLING:
 		sfptpd_log_topology_write_1to1_connector(stream, false, false, "?");
 		break;
 
