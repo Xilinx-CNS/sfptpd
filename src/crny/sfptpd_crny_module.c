@@ -855,10 +855,6 @@ static void crny_parse_state(struct ntp_state *state, int rc)
 	for (i = 0; i < state->peer_info.num_peers; i++) {
 		peer = &state->peer_info.peers[i];
 
-		/* Ignore ourselves */
-		if (peer->self)
-			continue;
-
 		if (peer->selected) {
 			if (state->selected_peer_idx != -1)
 				WARNING("crny: chronyd reporting more than one selected peer\n");
@@ -887,13 +883,22 @@ static void crny_parse_state(struct ntp_state *state, int rc)
 	/* We will only report being in the slave state if there is a selected
 	 * peer and the offset is safe i.e. there has been an update since the
 	 * clocks were stepped. */
-	if ((state->selected_peer_idx != -1) &&
-	     !debounce_unsafe(&state->our_step) &&
-	     !debounce_unsafe(&state->ref_discontinuity) &&
-	     state->offset_valid &&
-	     root_distance_ok) {
-		peer = &state->peer_info.peers[state->selected_peer_idx];
 
+	bool plausible_source =
+		state->selected_peer_idx != -1 &&
+		state->offset_valid &&
+		state->ref_id != REF_ID_UNSYNC &&
+		state->ref_id != REF_ID_LOCAL &&
+		state->ref_id != REF_ID_LOCL &&
+		root_distance_ok;
+
+	bool debounced_ok =
+		!debounce_unsafe(&state->our_step) &&
+		!debounce_unsafe(&state->ref_discontinuity);
+
+	if (plausible_source &&
+	    debounced_ok) {
+		peer = &state->peer_info.peers[state->selected_peer_idx];
 		state->state = SYNC_MODULE_STATE_SLAVE;
 		state->offset_from_master = sfptpd_ntpclient_offset(peer);
 		state->stratum = peer->stratum;
@@ -1363,6 +1368,7 @@ int handle_get_source_datum(crny_module_t *ntp)
 	peer->shortlist = (state == CRNY_STATE_CANDIDATE);
 	peer->candidate = (state == CRNY_STATE_CANDIDATE);
 	peer->self = (mode == CRNY_SRC_MODE_REF);
+	peer->stratum = ntohs(src_data->stratum);
 
 	/* Copy chrony address specifier for later ntp_data query */
 	ntp->query.src_addr = src_data->ip_addr;
@@ -1463,7 +1469,7 @@ int handle_get_ntp_datum(crny_module_t *ntp)
 		peer->ref_id = ntohl(answer->ref_id);
 		peer->pkts_sent = ntohl(answer->total_sent);
 		peer->pkts_received = ntohl(answer->total_received);
-		peer->stratum = answer->stratum;
+		/* prefer stratum from SOURCES request */
 		peer->candidate = (answer->mode == CRNY_NTPDATA_MODE_SERVER);
 		peer->offset = sfptpd_crny_tofloat(ntohl(answer->offset)) * -1.0e9; /*do we negate the offset? */
 		peer->root_dispersion = sfptpd_crny_tofloat(ntohl(answer->root_dispersion)) * 1.0e9;

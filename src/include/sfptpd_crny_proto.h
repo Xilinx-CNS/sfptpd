@@ -67,10 +67,12 @@ struct crny_tracking {
 
 struct crny_source {
 	struct crny_addr ip_addr; /* we need this to pass to the ntpdata query */
-	uint32_t ignore;
+	uint16_t ignore;
+	uint16_t stratum;
 	uint16_t state; /* crny_source_data request seems to be the only way to get the state */
 	uint16_t mode; /* we use this to filter out reference clocks */
 };
+static_assert(sizeof(struct crny_source) == 28, "structure matches protocol");
 
 struct crny_ntpdata {
 	struct crny_addr remote_ip;
