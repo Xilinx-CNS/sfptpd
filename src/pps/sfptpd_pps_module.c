@@ -877,7 +877,9 @@ static void pps_servo_update(pps_module_t *pps,
 	enum sfptpd_clock_ctrl clock_ctrl;
 	struct sfptpd_timespec diff = { 0 };
 	struct sfptpd_timespec tod_offset = pps->time_of_day.status.offset_from_master;
-	sfptpd_accuracy_t tod_accuracy = pps->time_of_day.accuracy;
+	sfptpd_accuracy_t tod_accuracy =
+		pps->time_of_day.status.state == SYNC_MODULE_STATE_SLAVE ?
+		pps->time_of_day.accuracy : INFINITY;
 
 	assert(pps != NULL);
 	assert(pps_timestamp != NULL);
