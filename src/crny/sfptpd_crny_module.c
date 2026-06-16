@@ -61,7 +61,7 @@
 
 #define DEBOUNCE_DIAG_FMT "%s (%u/%u)"
 #define DEBOUNCE_DIAG_ARGS(v) \
-	(debounce_unsafe(&v) ? "held" : "clear"), \
+	(debounce_unsafe(&v) ? ((v).advance_count == 0 ? "armed" : "held") : "clear"), \
 	(!debounce_unsafe(&v) ? (v).threshold : (v).advance_count), \
 	(v).threshold
 
@@ -805,6 +805,11 @@ static void debounce_init(struct debounce *debounce,
 	};
 }
 
+static inline bool debounce_unsafe(struct debounce *debounce)
+{
+	return debounce->unsafe;
+}
+
 static void debounce_event(struct ntp_state *state, struct debounce *debounce)
 {
 	if (debounce->threshold == 0)
@@ -814,6 +819,8 @@ static void debounce_event(struct ntp_state *state, struct debounce *debounce)
 	debounce->unsafe = true;
 	debounce->event_ref_time = state->ref_time;
 	debounce->advance_count = 0;
+	DBG_L4("crny: %s debounce arming: " DEBOUNCE_DIAG_FMT "\n",
+	       debounce->name, DEBOUNCE_DIAG_ARGS(*debounce));
 }
 
 static void debounce_advance(struct ntp_state *new_state, struct debounce *debounce)
@@ -822,6 +829,9 @@ static void debounce_advance(struct ntp_state *new_state, struct debounce *debou
 		debounce->event_ref_time = new_state->ref_time;
 		if (debounce->advance_count < UINT_MAX)
 			++debounce->advance_count;
+		if (debounce->unsafe)
+			DBG_L4("crny: %s debounce state: " DEBOUNCE_DIAG_FMT "\n",
+			       debounce->name, DEBOUNCE_DIAG_ARGS(*debounce));
 	}
 }
 
@@ -835,15 +845,8 @@ static void debounce_attempt_to_clear(struct ntp_state *state,
 			INFO("crny: new NTP offset clears %s condition\n", debounce->name);
 			sfptpd_clock_get_time(sfptpd_clock_get_system_clock(),
 					      &state->offset_timestamp);
-		} else {
-			DBG_L4("crny: new NTP offset deemed unsafe following %s\n", debounce->name);
 		}
 	}
-}
-
-static inline bool debounce_unsafe(struct debounce *debounce)
-{
-	return debounce->unsafe;
 }
 
 static void set_freerunning(struct ntp_state *state,
