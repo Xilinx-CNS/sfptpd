@@ -12,6 +12,7 @@
  ****************************************************************************/
 
 #define SFPTPD_CRNY_DEFAULT_DEBOUNCE 2
+#define SFPTPD_CRNY_DEFAULT_SETTLING_TIMEOUT 300
 #define SFPTPD_CRNY_DEFAULT_CONTROL_SCRIPT "/usr/libexec/sfptpd/chrony_clockcontrol.py"
 #define SFPTPD_CRNY_LEGACY_CONTROL_SCRIPT_PATTERN "/usr/share/doc/sfptpd.*/examples/chrony_clockcontrol.py"
 
@@ -45,6 +46,9 @@ typedef struct sfptpd_crny_module_config {
 
 	/** Threshold for ref id discontinuity debounce */
 	unsigned int debounce_threshold;
+
+	/** Timeout for SETTLING state */
+	unsigned int settling_timeout;
 } sfptpd_crny_module_config_t;
 
 /** Forward structure declarations */

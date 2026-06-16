@@ -176,6 +176,12 @@ struct ntp_state {
 	/* Chrony's cooked system time at which it updated its offset */
 	struct sfptpd_timespec ref_time;
 
+	/* Time by which the SETTLING state must be resolved */
+	struct sfptpd_timespec settling_expiry_time;
+
+	/* True clock class when we might be in holdover */
+	enum sfptpd_clock_class holdover;
+
 	/* Chrony's decision as to validity of offset */
 	bool offset_valid;
 
@@ -265,6 +271,9 @@ typedef struct sfptpd_crny_module {
 
 	/* Whether we have entered the RUNning phase */
 	bool running_phase;
+
+	/* Snapshot of monotonic time after wakeup */
+	struct sfptpd_timespec wakeup_time;
 } crny_module_t;
 
 
@@ -324,6 +333,7 @@ static const char *crny_state_names[CRNY_STATE_MAX] = {
 
 static bool crny_state_machine(crny_module_t *ntp, enum ntp_query_event);
 static void ntp_send_clustering_input(crny_module_t *ntp, struct ntp_state *state);
+static void update_state(crny_module_t *ntp);
 
 
 /****************************************************************************
@@ -455,12 +465,36 @@ static int parse_discontinuity_debounce(struct sfptpd_config_section *section, c
 		return EINVAL;
 
 	if (threshold < 0) {
-		CFG_ERROR(section, "negative invalid debounce limit %s is meaningless.\n",
+		CFG_ERROR(section, "negative debounce limit %s is meaningless.\n",
 		          params[0]);
 		return ERANGE;
 	}
 
 	ntp->debounce_threshold = threshold;
+	return 0;
+}
+
+static int parse_settling_timeout(struct sfptpd_config_section *section, const char *option,
+				  unsigned int num_params, const char * const params[], int)
+{
+	sfptpd_crny_module_config_t *ntp = (sfptpd_crny_module_config_t *)section;
+	assert(num_params == 1);
+	int tokens;
+	int interval;
+
+	tokens = sscanf(params[0], "%i", &interval);
+	if (tokens != 1)
+		return EINVAL;
+
+	if (interval < 0) {
+		CFG_ERROR(section, "negative settling timeout %s is meaningless.\n",
+		          params[0]);
+		return ERANGE;
+	}
+
+
+	ntp->settling_timeout = interval;
+
 	return 0;
 }
 
@@ -499,6 +533,14 @@ static const sfptpd_config_option_t ntp_config_options[] =
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_discontinuity_debounce,
 		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_CRNY_DEFAULT_DEBOUNCE)},
+	{"settling_timeout", "NUMBER",
+		"Specifies the interval before the ntp-settling state is "
+		"resolved to ntp-selection or ntp-listening if offset "
+		"uncorroborated.",
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_settling_timeout,
+		.dfl = SFPTPD_CONFIG_DFL(SFPTPD_CRNY_DEFAULT_SETTLING_TIMEOUT),
+		.unit = "seconds"},
 };
 
 static int crny_validate_config(struct sfptpd_config_section *section)
@@ -645,20 +687,12 @@ static void ntp_convergence_init(crny_module_t *ntp)
 
 static bool ntp_convergence_update(crny_module_t *ntp, struct ntp_state *new_state)
 {
-	struct sfptpd_timespec time;
 	struct sfptpd_ntpclient_peer *peer;
-	int rc;
 	assert(ntp != NULL);
-
-	rc = sfclock_gettime(CLOCK_MONOTONIC, &time);
-	if (rc < 0) {
-		ERROR("crny: failed to get monotonic time, %s\n", strerror(errno));
-		return false;
-	}
 
 	/* If not in the slave state or we failed to get the time for some
 	 * reason, reset the convergence measure. */
-	if ((rc < 0) || (new_state->state != SYNC_MODULE_STATE_SLAVE)) {
+	if (new_state->state != SYNC_MODULE_STATE_SLAVE) {
 		new_state->synchronized = false;
 		sfptpd_stats_convergence_reset(&ntp->convergence);
 	} else if ((new_state->alarms != 0) ||
@@ -675,7 +709,7 @@ static bool ntp_convergence_update(crny_module_t *ntp, struct ntp_state *new_sta
 		/* Update the synchronized state based on the current offset
 		 * from master */
 		new_state->synchronized = sfptpd_stats_convergence_update(&ntp->convergence,
-									  time.sec,
+									  ntp->wakeup_time.sec,
 									  sfptpd_ntpclient_offset(peer));
 	}
 
@@ -812,11 +846,23 @@ static inline bool debounce_unsafe(struct debounce *debounce)
 	return debounce->unsafe;
 }
 
-static void crny_parse_state(struct ntp_state *state, int rc)
+static void set_freerunning(struct ntp_state *state,
+			    sfptpd_sync_module_state_t s)
+{
+	state->state = s;
+	state->offset_from_master = 0.0;
+	state->root_dispersion = INFINITY;
+	state->stratum = 0;
+}
+
+static void crny_parse_state(struct ntp_state *state, int rc,
+			     const struct sfptpd_timespec *now)
 {
 	unsigned int i;
 	bool candidates;
 	struct sfptpd_ntpclient_peer *peer;
+	bool settling = state->state == SYNC_MODULE_STATE_SETTLING &&
+			sfptpd_time_is_greater_or_equal(&state->settling_expiry_time, now);
 
 	assert(state != NULL);
 
@@ -834,7 +880,9 @@ static void crny_parse_state(struct ntp_state *state, int rc)
 	 *   - Otherwise, we are in the listening state
 	 */
 	if (rc != 0) {
-		if (rc == ENOPROTOOPT)
+		if (settling)
+			set_freerunning(state, SYNC_MODULE_STATE_SETTLING);
+		else if (rc == ENOPROTOOPT)
 			state->state = SYNC_MODULE_STATE_DISABLED;
 		else if (rc == EAGAIN)
 			state->state = SYNC_MODULE_STATE_LISTENING;
@@ -906,11 +954,13 @@ static void crny_parse_state(struct ntp_state *state, int rc)
 		 * dispersion to INFINITY here. */
 		state->stratum = peer->stratum;
 	} else {
-		state->state = candidates?
-			SYNC_MODULE_STATE_SELECTION: SYNC_MODULE_STATE_LISTENING;
-		state->offset_from_master = 0.0;
-		state->root_dispersion = INFINITY;
-		state->stratum = 0;
+		if (settling)
+			state->state = SYNC_MODULE_STATE_SETTLING; /* unchanged */
+		else if (candidates)
+			state->state = SYNC_MODULE_STATE_SELECTION;
+		else
+			state->state = SYNC_MODULE_STATE_LISTENING;
+		set_freerunning(state, state->state);
 	}
 
 	state->clustering_score =
@@ -918,6 +968,18 @@ static void crny_parse_state(struct ntp_state *state, int rc)
 			&state->clustering_evaluator,
 			state->offset_from_master,
 			sfptpd_clock_get_system_clock());
+}
+
+static void set_settling_expiry(crny_module_t *ntp)
+{
+	struct sfptpd_timespec timeout;
+
+	sfptpd_time_from_s(&timeout, ntp->config->settling_timeout);
+	sfptpd_time_add(&ntp->next_state.settling_expiry_time,
+			&ntp->wakeup_time, &timeout);
+
+	/* Exceptionally, write to both next and committed states */
+	ntp->state.settling_expiry_time = ntp->next_state.settling_expiry_time;
 }
 
 static void crny_close_socket(crny_module_t *ntp)
@@ -1119,8 +1181,7 @@ static int issue_request(crny_module_t *ntp)
 	       ntohs(req->cmd1), ntohs(req->ignore), req->randoms);
 
 	/* Determine the timeout for this request */
-	(void)sfclock_gettime(CLOCK_MONOTONIC, &ntp->reply_expiry_time);
-	sfptpd_time_add(&ntp->reply_expiry_time, &ntp->reply_expiry_time, &timeout);
+	sfptpd_time_add(&ntp->reply_expiry_time, &ntp->wakeup_time, &timeout);
 
 	rc = send(comm->sock, req, sizeof(*req), 0);
 	if (rc == -1) {
@@ -1520,7 +1581,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 	int rc;
 	bool update = false;
 	bool disconnect = false;
-	struct sfptpd_timespec time_now, time_left;
+	struct sfptpd_timespec time_left;
 	struct ntp_state *next_state = &ntp->next_state;
 	enum ntp_query_state next_query_state = ntp->query.state;
 
@@ -1542,10 +1603,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 	    ntp->query.state != NTP_QUERY_STATE_CONNECT &&
 	    ntp->query.state != NTP_QUERY_STATE_SLEEP_DISCONNECTED &&
 	    ntp->query.state != NTP_QUERY_STATE_SLEEP_CONNECTED) {
-		struct sfptpd_timespec now;
-
-		(void)sfclock_gettime(CLOCK_MONOTONIC, &now);
-		if (sfptpd_time_cmp(&now, &ntp->reply_expiry_time) >= 0)
+		if (sfptpd_time_cmp(&ntp->wakeup_time, &ntp->reply_expiry_time) >= 0)
 			event = NTP_QUERY_EVENT_REPLY_TIMEOUT;
 	}
 
@@ -1560,7 +1618,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 		} else if (rc == EINPROGRESS) {
 			next_query_state = NTP_QUERY_STATE_CONNECT_WAIT;
 		} else {
-			crny_parse_state(next_state, rc);
+			crny_parse_state(next_state, rc, &ntp->wakeup_time);
 			next_query_state = NTP_QUERY_STATE_SLEEP_DISCONNECTED;
 		}
 		break;
@@ -1615,7 +1673,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 			rc = handle_get_source_datum(ntp);
 			if (rc == ENOENT) {
 				if (++ntp->query.src_idx == next_state->peer_info.num_peers) {
-					crny_parse_state(next_state, 0);
+					crny_parse_state(next_state, 0, &ntp->wakeup_time);
 					update = true;
 					sfptpd_ntpclient_print_peers(&next_state->peer_info, MODULE);
 					next_query_state = NTP_QUERY_STATE_SLEEP_CONNECTED;
@@ -1637,7 +1695,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 			rc = handle_get_source_stats(ntp);
 			if (rc == ENOENT) {
 				if (++ntp->query.src_idx == next_state->peer_info.num_peers) {
-					crny_parse_state(next_state, 0);
+					crny_parse_state(next_state, 0, &ntp->wakeup_time);
 					update = true;
 					sfptpd_ntpclient_print_peers(&next_state->peer_info, MODULE);
 					next_query_state = NTP_QUERY_STATE_SLEEP_CONNECTED;
@@ -1658,7 +1716,7 @@ static bool crny_state_machine(crny_module_t *ntp,
 		if (event == NTP_QUERY_EVENT_TRAFFIC) {
 			rc = handle_get_ntp_datum(ntp);
 			if (++ntp->query.src_idx == next_state->peer_info.num_peers) {
-				crny_parse_state(next_state, 0);
+				crny_parse_state(next_state, 0, &ntp->wakeup_time);
 				update = true;
 				sfptpd_ntpclient_print_peers(&next_state->peer_info, MODULE);
 				next_query_state = NTP_QUERY_STATE_SLEEP_CONNECTED;
@@ -1675,22 +1733,20 @@ static bool crny_state_machine(crny_module_t *ntp,
 
 	case NTP_QUERY_STATE_SLEEP_DISCONNECTED:
 		/* Check whether it's time to poll the NTP daemon again */
-		(void)sfclock_gettime(CLOCK_MONOTONIC, &time_now);
-		sfptpd_time_subtract(&time_left, &ntp->next_poll_time, &time_now);
+		sfptpd_time_subtract(&time_left, &ntp->next_poll_time, &ntp->wakeup_time);
 		if (time_left.sec < 0 || event == NTP_QUERY_EVENT_RUN) {
 			chrony_next_clock_control_state(ntp, &update);
 			if (ntp->chrony_running)
 				next_query_state = NTP_QUERY_STATE_CONNECT;
 			else
-				crny_parse_state(next_state, ENOPROTOOPT);
+				crny_parse_state(next_state, ENOPROTOOPT, &ntp->wakeup_time);
 			ntp->next_poll_time.sec += ntp->config->poll_interval;
 		}
 		break;
 
 	case NTP_QUERY_STATE_SLEEP_CONNECTED:
 		/* Check whether it's time to poll the NTP daemon again */
-		(void)sfclock_gettime(CLOCK_MONOTONIC, &time_now);
-		sfptpd_time_subtract(&time_left, &ntp->next_poll_time, &time_now);
+		sfptpd_time_subtract(&time_left, &ntp->next_poll_time, &ntp->wakeup_time);
 		if (time_left.sec < 0) {
 			if (issue_get_sys_info(ntp) != 0) {
 				disconnect = true;
@@ -1749,19 +1805,25 @@ static bool ntp_handle_state_change(crny_module_t *ntp,
 				SYNC_MODULE_CONSTRAINT_SET(ntp->constraints, CANNOT_BE_SELECTED);
 				SYNC_MODULE_CONSTRAINT_CLEAR(ntp->constraints, MUST_BE_SELECTED);
 			}
+			new_state->holdover = SFPTPD_CLOCK_CLASS_FREERUNNING;
 			break;
 
 		case SYNC_MODULE_STATE_FAULTY:
 			ERROR("crny: not able to communicate with chronyd\n");
+			[[fallthrough]];
+		case SYNC_MODULE_STATE_LISTENING:
+		case SYNC_MODULE_STATE_SELECTION:
+			new_state->holdover = SFPTPD_CLOCK_CLASS_FREERUNNING;
 			break;
 
 		case SYNC_MODULE_STATE_MASTER:
-		case SYNC_MODULE_STATE_LISTENING:
-		case SYNC_MODULE_STATE_SELECTION:
-		case SYNC_MODULE_STATE_SLAVE:
 		case SYNC_MODULE_STATE_SETTLING:
 			/* Nothing to do here */
-			break; 
+			break;
+
+		case SYNC_MODULE_STATE_SLAVE:
+			new_state->holdover = SFPTPD_CLOCK_CLASS_HOLDOVER;
+			break;
 
 		case SYNC_MODULE_STATE_PASSIVE:
 		default:
@@ -1805,7 +1867,7 @@ static bool ntp_handle_state_change(crny_module_t *ntp,
 			break;
 		case SYNC_MODULE_STATE_SETTLING:
 			status.master.remote_clock = true;
-			status.master.clock_class = SFPTPD_CLOCK_CLASS_HOLDOVER;
+			status.master.clock_class = ntp->state.holdover;
 			status.master.time_source = SFPTPD_TIME_SOURCE_NTP;
 			break;
 		default:
@@ -1920,7 +1982,7 @@ static int do_clock_control(crny_module_t *ntp,
 	if (!(last_changed.sec == 0 && last_changed.nsec == 0) &&
 	    op_do != CRNY_CTRL_OP_RESTORE &&
 	    op_do != CRNY_CTRL_OP_RESTORENORESTART) {
-		sfclock_gettime(CLOCK_MONOTONIC_RAW, &now);
+		sfclock_gettime(CLOCK_MONOTONIC, &now);
 		sfptpd_time_subtract(&delta, &now, &last_changed);
 		if (delta.sec < CLOCK_CONTROL_MIN_INTERVAL) {
 			INFO("crny: chrony_clock_control - return EAGAIN as delta = %d s\n",
@@ -1929,11 +1991,15 @@ static int do_clock_control(crny_module_t *ntp,
 		}
 	}
 
-	/* If we have a valid socket close it */
 	if (op_do == CRNY_CTRL_OP_ENABLE ||
 	    op_do == CRNY_CTRL_OP_DISABLE ||
 	    op_do == CRNY_CTRL_OP_RESTORE) {
+
+		/* We are going to attempt a restart. */
 		crny_close_socket(ntp);
+		set_settling_expiry(ntp);
+		if (ntp->next_state.state == SYNC_MODULE_STATE_SLAVE)
+			set_freerunning(&ntp->next_state, SYNC_MODULE_STATE_SETTLING);
 	}
 
 	if (ntp->config->chronyd_script != NULL) {
@@ -1959,7 +2025,7 @@ static int do_clock_control(crny_module_t *ntp,
 	}
 
 	if (op_do != CRNY_CTRL_OP_SAVE)
-		sfclock_gettime(CLOCK_MONOTONIC_RAW, &last_changed);
+		sfclock_gettime(CLOCK_MONOTONIC, &last_changed);
 
 	return rc;
 }
@@ -2058,8 +2124,7 @@ static void ntp_on_get_status(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 		status->master.remote_clock = true;
 		status->master.clock_class =
 			ntp->state.state == SYNC_MODULE_STATE_SLAVE ?
-			SFPTPD_CLOCK_CLASS_LOCKED :
-			SFPTPD_CLOCK_CLASS_HOLDOVER;
+			SFPTPD_CLOCK_CLASS_LOCKED : ntp->state.holdover;
 		status->master.time_source = SFPTPD_TIME_SOURCE_NTP;
 		status->master.accuracy = ntp->state.root_dispersion;
 		status->master.allan_variance = NAN;
@@ -2085,6 +2150,7 @@ static void ntp_on_control(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 {
 	sfptpd_sync_module_ctrl_flags_t flags;
 	bool have_control = ntp->config->clock_control;
+	bool cc_changed = false;
 	int rc;
 
 	assert(ntp != NULL);
@@ -2111,10 +2177,11 @@ static void ntp_on_control(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 			} else {
 				rc = crny_clock_control(ntp, clock_control);
 				if (rc == 0) {
+					cc_changed = true;
 					INFO("crny: %sabled chronyd clock control\n",
 					       clock_control? "en": "dis");
 				} else {
-				ERROR("crny: failed to change chronyd clock control, %s!\n",
+					ERROR("crny: failed to change chronyd clock control, %s!\n",
 				      strerror(rc));
 				}
 			}
@@ -2122,6 +2189,10 @@ static void ntp_on_control(crny_module_t *ntp, sfptpd_sync_module_msg_t *msg)
 	}
 
 	ntp->ctrl_flags = flags;
+
+	if (cc_changed)
+		update_state(ntp);
+
 	SFPTPD_MSG_REPLY(msg);
 }
 
@@ -2391,7 +2462,7 @@ static void ntp_on_run(crny_module_t *ntp)
 	}
 
 	/* Determine the time when we should next poll the NTP daemon */
-	(void)sfclock_gettime(CLOCK_MONOTONIC, &ntp->next_poll_time);
+	ntp->next_poll_time = ntp->wakeup_time;
 	ntp->query.state = NTP_QUERY_STATE_SLEEP_DISCONNECTED;
 
 	rc = EOPNOTSUPP;
@@ -2440,6 +2511,8 @@ static void ntp_on_timer(void *user_context, unsigned int id)
 
 	assert(ntp != NULL);
 
+	sfclock_gettime(CLOCK_MONOTONIC, &ntp->wakeup_time);
+
 	/* Progress the NTP state machine. We take a copy of the existing
 	 * ntp state and this is updated by the state machine */
 	if (crny_state_machine(ntp, NTP_QUERY_EVENT_TICK))
@@ -2462,6 +2535,8 @@ static int ntp_on_startup(void *context)
 	int rc;
 
 	assert(ntp != NULL);
+
+	sfclock_gettime(CLOCK_MONOTONIC, &ntp->wakeup_time);
 
 	/* Initial control flags. All instances start de-selected and with
 	 * clock control disabled but with timestamp processing enabled. */
@@ -2491,6 +2566,10 @@ static int ntp_on_startup(void *context)
 
 	if (!ntp->chrony_running)
 		ntp->state.state = SYNC_MODULE_STATE_DISABLED;
+	else
+		ntp->state.state = SYNC_MODULE_STATE_SETTLING;
+	set_settling_expiry(ntp);
+	ntp->state.holdover = SFPTPD_CLOCK_CLASS_FREERUNNING;
 
 	ntp->next_state = ntp->state;
 
@@ -2526,6 +2605,8 @@ static void ntp_on_message(void *context, struct sfptpd_msg_hdr *hdr)
 
 	assert(ntp != NULL);
 	assert(msg != NULL);
+
+	sfclock_gettime(CLOCK_MONOTONIC, &ntp->wakeup_time);
 
 	switch (SFPTPD_MSG_GET_ID(msg)) {
 	case SFPTPD_APP_MSG_RUN:
@@ -2625,6 +2706,8 @@ static void ntp_on_user_fds(void *context, unsigned int num_fds,
 
 	assert(ntp != NULL);
 
+	sfclock_gettime(CLOCK_MONOTONIC, &ntp->wakeup_time);
+
 	for (unsigned i = 0; i < num_fds; i++) {
 		if (ntp->crny_comm.sock == events[i].fd) {
 			crny_do_io(ntp);
@@ -2683,6 +2766,7 @@ static struct sfptpd_config_section *ntp_config_create(const char *name,
 		new->poll_interval = 2;
 		new->clock_control = false;
 		new->debounce_threshold = SFPTPD_CRNY_DEFAULT_DEBOUNCE;
+		new->settling_timeout = SFPTPD_CRNY_DEFAULT_SETTLING_TIMEOUT;
 	}
 
 	/* If this is an implicitly created sync instance, give it the lowest
@@ -2808,6 +2892,3 @@ int sfptpd_crny_module_create(struct sfptpd_config *config,
 
 	return 0;
 }
-
-
-	/* fin */
