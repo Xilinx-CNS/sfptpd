@@ -11,7 +11,7 @@
  * Constants
  ****************************************************************************/
 
-#define SFPTPD_CRNY_DEFAULT_DEBOUNCE 2
+#define SFPTPD_CRNY_DEFAULT_DEBOUNCE 1
 #define SFPTPD_CRNY_DEFAULT_SETTLING_TIMEOUT 300
 #define SFPTPD_CRNY_DEFAULT_CONTROL_SCRIPT "/usr/libexec/sfptpd/chrony_clockcontrol.py"
 #define SFPTPD_CRNY_LEGACY_CONTROL_SCRIPT_PATTERN "/usr/share/doc/sfptpd.*/examples/chrony_clockcontrol.py"
