@@ -10,14 +10,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- New time-limited and sticky ntp-settling state avoids source selection
+  flapping after fallback to chrony. Configure with `settling_timeout`,
+  default 5 minutes. (SWPTP-427)
 - Chrony integration improvements
-  - significant change to how chrony offsets are handled - see fixes.
+  - significant change to how chrony offsets are handled - see fixes,
+    which introduce some new controllable options to avoid using
+    unsafe offsets, with settling mechanisms that operate contemporaneously.
   - restore chrony config on exit. (SWPTP-1612)
   - new edit-chrony-cmdline script edits in place and is therefore compatible
     with the built-in manipulation in sfptpd, unlike old script. (SWPTP-1613)
   - add chrony clock control enable for when initially disabled. (SWPTP-1614)
   - fix to report the chrony offset actually used in stats. (SWPTP-1616)
-  - understand non-NTP chrony peers, controlled by `allow_refclk`. (SWPTP-1618)
+  - understand non-NTP chrony peers. (SWPTP-1618)
 - Add `--cpu` option to affinitise all or some threads. (SWPTP-1626)
 - Retry hybrid mode (unicast delay requests) on change of master. (SWPTP-1653)
 
@@ -57,6 +62,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Fix reassociation of replugged network interface, e.g. under driver reload
 - Issue SWPTP-1669
   - Avoid excessive selection churn by quantising source accuracy.
+- Issue SWPTP-1670:
+  - chrony: require configurable number of samples after ref id change.
+    (default: `discontinuity_debounce 1`.)
+  - pps: gate acceptance of time of day sample on its own accuracy & status,
+    with new coarse-time-of-day alarm.
 
 ## [3.9.0.1007] - 2025-11-07
 
