@@ -2469,6 +2469,7 @@ int sfptpd_clock_set_sync_status(struct sfptpd_clock *clock, bool in_sync,
 
 int sfptpd_clock_pps_configure(struct sfptpd_clock *clock,
 			       int pin,
+			       int channel,
 			       enum sfptpd_phc_pin_func function)
 {
 	struct efx_sock_ioctl sfc_req;
@@ -2482,19 +2483,18 @@ int sfptpd_clock_pps_configure(struct sfptpd_clock *clock,
 	if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM)
 		goto finish;
 
-	if (pin == 0 &&
+	if (function == SFPTPD_PPS_FUNC_PPS_IN &&
 	    clock->u.nic.supports_efx_pps) {
-		int enable = function == SFPTPD_PPS_FUNC_PPS_IN ? 1 : 0;
 
 		/* Enable or disable the PPS input via a private IOCTL */
 		memset(&sfc_req, 0, sizeof(sfc_req));
 		sfc_req.cmd = EFX_TS_ENABLE_HW_PPS;
-		sfc_req.u.pps_enable.enable = enable;
+		sfc_req.u.pps_enable.enable = 1;
 
 		rc = sfptpd_interface_ioctl(clock->u.nic.primary_if, SIOCEFX, &sfc_req);
 		if (rc == 0) {
-			INFO("clock %s: PPS input %s enabled using legacy SFC ioctl\n",
-			     clock->long_name, enable ? "enabled" : "disabled");
+			INFO("clock %s: PPS input enabled using legacy SFC ioctl\n",
+			     clock->long_name);
 			rc = 0;
 			goto finish;
 		} else if (rc == EOPNOTSUPP) {
@@ -2502,13 +2502,13 @@ int sfptpd_clock_pps_configure(struct sfptpd_clock *clock,
 			      clock->long_name);
 			clock->u.nic.supports_efx_pps = false;
 		} else {
-			ERROR("clock %s: failed to %s PPS input: %s\n",
-			      clock->long_name, enable ? "enable" : "disable", strerror(rc));
+			ERROR("clock %s: failed to enable PPS input: %s\n",
+			      clock->long_name, strerror(rc));
 			goto finish;
 		}
 	}
 
-	rc = sfptpd_phc_control_pps(clock->u.nic.phc, pin, function);
+	rc = sfptpd_phc_control_pps(clock->u.nic.phc, pin, channel, function);
 
 finish:
 	clock_unlock();

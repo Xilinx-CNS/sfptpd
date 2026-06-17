@@ -453,11 +453,13 @@ int sfptpd_clock_set_sync_status(struct sfptpd_clock *clock, bool in_sync,
 /** Enable or disable external PPS input on the NIC associated with the clock
  * @param clock Pointer to the clock instance
  * @param pin Pin to control
+ * @param channel The channel to configure
  * @param function Function to apply to the pin
  * @return 0 for success otherwise an errno status code.
  */
 int sfptpd_clock_pps_configure(struct sfptpd_clock *clock,
 			       int pin,
+			       int channel,
 			       enum sfptpd_phc_pin_func function);
 
 /** Get the fd to wait on for PPS events if necessary

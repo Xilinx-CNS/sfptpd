@@ -302,7 +302,32 @@ static int parse_pin(struct sfptpd_config_section *section, const char *option,
 	if (tokens != 1)
 		return EINVAL;
 
+	if (pin < -1) {
+		ERROR("Programmable pin must be >= -1\n");
+		return ERANGE;
+	}
+
 	pps->pin = pin;
+	return 0;
+}
+
+static int parse_channel(struct sfptpd_config_section *section, const char *option,
+		         unsigned int num_params, const char * const params[], int)
+{
+	sfptpd_pps_module_config_t *pps = (sfptpd_pps_module_config_t *)section;
+	int tokens, channel;
+	assert(num_params == 1);
+
+	tokens = sscanf(params[0], "%d", &channel);
+	if (tokens != 1)
+		return EINVAL;
+
+	if (channel < 0) {
+		ERROR("PPS channel must be non-negative\n");
+		return ERANGE;
+	}
+
+	pps->channel = channel;
 	return 0;
 }
 
@@ -313,7 +338,8 @@ static int parse_function(struct sfptpd_config_section *section, const char *opt
 	assert(num_params == 1);
 
 	pps->function = sfptpd_phc_pin_func_from_text(params[0]);
-	return pps->function == SFPTPD_PPS_FUNC_MAX ? EINVAL : 0;
+	return pps->function == SFPTPD_PPS_FUNC_MAX ||
+		pps->function == SFPTPD_PPS_FUNC_UNSET ? EINVAL : 0;
 }
 
 static int parse_priority(struct sfptpd_config_section *section, const char *option,
@@ -634,15 +660,21 @@ static const sfptpd_config_option_t pps_config_options[] =
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_interface},
 	{"pin", "<NUMBER>",
-		"Programmable pin number of the PPS clock to use",
+		"Programmable pin number of the device to map to configured PPS "
+		"function and channel, else -1",
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_pin,
-                .dfl = SFPTPD_CONFIG_DFL(0)},
+                .dfl = SFPTPD_CONFIG_DFL(-1)},
 	{"function", "<pps-in|pps-out|none>",
-		"Function to assign to the pin",
+		"Function for this instance",
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_function,
                 .dfl = "pps-in"},
+	{"channel", "<NUMBER>",
+		"Channel number for the selected PPS function",
+		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
+		parse_channel,
+                .dfl = SFPTPD_CONFIG_DFL(0)},
 	{"priority", "<NUMBER>",
 		"Relative priority of sync module instance. Smaller values have higher "
 		"priority. The default " STRINGIFY(SFPTPD_DEFAULT_PRIORITY) ".",
@@ -977,11 +1009,33 @@ static struct sfptpd_pps_instance *pps_find_instance_by_pin(pps_module_t *pps,
 							    int pin) {
 	struct sfptpd_pps_instance *instance;
 
+	/* No pin defined means no match */
+	if (pin == -1)
+		return NULL;
+
 	/* Walk linked list, looking for the clock */
 	for (instance = pps->instances;
 	     instance &&
 	     (instance->clock != clock ||
 	      instance->config->pin != pin);
+	     instance = instance->next);
+
+	return instance;
+}
+
+static struct sfptpd_pps_instance *pps_find_instance_by_channel(pps_module_t *pps,
+								struct sfptpd_clock *clock,
+								enum sfptpd_phc_pin_func function,
+								int channel)
+{
+	struct sfptpd_pps_instance *instance;
+
+	/* Walk linked list, looking for the clock */
+	for (instance = pps->instances;
+	     instance &&
+	     (instance->clock != clock ||
+	      instance->config->function != function ||
+	      instance->config->channel != channel) ;
 	     instance = instance->next);
 
 	return instance;
@@ -1008,7 +1062,10 @@ static void pps_destroy_instance(pps_module_t *pps,
 
 	/* Disable PPS events in the driver */
 	if (instance->clock != NULL) {
-		(void)sfptpd_clock_pps_configure(instance->clock, instance->config->pin, SFPTPD_PPS_FUNC_NONE);
+		(void)sfptpd_clock_pps_configure(instance->clock,
+						 instance->config->pin,
+						 instance->config->channel,
+						 SFPTPD_PPS_FUNC_UNSET);
 		instance->clock = NULL;
 	}
 
@@ -1216,10 +1273,22 @@ static int pps_configure_pin(pps_module_t *pps,
 	assert((clock != NULL) &&
 	       (clock != sfptpd_clock_get_system_clock()));
 
-	/* Check if the clock is in use in another instance */
+	/* Check if (clock, function, channel) is in use in another instance */
+	other_instance = pps_find_instance_by_channel(pps, clock, config->function, config->channel);
+	if (other_instance) {
+		ERROR("pps %s: %s channel %d of clock on nic %s is already in use for instance %s\n",
+		      SFPTPD_CONFIG_GET_NAME(config),
+		      sfptpd_phc_pin_func_to_text(config->function),
+		      config->channel,
+		      config->interface_name,
+		      other_instance->config->hdr.name);
+		return EBUSY;
+	}
+
+	/* Check if (clock, pin) is already mapped */
 	other_instance = pps_find_instance_by_pin(pps, clock, config->pin);
 	if (other_instance) {
-		ERROR("pps %s: pin %d of clock on nic %s is already in use for instance %s\n",
+		ERROR("pps %s: pin %d of clock on nic %s is already mapped by instance %s\n",
 		      SFPTPD_CONFIG_GET_NAME(config),
 		      config->pin,
 		      config->interface_name,
@@ -1240,12 +1309,14 @@ static int pps_configure_pin(pps_module_t *pps,
 	}
 
 	/* Enable PPS events in the driver */
-	rc = sfptpd_clock_pps_configure(clock, config->pin, config->function);
+	rc = sfptpd_clock_pps_configure(clock, config->pin, config->channel, config->function);
 	if (rc != 0) {
-		ERROR("pps %s: failed to configure PPS pin %d for interface %s, %s\n",
-		      SFPTPD_CONFIG_GET_NAME(config), config->pin,
-		      config->interface_name, strerror(rc));
-		return EIO;
+		ERROR("pps %s: failed to configure %s pin %d to %s channel %d, %s\n",
+		      SFPTPD_CONFIG_GET_NAME(config),
+		      config->interface_name, config->pin,
+		      sfptpd_phc_pin_func_to_text(config->function),
+		      config->channel, strerror(rc));
+		return rc;
 	}
 
 	/* Get a clock feed */
@@ -2136,8 +2207,9 @@ static void pps_on_save_state(pps_module_t *pps, sfptpd_sync_module_msg_t *msg)
 				"alarms: %s\n"
 				"control-flags: %s\n"
 				"interface: %s\n"
-				"pin: %d\n"
 				"function: %s\n"
+				"channel: %d\n"
+				"pin: %d\n"
 				"offset-from-master: " SFPTPD_FORMAT_FLOAT "\n"
 				"freq-adjustment-ppb: " SFPTPD_FORMAT_FLOAT "\n"
 				"in-sync: %d\n"
@@ -2151,8 +2223,9 @@ static void pps_on_save_state(pps_module_t *pps, sfptpd_sync_module_msg_t *msg)
 				pps_state_text(instance->state, instance->alarms),
 				alarms, flags,
 				instance->config->interface_name,
-				instance->config->pin,
 				sfptpd_phc_pin_func_to_text(instance->config->function),
+				instance->config->channel,
+				instance->config->pin,
 				instance->offset_from_master_ns,
 				instance->freq_adjust_ppb,
 				instance->synchronized,
@@ -2171,8 +2244,9 @@ static void pps_on_save_state(pps_module_t *pps, sfptpd_sync_module_msg_t *msg)
 				"alarms: %s\n"
 				"control-flags: %s\n"
 				"interface: %s\n"
-				"pin: %d\n"
 				"function: %s\n"
+				"channel: %d\n"
+				"pin: %d\n"
 				"freq-adjustment-ppb: " SFPTPD_FORMAT_FLOAT "\n",
 				SFPTPD_CONFIG_GET_NAME(instance->config),
 				sfptpd_clock_get_long_name(instance->clock),
@@ -2180,8 +2254,9 @@ static void pps_on_save_state(pps_module_t *pps, sfptpd_sync_module_msg_t *msg)
 				pps_state_text(instance->state, instance->alarms),
 				alarms, flags,
 				instance->config->interface_name,
-				instance->config->pin,
 				sfptpd_phc_pin_func_to_text(instance->config->function),
+				instance->config->channel,
+				instance->config->pin,
 				instance->freq_adjust_ppb);
 		}
 
@@ -2612,7 +2687,8 @@ static struct sfptpd_config_section *pps_config_create(const char *name,
 	} else {
 		/* Set default values for PPS configuration */
 		new->interface_name[0] = '\0';
-		new->pin = 0;
+		new->pin = -1;
+		new->channel = 0;
 		new->function = SFPTPD_PPS_FUNC_PPS_IN;
 		new->priority = SFPTPD_DEFAULT_PRIORITY;
 		new->convergence_threshold = 0.0;

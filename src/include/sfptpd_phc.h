@@ -39,6 +39,7 @@ typedef enum {
 } sfptpd_phc_pps_method_t;
 
 enum sfptpd_phc_pin_func {
+	SFPTPD_PPS_FUNC_UNSET,
 	SFPTPD_PPS_FUNC_NONE,
 	SFPTPD_PPS_FUNC_PPS_IN,
 	SFPTPD_PPS_FUNC_PPS_OUT,
@@ -120,10 +121,11 @@ int sfptpd_phc_compare_to_sys_clk(struct sfptpd_phc *phc, struct sfptpd_timespec
 /** Control PPS pin
  * @param phc Handle of the PHC device
  * @param pin Pin index
+ * @param channel Channel index
  * @param function Pin function
  * @return 0 on success or an errno otherwise
  */
-int sfptpd_phc_control_pps(struct sfptpd_phc *phc, int pin, enum sfptpd_phc_pin_func func);
+int sfptpd_phc_control_pps(struct sfptpd_phc *phc, int pin, int channel, enum sfptpd_phc_pin_func func);
 
 
 /** Get any PPS fd needed for polling

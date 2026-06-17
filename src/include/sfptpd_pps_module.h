@@ -43,11 +43,17 @@ typedef struct sfptpd_pps_module_config {
 	/* Textual name of interface that PPS should use */
 	char interface_name[IF_NAMESIZE];
 
-	/* Pin index */
+	/* Pin index or -1 if unprogrammed */
 	int pin;
 
 	/* Function */
 	enum sfptpd_phc_pin_func function;
+
+	/* Channel index.
+	 * The notional 'primary key' for a PPS sync instance is
+	 * (clock, function, channel). The pin is also cross-checked as
+	 * a user config validation. */
+	int channel;
 
 	/* Priority of this instance */
 	unsigned int priority;

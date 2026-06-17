@@ -92,6 +92,21 @@ struct phc_diff_method {
 	void *context; /* If NULL, phc context is used */
 };
 
+struct chan_config {
+	bool enabled;
+};
+
+struct pin_config {
+	enum sfptpd_phc_pin_func func;
+	int channel;
+};
+
+struct pps_assignments {
+	struct pin_config *pins;
+	struct chan_config *in;
+	struct chan_config *out;
+};
+
 struct sfptpd_phc {
 	/* PHC Index */
 	int phc_idx;
@@ -113,6 +128,9 @@ struct sfptpd_phc {
 
 	/* Keep track of which diff methods have already been tried */
 	int diff_method_index;
+
+	struct pps_assignments pps_requested;
+	struct pps_assignments pps_confirmed;
 
 	/* File descriptor for associated PPS device */
 	int pps_fd;
@@ -228,6 +246,7 @@ static sfptpd_phc_pps_method_t phc_pps_methods[SFPTPD_PPS_METHOD_MAX + 1] = {
 };
 
 const char *sfptpd_phc_pin_func_text[] = {
+	"unset",
 	"none",
 	"pps-in",
 	"pps-out",
@@ -902,36 +921,161 @@ diff_method_selected:
 	return phc->diff_method == SFPTPD_DIFF_METHOD_MAX ? EOPNOTSUPP : 0;
 }
 
-
-static int phc_control_devptp(struct sfptpd_phc *phc,
-			      int pin,
-			      enum sfptpd_phc_pin_func func)
+static int pps_clear_channel(struct sfptpd_phc *phc,
+			     enum sfptpd_phc_pin_func func,
+			     int channel)
 {
-	struct ptp_extts_request req = { 0 };
-	const int channel = 0;
 	int rc = 0;
 
-	assert(phc != NULL);
+	/* Relies on caller range checking the channel number */
 
-	if (func == SFPTPD_PPS_FUNC_PPS_IN &&
-	    phc->caps.n_ext_ts <= channel) {
-		TRACE_L2("phc%d: no external timestamping channel %d available\n",
-		phc->phc_idx, channel);
-		return ENOTSUP;
+	switch (func) {
+	case SFPTPD_PPS_FUNC_PPS_IN: {
+		/* Mark in our requested allocations cache */
+		phc->pps_requested.in[channel].enabled = false;
+
+		/* Issue the request to the kernel */
+		struct ptp_extts_request req = {
+			.index = channel,
+			.flags = 0,
+		};
+		rc = ioctl(phc->phc_fd, PTP_EXTTS_REQUEST, &req);
+		if (rc != 0) {
+			rc = errno;
+			ERROR("phc%d: could not disable PPS on external "
+			      "timestamping channel %d: %s\n",
+			      phc->phc_idx, channel, strerror(rc));
+		}
+		break;
+	}
+	case SFPTPD_PPS_FUNC_PPS_OUT: {
+		phc->pps_requested.out[channel].enabled = false;
+		struct ptp_perout_request req = {
+			.index = channel,
+			.period = { 0, 0 },
+		};
+		rc = ioctl(phc->phc_fd, PTP_PEROUT_REQUEST, &req);
+		if (rc != 0) {
+			rc = errno;
+			ERROR("phc%d: could not disable PPS output on "
+			      "channel %d: %s\n", phc->phc_idx,
+			      channel, strerror(rc));
+		}
+		break;
+	}
+	default:
+		break;
+	}
+	return rc;
+}
+
+static int pps_set_channel(struct sfptpd_phc *phc,
+			   enum sfptpd_phc_pin_func func,
+			   int channel)
+{
+	int rc = 0;
+
+	/* Relies on caller range checking the channel number */
+
+	switch (func) {
+	case SFPTPD_PPS_FUNC_PPS_IN: {
+		/* Mark in our requested allocations cache */
+		phc->pps_requested.in[channel].enabled = true;
+
+		/* Issue the request to the kernel */
+		struct ptp_extts_request req = {
+			.index = channel,
+			.flags = PTP_ENABLE_FEATURE | PTP_RISING_EDGE,
+		};
+		rc = ioctl(phc->phc_fd, PTP_EXTTS_REQUEST, &req);
+		if (rc != 0) {
+			rc = errno;
+			ERROR("phc%d: could not enable PPS on external "
+			      "timestamping channel %d: %s\n",
+			      phc->phc_idx, channel, strerror(rc));
+		}
+		break;
+	}
+	case SFPTPD_PPS_FUNC_PPS_OUT: {
+		phc->pps_requested.out[channel].enabled = true;
+
+		struct ptp_perout_request req = {
+			.index = channel,
+			.period = { 1, 0 },
+		};
+		rc = ioctl(phc->phc_fd, PTP_PEROUT_REQUEST, &req);
+		if (rc != 0) {
+			rc = errno;
+			ERROR("phc%d: could not enable PPS output on "
+			      "channel %d: %s\n", phc->phc_idx,
+			      channel, strerror(rc));
+		}
+		break;
+	}
+	default:
+		break;
+	}
+	return rc;
+}
+
+static void pps_remove_conflicting_mappings(struct sfptpd_phc *phc,
+					    enum sfptpd_phc_pin_func func,
+					    int channel, int pin)
+{
+#ifdef PTP_PIN_SETFUNC
+	/* Check for existing mapping in the codomain */
+	for (int p = 0; p < phc->caps.n_pins; p++) {
+		struct pin_config *c = &phc->pps_requested.pins[p];
+		if (p != pin &&
+		    c->func == func &&
+		    c->channel == channel) {
+			WARNING("phc%d: pin %d already holds the setting "
+				"%s#%d we are moving to pin %d\n",
+				phc->phc_idx, p,
+				sfptpd_phc_pin_func_to_text(func), channel, pin);
+			c->func = SFPTPD_PPS_FUNC_UNSET;
+			c->channel = -1;
+		}
+	}
+#endif
+}
+
+static int pps_set_pin(struct sfptpd_phc *phc,
+		       int pin,
+		       int channel,
+		       enum sfptpd_phc_pin_func func)
+{
+	struct pin_config *conf = &phc->pps_requested.pins[pin];
+	const struct pin_config old_conf = *conf;
+
+	int rc = 0;
+
+	/* Relies on caller range checking the pin number */
+
+	switch (func) {
+	case SFPTPD_PPS_FUNC_UNSET:
+		conf->func = func;		/* We care no longer! */
+		conf->channel = channel = -1;
+		if (old_conf.func == SFPTPD_PPS_FUNC_UNSET)
+			return 0;		/* Change nothing */
+		func = SFPTPD_PPS_FUNC_NONE;	/* One-off disablement */
+		break;
+	case SFPTPD_PPS_FUNC_NONE:
+		conf->func = func;
+		conf->channel = channel = -1;
+		break;
+	default:
+		pps_remove_conflicting_mappings(phc, func, channel, pin);
+		conf->func = func;
+		conf->channel = channel;
 	}
 
 #ifdef PTP_PIN_SETFUNC
-	if (phc->caps.n_pins <= pin) {
-		TRACE_L2("phc%d: no pin %d available to configure\n",
-		phc->phc_idx, pin);
-		return ENOTSUP;
-	}
-
-	struct ptp_pin_desc pin_conf = { "" };
-
-	pin_conf.index = pin;
-	pin_conf.func = phc_pin_func_to_linux(func);
-	pin_conf.chan = channel;
+	struct ptp_pin_desc pin_conf = {
+		.index = pin,
+		.func = phc_pin_func_to_linux(func),
+		.chan = channel,
+	};
 	rc = ioctl(phc->phc_fd, PTP_PIN_SETFUNC, &pin_conf);
 
 	if (rc != 0) {
@@ -945,27 +1089,110 @@ static int phc_control_devptp(struct sfptpd_phc *phc,
 	}
 #endif
 
-	if (func == SFPTPD_PPS_FUNC_PPS_IN || (
-#ifndef PTP_PIN_SETFUNC
-	     true &&
-#else
-	     phc->caps.n_pins == 1 &&
-#endif
-	     channel < phc->caps.n_ext_ts)) {
-		/* Always enable the PPS_IN when needed; only disable it if
-		   we are sure we might not be disabling a channel in use on
-		   another pin, since we don't yet track all channels/pins. */
-		req.index = channel;
-		req.flags = func == SFPTPD_PPS_FUNC_PPS_IN ? (PTP_ENABLE_FEATURE | PTP_RISING_EDGE) : 0;
-		rc = ioctl(phc->phc_fd, PTP_EXTTS_REQUEST, &req);
-		if (rc != 0) {
-			rc = errno;
-			ERROR("phc%d: could not enable/disable PPS on external "
-			      "timestamping channel %d: %s\n",
-			      phc->phc_idx, channel, strerror(rc));
-			return rc;
+	return rc;
+}
+
+static int pps_reconcile_pins(struct sfptpd_phc *phc)
+{
+	/* We do not try to force a fix if we don't have what is expected -
+	 * we set only once when asked by our client (or possibly on reset-type
+	 * scenario) but we assume the hardware had a good reason for voiding
+	 * our prior request and will use this for downstream information only. */
+	int pin;
+
+#ifdef PTP_PIN_SETFUNC
+	for (pin = 0; pin < phc->caps.n_pins; pin++) {
+		struct ptp_pin_desc pin_conf = {
+			.index = pin,
+		};
+		if (ioctl(phc->phc_fd, PTP_PIN_GETFUNC, &pin_conf) == -1) {
+			TRACE_L3("phc%d: could not get pin %d function, %s\n",
+				  phc->phc_idx, pin, strerror(errno));
+		} else {
+			struct pin_config *req = &phc->pps_requested.pins[pin];
+			struct pin_config *conf = &phc->pps_confirmed.pins[pin];
+
+			conf->func = phc_pin_func_from_linux(pin_conf.func);
+			conf->channel = pin_conf.chan;
+			if (req->func != SFPTPD_PPS_FUNC_UNSET &&
+			    (conf->func != req->func ||
+			     conf->channel != req->channel)) {
+				WARNING("phc%d: effective pin %d config (%s#%d) does not match requested (%s#%d)\n",
+					phc->phc_idx, pin,
+					sfptpd_phc_pin_func_to_text(conf->func), conf->channel,
+					sfptpd_phc_pin_func_to_text(req->func), req->channel);
+			}
 		}
 	}
+	/* TODO: report back to owner. */
+#endif
+	return 0;
+}
+
+
+
+static int phc_control_devptp(struct sfptpd_phc *phc,
+			      int pin,
+			      int channel,
+			      enum sfptpd_phc_pin_func func)
+{
+	int rc = 0;
+
+	assert(phc != NULL);
+
+	bool rationed;
+	bool activate = false;
+	int num_channels;
+
+	switch (func) {
+	case SFPTPD_PPS_FUNC_PPS_IN:
+		num_channels = phc->caps.n_ext_ts;
+		rationed = true;
+		activate = true;
+		break;
+	case SFPTPD_PPS_FUNC_PPS_OUT:
+		num_channels = phc->caps.n_per_out;
+		rationed = true;
+		activate = true;
+		break;
+	case SFPTPD_PPS_FUNC_UNSET:
+	default:
+		num_channels = 0;
+		rationed = false;
+	}
+
+#ifdef PTP_PIN_SETFUNC
+	const int n_pins = phc->caps.n_pins;
+#else
+	const int n_pins = 0;
+#endif
+	if (pin >= 0 && n_pins <= pin) {
+		WARNING("phc%d: pin %d is not configurable but proceeding with %s channel %d request\n",
+			phc->phc_idx, pin, sfptpd_phc_pin_func_text[func], channel);
+		pin = -1;
+	}
+
+	if (rationed && channel >= num_channels) {
+		TRACE_L2("phc%d: could not use %s channel %d, only %d available\n",
+			 phc->phc_idx, sfptpd_phc_pin_func_text[func], channel, num_channels);
+		return ENOTSUP;
+	}
+
+	if (pin >= 0) {
+		struct pin_config *old_config = &phc->pps_requested.pins[pin];
+		if ((old_config->func != func ||
+		     old_config->channel != channel))
+			pps_clear_channel(phc, old_config->func, old_config->channel);
+
+		rc = pps_set_pin(phc, pin, channel, func);
+		/* Ignore failure for now */
+	}
+
+	if (rationed && activate) {
+		rc = pps_set_channel(phc, func, channel);
+	}
+
+	pps_reconcile_pins(phc);
 
 	return rc;
 }
@@ -1106,6 +1333,29 @@ static void phc_choose_extpps(struct sfptpd_phc *phc)
 	}
 }
 
+static int pps_alloc_from_caps(const struct ptp_clock_caps *caps, struct pps_assignments *assignments)
+{
+	int rc = 0;
+
+	if (caps->n_pins &&
+	    !(assignments->pins = calloc(caps->n_pins, sizeof *assignments->pins)))
+		rc = errno;
+	if (rc == 0 && caps->n_ext_ts &&
+	    !(assignments->in = calloc(caps->n_ext_ts, sizeof *assignments->in)))
+		rc = errno;
+	if (rc == 0 && caps->n_per_out &&
+	    !(assignments->out = calloc(caps->n_per_out, sizeof *assignments->out)))
+		rc = errno;
+	return rc;
+}
+
+static void pps_dealloc(struct pps_assignments *assignments)
+{
+	free(assignments->pins);
+	free(assignments->in);
+	free(assignments->out);
+}
+
 static void phc_list_pins(struct sfptpd_phc *phc)
 {
 	int pin;
@@ -1218,6 +1468,10 @@ int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc, bool read_only)
 		goto fail2;
 	}
 
+	if ((rc = pps_alloc_from_caps(&new->caps, &new->pps_requested)) ||
+	    (rc = pps_alloc_from_caps(&new->caps, &new->pps_confirmed)))
+		goto fail3;
+
 	new->phc_idx = phc_index;
 	new->posix_id = PHC_FD_TO_POSIX_ID(new->phc_fd);
 	new->pps_fd = -1;
@@ -1241,6 +1495,10 @@ int sfptpd_phc_open(int phc_index, struct sfptpd_phc **phc, bool read_only)
 	*phc = new;
 	free(path);
 	return 0;
+
+fail3:
+	pps_dealloc(&new->pps_requested);
+	pps_dealloc(&new->pps_confirmed);
 
 fail2:
 	close(new->phc_fd);
@@ -1268,6 +1526,9 @@ int sfptpd_phc_start(struct sfptpd_phc *phc)
 void sfptpd_phc_close(struct sfptpd_phc *phc)
 {
 	assert(phc != NULL);
+
+	pps_dealloc(&phc->pps_requested);
+	pps_dealloc(&phc->pps_confirmed);
 
 	if (phc->devpps_fd >= 0) {
 		/* Close the external PPS device */
@@ -1440,7 +1701,7 @@ int sfptpd_phc_set_pps_methods(sfptpd_phc_pps_method_t *new_order)
 }
 
 
-int sfptpd_phc_control_pps(struct sfptpd_phc *phc, int pin, enum sfptpd_phc_pin_func func)
+int sfptpd_phc_control_pps(struct sfptpd_phc *phc, int pin, int channel, enum sfptpd_phc_pin_func func)
 {
 	bool on = func == SFPTPD_PPS_FUNC_PPS_IN;
 
@@ -1449,16 +1710,18 @@ int sfptpd_phc_control_pps(struct sfptpd_phc *phc, int pin, enum sfptpd_phc_pin_
 
 	switch (phc->pps_method) {
 	case SFPTPD_PPS_METHOD_DEV_PTP:
-		return phc_control_devptp(phc, pin, func);
+		return phc_control_devptp(phc, pin, channel, func);
 
 	case SFPTPD_PPS_METHOD_DEV_PPS:
+		if (channel > 0)
+			return EINVAL;
 		return phc_enable_devpps(phc, on);
 
 	case SFPTPD_PPS_METHOD_MAX:
 	default:
 		ERROR("phc%d: HW PPS enable requested but no method available\n",
 		      phc->phc_idx);
-		return EOPNOTSUPP;
+		return ENODEV;
 	}
 }
 
