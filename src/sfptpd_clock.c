@@ -2868,12 +2868,8 @@ int64_t sfptpd_clock_reconcile_pins(struct sfptpd_clock *clock,
 	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
 	assert(n_pins || !copy_to);
 
-	if (clock->u.nic.phc != NULL &&
-	    ((clock->type == SFPTPD_CLOCK_TYPE_NON_SFC && clock->cfg_non_sfc_nics) ||
-	     (clock->type == SFPTPD_CLOCK_TYPE_XNET) ||
-	     (clock->type == SFPTPD_CLOCK_TYPE_SFC &&
-	      (!clock->u.nic.supports_efx_pps || clock->cfg_avoid_efx)))) {
-
+	if (clock->type != SFPTPD_CLOCK_TYPE_SYSTEM &&
+	    clock->u.nic.phc != NULL ) {
 		ret = sfptpd_pps_reconcile_pins(clock->u.nic.phc, copy_to, n_pins, false);
 	}
 

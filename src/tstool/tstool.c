@@ -120,6 +120,7 @@ enum clock_command_e {
 	CLOCK_CMD_DIFF,
 	CLOCK_CMD_DEDUP,
 	CLOCK_CMD_SET_SYNC,
+	CLOCK_CMD_PPS_LIST,
 	CLOCK_CMD_INVALID
 };
 
@@ -160,6 +161,7 @@ static const struct clock_command clock_cmds[] = {
 	{ CLOCK_CMD_DIFF,     "diff",     2 },
 	{ CLOCK_CMD_DEDUP,    "dedup",    0 },
 	{ CLOCK_CMD_SET_SYNC, "set_sync", 1 },
+	{ CLOCK_CMD_PPS_LIST, "pps_list", 1 },
 	{ CLOCK_CMD_INVALID,  "INVALID",  0 },
 };
 
@@ -291,6 +293,7 @@ static void usage(FILE *stream)
 		"    clock diff CLOCK1 CLOCK2    CLOCK1 - CLOCK2\n"
 		"    clock set_sync CLOCK TIMEO  Set CLOCK sync flag for TIMEO seconds\n"
 		"    clock dedup                 Deduplicate shared phc devices\n\n"
+		"    clock pps_list CLOCK        List PPS pins\n"
 		"      CLOCK := <phcN> | <ethN> | system\n\n"
 		"  INTERFACE SUBSYSTEM\n"
 		"    interface list              List physical interfaces\n"
@@ -421,6 +424,20 @@ static int clock_command(int argc, char *argv[])
 		break;
 	case CLOCK_CMD_DEDUP:
 		rc = sfptpd_clock_deduplicate();
+		break;
+	case CLOCK_CMD_PPS_LIST:
+		struct sfptpd_phc_pin_config *pins;
+		unsigned int n_pins;
+		int64_t map = sfptpd_clock_reconcile_pins(clocks[0], &pins, &n_pins);
+		if (map == -1) {
+			ERROR("could not get pin list\n");
+			return EXIT_FAILURE;
+		}
+		for (unsigned int pin = 0; pin < n_pins; pin++)
+			printf("pin %d -> %s channel %d\n", pin,
+			       sfptpd_phc_pin_func_to_text(pins[pin].func),
+			       pins[pin].channel);
+		free(pins);
 		break;
 	default:
 		fprintf(stderr, "unknown clock command: %s\n", command);
