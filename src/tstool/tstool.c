@@ -121,6 +121,7 @@ enum clock_command_e {
 	CLOCK_CMD_DEDUP,
 	CLOCK_CMD_SET_SYNC,
 	CLOCK_CMD_PPS_LIST,
+	CLOCK_CMD_PPS_SET,
 	CLOCK_CMD_INVALID
 };
 
@@ -162,6 +163,7 @@ static const struct clock_command clock_cmds[] = {
 	{ CLOCK_CMD_DEDUP,    "dedup",    0 },
 	{ CLOCK_CMD_SET_SYNC, "set_sync", 1 },
 	{ CLOCK_CMD_PPS_LIST, "pps_list", 1 },
+	{ CLOCK_CMD_PPS_SET,  "pps_set", 1 },
 	{ CLOCK_CMD_INVALID,  "INVALID",  0 },
 };
 
@@ -292,9 +294,15 @@ static void usage(FILE *stream)
 		"    clock set_to CLOCK1 CLOCK2  CLOCK1 := CLOCK2\n"
 		"    clock diff CLOCK1 CLOCK2    CLOCK1 - CLOCK2\n"
 		"    clock set_sync CLOCK TIMEO  Set CLOCK sync flag for TIMEO seconds\n"
-		"    clock dedup                 Deduplicate shared phc devices\n\n"
+		"    clock dedup                 Deduplicate shared phc devices\n"
 		"    clock pps_list CLOCK        List PPS pins\n"
-		"      CLOCK := <phcN> | <ethN> | system\n\n"
+		"    clock pps_set CLOCK FUNC [CHAN] [PIN]\n"
+		"                                Set PPS function\n\n"
+		"      CLOCK := <phcN> | <ethN> | system\n"
+		"      FUNC := none | pps-in | pps-out\n"
+		"      CHAN := input or output channel index, default 0\n"
+		"      PIN := programmable pin, default -1 only sets up the\n"
+		"             physical input/output, use 0, 1... for routing\n\n"
 		"  INTERFACE SUBSYSTEM\n"
 		"    interface list              List physical interfaces\n"
 		"    interface info INTF         Show interface information\n"
@@ -425,15 +433,35 @@ static int clock_command(int argc, char *argv[])
 	case CLOCK_CMD_DEDUP:
 		rc = sfptpd_clock_deduplicate();
 		break;
-	case CLOCK_CMD_PPS_LIST:
-		struct sfptpd_phc_pin_config *pins;
-		unsigned int n_pins;
-		int64_t map = sfptpd_clock_reconcile_pins(clocks[0], &pins, &n_pins);
-		if (map == -1) {
-			ERROR("could not get pin list\n");
+	case CLOCK_CMD_PPS_SET:
+		int argi = cmd->clock_args + 1;
+		enum sfptpd_phc_pin_func func;
+		int channel = 0;
+		int pin = -1;
+		if (argc - argi < 1) {
+			ERROR("must specify function\n");
 			return EXIT_FAILURE;
 		}
-		for (unsigned int pin = 0; pin < n_pins; pin++)
+		func = sfptpd_phc_pin_func_from_text(argv[argi]);
+		if (func >= SFPTPD_PPS_FUNC_MAX) {
+			ERROR("invalid function: %s\n", argv[argi]);
+			return EXIT_FAILURE;
+		}
+		if (argc - argi > 1)
+			tokens = sscanf(argv[argi + 1], "%i", &channel);
+		if (argc - argi > 2)
+			tokens = sscanf(argv[argi + 2], "%i", &pin);
+		int err = sfptpd_clock_pps_configure(clocks[0], pin, channel, func);
+		if (err)
+			WARNING("error trying to set pps config, %s\n", strerror(err));
+		[[fallthrough]];
+	case CLOCK_CMD_PPS_LIST:
+		struct sfptpd_phc_pin_config *pins = NULL;
+		unsigned int n_pins = 0;
+		int64_t map = sfptpd_clock_reconcile_pins(clocks[0], &pins, &n_pins);
+		if (map == -1)
+			WARNING("could not get pin list\n");
+		for (pin = 0; pin < (int) n_pins; pin++)
 			printf("pin %d -> %s channel %d\n", pin,
 			       sfptpd_phc_pin_func_to_text(pins[pin].func),
 			       pins[pin].channel);
