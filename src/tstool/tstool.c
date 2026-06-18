@@ -17,6 +17,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <poll.h>
 #include <linux/sockios.h>
 #include <linux/net_tstamp.h>
 
@@ -122,6 +124,7 @@ enum clock_command_e {
 	CLOCK_CMD_SET_SYNC,
 	CLOCK_CMD_PPS_LIST,
 	CLOCK_CMD_PPS_SET,
+	CLOCK_CMD_PPS_POLL,
 	CLOCK_CMD_INVALID
 };
 
@@ -163,7 +166,8 @@ static const struct clock_command clock_cmds[] = {
 	{ CLOCK_CMD_DEDUP,    "dedup",    0 },
 	{ CLOCK_CMD_SET_SYNC, "set_sync", 1 },
 	{ CLOCK_CMD_PPS_LIST, "pps_list", 1 },
-	{ CLOCK_CMD_PPS_SET,  "pps_set", 1 },
+	{ CLOCK_CMD_PPS_SET,  "pps_set",  1 },
+	{ CLOCK_CMD_PPS_POLL, "pps_poll", 1 },
 	{ CLOCK_CMD_INVALID,  "INVALID",  0 },
 };
 
@@ -297,12 +301,15 @@ static void usage(FILE *stream)
 		"    clock dedup                 Deduplicate shared phc devices\n"
 		"    clock pps_list CLOCK        List PPS pins\n"
 		"    clock pps_set CLOCK FUNC [CHAN] [PIN]\n"
-		"                                Set PPS function\n\n"
+		"                                Set PPS function\n"
+		"    clock pps_poll CLOCK pps-in [CHAN] [PIN] [COUNT]\n"
+		"                                Set and poll PPS events\n"
 		"      CLOCK := <phcN> | <ethN> | system\n"
 		"      FUNC := none | pps-in | pps-out\n"
 		"      CHAN := input or output channel index, default 0\n"
 		"      PIN := programmable pin, default -1 only sets up the\n"
-		"             physical input/output, use 0, 1... for routing\n\n"
+		"             physical input/output, use 0, 1... for routing\n"
+		"      COUNT :- number of events to read, default 0 forever\n\n"
 		"  INTERFACE SUBSYSTEM\n"
 		"    interface list              List physical interfaces\n"
 		"    interface info INTF         Show interface information\n"
@@ -310,6 +317,69 @@ static void usage(FILE *stream)
 		"      INTF := <ethN>\n"
                 "      See 'info' response for available TX and RX modes\n",
 		program_invocation_short_name);
+}
+
+static void pps_list(struct sfptpd_clock *clock)
+{
+	struct sfptpd_phc_pin_config *pins = NULL;
+	unsigned int n_pins = 0;
+	int64_t map = sfptpd_clock_reconcile_pins(clock, &pins, &n_pins);
+	if (map == -1)
+		WARNING("could not get pin list\n");
+	for (unsigned int pin = 0; pin < n_pins; pin++)
+		printf("pin %d -> %s channel %d\n", pin,
+		       sfptpd_phc_pin_func_to_text(pins[pin].func),
+		       pins[pin].channel);
+	free(pins);
+}
+
+static void pps_poll(struct sfptpd_clock *clock, int func, int channel, int count)
+{
+	if (channel != 0) {
+		ERROR("Internal abstractions do not yet support polling "
+		      "for channels other than channel 0\n");
+		return;
+	}
+
+	struct pollfd pfd = {
+		.fd = sfptpd_clock_pps_get_fd(clock),
+		.events = POLLIN,
+	};
+	const char *cnam = sfptpd_clock_get_short_name(clock);
+	const char *fnam = sfptpd_phc_pin_func_to_text(func);
+	int i = 0;
+
+	if (count < 1)
+		count = INT_MAX;
+
+	INFO("Waiting for %d %s events...\n", count, fnam);
+
+	while(i < count) {
+		struct sfptpd_timespec ts;
+		uint32_t seq;
+		int rc;
+		int pres = pfd.fd == -1 ? 1 : poll(&pfd, 1, -1);
+
+		if (pres == -1) {
+			if (errno == EINTR)
+				break;
+			ERROR("Polling for PPS events: %s\n",
+			      strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+		if (pfd.fd != -1 && (pfd.revents & POLLIN) == 0)
+			break;
+		rc = sfptpd_clock_pps_get(clock, &seq, &ts);
+		if (rc == 0) {
+			printf("%s %s#%d event %d timestamp " SFPTPD_FMT_SFTIMESPEC "\n",
+			       cnam, fnam, channel, i,
+			       SFPTPD_ARGS_SFTIMESPEC(ts));
+			i++;
+		} else if (rc != EAGAIN && rc != EBUSY) {
+			ERROR("Getting PPS event, %s\n", strerror(rc));
+			i++;
+		}
+	}
 }
 
 static int clock_command(int argc, char *argv[])
@@ -434,10 +504,12 @@ static int clock_command(int argc, char *argv[])
 		rc = sfptpd_clock_deduplicate();
 		break;
 	case CLOCK_CMD_PPS_SET:
+	case CLOCK_CMD_PPS_POLL:
 		int argi = cmd->clock_args + 1;
 		enum sfptpd_phc_pin_func func;
 		int channel = 0;
 		int pin = -1;
+		int count = 0;
 		if (argc - argi < 1) {
 			ERROR("must specify function\n");
 			return EXIT_FAILURE;
@@ -451,21 +523,19 @@ static int clock_command(int argc, char *argv[])
 			tokens = sscanf(argv[argi + 1], "%i", &channel);
 		if (argc - argi > 2)
 			tokens = sscanf(argv[argi + 2], "%i", &pin);
+		if (argc - argi > 3)
+			tokens = sscanf(argv[argi + 3], "%i", &count);
 		int err = sfptpd_clock_pps_configure(clocks[0], pin, channel, func);
 		if (err)
 			WARNING("error trying to set pps config, %s\n", strerror(err));
-		[[fallthrough]];
+		/* List all pins because we'd like to see if other pins got
+		   implicitly switched. */
+		pps_list(clocks[0]);
+		if (cmd->tag == CLOCK_CMD_PPS_POLL)
+			pps_poll(clocks[0], func, channel, count);
+		break;
 	case CLOCK_CMD_PPS_LIST:
-		struct sfptpd_phc_pin_config *pins = NULL;
-		unsigned int n_pins = 0;
-		int64_t map = sfptpd_clock_reconcile_pins(clocks[0], &pins, &n_pins);
-		if (map == -1)
-			WARNING("could not get pin list\n");
-		for (pin = 0; pin < (int) n_pins; pin++)
-			printf("pin %d -> %s channel %d\n", pin,
-			       sfptpd_phc_pin_func_to_text(pins[pin].func),
-			       pins[pin].channel);
-		free(pins);
+		pps_list(clocks[0]);
 		break;
 	default:
 		fprintf(stderr, "unknown clock command: %s\n", command);
