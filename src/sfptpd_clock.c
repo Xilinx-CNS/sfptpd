@@ -2857,4 +2857,29 @@ char *sfptpd_clock_get_blocked_reasons(struct sfptpd_clock *clock)
 				    SFPTPD_CLOCK_BLOCK_REASON_MAX);
 }
 
+int64_t sfptpd_clock_reconcile_pins(struct sfptpd_clock *clock,
+				    struct sfptpd_phc_pin_config **copy_to,
+				    unsigned int *n_pins)
+{
+	int64_t ret = -1;
+
+	clock_lock();
+
+	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
+	assert(n_pins || !copy_to);
+
+	if (clock->u.nic.phc != NULL &&
+	    ((clock->type == SFPTPD_CLOCK_TYPE_NON_SFC && clock->cfg_non_sfc_nics) ||
+	     (clock->type == SFPTPD_CLOCK_TYPE_XNET) ||
+	     (clock->type == SFPTPD_CLOCK_TYPE_SFC &&
+	      (!clock->u.nic.supports_efx_pps || clock->cfg_avoid_efx)))) {
+
+		ret = sfptpd_pps_reconcile_pins(clock->u.nic.phc, copy_to, n_pins, false);
+	}
+
+	clock_unlock();
+	return ret;
+}
+
+
 /* fin */

@@ -46,6 +46,11 @@ enum sfptpd_phc_pin_func {
 	SFPTPD_PPS_FUNC_MAX
 };
 
+struct sfptpd_phc_pin_config {
+	enum sfptpd_phc_pin_func func;
+	int channel;
+};
+
 /* Forward declaration of PHC context */
 struct sfptpd_phc;
 
@@ -202,4 +207,20 @@ enum sfptpd_phc_pin_func sfptpd_phc_pin_func_from_text(const char *text);
  */
 bool sfptpd_phc_try_claim_lock(struct sfptpd_phc *phc);
 
+/* Reconcile requested and confirmed PPS pin routing configuration
+ * with the kernel.
+ * @param phc Handle of the PHC device
+ * @param copy_to Pointer to where to save a copy of the confirmed
+ * pin configurations, or NULL if not needed. The caller owns this
+ * copy and must free it eventually.
+ * @param n_pins Where to save the number of pins considered. Must
+ * be set in order to receive a copy of the configs.
+ * @param Whether to trace the operation.
+ * @return bitfield of diverged pin configurations up to 63 pins,
+ * or -1 on error.
+ */
+int64_t sfptpd_pps_reconcile_pins(struct sfptpd_phc *phc,
+				  struct sfptpd_phc_pin_config **copy_to,
+				  unsigned int *n_pins,
+				  bool trace);
 #endif /* _SFPTPD_PHC_H */

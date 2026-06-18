@@ -96,13 +96,8 @@ struct chan_config {
 	bool enabled;
 };
 
-struct pin_config {
-	enum sfptpd_phc_pin_func func;
-	int channel;
-};
-
 struct pps_assignments {
-	struct pin_config *pins;
+	struct sfptpd_phc_pin_config *pins;
 	struct chan_config *in;
 	struct chan_config *out;
 };
@@ -1025,7 +1020,7 @@ static void pps_remove_conflicting_mappings(struct sfptpd_phc *phc,
 #ifdef PTP_PIN_SETFUNC
 	/* Check for existing mapping in the codomain */
 	for (int p = 0; p < phc->caps.n_pins; p++) {
-		struct pin_config *c = &phc->pps_requested.pins[p];
+		struct sfptpd_phc_pin_config *c = &phc->pps_requested.pins[p];
 		if (p != pin &&
 		    c->func == func &&
 		    c->channel == channel) {
@@ -1045,8 +1040,8 @@ static int pps_set_pin(struct sfptpd_phc *phc,
 		       int channel,
 		       enum sfptpd_phc_pin_func func)
 {
-	struct pin_config *conf = &phc->pps_requested.pins[pin];
-	const struct pin_config old_conf = *conf;
+	struct sfptpd_phc_pin_config *conf = &phc->pps_requested.pins[pin];
+	const struct sfptpd_phc_pin_config old_conf = *conf;
 
 	int rc = 0;
 
@@ -1092,15 +1087,22 @@ static int pps_set_pin(struct sfptpd_phc *phc,
 	return rc;
 }
 
-static int pps_reconcile_pins(struct sfptpd_phc *phc)
+int64_t sfptpd_pps_reconcile_pins(struct sfptpd_phc *phc,
+				  struct sfptpd_phc_pin_config **copy_to,
+				  unsigned int *n_pins,
+				  bool trace)
 {
 	/* We do not try to force a fix if we don't have what is expected -
 	 * we set only once when asked by our client (or possibly on reset-type
 	 * scenario) but we assume the hardware had a good reason for voiding
 	 * our prior request and will use this for downstream information only. */
 	int pin;
+	int64_t mismatches = 0;
 
 #ifdef PTP_PIN_SETFUNC
+	if (n_pins)
+		*n_pins = phc->caps.n_pins;
+
 	for (pin = 0; pin < phc->caps.n_pins; pin++) {
 		struct ptp_pin_desc pin_conf = {
 			.index = pin,
@@ -1108,27 +1110,39 @@ static int pps_reconcile_pins(struct sfptpd_phc *phc)
 		if (ioctl(phc->phc_fd, PTP_PIN_GETFUNC, &pin_conf) == -1) {
 			TRACE_L3("phc%d: could not get pin %d function, %s\n",
 				  phc->phc_idx, pin, strerror(errno));
+			return -1;
 		} else {
-			struct pin_config *req = &phc->pps_requested.pins[pin];
-			struct pin_config *conf = &phc->pps_confirmed.pins[pin];
+			struct sfptpd_phc_pin_config *req = &phc->pps_requested.pins[pin];
+			struct sfptpd_phc_pin_config *conf = &phc->pps_confirmed.pins[pin];
 
 			conf->func = phc_pin_func_from_linux(pin_conf.func);
 			conf->channel = pin_conf.chan;
 			if (req->func != SFPTPD_PPS_FUNC_UNSET &&
 			    (conf->func != req->func ||
 			     conf->channel != req->channel)) {
-				WARNING("phc%d: effective pin %d config (%s#%d) does not match requested (%s#%d)\n",
-					phc->phc_idx, pin,
-					sfptpd_phc_pin_func_to_text(conf->func), conf->channel,
-					sfptpd_phc_pin_func_to_text(req->func), req->channel);
+				if (pin < 63)
+					mismatches |= ((int64_t) 1L << pin);
+				if (trace)
+					WARNING("phc%d: effective pin %d config (%s#%d) does not match requested (%s#%d)\n",
+						phc->phc_idx, pin,
+						sfptpd_phc_pin_func_to_text(conf->func), conf->channel,
+						sfptpd_phc_pin_func_to_text(req->func), req->channel);
 			}
 		}
 	}
-	/* TODO: report back to owner. */
+	if (copy_to && n_pins) {
+		const size_t bytes = *n_pins * sizeof **copy_to;
+		*copy_to = malloc(bytes);
+		if (*copy_to)
+			memcpy(*copy_to, phc->pps_confirmed.pins, bytes);
+		else
+			return -1;
+	}
+	return mismatches;
+#else
+	return -1;
 #endif
-	return 0;
 }
-
 
 
 static int phc_control_devptp(struct sfptpd_phc *phc,
@@ -1179,7 +1193,7 @@ static int phc_control_devptp(struct sfptpd_phc *phc,
 	}
 
 	if (pin >= 0) {
-		struct pin_config *old_config = &phc->pps_requested.pins[pin];
+		struct sfptpd_phc_pin_config *old_config = &phc->pps_requested.pins[pin];
 		if ((old_config->func != func ||
 		     old_config->channel != channel))
 			pps_clear_channel(phc, old_config->func, old_config->channel);
@@ -1192,7 +1206,7 @@ static int phc_control_devptp(struct sfptpd_phc *phc,
 		rc = pps_set_channel(phc, func, channel);
 	}
 
-	pps_reconcile_pins(phc);
+	sfptpd_pps_reconcile_pins(phc, NULL, NULL, true);
 
 	return rc;
 }
@@ -1371,7 +1385,7 @@ static void phc_list_pins(struct sfptpd_phc *phc)
 		rc = EOPNOTSUPP;
 #endif
 		if (rc == 0) {
-			TRACE_L2("phc%c: pin %d is set to %s, channel %d\n",
+			TRACE_L2("phc%d: pin %d is set to %s, channel %d\n",
 				 phc->phc_idx, pin,
 				 sfptpd_phc_pin_func_to_text(phc_pin_func_from_linux(pin_conf.func)),
 				 pin_conf.chan);

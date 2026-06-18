@@ -567,4 +567,19 @@ bool sfptpd_clock_try_claim_locks(void);
  */
 char *sfptpd_clock_get_blocked_reasons(struct sfptpd_clock *clock);
 
+/* Reconcile requested and confirmed PPS pin routing configuration
+ * with the kernel.
+ * @param clock the clock
+ * @param copy_to Pointer to where to save a copy of the confirmed
+ * pin configurations, or NULL if not needed. The caller owns this
+ * copy and must free it eventually.
+ * @param n_pins Where to save the number of pins considered. Must
+ * be set in order to receive a copy of the configs.
+ * @return bitfield of diverged pin configurations up to 63 pins,
+ * or -1 on error.
+ */
+int64_t sfptpd_clock_reconcile_pins(struct sfptpd_clock *clock,
+				    struct sfptpd_phc_pin_config **copy_to,
+				    unsigned int *n_pins);
+
 #endif /* _SFPTPD_CLOCK_H */
