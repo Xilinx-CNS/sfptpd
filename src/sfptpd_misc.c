@@ -620,7 +620,7 @@ int sfptpd_open_dirf(const char *fmt, ...)
 	if (rc == -1) {
 		e = errno;
 		ERROR("opening directory %s, %s\n",
-		      fmt, strerror(e));
+		      path, strerror(e));
 	}
 
 	free(path);

@@ -472,8 +472,8 @@ static int interface_open_sysfs_device_dir(struct sfptpd_interface *interface)
 		sfptpd_open_dirf("%s%s/device", SFPTPD_SYSFS_NET_PATH, interface->name);
 	if (interface->sysfs_device_dir_fd == -1) {
 		rc = errno;
-		ERROR("%s: opening sysfs device directory, %s\n",
-		      interface->name, strerror(rc));
+		TRACE_L6("%s: opening sysfs device directory, %s\n",
+			 interface->name, strerror(rc));
 	} else {
 		rc = 0;
 	}
@@ -1063,8 +1063,7 @@ static int interface_init(const struct sfptpd_link *link,
 	interface->static_caps.stratum = SFPTPD_CLOCK_STRATUM_MAX;
 
 	/* Open sysfs directory */
-	if ((rc = interface_open_sysfs_device_dir(interface)))
-		return rc;
+	interface_open_sysfs_device_dir(interface);
 
 	/* Get the permanent hardware address of the interface */
 	ret = interface_get_hw_address(interface);
