@@ -1092,13 +1092,13 @@ static int interface_init(const struct sfptpd_link *link,
 		 interface->ts_info.phc_index != -1 ? " phc" :"",
 		 interface->ts_info.phc_index != -1 ? phc_num : "");
 	if (interface->pci_vendor_id != 0)
-		TRACE_L3("interface %s: device %hx:%hx%s at %s\n",
+		TRACE_L3("interface %s: device %hx:%hx%s at %s/%s\n",
 			 interface->name,
 			 interface->pci_vendor_id,
 			 interface->pci_device_id,
 			 (interface->class == SFPTPD_INTERFACE_SFC ||
 			  interface->class == SFPTPD_INTERFACE_XNET) ? " (AMD Solarflare)" : "",
-			 interface->bus_addr);
+			 interface->link.bus_type, interface->bus_addr);
 	if (interface->driver[0] != '\0')
 		TRACE_L3("interface %s: %s %s, fw %s\n",
 			 interface->name,
