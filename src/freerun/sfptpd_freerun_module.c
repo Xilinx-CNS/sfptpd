@@ -299,13 +299,15 @@ struct phy_search_result freerun_find_physical_link(freerun_module_t *fr,
 	candidate.link = link;
 
 	/* Resolve VLANs first. */
-	while (candidate.link->type == SFPTPD_LINK_VLAN) {
+	while (candidate.link->type == SFPTPD_LINK_VLAN ||
+	       candidate.link->type == SFPTPD_LINK_MACVLAN) {
 		other = sfptpd_link_by_if_index(&fr->link_table, candidate.link->if_link);
 		if (other == NULL) {
-			ERROR("freerun %s: inner link not found resolving VLAN %s\n",
+			ERROR("freerun %s: inner link not found resolving (MAC)VLAN %s\n",
 			      link->if_name, candidate.link->if_name);
+			break;
 		} else {
-			TRACE_L4("freerun %s: resolved VLAN %s to %s\n",
+			TRACE_L4("freerun %s: resolved (MAC)VLAN %s to %s\n",
 				 link->if_name, candidate.link->if_name, other->if_name);
 			candidate.link = other;
 		}

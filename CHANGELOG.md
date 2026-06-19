@@ -57,6 +57,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Issue SWPTP-1634
   - Fix top clockfeed module that could cause assertion failure if engine
     thread paused.
+- Issue SWPTP-1639
+  - Fix resolution of MACVLAN and VLAN interfaces for freerun configurations
 - Issue SWPTP-1645
   - Fix parsing of `phc_pps_methods` configuration.
 - Issue SWPTP-1646
