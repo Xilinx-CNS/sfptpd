@@ -144,6 +144,8 @@ const struct sfptpd_link *sfptpd_link_by_if_index(const struct sfptpd_link_table
 	const struct sfptpd_link *link = NULL;
 	int row;
 
+	if (if_index < 1)
+		return NULL;
 	for (row = 0; row < link_table->count; row++) {
 		if (link_table->rows[row].if_index == if_index) {
 			TRACE_L4("link: table %d: found link table entry for if_index %d\n",
@@ -159,6 +161,14 @@ const struct sfptpd_link *sfptpd_link_by_if_index(const struct sfptpd_link_table
 	return link;
 }
 
+const struct sfptpd_link *sfptpd_link_resolve_root(const struct sfptpd_link_table *table,
+						   const struct sfptpd_link *link)
+{
+	const struct sfptpd_link *parent;
+	while ((parent = sfptpd_link_by_if_index(table, link->if_link)))
+		link = parent;
+	return link;
+}
 
 int sfptpd_link_table_copy(const struct sfptpd_link_table *src,
 			   struct sfptpd_link_table *dest)

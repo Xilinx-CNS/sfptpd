@@ -133,6 +133,9 @@ const struct sfptpd_link *sfptpd_link_by_name(const struct sfptpd_link_table *li
 const struct sfptpd_link *sfptpd_link_by_if_index(const struct sfptpd_link_table *link_table,
 						  int if_index);
 
+const struct sfptpd_link *sfptpd_link_resolve_root(const struct sfptpd_link_table *table,
+						   const struct sfptpd_link *link);
+
 int sfptpd_link_table_copy(const struct sfptpd_link_table *src,
 			   struct sfptpd_link_table *dest);
 

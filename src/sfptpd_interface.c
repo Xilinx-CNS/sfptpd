@@ -513,6 +513,9 @@ static bool sysfs_file_exists(const char *base, const char *interface,
 	return exists;
 }
 
+
+/* Check suitability of link as a physical interface for local or
+ * remote timekeeping. */
 static bool interface_check_suitability(const struct sfptpd_link *link,
 					sfptpd_interface_class_t *class)
 {
@@ -1029,6 +1032,7 @@ static void interface_reset(struct sfptpd_interface *interface)
 }
 
 static int interface_init(const struct sfptpd_link *link,
+			  const struct sfptpd_link *root_link,
 			  struct sfptpd_interface *interface,
 			  sfptpd_interface_class_t class)
 {
@@ -1263,11 +1267,21 @@ int sfptpd_interface_initialise(struct sfptpd_config *config,
 
 	/* Iterate through the interfaces in the system */
 	for (row = 0; row < link_table->count; row++) {
+		const struct sfptpd_link *root_link;
+
 		link = link_table->rows + row;
+
+		/* follow chain of parent links to find the physical interface
+		 * in the case of a MACVLAN or similar. If none such is found,
+		 * perhaps because it is hidden in a different netns, then
+		 * make do with the characteristics we can see. */
+		root_link = sfptpd_link_resolve_root(link_table, link);
 
 		/* Check that the interface is suitable i.e. an ethernet device
 		 * that isn't wireless or a bridge or virtual etc */
-		if (!interface_check_suitability(link, &class))
+		if (!interface_check_suitability(link, &class, sysfs_dir)) {
+			if (sysfs_dir != -1)
+				close(sysfs_dir);
 			continue;
 
 		/* Create a new interface */
@@ -1278,7 +1292,7 @@ int sfptpd_interface_initialise(struct sfptpd_config *config,
 			return rc;
 		}
 
-		rc = interface_init(link, new, class);
+		rc = interface_init(link, root_link, new, class);
 		if (rc != 0) {
 			interface_delete(new, false);
 			if (rc == ENOTSUP || rc == EOPNOTSUPP) {
@@ -1438,8 +1452,10 @@ static int interface_handle_rename(struct sfptpd_interface *interface,
 }
 
 
-int sfptpd_interface_hotplug_insert(const struct sfptpd_link *link)
+int sfptpd_interface_hotplug_insert(const struct sfptpd_link_table *link_table,
+				    const struct sfptpd_link *link)
 {
+	const struct sfptpd_link *root_link = sfptpd_link_resolve_root(link_table, link);
 	struct sfptpd_interface *interface;
 	int rc = 0;
 	sfptpd_interface_class_t class;
@@ -1511,7 +1527,7 @@ int sfptpd_interface_hotplug_insert(const struct sfptpd_link *link)
 
 	/* Check that the interface is suitable i.e. an ethernet device
 	 * that isn't wireless or a bridge or virtual etc */
-	if (!interface_check_suitability(link, &class)) {
+	if (!interface_check_suitability(link, &class, sysfs_dir)) {
 		TRACE_L4("interface: ignoring interface %s of irrelevant type\n", if_name);
 		sfptpd_strncpy(interface->name, if_name, sizeof(interface->name));
 		interface->if_index = if_index;
@@ -1520,7 +1536,7 @@ int sfptpd_interface_hotplug_insert(const struct sfptpd_link *link)
 		goto finish;
 	}
 
-	rc = interface_init(link, interface, class);
+	rc = interface_init(link, root_link, interface, class);
 	if (rc == ENODEV) {
 		WARNING("interface %s seems to have disappeared, deleting\n",
 			if_name);

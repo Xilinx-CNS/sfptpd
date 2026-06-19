@@ -233,10 +233,12 @@ void sfptpd_interface_hw_timestamping_disable(struct sfptpd_interface *interface
 /** Triggers handling by the interface module of a netlink
  * interface hotplug event designating the insertion or modification
  * of a logical interface.
+ * @param link_table the link table for context
  * @param link link object for the new or modified interface
  * @return 0 on success else an error from errno.h
  */
-int sfptpd_interface_hotplug_insert(const struct sfptpd_link *link);
+int sfptpd_interface_hotplug_insert(const struct sfptpd_link_table *link_table,
+				    const struct sfptpd_link *link);
 
 /** Triggers handling by the interface module of a netlink
  * interface hotplug event designating the removal

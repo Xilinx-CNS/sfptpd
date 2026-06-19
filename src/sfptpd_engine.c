@@ -1347,7 +1347,7 @@ static void engine_handle_new_link_table(struct sfptpd_engine *engine, int versi
 
 			if (link->event == SFPTPD_LINK_UP ||
 			    link->event == SFPTPD_LINK_CHANGE) {
-				rc = sfptpd_interface_hotplug_insert(link);
+				rc = sfptpd_interface_hotplug_insert(engine->link_table, link);
 
 				if (rc == 0) {
 					reconfigure = true;
