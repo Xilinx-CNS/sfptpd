@@ -85,6 +85,7 @@ struct sfptpd_link {
 	char if_name[IF_NAMESIZE];
 	char if_kind[16];
 	int if_link;
+	struct sfptpd_l2addr addr;
 	struct sfptpd_l2addr perm_addr;
 	char bus_type[ETHTOOL_BUSINFO_LEN];
 	char bus_addr[ETHTOOL_BUSINFO_LEN];

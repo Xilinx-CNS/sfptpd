@@ -906,7 +906,7 @@ static int renew_clock(struct sfptpd_clock *clock)
 	general_config = sfptpd_general_config_get(sfptpd_clock_config);
 
 	/* Get an index of the active PTP capable interfaces. Note that the
-	 * index is ordered by NIC ID and then by increasing MAC address.
+	 * index is ordered by NIC ID, type and then by increasing MAC address.
 	 * This hugely reduces the pain of initialising the clock. */
 	interface_index_snapshot = sfptpd_interface_get_active_ptp_snapshot();
 

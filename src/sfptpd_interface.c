@@ -633,19 +633,32 @@ static int interface_get_hw_address(struct sfptpd_interface *interface)
 		req->size = ETH_ALEN;
 		rc = sfptpd_interface_ioctl(interface, SIOCETHTOOL, req);
 		if (rc != 0) {
-			TRACE_L3("interface %s: failed to get permanent hardware address, %s\n",
+			TRACE_L3("interface %s: error getting permanent hardware address, %s\n",
 				 interface->name, strerror(rc));
-			return rc;
+			interface->mac_addr.len = 0;
+		} else {
+			interface->mac_addr.len = req->size;
 		}
+		if (interface->mac_addr.len > sizeof interface->mac_addr.addr)
+			interface->mac_addr.len = sizeof interface->mac_addr.addr;
+		memcpy(interface->mac_addr.addr, req->data, interface->mac_addr.len);
 
 		snprintf(interface->mac_string, sizeof(interface->mac_string),
 			 "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx",
 			 req->data[0], req->data[1], req->data[2],
 			 req->data[3], req->data[4], req->data[5]);
-		interface->mac_addr.len = req->size;
-		if (interface->mac_addr.len > sizeof interface->mac_addr.addr)
-			interface->mac_addr.len = sizeof interface->mac_addr.addr;
-		memcpy(interface->mac_addr.addr, req->data, interface->mac_addr.len);
+	}
+	const sfptpd_mac_addr_t zero_addr = { 0 };
+	if (!memcmp(interface->mac_addr.addr, &zero_addr.addr,
+		    interface->mac_addr.len)) {
+		/* Method 3. Fallback to non-permanent address */
+		TRACE_L4("interface %s: using non-permanent hardware address from netlink\n",
+			 interface->name);
+
+		assert(interface->link.addr.len <= sizeof interface->mac_addr.addr);
+		interface->mac_addr.len = interface->link.addr.len;
+		memcpy(interface->mac_addr.addr, interface->link.addr.addr, interface->link.addr.len);
+		sfptpd_strncpy(interface->mac_string, interface->link.addr.string, sizeof interface->mac_string);
 	}
 
 	return 0;

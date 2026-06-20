@@ -250,12 +250,12 @@ static int snprint_flags_delta(char *buf, ssize_t space, int flags1, int flags2)
 
 static void print_link(struct sfptpd_link *link)
 {
-	DBG_L4("if %d name %s event %s link %d kind %s type %d flags %x family %d master %d type %d bond_mode %d active_slave %d is_slave %d vlan %d phc %d perm_addr %s bus_addr %s/%s\n",
+	DBG_L4("if %d name %s event %s link %d kind %s type %d flags %x family %d master %d type %d bond_mode %d active_slave %d is_slave %d vlan %d phc %d addr %s perm_addr %s bus_addr %s/%s\n",
 	       link->if_index, link->if_name, sfptpd_link_event_str(link->event),
                link->if_link, link->if_kind, link->if_type, link->if_flags,
                link->if_family, link->bond.if_master, link->type,
                link->bond.bond_mode, link->bond.active_slave, link->is_slave,
-               link->vlan_id, link->ts_info.phc_index,
+               link->vlan_id, link->ts_info.phc_index, link->addr.string,
 	       link->perm_addr.string, link->bus_type, link->bus_addr);
 }
 
@@ -436,7 +436,6 @@ static bool netlink_send_ethtool_query(struct sfptpd_nl_state *state, struct sfp
 }
 #endif
 
-#ifdef HAVE_IFLA_PERM_ADDRESS
 static void render_l2_addr(struct sfptpd_l2addr *addr)
 {
 	assert(addr);
@@ -448,7 +447,6 @@ static void render_l2_addr(struct sfptpd_l2addr *addr)
 			 ptr == addr->len - 1 ? "%02hhx" : "%02hhx:",
 			 addr->addr[ptr]);
 }
-#endif
 
 MNL_VALIDATE_CB(link_attr, IFLA_MAX, EXPECTED(
 #ifdef HAVE_IFLA_PARENT_DEV_NAME
@@ -607,6 +605,15 @@ static int netlink_handle_link(struct nl_conn_state *conn, const struct nlmsghdr
 		}
 	}
 #endif
+	if (table[IFLA_ADDRESS]) {
+		uint32_t len = mnl_attr_get_payload_len(table[IFLA_ADDRESS]);
+		void *data = mnl_attr_get_payload(table[IFLA_ADDRESS]);
+		if (len <= sizeof link->addr.addr) {
+			link->addr.len = len;
+			memcpy(link->addr.addr, data, len);
+			render_l2_addr(&link->addr);
+		}
+	}
 
 #ifdef HAVE_IFLA_PARENT_DEV_NAME
 	if (table[IFLA_PARENT_DEV_NAME]) {
