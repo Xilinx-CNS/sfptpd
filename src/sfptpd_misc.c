@@ -619,7 +619,7 @@ int sfptpd_open_dirf(const char *fmt, ...)
 	rc = open(path, O_PATH);
 	if (rc == -1) {
 		e = errno;
-		ERROR("opening directory %s, %s\n",
+		TRACE_L6("opening directory %s, %s\n",
 		      path, strerror(e));
 	}
 
@@ -690,6 +690,9 @@ int sfptpd_read_int_from_fileat(int dir_fd, const char *filename, long long *ans
 {
 	int fd;
 	int rc;
+
+	if (dir_fd == -1)
+		return EBADF;
 
 	if ((fd = openat(dir_fd, filename, O_RDONLY)) == -1) {
 		rc = errno;
