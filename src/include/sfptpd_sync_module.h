@@ -117,8 +117,10 @@ extern const char *sync_module_state_text[];
 #define SYNC_MODULE_ALARM_CLUSTERING_THRESHOLD_EXCEEDED (1<<15)
 /** Any: Sustained clock comparison failure */
 #define SYNC_MODULE_ALARM_SUSTAINED_SYNC_FAILURE     (1<<16)
+/** PPS: Time of day insufficiently accurate to disambiguate seconds */
+#define SYNC_MODULE_ALARM_COARSE_TIME_OF_DAY         (1<<17)
 /** Invalid: any alarm value >= to this will trigger an assertion failure! */
-#define SYNC_MODULE_ALARM_MAX                        (1<<17)
+#define SYNC_MODULE_ALARM_MAX                        (1<<18)
 
 /** Type used to hold a bitmask of alarms */
 typedef unsigned int sfptpd_sync_module_alarms_t;

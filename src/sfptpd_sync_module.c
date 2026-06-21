@@ -90,6 +90,7 @@ const struct sync_module_bitmask_to_text_map alarm_texts[] = {
 	{SYNC_MODULE_ALARM_CAPS_MISMATCH,             "caps-mismatch "},
 	{SYNC_MODULE_ALARM_CLUSTERING_THRESHOLD_EXCEEDED, "clustering-guard"},
 	{SYNC_MODULE_ALARM_SUSTAINED_SYNC_FAILURE   , "sustained-sync-failure"},
+	{SYNC_MODULE_ALARM_COARSE_TIME_OF_DAY,        "coarse-time-of-day"},
 };
 
 static_assert(1 << (sizeof(alarm_texts) / sizeof(*alarm_texts)) == SYNC_MODULE_ALARM_MAX,

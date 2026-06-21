@@ -1805,6 +1805,12 @@ static void pps_time_of_day_poll(pps_module_t *pps,
 		     ok ? "became known" : "became unknown",
 		     tod.accuracy);
 
+	/* Manage the coarse-time-of-day alarm as a level (cheap) not edge. */
+	if (tod.status.state == SYNC_MODULE_STATE_SLAVE && !ok)
+		SYNC_MODULE_ALARM_SET(instance->alarms, COARSE_TIME_OF_DAY);
+	else
+		SYNC_MODULE_ALARM_CLEAR(instance->alarms, COARSE_TIME_OF_DAY);
+
 	pps->time_of_day = tod;
 }
 
