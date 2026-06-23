@@ -1835,18 +1835,13 @@ finish:
 }
 
 
-static void ptp_update_sockets(int old_sock, int new_sock)
+static void ptp_update_sockets(int new_sock)
 {
 	int rc;
 
-	/* It is impossible to check for equivalence between the underlying
-	   resources using file descriptors because they can be re-allocated,
-	   so always remove and add the fds presented here. */
-
-	/* Ignore any errors removing fds; these can be expected if the
-	   resource has been closed. */
-	if (old_sock >= 0)
-		sfptpd_thread_user_fd_remove(old_sock);
+	/* It is never necessary to remove old sockets from the epoll set
+	 * because the socket is always closed by netShutdown() as appropriate.
+	 */
 
 	if (new_sock >= 0) {
 		rc = sfptpd_thread_user_fd_add(new_sock, true, false);
@@ -2159,10 +2154,8 @@ static void ptp_update_interface_state(struct sfptpd_ptp_intf *interface)
 	 * and reopened if a serious error occurs) then update the thread epoll
 	 * set with the new values. */
 	if (interface->bond_changed || state_changed) {
-		ptp_update_sockets(interface->ptpd_intf_fds.event_sock,
-				   fds.event_sock);
-		ptp_update_sockets(interface->ptpd_intf_fds.general_sock,
-				   fds.general_sock);
+		ptp_update_sockets(fds.event_sock);
+		ptp_update_sockets(fds.general_sock);
 	}
 
 	/* Store the new fds */
