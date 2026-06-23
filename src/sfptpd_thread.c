@@ -51,9 +51,9 @@
 #define SFPTPD_ZOMBIE_MAGIC (0x203b111e)
 #define SFPTPD_DEAD_MAGIC   (0xdead7ead)
 
-/* Maximum time we will wait for a child thred to exit before giving up. */
-#define SFPTPD_JOIN_TIMEOUT       (1000000)
-#define SFPTPD_JOIN_POLL_INTERVAL (10000)
+/* Maximum time we will wait for a child thread to exit before giving up. */
+#define SFPTPD_JOIN_TIMEOUT       (5000000)
+#define SFPTPD_JOIN_POLL_INTERVAL (50000)
 
 /* If a timer expires more times than this without ticking, warn the user.
  * bug77937: This value should be 1 but due to the way the PTP thread blocks
