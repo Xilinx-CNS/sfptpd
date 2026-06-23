@@ -2405,4 +2405,10 @@ int sfptpd_thread_config_affinity(char *thread_name, char *cpu_spec)
 	return 0;
 }
 
+const _Atomic bool *sfptpd_thread_get_quiescing_flag(void)
+{
+	return &sfptpd_thread_self()->quiescing;
+}
+
+
 /* fin */

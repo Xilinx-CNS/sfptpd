@@ -348,12 +348,13 @@ static void clockfeed_on_timer(void *user_context, unsigned int id)
 	struct sfptpd_timespec realtime = { 0, 0 };
 	struct clockfeed_source *source;
 	int sources_count;
+	const _Atomic bool *quiescing = sfptpd_thread_get_quiescing_flag();
 
 	assert(clockfeed != NULL);
 	assert(clockfeed->magic == CLOCKFEED_MODULE_MAGIC);
 
 	sources_count = 0;
-	for (source = clockfeed->active; source; source = source->next) {
+	for (source = clockfeed->active; !*quiescing && source; source = source->next) {
 		const int cadence = source->poll_period_log2 - clockfeed->poll_period_log2;
 		const unsigned cadence_mask = (1 << cadence) - 1;
 

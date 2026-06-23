@@ -311,4 +311,10 @@ int sfptpd_thread_event_post(struct sfptpd_thread_event_writer *writer);
  */
 int sfptpd_thread_config_affinity(char *thread_name, char *cpu_spec);
 
+/** Get a read-only accessor to the quiescing flag to determine if the
+ * thread is advised to cut short its handling of timer events.
+ * @return pointer to the current thread's quiescing flag.
+ */
+const _Atomic bool *sfptpd_thread_get_quiescing_flag(void);
+
 #endif /* _SFPTPD_THREAD_H */
