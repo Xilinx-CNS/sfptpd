@@ -88,6 +88,7 @@ struct ptpd_port_snapshot {
 struct ptpd_intf_fds {
 	int event_sock;
 	int general_sock;
+	unsigned long generation;
 };
 
 

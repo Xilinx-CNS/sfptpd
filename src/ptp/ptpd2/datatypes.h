@@ -641,6 +641,7 @@ struct ptpd_transport {
 	/* Socket fds for sending and receiving PTP packets */
 	int eventSock;
 	int generalSock;
+	unsigned long generation;
 
 	/* Socket available for sending PTP packets that is not
 	   bound to an interface, e.g. for unicast signalling monitoring

@@ -825,6 +825,7 @@ int ptpd_get_intf_fds(struct ptpd_intf_context *ptpd, struct ptpd_intf_fds *fds)
 	memset(fds, 0, sizeof *fds);
 	fds->event_sock = ptpd->transport.eventSock;
 	fds->general_sock = ptpd->transport.generalSock;
+	fds->generation = ptpd->transport.generation;
 
 	return 0;
 }

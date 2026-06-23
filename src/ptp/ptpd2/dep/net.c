@@ -581,6 +581,8 @@ netShutdown(struct ptpd_transport *transport)
 	   ... but probably not necessary */
 	//transport->unicastAddr = 0;
 
+	transport->generation++;
+
 	/* Close sockets */
 	if (transport->eventSock >= 0)
 		close(transport->eventSock);
@@ -1892,6 +1894,8 @@ netInit(struct ptpd_transport * transport, InterfaceOpts * ifOpts, PtpInterface 
 			    transport->interfaceInfo.afAddressLen);
 	}
 
+
+	transport->generation++;
 
 	/* create and bind event socket */
 	transport->eventSock = netCreateBindSocket("event",

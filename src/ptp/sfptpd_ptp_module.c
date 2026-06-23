@@ -2123,12 +2123,9 @@ static void ptp_update_interface_state(struct sfptpd_ptp_intf *interface)
 {
 	struct sfptpd_ptp_instance *instance;
 	struct ptpd_intf_fds fds;
-	bool state_changed;
 	int rc;
 
 	assert(interface != NULL);
-
-	state_changed = false;
 
 	/* Bond changes are checked when a new link table becomes
 	 * available and there is no other type of probing performed.
@@ -2138,6 +2135,11 @@ static void ptp_update_interface_state(struct sfptpd_ptp_intf *interface)
 	 *   ptp_handle_bonding_interface_change(interface, &bond_changed)
 	 */
 
+	for (instance = interface->instance_list; instance != NULL; instance = instance->next) {
+		ptp_update_instance_state(instance,
+					  interface->bond_changed);
+	}
+
 	/* Get a snapshot of PTPD interface's fds */
 	rc = ptpd_get_intf_fds(interface->ptpd_intf_private, &fds);
 	if (rc != 0) {
@@ -2145,15 +2147,10 @@ static void ptp_update_interface_state(struct sfptpd_ptp_intf *interface)
 		return;
 	}
 
-	for (instance = interface->instance_list; instance != NULL; instance = instance->next) {
-		state_changed |= ptp_update_instance_state(instance,
-							   interface->bond_changed);
-	}
-
 	/* If the sockets used for PTP traffic have changed (they get closed
 	 * and reopened if a serious error occurs) then update the thread epoll
 	 * set with the new values. */
-	if (interface->bond_changed || state_changed) {
+	if (fds.generation != interface->ptpd_intf_fds.generation) {
 		ptp_update_sockets(fds.event_sock);
 		ptp_update_sockets(fds.general_sock);
 	}
