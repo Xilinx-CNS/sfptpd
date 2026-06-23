@@ -194,6 +194,10 @@ struct sfptpd_thread
 
 	/* Events, including timers */
 	struct sfptpd_event *event_list;
+
+	/* Thread is preparing to die; stop timer events */
+	_Atomic bool quiescing;
+
 };
 
 /* Thread affinity config */
@@ -910,6 +914,12 @@ static int timer_start(struct sfptpd_event *timer, bool periodic,
 	assert(timer->type == THREAD_EVENT_TIMER);
 	assert(interval != NULL);
 
+	if (sfptpd_thread_self()->quiescing) {
+		DBG_L3("thread %s timer %d: not arming as quiescing\n",
+		       thread_get_name(), timer->id);
+		return 0;
+	}
+
 	if (absolute)
 		flags |= TIMER_ABSTIME;
 
@@ -1004,6 +1014,12 @@ static void timer_on_expiry(struct sfptpd_event *timer)
 	} else if (expirations > TIMER_EXPIRIES_WARN_THRESH) {
 		WARNING("thread %s timer %d: expired %d times since last handled\n",
 			thread_get_name(), timer->id, expirations);
+	}
+
+	if (sfptpd_thread_self()->quiescing) {
+		DBG_L3("thread %s timer %d: ignoring event as quiescing\n",
+		       thread_get_name(), timer->id);
+		return;
 	}
 
 	timer->on_event(timer->user_context, timer->id);
@@ -1593,6 +1609,9 @@ static int thread_destroy(struct sfptpd_thread *thread)
 	if (thread != sfptpd_thread_lib.root_thread) {
 		/* A thread should not try to kill itself! */
 		assert(thread != sfptpd_thread_self());
+
+		/* Give the thread best-effort advice to quiesce */
+		thread->quiescing = true;
 
 		/* Send an exit event to the thread and wait for it to exit. */
 		wrote = write(thread->exit_event_fd, (const void *)&value, sizeof(value));
