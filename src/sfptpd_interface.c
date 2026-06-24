@@ -145,7 +145,6 @@ struct sfptpd_interface {
 	char driver_version[SFPTPD_VERSION_STRING_MAX];
 	char fw_version[SFPTPD_VERSION_STRING_MAX];
 	char driver[32];
-	uint32_t n_stats;
 
 	/* Indicates that the associated PTP clock supports the PHC API */
 	bool clock_supports_phc;
@@ -175,19 +174,26 @@ struct sfptpd_interface {
 	/* Static capabilities of NIC model */
 	struct nic_model_caps static_caps;
 
-	/* Methods for driver statistic recovery */
-	enum drv_stat_method drv_stat_method[SFPTPD_DRVSTAT_MAX];
-	int drv_stat_ethtool_index[SFPTPD_DRVSTAT_MAX];
+	/* Directory fd for netdev's sysfs device directory */
 	int sysfs_device_dir_fd;
 
-	/* Bitfield of methods needed for driver stats */
-	int drv_stat_methods;
+	/* Number of driver stats presented over ethtool */
+	unsigned int n_stats;
 
-	/* Raw driver stats buffer */
-	struct ethtool_stats *ethtool_stats;
+	struct {
+		/* Methods for driver statistic recovery */
+		enum drv_stat_method method[SFPTPD_DRVSTAT_MAX];
+		int ethtool_index[SFPTPD_DRVSTAT_MAX];
 
-	/* Zero adjustment for driver counters */
-	int64_t stat_zero_adjustment[SFPTPD_DRVSTAT_MAX];
+		/* Bitfield of methods needed for driver stats */
+		unsigned int methods;
+
+		/* Raw driver stats buffer */
+		struct ethtool_stats *ethtool;
+
+		/* Zero adjustment for driver counters */
+		int64_t zero_adjustment[SFPTPD_DRVSTAT_MAX];
+	} drv_stat;
 
 	/* A copy of the link table object, not necessarily current */
 	struct sfptpd_link link;
@@ -813,9 +819,9 @@ static void interface_driver_stats_init(struct sfptpd_interface *interface)
 	if (interface->link.drv_stats_ids_state == QRY_POPULATED) {
 		for (found = 0, i = 0; i < SFPTPD_DRVSTAT_MAX; i++) {
 			if (interface->link.drv_stats.requested_ids[i] != -1) {
-				interface->drv_stat_method[i] = DRV_STAT_ETHTOOL;
-				interface->drv_stat_ethtool_index[i] = interface->link.drv_stats.requested_ids[i];
-				interface->drv_stat_methods |= 1 << DRV_STAT_ETHTOOL;
+				interface->drv_stat.method[i] = DRV_STAT_ETHTOOL;
+				interface->drv_stat.ethtool_index[i] = interface->link.drv_stats.requested_ids[i];
+				interface->drv_stat.methods |= 1 << DRV_STAT_ETHTOOL;
 				found++;
 			}
 		}
@@ -854,9 +860,9 @@ static void interface_driver_stats_init(struct sfptpd_interface *interface)
 		}
 
 		if (j != SFPTPD_DRVSTAT_MAX) {
-			interface->drv_stat_method[j] = DRV_STAT_ETHTOOL;
-			interface->drv_stat_ethtool_index[j] = i;
-			interface->drv_stat_methods |= 1 << DRV_STAT_ETHTOOL;
+			interface->drv_stat.method[j] = DRV_STAT_ETHTOOL;
+			interface->drv_stat.ethtool_index[j] = i;
+			interface->drv_stat.methods |= 1 << DRV_STAT_ETHTOOL;
 			found++;
 		}
 	}
@@ -866,19 +872,19 @@ static void interface_driver_stats_init(struct sfptpd_interface *interface)
 skip_ioctl:
 	/* Method 3. Use sysfs for stats */
 	for (found = 0, j = 0; j < SFPTPD_DRVSTAT_MAX; j++) {
-		if (interface->drv_stat_method[j] == DRV_STAT_NOT_AVAILABLE) {
+		if (interface->drv_stat.method[j] == DRV_STAT_NOT_AVAILABLE) {
 			if (!faccessat(interface->sysfs_device_dir_fd,
 				       drv_stats[j].sysfs_name, R_OK, 0)) {
-				interface->drv_stat_method[j] = DRV_STAT_SYSFS;
-				interface->drv_stat_methods |= 1 << DRV_STAT_SYSFS;
+				interface->drv_stat.method[j] = DRV_STAT_SYSFS;
+				interface->drv_stat.methods |= 1 << DRV_STAT_SYSFS;
 				found++;
 			}
 		}
 
 		TRACE_L5("interface %s: driver stat %s available by %s\n",
 			 interface->name, sfptpd_stats_ethtool_names[j],
-			 interface->drv_stat_method[j] == DRV_STAT_ETHTOOL ? "ethtool" :
-			 (interface->drv_stat_method[j] == DRV_STAT_SYSFS ? "sysfs" :
+			 interface->drv_stat.method[j] == DRV_STAT_ETHTOOL ? "ethtool" :
+			 (interface->drv_stat.method[j] == DRV_STAT_SYSFS ? "sysfs" :
 			 "no method"));
 	}
 	TRACE_L5("interface %s: found %d/%d stats strings via sysfs\n",
@@ -887,8 +893,8 @@ skip_ioctl:
 	if (gstrings)
 		free(gstrings);
 
-	if (interface->drv_stat_methods & (1 << DRV_STAT_ETHTOOL))
-		interface->ethtool_stats = (struct ethtool_stats *) malloc(sizeof(struct ethtool_stats) + interface->n_stats * 8);
+	if (interface->drv_stat.methods & (1 << DRV_STAT_ETHTOOL))
+		interface->drv_stat.ethtool = (struct ethtool_stats *) malloc(sizeof(struct ethtool_stats) + interface->n_stats * 8);
 
 	interface_close_sysfs_dirs(interface);
 }
@@ -1027,6 +1033,16 @@ static int interface_assign_nic_id(struct sfptpd_interface *interface)
 	return 0;
 }
 
+/* Structural state reset for some discovered information in an interface
+ * object before it gets (re-)initialised. Select elements survive, especially
+ * those governing identity. */
+static void interface_reset(struct sfptpd_interface *interface)
+{
+	free(interface->drv_stat.ethtool);
+	memset(&interface->drv_stat, '\0', sizeof interface->drv_stat);
+	memset(interface->bus_addr_nic, '\0', sizeof interface->bus_addr_nic);
+}
+
 static int interface_init(const struct sfptpd_link *link,
 			  struct sfptpd_interface *interface,
 			  sfptpd_interface_class_t class)
@@ -1040,6 +1056,8 @@ static int interface_init(const struct sfptpd_link *link,
 	assert(link != NULL);
 	assert(interface != NULL);
 	assert(interface->magic == SFPTPD_INTERFACE_MAGIC);
+
+	interface_reset(interface);
 
 	name = link->if_name;
 	if_index = link->if_index;
@@ -1150,7 +1168,6 @@ static int interface_alloc(struct sfptpd_interface **interface)
 	*interface = new;
 	return 0;
 }
-
 
 static void interface_free(struct sfptpd_interface *interface)
 {
@@ -1383,8 +1400,8 @@ static void interface_record_delete_fn(void *record, void *context) {
 static void interface_record_free_fn(void *record, void *context) {
 	struct sfptpd_interface *interface = *((struct sfptpd_interface **) record);
 	assert(interface->magic == SFPTPD_INTERFACE_MAGIC);
-	if (interface->ethtool_stats)
-		free(interface->ethtool_stats);
+	if (interface->drv_stat.ethtool)
+		free(interface->drv_stat.ethtool);
 	interface_free(interface);
 }
 
@@ -2104,12 +2121,12 @@ int sfptpd_interface_driver_stats_read(struct sfptpd_interface *interface,
 
 	assert(interface != NULL);
 
-	if (interface->drv_stat_methods == 0)
+	if (interface->drv_stat.methods == 0)
 		return ENODATA;
 
-	estats = interface->ethtool_stats;
+	estats = interface->drv_stat.ethtool;
 
-	if (interface->drv_stat_methods & (1 << DRV_STAT_ETHTOOL)) {
+	if (interface->drv_stat.methods & (1 << DRV_STAT_ETHTOOL)) {
 		assert(estats != NULL);
 
 		estats->cmd = ETHTOOL_GSTATS;
@@ -2122,14 +2139,14 @@ int sfptpd_interface_driver_stats_read(struct sfptpd_interface *interface,
 			return errno;
 		}
 	}
-	if (interface->drv_stat_methods & (1 << DRV_STAT_SYSFS))
+	if (interface->drv_stat.methods & (1 << DRV_STAT_SYSFS))
 		interface_open_sysfs_device_dir(interface);
 
 	for (i = 0; i < SFPTPD_DRVSTAT_MAX; i++) {
-		enum drv_stat_method method = interface->drv_stat_method[i];
+		enum drv_stat_method method = interface->drv_stat.method[i];
 		switch (method) {
 		case DRV_STAT_ETHTOOL:
-			stats[i] = estats->data[interface->drv_stat_ethtool_index[i]];
+			stats[i] = estats->data[interface->drv_stat.ethtool_index[i]];
 			break;
 		case DRV_STAT_SYSFS:
 			if (sfptpd_read_int_from_fileat(
@@ -2144,7 +2161,7 @@ int sfptpd_interface_driver_stats_read(struct sfptpd_interface *interface,
 		}
 
 		/* Adjust for virtual resets */
-		stats[i] += interface->stat_zero_adjustment[i];
+		stats[i] += interface->drv_stat.zero_adjustment[i];
 	}
 
 	return 0;
@@ -2192,7 +2209,7 @@ int sfptpd_interface_driver_stats_reset(struct sfptpd_interface *interface)
 		 * a virtual reset where we subtract the count as it was
 		 * at reset. */
 
-		switch (interface->drv_stat_method[i]) {
+		switch (interface->drv_stat.method[i]) {
 		case DRV_STAT_SYSFS:
 			if (!sysfs_stats_reset && !reset_failed) {
 				rc = interface_sysfs_stats_reset(interface);
@@ -2219,7 +2236,7 @@ int sfptpd_interface_driver_stats_reset(struct sfptpd_interface *interface)
 				}
 			}
 			if (stats_sampled)
-				interface->stat_zero_adjustment[i] -= sample[i];
+				interface->drv_stat.zero_adjustment[i] -= sample[i];
 			break;
 		case DRV_STAT_NOT_AVAILABLE:
 			break;
