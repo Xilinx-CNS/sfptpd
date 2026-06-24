@@ -942,6 +942,39 @@ static int ptp_timestamp_filtering_configure_all(struct sfptpd_ptp_intf *intf)
 	return error;
 }
 
+/* Wrapper for strcmp so that it can be used with qsort */
+static int qsort_intfnamecmp(const void *p1, const void *p2)
+{
+	struct sfptpd_ptp_bond_phys_if *pi1 = (struct sfptpd_ptp_bond_phys_if *) p1;
+	struct sfptpd_ptp_bond_phys_if *pi2 = (struct sfptpd_ptp_bond_phys_if *) p2;
+
+	return strcmp(sfptpd_interface_get_name(pi1->intf),
+		      sfptpd_interface_get_name(pi2->intf));
+}
+
+static int phys_intf_cmp(const void *p1, const void *p2)
+{
+	struct sfptpd_ptp_bond_phys_if *pi1 = (struct sfptpd_ptp_bond_phys_if *) p1;
+	struct sfptpd_ptp_bond_phys_if *pi2 = (struct sfptpd_ptp_bond_phys_if *) p2;
+
+	assert(pi1->if_index != pi2->if_index ||
+	       pi1->intf == pi2->intf);
+
+	return pi1->if_index - pi2->if_index;
+}
+
+static struct sfptpd_ptp_bond_phys_if phys_intf(struct sfptpd_interface *interface,
+						const struct sfptpd_link *link)
+{
+	return (struct sfptpd_ptp_bond_phys_if) {
+		.intf = interface,
+		.if_index = sfptpd_interface_get_ifindex(interface),
+		.is_up = !!(link->if_flags & IFF_UP),
+		.is_primary = (link->bond.active_slave == link->if_index),
+		.has_hwts = !!(sfptpd_interface_ptp_caps(interface) &
+			       SFPTPD_INTERFACE_TS_CAPS_HW),
+	};
+}
 
 static void ptp_timestamp_filtering_reconfigure_all(struct sfptpd_ptp_intf *intf,
 						    struct sfptpd_ptp_bond_info *new_bond_info,
@@ -959,15 +992,23 @@ static void ptp_timestamp_filtering_reconfigure_all(struct sfptpd_ptp_intf *intf
 
 	old_bond_info = &intf->bond_info;
 
+	const struct sfptpd_ptp_bond_phys_if *phys_old = old_bond_info->physical_ifs;
+	const struct sfptpd_ptp_bond_phys_if *phys_new = new_bond_info->physical_ifs;
+
+	/* A new underlying netdev, identified by its if_index changing, is
+	 * treated like a removal and addition so that timestamping
+	 * configuration will be recomputed (capabilities might not be the
+	 * same) and reapplied. */
+
 	/* Disable timestamping on any interfaces that have been removed from
 	 * the bond. */
 	for (i = 0; i < old_bond_info->num_physical_ifs; i++) {
-		candidate = old_bond_info->physical_ifs[i].intf;
 
-		for (j = 0; j < new_bond_info->num_physical_ifs; j++) {
-			if (candidate == new_bond_info->physical_ifs[j].intf)
-				break;
-		}
+		/* Find a match in the new array. */
+		for (j = 0; j < new_bond_info->num_physical_ifs &&
+			    phys_intf_cmp(&phys_old[i], &phys_new[j]); j++);
+
+		candidate = phys_old[i].intf;
 
 		/* If the interface from the old config is not in the new
 		 * configuration, then disable timestamping for this
@@ -988,12 +1029,13 @@ static void ptp_timestamp_filtering_reconfigure_all(struct sfptpd_ptp_intf *intf
 	/* Enable timestamping on any interfaces that have been added to the
 	 * bond. */
 	for (i = 0; i < new_bond_info->num_physical_ifs; i++) {
-		candidate = new_bond_info->physical_ifs[i].intf;
 
-		for (j = 0; j < old_bond_info->num_physical_ifs; j++) {
-			if (candidate == old_bond_info->physical_ifs[j].intf)
-				break;
-		}
+		/* Find a match in the old array. */
+		for (j = 0; j < old_bond_info->num_physical_ifs &&
+			    phys_intf_cmp(&phys_new[i], &phys_old[j]); j++);
+
+		candidate = phys_new[i].intf;
+
 		/* If the interface from the new config is not in the existing
 		 * configuration, then report this for symmetry when reading logs */
 		if (j >= old_bond_info->num_physical_ifs) {
@@ -1126,18 +1168,6 @@ static int ptp_is_interface_vlan(const struct sfptpd_link *logical_if, bool *is_
 	return EINVAL;
 }
 
-
-/* Wrapper for strcmp so that it can be used with qsort */
-int qsort_intfnamecmp(const void *p1, const void *p2)
-{
-	struct sfptpd_ptp_bond_phys_if *pi1 = (struct sfptpd_ptp_bond_phys_if *) p1;
-	struct sfptpd_ptp_bond_phys_if *pi2 = (struct sfptpd_ptp_bond_phys_if *) p2;
-
-	return strcmp(sfptpd_interface_get_name(pi1->intf),
-		      sfptpd_interface_get_name(pi2->intf));
-}
-
-
 /* Parse a bond within a bridge */
 static int parse_nested_bond(struct sfptpd_ptp_bond_info *bond_info, bool verbose,
 			     const struct sfptpd_link_table *link_table,
@@ -1178,14 +1208,7 @@ static int parse_nested_bond(struct sfptpd_ptp_bond_info *bond_info, bool verbos
 				      "nested slave %s\n", link->if_name);
 				/* Not fatal unless we find none overall! */
 			} else {
-				bond_info->physical_ifs[bond_info->num_physical_ifs] =
-					(struct sfptpd_ptp_bond_phys_if) {
-						.intf = interface,
-						.is_up = !!(link->if_flags & IFF_UP),
-						.is_primary = (link->bond.active_slave == link->if_index),
-						.has_hwts = !!(sfptpd_interface_ptp_caps(interface) &
-									   SFPTPD_INTERFACE_TS_CAPS_HW)
-					};
+				bond_info->physical_ifs[bond_info->num_physical_ifs] = phys_intf(interface, link);
 				bond_info->num_physical_ifs++;
 			}
 		}
@@ -1245,14 +1268,7 @@ static int parse_bond(struct sfptpd_ptp_bond_info *bond_info, bool verbose,
 					/* Not fatal unless we find none! */
 				}
 			} else {
-				bond_info->physical_ifs[bond_info->num_physical_ifs] =
-					(struct sfptpd_ptp_bond_phys_if) {
-						.intf = interface,
-						.is_up = !!(link->if_flags & IFF_UP),
-						.is_primary = (link->bond.active_slave == link->if_index),
-						.has_hwts = !!(sfptpd_interface_ptp_caps(interface) &
-									   SFPTPD_INTERFACE_TS_CAPS_HW)
-					};
+				bond_info->physical_ifs[bond_info->num_physical_ifs] = phys_intf(interface, link);
 				bond_info->num_physical_ifs++;
 			}
 		}
@@ -1438,7 +1454,8 @@ static int ptp_probe_bonding(const struct sfptpd_link *logical_link,
 				 logical_if,
 				 sfptpd_interface_get_name(interface));
 			bond_info->num_physical_ifs = 1;
-			bond_info->active_if = bond_info->physical_ifs[0].intf = interface;
+			bond_info->physical_ifs[0] = phys_intf(interface, logical_link);
+			bond_info->active_if = interface;
 		}
 	} else {
 		assert(bond_info->bond_mode == SFPTPD_BOND_MODE_NONE);
@@ -1453,7 +1470,8 @@ static int ptp_probe_bonding(const struct sfptpd_link *logical_link,
 			/* There is no bond. Set up a set of 1 physical interface to
 			 * make parsing later less painful */
 			bond_info->num_physical_ifs = 1;
-			bond_info->active_if = bond_info->physical_ifs[0].intf = interface;
+			bond_info->physical_ifs[0] = phys_intf(interface, logical_link);
+			bond_info->active_if = interface;
 		}
 	}
 

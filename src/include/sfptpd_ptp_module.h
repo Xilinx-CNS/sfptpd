@@ -82,6 +82,10 @@ struct sfptpd_ptp_bond_info {
 		bool is_up:1;
 		bool is_primary:1;
 		bool has_hwts:1;
+
+		/* Track if_index so we know if the netdev is new and
+		 * needs timestamping recomputed and reapplied */
+		int if_index;
 	} physical_ifs[SFPTP_MAX_PHYSICAL_IFS];
 
 	/* Active physical interface */
