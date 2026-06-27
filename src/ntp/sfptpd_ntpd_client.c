@@ -81,7 +81,7 @@ void sfptpd_ntpclient_print_peers(struct sfptpd_ntpclient_peer_info *peer_info,
 		local_host[0]	= '\0';
 
 		if (peer->self) {
-			strcpy(remote_host, "<reference clock>");
+			sfptpd_strncpy(remote_host, "<reference clock>", sizeof remote_host);
 		} else if (peer->remote_address.ss_family != 0) {
 			rc = getnameinfo((struct sockaddr *) &peer->remote_address,
 					 peer->remote_address_len,
@@ -91,14 +91,14 @@ void sfptpd_ntpclient_print_peers(struct sfptpd_ntpclient_peer_info *peer_info,
 				DBG_L5("ntpclient: getnameinfo: error "
 				       "retrieving remote_address, %s\n",
 				       gai_strerror(rc));
-				strcpy(remote_host, "<invalid>");
+				sfptpd_strncpy(remote_host, "<invalid>", sizeof remote_host);
 			}
 		} else {
-			strcpy(remote_host, "<>");
+			sfptpd_strncpy(remote_host, "<>", sizeof remote_host);
 		}
 
 		if (peer->self) {
-			strcpy(local_host, "<reference clock>");
+			sfptpd_strncpy(local_host, "<reference clock>", sizeof local_host);
 		} else if (peer->local_address.ss_family != 0) {
 			rc = getnameinfo((struct sockaddr *) &peer->local_address,
 					 peer->local_address_len,
@@ -108,10 +108,10 @@ void sfptpd_ntpclient_print_peers(struct sfptpd_ntpclient_peer_info *peer_info,
 				DBG_L5("ntpclient: getnameinfo: error "
 				       "retrieving local_address, %s\n",
 				       gai_strerror(rc));
-				strcpy(local_host, "<invalid>");
+				sfptpd_strncpy(local_host, "<invalid>", sizeof local_host);
 			}
 		} else {
-			strcpy(local_host, "<>");
+			sfptpd_strncpy(local_host, "<>", sizeof local_host);
 		}
 
 		DBG_L5("%s-peer%d: ref-id %08X, remote-address %s, "

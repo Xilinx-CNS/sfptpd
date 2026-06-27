@@ -1223,7 +1223,7 @@ static int parse_bmc_discriminator(struct sfptpd_config_section *section, const 
 			  params[0]);
 		return ERANGE;
 	}
-	strcpy(ptp->ptpd_port.discriminator_name, params[0]);
+	sfptpd_strncpy(ptp->ptpd_port.discriminator_name, params[0], sizeof ptp->ptpd_port.discriminator_name);
 
 	tokens = sscanf(params[1], "%Lf", &threshold);
 	if (tokens != 1)

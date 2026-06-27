@@ -358,7 +358,7 @@ static int parse_time_of_day(struct sfptpd_config_section *section, const char *
 		return ERANGE;
 	}
 
-	strcpy(pps->tod_name, params[0]);
+	sfptpd_strncpy(pps->tod_name, params[0], sizeof pps->tod_name);
 	return 0;
 }
 
