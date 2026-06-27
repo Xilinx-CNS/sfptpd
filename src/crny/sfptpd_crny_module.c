@@ -1788,7 +1788,7 @@ static void ntp_send_clustering_input(crny_module_t *ntp, struct ntp_state *stat
 }
 
 
-static char *clock_control_op_name(enum chrony_clock_control_op op) {
+static const char *clock_control_op_name(enum chrony_clock_control_op op) {
 	if (op == CRNY_CTRL_OP_NOP)
 		return "nop";
 	else if (op == CRNY_CTRL_OP_SAVE)
@@ -1812,7 +1812,7 @@ static int do_clock_control(crny_module_t *ntp,
 	enum chrony_clock_control_op op_do;
 	bool clock_control;
 	bool have_control = ntp->config->clock_control;
-	char *action;
+	const char *action;
 	int status;
 	int rc;
 
