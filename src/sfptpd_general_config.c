@@ -144,7 +144,7 @@ static int parse_selection_policy(struct sfptpd_config_section *section, const c
 		}
 		/* Can't easily check that the instance name is valid here as that 
 		 * implies ordering of elements in the configuration */
-		strcpy(general->initial_sync_instance, params[1]);
+		sfptpd_strncpy(general->initial_sync_instance, params[1], sizeof general->initial_sync_instance);
 	}
 
 	return 0;
@@ -1293,7 +1293,8 @@ static int parse_clustering(struct sfptpd_config_section *section, const char *o
 		return ERANGE;
 	}
 
-	strcpy(general->clustering_discriminator_name, params[1]);
+	sfptpd_strncpy(general->clustering_discriminator_name, params[1],
+		       sizeof general->clustering_discriminator_name);
 
 	tokens = sscanf(params[2], "%Lf", &threshold);
 	if (tokens != 1)

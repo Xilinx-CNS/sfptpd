@@ -1790,17 +1790,17 @@ static void ntp_send_clustering_input(crny_module_t *ntp, struct ntp_state *stat
 
 static char *clock_control_op_name(enum chrony_clock_control_op op) {
 	if (op == CRNY_CTRL_OP_NOP)
-		return " nop";
+		return "nop";
 	else if (op == CRNY_CTRL_OP_SAVE)
-		return " save";
+		return "save";
 	else if (op == CRNY_CTRL_OP_RESTORE)
-		return " restore";
+		return "restore";
 	else if (op == CRNY_CTRL_OP_RESTORENORESTART)
-		return " restorenorestart";
+		return "restorenorestart";
 	else if (op == CRNY_CTRL_OP_ENABLE)
-		return " enable";
+		return "enable";
 	else
-		return " disable";
+		return "disable";
 }
 
 #define CLOCK_CONTROL_MIN_INTERVAL (0) /* min time between running script in seconds */
@@ -1812,9 +1812,7 @@ static int do_clock_control(crny_module_t *ntp,
 	enum chrony_clock_control_op op_do;
 	bool clock_control;
 	bool have_control = ntp->config->clock_control;
-	char *command;
 	char *action;
-	int len, total;
 	int status;
 	int rc;
 
@@ -1862,17 +1860,13 @@ static int do_clock_control(crny_module_t *ntp,
 	}
 
 	if (ntp->config->chronyd_script != NULL) {
-		len = strlen(ntp->config->chronyd_script);
-		total = len + strlen(action) + 1;
-		command = calloc(1, total);
-		if (!command)
+		char *command;
+		if (asprintf(&command, "%s %s", ntp->config->chronyd_script, action) == -1)
 			return ENOMEM;
-		strcpy(command, ntp->config->chronyd_script);
-		strcpy(command + len, action);
 
 		INFO("crny: invoking clock control script '%s'\n", command);
 
-			/* run the command */
+		/* run the command */
 		status = system(command);
 		if (status == -1 || !WIFEXITED(status))
 			rc = ECHILD;
