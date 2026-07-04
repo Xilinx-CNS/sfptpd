@@ -172,16 +172,18 @@ void sfptpd_clock_shutdown(void);
  */
 int sfptpd_clock_get_total(void);
 
-/** Get a snapshot of the active clocks ordered by clock pointer.
- * @param num_clocks Set to the number of active clocks in snapshot.
+/** Get a snapshot of the non-deleted clocks ordered by clock pointer.
+ * @param num_clocks Set to the number of clocks in the snapshot.
+ * @param only_for_us If set, only include clocks our application is
+ * configured to use.
  * @return A pointer to an array of clock pointers.
  */
-struct sfptpd_clock **sfptpd_clock_get_active_snapshot(size_t *num_clocks);
+struct sfptpd_clock **sfptpd_clock_get_snapshot(size_t *num_clocks, bool only_for_us);
 
 /** Free a snapshot of clock pointers.
  * @param snapshot The snapshot to be freed.
  */
-void sfptpd_clock_free_active_snapshot(struct sfptpd_clock **snapshot);
+void sfptpd_clock_free_snapshot(struct sfptpd_clock **snapshot);
 
 /** Find a clock by name 
  * @param name  Textual name of clock

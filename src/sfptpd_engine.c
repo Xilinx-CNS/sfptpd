@@ -431,11 +431,11 @@ static void reconfigure_servos(struct sfptpd_engine *engine,
 
 	/* For each clock that is not the LRC, configure a servo to slave the
 	 * clock to the LRC */
-	active = sfptpd_clock_get_active_snapshot(&num_active);
+	active = sfptpd_clock_get_snapshot(&num_active, true);
 	idx = 0;
 	for (clock_idx = 0; clock_idx < num_active; clock_idx++) {
 		clock = active[clock_idx];
-		if (sfptpd_clock_get_observe(clock) && (clock != engine->lrc)) {
+		if (clock != engine->lrc) {
 			/* We should always have enough servos */
 			assert(idx < engine->total_servos);
 
@@ -444,7 +444,7 @@ static void reconfigure_servos(struct sfptpd_engine *engine,
 			idx++;
 		}
 	}
-	sfptpd_clock_free_active_snapshot(active);
+	sfptpd_clock_free_snapshot(active);
 
 	/* Record the number of active servos */
 	engine->active_servos = idx;
@@ -1325,7 +1325,7 @@ static void engine_handle_new_link_table(struct sfptpd_engine *engine, int versi
 
 	assert(engine != NULL);
 
-	clocks_before = sfptpd_clock_get_active_snapshot(&num_clocks_before);
+	clocks_before = sfptpd_clock_get_snapshot(&num_clocks_before, true);
 
 	while (version > 0) {
 		TRACE_L3("engine: link changes - new table version %d\n", version);
@@ -1336,7 +1336,7 @@ static void engine_handle_new_link_table(struct sfptpd_engine *engine, int versi
 		assert(rows == engine->link_table->count);
 
 		if (engine->link_table_prev == NULL) {
-			sfptpd_clock_free_active_snapshot(clocks_before);
+			sfptpd_clock_free_snapshot(clocks_before);
 			return;
 		}
 
@@ -1390,7 +1390,7 @@ static void engine_handle_new_link_table(struct sfptpd_engine *engine, int versi
 	on_try_lock_clocks(engine, ENGINE_TIMER_TRY_LOCK_CLOCKS);
 
 	/* Reflect hot-plugged clocks in clock feeds */
-	clocks_after = sfptpd_clock_get_active_snapshot(&num_clocks_after);
+	clocks_after = sfptpd_clock_get_snapshot(&num_clocks_after, true);
 	for (unsigned i = 0, j = 0; i < num_clocks_before || j < num_clocks_after;) {
 		struct sfptpd_clock *clock_a = i < num_clocks_before ? clocks_before[i] : NULL;
 		struct sfptpd_clock *clock_b = j < num_clocks_after ? clocks_after[j] : NULL;
@@ -1411,8 +1411,8 @@ static void engine_handle_new_link_table(struct sfptpd_engine *engine, int versi
 			i++, j++;
 		}
 	}
-	sfptpd_clock_free_active_snapshot(clocks_after);
-	sfptpd_clock_free_active_snapshot(clocks_before);
+	sfptpd_clock_free_snapshot(clocks_after);
+	sfptpd_clock_free_snapshot(clocks_before);
 
 	if (reconfigure) {
 		TRACE_L3("engine: reconfiguring slave servos after interface hotplugging\n");
@@ -2273,10 +2273,10 @@ static void engine_on_shutdown(void *context)
 	sfptpd_metrics_destroy();
 
 	/* Remove clock feeds */
-	clocks = sfptpd_clock_get_active_snapshot(&num_clocks);
+	clocks = sfptpd_clock_get_snapshot(&num_clocks, false);
 	while (num_clocks--)
 		sfptpd_clockfeed_remove_clock(engine->clockfeed, clocks[num_clocks]);
-	sfptpd_clock_free_active_snapshot(clocks);
+	sfptpd_clock_free_snapshot(clocks);
 
 	/* Now free up the resources */
 	for (module = 0; module < SFPTPD_CONFIG_CATEGORY_MAX; module++) {
@@ -2423,14 +2423,14 @@ static int engine_on_startup(void *context)
 		struct sfptpd_clock *clock;
 		size_t num_active;
 
-		active = sfptpd_clock_get_active_snapshot(&num_active);
+		active = sfptpd_clock_get_snapshot(&num_active, true);
 		for (unsigned idx = 0; idx < num_active; idx++) {
 		     clock = active[idx];
 			if (clock != sfptpd_clock_get_system_clock())
 				sfptpd_clockfeed_add_clock(engine->clockfeed, clock,
 							   engine->general_config->clocks.sync_interval);
 		}
-		sfptpd_clock_free_active_snapshot(active);
+		sfptpd_clock_free_snapshot(active);
 	}
 
 	/* Count potential sync instances, create storage for them and

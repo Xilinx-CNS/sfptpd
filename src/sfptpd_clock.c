@@ -448,7 +448,7 @@ static void clock_dump_record(struct sfptpd_clock *clock, int trace_level)
 		   clock->type == SFPTPD_CLOCK_TYPE_SFC ? "sfc" :
 			(clock->type == SFPTPD_CLOCK_TYPE_XNET ? "xnet" : "non-sfc"),
 		   clock->u.nic.nic_id, clock->u.nic.device_idx,
-		   sfptpd_phc_get_diff_method_name(clock->u.nic.phc),
+		   sfptpd_clock_get_diff_method(clock),
 		   clock->short_name, clock->long_name,
 		   clock->deleted ? " [deleted]" : "",
 		   clock->read_only ? " [read-only]" : "");
@@ -648,8 +648,7 @@ static void fixup_clock(struct sfptpd_clock *clock, struct sfptpd_config_general
         /* Now that we have configured the clock's readonly flag, we can finally load saved frequency corrections
            and epoch startup correction.
         */
-	if (!cfg->clocks.no_initial_correction)
-	        sfptpd_clock_correct_new(clock);
+        sfptpd_clock_correct_new(clock);
 
         return;
 }
@@ -791,8 +790,7 @@ static int new_system_clock(struct sfptpd_config_general *config,
 		sfptpd_clock_set_blocked(new, true, SFPTPD_CLOCK_BLOCK_REASON_LOCKED);
 	}
 
-	if (!config->clocks.no_initial_correction)
-		sfptpd_clock_correct_new(new);
+	sfptpd_clock_correct_new(new);
 
 	*clock = new;
 	return 0;
@@ -826,30 +824,22 @@ static void clock_determine_stratum(struct sfptpd_clock *clock)
 static void clock_determine_max_freq_adj(struct sfptpd_clock *clock)
 {
 	int max_freq_adj;
-	bool success;
 	struct sfptpd_config_general *general_config;
 
 	assert(clock != NULL);
-	assert(clock->u.nic.phc != NULL);
+
+	/* If PHC not open then silently accept we can ignore this clock */
+	if (!clock->u.nic.phc)
+		return;
+
 	assert(clock->type != SFPTPD_CLOCK_TYPE_SYSTEM);
 
 	clock->max_freq_adj_ppb = 0.0;
-	success = false;
 
 	/* Get the maximum frequency adjustment using an IOCTL operation
 	 * to the device. */
 	max_freq_adj = sfptpd_phc_get_max_freq_adj(clock->u.nic.phc);
 	clock->max_freq_adj_ppb = (long double)max_freq_adj;
-	success = true;
-
-	/* If previous attempts to find the maximum frequency adjustment have
-	 * failed, fallback to a default value. */
-	if (!success) {
-		clock->max_freq_adj_ppb = SFPTPD_NIC_CLOCK_MAX_FREQ_ADJ;
-		WARNING("clock %s: failed to determine max frequency adjustment- "
-			"assuming %Lf\n",
-			clock->short_name, clock->max_freq_adj_ppb);
-	}
 
 	/* Apply overriding limit if set by user */
 	general_config = sfptpd_general_config_get(sfptpd_clock_config);
@@ -933,7 +923,7 @@ static int renew_clock(struct sfptpd_clock *clock)
 	}
 
 	if (primary != clock->u.nic.primary_if ||
-	    (supports_phc && clock->u.nic.phc == NULL) ||
+	    (supports_phc && clock->u.nic.phc == NULL && clock->observe) ||
 	    (!supports_phc && clock->u.nic.phc != NULL) ||
 	    phc_idx != clock->u.nic.device_idx)
 		change = true;
@@ -960,7 +950,7 @@ static int renew_clock(struct sfptpd_clock *clock)
 		sfptpd_format(clock_format_specifiers, clock, clock->short_name,
 			      sizeof clock->short_name, general_config->clocks.format_short);
 
-		if (clock->u.nic.phc == NULL) {
+		if (clock->u.nic.phc == NULL && clock->observe) {
 			rc = sfptpd_phc_open(clock->u.nic.device_idx,
 					     &clock->u.nic.phc,
 					     clock->read_only);
@@ -1224,8 +1214,7 @@ static void sfptpd_clock_init_interface(int nic_id,
 		} else if (clock->deleted) {
 			/* If a previously-removed NIC is re-inserted we
 			   may need to step the clock */
-			if (!general_config->clocks.no_initial_correction)
-				sfptpd_clock_correct_new(clock);
+			sfptpd_clock_correct_new(clock);
 		}
 
 		/* Invariant: by now there must be a clock allocated */
@@ -1280,12 +1269,27 @@ static int ptr_compar(const void *a, const void *b)
 		return 0;
 }
 
+static bool clock_match(struct sfptpd_clock *node,
+			bool not_deleted,
+			bool not_sfc,
+			bool to_be_observed)
+{
+	return ((!not_deleted    || !node->deleted) &&
+		(!not_sfc        || node->type == SFPTPD_CLOCK_TYPE_NON_SFC) &&
+		(!to_be_observed || node->observe));
+}
 
-/* Take a snapshot of the clocks list.
+/* Take a snapshot of non-deleted clocks from the clocks list.
  * This function should always be called with the hardware state lock
  * already taken.
+ * @param no_sfc Exclude sfc clocks (used for deduplicating phcs with
+ * shared underlying clocks - not relevant to sfc devices)
+ * @param only_for_us Only include clocks configured to be used by
+ * our application. This maps to the 'observed' property.
  */
-static struct sfptpd_clock **clock_snapshot(size_t *num_clocks, bool no_sfc)
+static struct sfptpd_clock **clock_snapshot(size_t *num_clocks,
+					    bool no_sfc,
+					    bool only_for_us)
 {
 	struct sfptpd_clock **snapshot;
 	struct sfptpd_clock *node;
@@ -1295,9 +1299,12 @@ static struct sfptpd_clock **clock_snapshot(size_t *num_clocks, bool no_sfc)
 	count = 0;
 	for (node = sfptpd_clock_list_head; node != NULL; node = node->next) {
 		assert(node->magic == SFPTPD_CLOCK_MAGIC);
-		if (!node->deleted &&
-		    (!no_sfc || node->type == SFPTPD_CLOCK_TYPE_NON_SFC)) count++;
+		if (clock_match(node, true, no_sfc, only_for_us))
+			count++;
 	}
+
+	if (!(*num_clocks = count))
+		return NULL;
 
 	snapshot = calloc(count, sizeof *snapshot);
 	if (!snapshot) {
@@ -1309,8 +1316,7 @@ static struct sfptpd_clock **clock_snapshot(size_t *num_clocks, bool no_sfc)
 	index = 0;
 	for (node = sfptpd_clock_list_head; node != NULL; node = node->next) {
 		assert(node->magic == SFPTPD_CLOCK_MAGIC);
-		if (!node->deleted &&
-		    (!no_sfc || node->type == SFPTPD_CLOCK_TYPE_NON_SFC)) {
+		if (clock_match(node, true, no_sfc, only_for_us)) {
 			assert(index < count);
 			snapshot[index++] = node;
 		}
@@ -1322,8 +1328,6 @@ static struct sfptpd_clock **clock_snapshot(size_t *num_clocks, bool no_sfc)
 	qsort(snapshot, count, sizeof *snapshot, ptr_compar);
 
 finish:
-	if (num_clocks)
-		*num_clocks = count;
 	return snapshot;
 }
 
@@ -1448,21 +1452,21 @@ int sfptpd_clock_get_total(void)
 	return count;
 }
 
-struct sfptpd_clock **sfptpd_clock_get_active_snapshot(size_t *num_clocks)
+struct sfptpd_clock **sfptpd_clock_get_snapshot(size_t *num_clocks,
+						bool only_for_us)
 {
 	struct sfptpd_clock **snapshot;
 	size_t count = 0;
 
 	clock_lock();
-	snapshot = clock_snapshot(&count, false);
+	snapshot = clock_snapshot(&count, false, only_for_us);
 	clock_unlock();
 
-	if (count != 0)
-		*num_clocks = count;
+	*num_clocks = count;
 	return snapshot;
 }
 
-void sfptpd_clock_free_active_snapshot(struct sfptpd_clock **snapshot)
+void sfptpd_clock_free_snapshot(struct sfptpd_clock **snapshot)
 {
 	free(snapshot);
 }
@@ -2560,37 +2564,43 @@ finish:
 
 void sfptpd_clock_correct_new(struct sfptpd_clock *clock)
 {
+        struct sfptpd_config_general *gconf = sfptpd_general_config_get(sfptpd_clock_config);
 	long double not_used;
 	struct sfptpd_timespec time;
 	int rc;
 
 	assert(clock->magic == SFPTPD_CLOCK_MAGIC);
 
+	if (gconf->clocks.no_initial_correction)
+		return;
+
+	if (!clock->observe)
+		return;
+
+	/* Correct only NIC clocks, subject to non-sfc setting */
+	if (!((clock->type == SFPTPD_CLOCK_TYPE_SFC) ||
+	      (clock->type == SFPTPD_CLOCK_TYPE_XNET) ||
+	      ((clock->type == SFPTPD_CLOCK_TYPE_NON_SFC) && clock->cfg_non_sfc_nics)))
+		return;
+
 	(void)sfptpd_clock_load_freq_correction(clock, &not_used);
 
-	/* Don't attempt to correct the system clock */
-	if ((clock->type == SFPTPD_CLOCK_TYPE_SFC) ||
-	    (clock->type == SFPTPD_CLOCK_TYPE_XNET) ||
-	    ((clock->type == SFPTPD_CLOCK_TYPE_NON_SFC) && clock->cfg_non_sfc_nics)) {
-		/* Read the NIC clock time. If it is near the epoch
-		 * then we conclude that it has never been set. Set
-		* it to the current system time */
-		rc = sfptpd_clock_get_time(clock, &time);
-		if (rc != 0) {
-			ERROR("failed to read clock %s time, %s\n",
-			      clock->long_name, strerror(rc));
-		} else {
-		        struct sfptpd_config_general *gconf;
-			gconf = sfptpd_general_config_get(sfptpd_clock_config);
-
-			if (time.sec < SFPTPD_NIC_TIME_VALID_THRESHOLD ||
-			    gconf->initial_clock_correction == SFPTPD_CLOCK_INITIAL_CORRECTION_ALWAYS) {
-				sfptpd_clock_set_time(clock, sfptpd_clock_system, NULL, true);
-			}
-		}
+	/* Read the NIC clock time. If it is near the epoch
+	 * then we conclude that it has never been set. Set
+	* it to the current system time */
+	rc = sfptpd_clock_get_time(clock, &time);
+	if (rc != 0) {
+		ERROR("failed to read clock %s time, %s\n",
+		      clock->long_name, strerror(rc));
+		return;
 	}
-}
 
+	/* Only perform initial correction if currently unset, as judged
+	 * by proximity to epoch, or if configured always to do so. */
+	if (time.sec < SFPTPD_NIC_TIME_VALID_THRESHOLD ||
+	    gconf->initial_clock_correction == SFPTPD_CLOCK_INITIAL_CORRECTION_ALWAYS)
+		sfptpd_clock_set_time(clock, sfptpd_clock_system, NULL, true);
+}
 
 int sfptpd_clock_pps_get_fd(struct sfptpd_clock *clock)
 {
@@ -2730,7 +2740,7 @@ int sfptpd_clock_deduplicate(void)
 
 	clock_lock();
 
-	if ((clocks_table = clock_snapshot(&count, true)) == NULL)
+	if ((clocks_table = clock_snapshot(&count, true, false)) == NULL)
 		goto finish;
 
 	if (count < 2)

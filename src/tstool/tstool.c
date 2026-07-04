@@ -433,11 +433,11 @@ static int clock_command(int argc, char *argv[])
 
 	switch(cmd->tag) {
 	case CLOCK_CMD_LIST:
-		all_clocks = sfptpd_clock_get_active_snapshot(&num_clocks);
+		all_clocks = sfptpd_clock_get_snapshot(&num_clocks, true);
 		for (i = 0; i < (int) num_clocks; i++) {
 			printf("%s\n", sfptpd_clock_get_long_name(all_clocks[i]));
 		}
-		sfptpd_clock_free_active_snapshot(all_clocks);
+		sfptpd_clock_free_snapshot(all_clocks);
 		break;
 	case CLOCK_CMD_INFO:
 		sfptpd_clock_get_frequency(clocks[0], &freq_adj, &tick_len);
