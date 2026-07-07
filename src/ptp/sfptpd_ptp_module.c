@@ -3639,9 +3639,6 @@ static int ptp_start_instance(struct sfptpd_ptp_instance *instance) {
 	/* Initialise the sync module convergence and stats */
 	ptp_convergence_init(instance);
 
-	/* Set the convergence threshold */
-	ptp_set_convergence_threshold(instance);
-
 fail:
 	return rc;
 }
@@ -3748,6 +3745,8 @@ static int ptp_on_startup(void *context)
 						  interface,
 						  instance->intf->bond_info.active_if);
 		if (rc != 0) goto fail;
+
+		ptp_set_convergence_threshold(instance);
 	}
 
 	/* Initialise PTPD */
