@@ -802,7 +802,7 @@ static bool ptp_is_ptpd_interface_hw_timestamping(struct sfptpd_ptp_intf *intf)
 		mode = ptpd_get_timestamping(intf->ptpd_intf_private);
 	}
 
-	return mode != PTPD_TIMESTAMP_TYPE_SW;
+	return mode == PTPD_TIMESTAMP_TYPE_HW;
 }
 
 
