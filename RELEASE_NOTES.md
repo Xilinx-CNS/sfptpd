@@ -1,7 +1,7 @@
 AMD Solarflare Enhanced PTP Daemon
 ==================================
 
-Version: v3.9.0.1007
+Version: v3.10.0.1000
 
 These are the release notes for sfptpd on AMD Solarflare adaptors.
 
@@ -9,7 +9,7 @@ The full list of changes since earlier versions, including changes relating
 to unsupported adapters and use cases available using the sfptpd source code
 is available in [the changelog](CHANGELOG.md).
 
-Copyright (c) 2012-2025, Advanced Micro Devices, Inc.
+Copyright (c) 2012-2026, Advanced Micro Devices, Inc.
 
 
 Overview
@@ -48,14 +48,12 @@ This package is supported on:
 
 - Red Hat Enterprise Linux 7.9
 - Red Hat Enterprise Linux 8.1 - 8.10
-- Red Hat Enterprise Linux 9.0 - 9.6
-- Red Hat Enterprise Linux 10.0
-- Canonical Ubuntu Server LTS 20.04, 22.04, 24.04
-- Debian 10 "Buster"
-- Debian 11 "Bullseye"
+- Red Hat Enterprise Linux 9.0 - 9.8
+- Red Hat Enterprise Linux 10.0 - 10.2
+- Canonical Ubuntu Server LTS 22.04, 24.04, 26.04
 - Debian 12 "Bookworm"
 - Debian 13 "Trixie"
-- Linux kernels 3.0 - 6.15
+- Linux kernels 3.0 - 7.1
 
 Other and older platforms and non-amd64 architectures may be compatible with
 sfptpd but are not supported by AMD. Please raise issues and patches for
