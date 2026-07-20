@@ -1,6 +1,19 @@
-sfptpd (3.10.0-1~local1) UNRELEASED; urgency=medium
+sfptpd (3.10.0.1000-1) UNRELEASED; urgency=medium
 
-  * Upstream's Debian package for sfptpd; see CHANGELOG.md for real changelog.
-  * Copyright (c) 2024, Advanced Micro Devices, Inc.
+  * New upstream release.
+  * Switch from dh_sysuser to dh_installsysusers.
+  * Follow usrmerge transition.
+  * Pass CPPFLAGS hardening through to the build.
+  * Rewrite initscript simply using init-d-script(5).
+  * Install new edit-chrony-cmdline script.
+  * Address assorted lintian tags: add upstream metadata,
+    drop redundant linker flag, bump Standards-Version.
+
+ -- AMD NIC Support <support-nic@amd.com>  Sun, 19 Jul 2026 15:25:33 +0100
+
+sfptpd (3.9.0.1007-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Copyright (c) Advanced Micro Devices, Inc.
 
  -- AMD NIC Support <support-nic@amd.com>  Tue, 27 Jan 2026 09:08:32 +0000
