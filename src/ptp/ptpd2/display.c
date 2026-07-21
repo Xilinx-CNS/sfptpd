@@ -229,7 +229,7 @@ unicast_display(const Octet * unicast)
 
 	int i;
 
-	DBGV("Unicast adress : ");
+	DBGV("Unicast address : ");
 
 	for (i = 0; i < NET_ADDRESS_LENGTH; i++) {
 		DBGV("%c", unicast[i]);

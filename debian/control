@@ -13,7 +13,7 @@ Build-Depends:
  python3,
  dh-python,
  dh-runit
-Standards-Version: 4.6.0
+Standards-Version: 4.7.4
 Homepage: https://github.com/Xilinx-CNS/sfptpd
 Rules-Requires-Root: no
 
@@ -49,3 +49,14 @@ Depends:
  ${misc:Depends},
 Description: Scripts for sfptpd time sync daemon
  This package provides Python scripts to support the sfptpd daemon.
+ .
+ Tool:
+  - sfptpmon - collects event monitoring messages over the wire
+ .
+ Internal helper:
+  - chrony_clockcontrol.py - legacy helper for chronyd clock control
+ .
+ Examples:
+  - monitoring_console.py    - example realtime stats consumer
+  - sfptpdctl.py             - example customisable version of sfptpdctl
+  - sfptpd_stats_collectd.py - example realtime stats adapter

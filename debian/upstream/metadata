@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# (c) Copyright 2026 Advanced Micro Devices, Inc.
+
+Bug-Database: https://github.com/Xilinx-CNS/sfptpd/issues
+Bug-Submit: https://github.com/Xilinx-CNS/sfptpd/issues/new
+Changelog: https://github.com/Xilinx-CNS/sfptpd/blob/master/CHANGELOG.md
+Documentation: https://docs.amd.com/r/en-US/ug1602-ptp-user
+Repository-Browse: https://github.com/Xilinx-CNS/sfptpd
+Repository: https://github.com/Xilinx-CNS/sfptpd.git

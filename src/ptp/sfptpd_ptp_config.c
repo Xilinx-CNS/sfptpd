@@ -1453,7 +1453,7 @@ static const sfptpd_config_option_t ptp_config_options[] =
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_delayresp_pkt_timeout},
 	{"max_missing_delayresps", "A B",
-		"The maximimum number of missing delay responses to alarm (A) "
+		"The maximum number of missing delay responses to alarm (A) "
 		"or fall back from hybrid mode (B). Default "
 		STRINGIFY(DEFAULT_DELAY_RESP_ALARM_THRESHOLD) " "
 		STRINGIFY(DEFAULT_DELAY_RESP_HYBRID_THRESHOLD) ".",

@@ -1811,7 +1811,7 @@ handleAnnounce(MsgHeader *header, ssize_t length,
 			/* the actual decision to change masters is only done in  doState() / record_update == TRUE / bmc() */
 			/* the original code always called: addforeign(new master) + timerstart(announce) */
 			DBG("___ Announce: received Announce from another master, will add to the list, as it might be better\n\n");
-			DBGV("this is to be decided immediatly by bmc())\n\n");
+			DBGV("this is to be decided immediately by bmc())\n\n");
 			addForeign(ptpClock->interface->msgIbuf, length, header, ptpClock);
 		}
 		break;

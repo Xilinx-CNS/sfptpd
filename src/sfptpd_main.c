@@ -807,7 +807,7 @@ static void on_control_socket_fd(int fd)
 		break;
 	case CONTROL_DUMPTABLES:
 		/* Dump diagnostic tables */
-		NOTICE("received 'dumptables' control command: outputing diagnostics\n");
+		NOTICE("received 'dumptables' control command: outputting diagnostics\n");
 		sfptpd_interface_diagnostics(0);
 		sfptpd_clock_diagnostics(0);
 		sfptpd_multicast_dump_state();
