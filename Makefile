@@ -86,7 +86,7 @@ BUILD_DIR = build
 ### Build tools
 #
 
-COMPILE         = $(CC) $(CFLAGS) $(INCDIRS) $(EXTRA_CFLAGS) -o $@ -c $<
+COMPILE         = $(CC) $(CPPFLAGS) $(CFLAGS) $(INCDIRS) $(EXTRA_CFLAGS) -o $@ -c $<
 ARCHIVE         = $(AR) $(ARFLAGS) $@ $^
 LINK            = $(CC) $(LDFLAGS) -o $@ -Wl,--start-group $^ -Wl,--end-group $(LDLIBS)
 
