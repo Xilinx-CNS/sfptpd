@@ -17,7 +17,7 @@ BuildRequires: make
 BuildRequires: systemd-rpm-macros
 BuildRequires: libmnl-devel
 BuildRequires: libcap-devel
-BuildRequires: gcc-toolset-10-gcc
+BuildRequires: gcc-toolset-11-gcc
 
 %description
 Use multiple PTP an PPS sources and sync local clocks together in one
@@ -47,7 +47,7 @@ sed -i -E 's,(-p )?-u[ _]sfptpd ?,,g' scripts/systemd/sfptpd.service
 # hardened defaults when launched from containerised github workflow
 %set_build_flags
 export prefix=%{_prefix}
-scl enable gcc-toolset-10 '%make_build'
+scl enable gcc-toolset-11 '%make_build'
 
 %install
 export CC='false # no compilation at installation stage #'
