@@ -1050,14 +1050,14 @@ static int pps_set_pin(struct sfptpd_phc *phc,
 	switch (func) {
 	case SFPTPD_PPS_FUNC_UNSET:
 		conf->func = func;		/* We care no longer! */
-		conf->channel = channel = -1;
+		conf->channel = channel = 0;
 		if (old_conf.func == SFPTPD_PPS_FUNC_UNSET)
 			return 0;		/* Change nothing */
 		func = SFPTPD_PPS_FUNC_NONE;	/* One-off disablement */
 		break;
 	case SFPTPD_PPS_FUNC_NONE:
 		conf->func = func;
-		conf->channel = channel = -1;
+		conf->channel = channel = 0;
 		break;
 	default:
 		pps_remove_conflicting_mappings(phc, func, channel, pin);
@@ -1186,7 +1186,7 @@ static int phc_control_devptp(struct sfptpd_phc *phc,
 		pin = -1;
 	}
 
-	if (rationed && channel >= num_channels) {
+	if (channel < 0 || (rationed && channel >= num_channels)) {
 		TRACE_L2("phc%d: could not use %s channel %d, only %d available\n",
 			 phc->phc_idx, sfptpd_phc_pin_func_text[func], channel, num_channels);
 		return ENOTSUP;
