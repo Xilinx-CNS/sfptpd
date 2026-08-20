@@ -625,7 +625,7 @@ static int notify_ready(int retcode)
 	}
 	notify_close();
 
-	return rc == 0 ? 0 : errno;
+	return rc == -1 ? errno : 0;
 }
 
 static int main_on_startup(void *not_used)
