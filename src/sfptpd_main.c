@@ -445,7 +445,8 @@ static int rundir_create(struct sfptpd_config *config)
 
 	/* Best effort: create an alias to this directory */
 	if (generated_path && access(SFPTPD_RUN_DIR, F_OK))
-		(void) symlink(path, SFPTPD_RUN_DIR);
+		if (symlink(path, SFPTPD_RUN_DIR)) {
+		}
 
 	return 0;
 }

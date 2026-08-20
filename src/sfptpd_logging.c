@@ -450,7 +450,8 @@ int sfptpd_log_open(struct sfptpd_config *config)
 	/* Attempt to symlink to sfptpd instance */
 	if (strcmp(SFPTPD_STATE_PATH, state_path) &&
 	    !strncmp(SFPTPD_STATE_PATH, state_path, strlen(SFPTPD_STATE_PATH))) {
-		(void) symlink(state_path, SFPTPD_STATE_PATH);
+		if (symlink(state_path, SFPTPD_STATE_PATH)) {
+		}
 	}
 
 	/* If messages are being logged to the syslog, open it */
