@@ -1264,7 +1264,7 @@ static void metrics_execute_query(struct query_state *q)
 
 	if (http->method == HTTP_METHOD_GET ||
 	    http->method == HTTP_METHOD_HEAD) {
-		char *s;
+		const char *s;
 		if (*target &&
 		    (s = strchr(target + 1, '/')) &&
 		    !strncmp(target, "/peek", strlen("/peek"))) {

@@ -1514,7 +1514,7 @@ static int parse_eligible_interface_types(struct sfptpd_config_section *section,
 	struct sfptpd_config_interface_selection *ss = general->eligible_interface_types;
 	const char *separators = "@!";
 	const char *ptr;
-	char *next;
+	const char *next;
 	char *word;
 	int rc;
 	int keep = 0;
