@@ -944,7 +944,7 @@ static int interface_assign_nic_id(struct sfptpd_interface *interface)
 				interface->bus_addr + matches[1].rm_so,
 				matches[1].rm_eo - matches[1].rm_so);
 		} else {
-			strncpy(interface->bus_addr_nic, interface->bus_addr, sizeof interface->bus_addr_nic);
+			sfptpd_strncpy(interface->bus_addr_nic, interface->bus_addr, sizeof interface->bus_addr_nic);
 		}
 
 		regfree(&regex);
