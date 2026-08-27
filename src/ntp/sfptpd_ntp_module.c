@@ -19,6 +19,7 @@
 #include <inttypes.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <regex.h>
 
 #include "sfptpd_app.h"
 #include "sfptpd_sync_module.h"
@@ -246,20 +247,97 @@ static int parse_ntp_poll_interval(struct sfptpd_config_section *section, const 
 	return 0;
 }
 
+static int lookup_ntp_key(struct sfptpd_config_section *section,
+			   const char *file, int keyid, char *key_buf, size_t sz)
+{
+	char *key_def = NULL;
+	size_t bufsz = 0;
+	int rc;
+	FILE *ntpkeys;
+	ssize_t len;
+	regex_t rkey;
+	regmatch_t matches[4];
+
+	rc = regcomp(&rkey,
+		     "^[[:space:]]*([[:digit:]]+)[[:space:]]+([[:alnum:]-]+)[[:space:]]([^[:space:]#]+)",
+		     REG_EXTENDED);
+	assert(rc == 0);
+
+	if ((ntpkeys = fopen(file, "r")) == NULL) {
+		rc = errno;
+		CFG_ERROR(section, "opening NTP keys file: %s\n", file);
+		goto fail;
+	}
+
+	rc = ENOENT;
+	while ((len = getline(&key_def, &bufsz, ntpkeys)) != -1) {
+		if (regexec(&rkey, key_def, sizeof matches / sizeof *matches, matches, 0) == 0) {
+			int fid = -1;
+			char *ftype = NULL;
+			char *fkey = NULL;
+			if (matches[1].rm_so != -1) {
+				key_def[matches[1].rm_eo] = '\0';
+				fid = atoi(key_def + matches[1].rm_so);
+			}
+			if (matches[2].rm_so != -1) {
+				key_def[matches[2].rm_eo] = '\0';
+				ftype = key_def + matches[2].rm_so;
+			}
+			if (matches[3].rm_so != -1) {
+				key_def[matches[3].rm_eo] = '\0';
+				fkey = key_def + matches[3].rm_so;
+			}
+			if (fid == keyid) {
+				if (ftype && fkey &&
+				    (!strcasecmp(ftype, "MD5") ||
+				     !strcasecmp(ftype, "M"))) {
+					if (strlen(fkey) < sz) {
+						sfptpd_strncpy(key_buf, fkey, sz);
+						rc = 0;
+						break;
+					} else {
+						CFG_ERROR(section, "ntp key too long\n");
+						rc = ENOSPC;
+					}
+				} else {
+					CFG_ERROR(section, "ntp key type unsupported\n");
+					rc = EINVAL;
+				}
+			}
+		}
+	}
+	free(key_def);
+	fclose(ntpkeys);
+fail:
+	regfree(&rkey);
+	return rc;
+}
+
 static int parse_ntp_key(struct sfptpd_config_section *section, const char *option,
 			 unsigned int num_params, const char * const params[], int cookie)
 {
 	sfptpd_ntp_module_config_t *ntp = (sfptpd_ntp_module_config_t *)section;
 	assert(num_params == 2);
 
-	ntp->key_id = strtoul(params[0], NULL, 0);
+	const char *key_id = params[0];
+	const char *key = params[1];
+
+	bool lookup = *key_id == '@';
+	if (lookup)
+		key_id++;
+
+	ntp->key_id = strtoul(key_id, NULL, 0);
 	if (ntp->key_id == 0) {
 		CFG_ERROR(section, "ntp_key %d invalid. Non-zero value expected\n",
 		          ntp->key_id);
 		return ERANGE;
 	}
 
-	if (strlen(params[1]) >= sizeof(ntp->key_value)) {
+	if (lookup) {
+		int rc = lookup_ntp_key(section, params[1], ntp->key_id,
+					ntp->key_value, sizeof ntp->key_value);
+		return rc;
+	} else if (strlen(key) >= sizeof(ntp->key_value)) {
 		CFG_ERROR(section, "invalid NTP key value - maximum length is %zd characters\n",
 			  sizeof(ntp->key_value) - 1);
 		return ENOSPC;
@@ -288,10 +366,10 @@ static const sfptpd_config_option_t ntp_config_options[] =
 		"Specifies the NTP daemon poll interval in seconds. Default value 1",
 		1, SFPTPD_CONFIG_SCOPE_INSTANCE,
 		parse_ntp_poll_interval},
-	{"ntp_key", "ID VALUE",
-		"NTP authentication key. Both ID and ascii key value must "
-		"match a key configured in NTPD's keys file. The key value "
-		"can be up to 31 characters long.",
+	{"ntp_key", "[@]ID VALUE",
+		"MD5 NTP authentication key to match ntpd configuration. If the id "
+		"is preceded with '@', VALUE is an ntpd keys file in which the id "
+		"will be looked up.",
 		2, SFPTPD_CONFIG_SCOPE_INSTANCE, parse_ntp_key,
 		.confidential = true},
 };
