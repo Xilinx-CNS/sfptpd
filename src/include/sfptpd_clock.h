@@ -584,4 +584,12 @@ int64_t sfptpd_clock_reconcile_pins(struct sfptpd_clock *clock,
 				    struct sfptpd_phc_pin_config **copy_to,
 				    unsigned int *n_pins);
 
+/* Read device generation for a clock.
+ * If this number increases then a device may have been re-opened
+ * or reset in such a way that it is worth reconciling configuration
+ * such as PPS pin mappings and function enablements.
+ * param clock the clock
+ * return the generation counter */
+int sfptpd_clock_get_device_generation(struct sfptpd_clock *clock);
+
 #endif /* _SFPTPD_CLOCK_H */

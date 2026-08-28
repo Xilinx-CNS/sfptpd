@@ -279,6 +279,11 @@ struct sfptpd_clock {
 	/* Status flags */
         bool lrc_been_locked:1;
 	bool initial_correction_applied:1;
+
+	/* Device generation.
+	 * Incremented when device may lose critical config,
+	 * e.g. PPS pin/function settings. */
+	_Atomic int device_generation;
 };
 
 
@@ -962,6 +967,7 @@ static int renew_clock(struct sfptpd_clock *clock)
 				clock->posix_id = POSIX_ID_NULL;
 				return errno;
 			}
+			clock->device_generation++;
 
 			if (!sfptpd_phc_have_lock(clock->u.nic.phc)) {
 				NOTICE("clock %s: could not lock PHC device: blocking clock\n",
@@ -2555,7 +2561,10 @@ int sfptpd_clock_pps_configure(struct sfptpd_clock *clock,
 		}
 	}
 
-	rc = sfptpd_phc_control_pps(clock->u.nic.phc, pin, channel, function);
+	if (clock->u.nic.phc != NULL)
+		rc = sfptpd_phc_control_pps(clock->u.nic.phc, pin, channel, function);
+	else
+		rc = ENOENT;
 
 finish:
 	clock_unlock();
@@ -2926,6 +2935,11 @@ int64_t sfptpd_clock_reconcile_pins(struct sfptpd_clock *clock,
 
 	clock_unlock();
 	return ret;
+}
+
+int sfptpd_clock_get_device_generation(struct sfptpd_clock *clock)
+{
+	return clock->device_generation;
 }
 
 

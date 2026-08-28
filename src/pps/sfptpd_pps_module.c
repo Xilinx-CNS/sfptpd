@@ -110,6 +110,9 @@ struct sfptpd_pps_instance {
 	/* Handle of the local reference clock */
 	struct sfptpd_clock *clock;
 
+	/* Device generation for LRC */
+	int clock_device_generation;
+
 	/* Clock feed for LRC */
 	struct sfptpd_clockfeed_sub *feed;
 
@@ -1301,6 +1304,7 @@ static int pps_configure_pin(pps_module_t *pps,
 
 	/* Store the clock */
 	instance->clock = clock;
+	instance->clock_device_generation = sfptpd_clock_get_device_generation(clock);
 
 	if (config->function == SFPTPD_PPS_FUNC_PPS_IN) {
 		rc = pps_configure_clock(pps, instance);
@@ -1316,6 +1320,7 @@ static int pps_configure_pin(pps_module_t *pps,
 		      config->interface_name, config->pin,
 		      sfptpd_phc_pin_func_to_text(config->function),
 		      config->channel, strerror(rc));
+		SYNC_MODULE_ALARM_SET(instance->alarms, NO_INTERFACE);
 		return rc;
 	}
 
@@ -2003,6 +2008,29 @@ static void pps_on_timer(void *user_context, unsigned int id)
 	struct sfptpd_pps_instance *instance;
 
 	assert(pps != NULL);
+
+	/* First check if any clocks need PPS pin/function reconciliation
+	 * due to hotplug/reset. */
+	for(instance = pps->instances; instance != NULL; instance = instance->next) {
+		struct sfptpd_pps_module_config *config = instance->config;
+		int gen = sfptpd_clock_get_device_generation(instance->clock);
+
+		if (gen != instance->clock_device_generation) {
+			instance->clock_device_generation = gen;
+
+			rc = sfptpd_clock_pps_configure(instance->clock, config->pin, config->channel, config->function);
+			if (rc != 0) {
+				ERROR("pps %s: failed to configure %s pin %d to %s channel %d, %s\n",
+				      SFPTPD_CONFIG_GET_NAME(config),
+				      config->interface_name, config->pin,
+				      sfptpd_phc_pin_func_to_text(config->function),
+				      config->channel, strerror(rc));
+				SYNC_MODULE_ALARM_SET(instance->alarms, NO_INTERFACE);
+			} else {
+				SYNC_MODULE_ALARM_CLEAR(instance->alarms, NO_INTERFACE);
+			}
+		}
+	}
 
 	for(instance = pps->instances; instance != NULL; instance = instance->next) {
 
