@@ -1810,7 +1810,7 @@ static void pps_time_of_day_poll(pps_module_t *pps,
 	/* Inaccurate until proven otherwise! */
 	tod.accuracy = INFINITY;
 
-	if (tod.source.module != NULL) {
+	if (tod.source.module != NULL && instance->feed != NULL) {
 
 		/* Get the offset from the sync module. If the offset is valid (non zero)
 		 * then work out the offset from the master to our NIC.
@@ -2029,7 +2029,18 @@ static void pps_on_timer(void *user_context, unsigned int id)
 			} else {
 				SYNC_MODULE_ALARM_CLEAR(instance->alarms, NO_INTERFACE);
 			}
+
+			/* Unsubscribe to clock feed if dead. */
+			if (config->function == SFPTPD_PPS_FUNC_PPS_IN)
+				sfptpd_clockfeed_unsubscribe(sfptpd_engine_get_clockfeed(pps->engine),
+							     &instance->feed, true);
 		}
+
+		/* Resubscribe to clock feed if gone. */
+		if (instance->feed == NULL && config->function == SFPTPD_PPS_FUNC_PPS_IN)
+			sfptpd_clockfeed_subscribe(sfptpd_engine_get_clockfeed(pps->engine),
+						   instance->clock,
+						   &instance->feed);
 	}
 
 	for(instance = pps->instances; instance != NULL; instance = instance->next) {
