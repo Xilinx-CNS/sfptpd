@@ -231,12 +231,6 @@ or
 .Fl -no-lock
 command line options cause another set of bits to be chosen to form unique
 clock ids and these are then locked.
-.Pp
-When such additional instances are run, the
-.Pa /var/lib/sfptpd
-and
-.Pa /run/sfptpd
-symlinks only point to the first instance started.
 When multiple instances are run simultaneously,
 the list of clocks that are controlled by the different instances should also
 be partitioned using
@@ -250,7 +244,8 @@ Typical configuration file location.
 .It Pa /run/ptp-clockid-NNNN.lock
 A lock file for the unique clock id bits NNNN.
 .It Pa /var/lib/sfptpd
-A symlink to the state directory for the first running sfptpd invocation.
+The state directory for the running sfptpd invocation (when default
+unique clock id of 0000 in use.)
 .It Pa /var/lib/sfptpd-NNNN
 location of files giving instantaneous sfptpd status, long term
 statistics and diagnostics for the running sfptpd invocation using unique
@@ -259,11 +254,9 @@ clock id bits NNNN.
 lock file preventing multiple instances of
 .Nm
 or ptpd trying to adjust the system clock simultaneously.
-.It Pa /run/sfptpd
-A symlink to the runtime directory for the first running sfptpd invocation.
-.It Pa /run/sfptpd-NNNN/metrics.sock
+.It Pa /run/sfptpd/metrics.sock
 stream socket serving OpenMetrics stats over HTTP
-.It Pa /run/sfptpd-NNNN/control-v1.sock
+.It Pa /run/sfptpd/control-v1.sock
 datagram socket accepting control packets from
 .Nm sfptpdctl
 .El

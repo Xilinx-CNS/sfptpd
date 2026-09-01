@@ -75,6 +75,7 @@ enum path_format_id {
 	PATH_FMT_CTIME_LOCAL,
 	PATH_FMT_RUNDIR,
 	PATH_FMT_UNIQUE_CLOCKID,
+	PATH_FMT_UNIQUE_CLOCKID_COND,
 };
 
 static ssize_t path_interpolate(char *buffer, size_t space, int id, void *context, char opt);
@@ -86,7 +87,8 @@ static ssize_t path_interpolate_time(char *buffer, size_t space, int id, void *c
  * %Cd  creation date, local time (ISO 8601)
  * %Ct  creation date and local time (ISO 8601)
  * %R   run directory
- * %U	least significant 16 unique clock id bits in hex
+ * %U   least significant 16 unique clock id bits in hex
+ * %Vc  '<c>%U' iff unique clock id bits are not zero
  */
 static const struct sfptpd_interpolation path_format_specifiers[] = {
 	{ PATH_FMT_HOSTNAME,		'H', false, path_interpolate },
@@ -95,6 +97,7 @@ static const struct sfptpd_interpolation path_format_specifiers[] = {
 	{ PATH_FMT_CTIME_LOCAL,		'C', true,  path_interpolate_time },
 	{ PATH_FMT_RUNDIR,		'R', false, path_interpolate },
 	{ PATH_FMT_UNIQUE_CLOCKID,	'U', false, path_interpolate },
+	{ PATH_FMT_UNIQUE_CLOCKID_COND,	'V', true,  path_interpolate },
 	{ SFPTPD_INTERPOLATORS_END }
 };
 
@@ -176,6 +179,11 @@ static ssize_t path_interpolate(char *buffer, size_t space, int id, void *contex
 		return snprintf(buffer, space, "%s", rundir_to_interpolate);
 	case PATH_FMT_UNIQUE_CLOCKID:
 		return snprintf(buffer, space, "%04hx", clockid_to_interpolate);
+	case PATH_FMT_UNIQUE_CLOCKID_COND:
+		if (clockid_to_interpolate == 0)
+			return 0;
+		else
+			return snprintf(buffer, space, "%c%04hx", opt, clockid_to_interpolate);
 	default:
 		return 0;
 	}
@@ -446,13 +454,6 @@ int sfptpd_log_open(struct sfptpd_config *config)
 	if (chown(state_path, general_config->uid, general_config->gid))
 		TRACE_L4("could not set state directory ownership, %s\n",
 			 strerror(errno));
-
-	/* Attempt to symlink to sfptpd instance */
-	if (strcmp(SFPTPD_STATE_PATH, state_path) &&
-	    !strncmp(SFPTPD_STATE_PATH, state_path, strlen(SFPTPD_STATE_PATH))) {
-		if (symlink(state_path, SFPTPD_STATE_PATH)) {
-		}
-	}
 
 	/* If messages are being logged to the syslog, open it */
 	if (message_log == SFPTPD_MSG_LOG_TO_SYSLOG)

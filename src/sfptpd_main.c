@@ -412,9 +412,13 @@ static int rundir_create(struct sfptpd_config *config)
 	gconf = sfptpd_general_config_get(config);
 	configured_path = gconf->run_dir;
 	if (configured_path[0] == '\0') {
-		/* Default run directory is based on unique clock id LSBs */
-		rc = asprintf(&generated_path, "%s-%04hx", SFPTPD_RUN_DIR,
-			      sfptpd_config_general_get_clockid_lsbs(config));
+		uint16_t clkid = sfptpd_config_general_get_clockid_lsbs(config);
+
+		/* Default run directory is based on unique clock id LSBs if non-zero */
+		if (clkid == 0)
+			rc = asprintf(&generated_path, "%s", SFPTPD_RUN_DIR);
+		else
+			rc = asprintf(&generated_path, "%s-%04hx", SFPTPD_RUN_DIR, clkid);
 		if (rc == -1) {
 			CRITICAL("failed to format run path: %s\n", strerror(rc = errno));
 			return rc;
@@ -442,11 +446,6 @@ static int rundir_create(struct sfptpd_config *config)
 	if (chown(path, gconf->uid, gconf->gid))
 		WARNING("could not set run directory to uid/gid %d/%d, %s\n",
 			gconf->uid, gconf->gid, strerror(errno));
-
-	/* Best effort: create an alias to this directory */
-	if (generated_path && access(SFPTPD_RUN_DIR, F_OK))
-		if (symlink(path, SFPTPD_RUN_DIR)) {
-		}
 
 	return 0;
 }
