@@ -2010,7 +2010,7 @@ static void pps_on_timer(void *user_context, unsigned int id)
 	assert(pps != NULL);
 
 	/* First check if any clocks need PPS pin/function reconciliation
-	 * due to hotplug/reset. */
+	 * and re-adding to polling epoll set due to hotplug/reset. */
 	for(instance = pps->instances; instance != NULL; instance = instance->next) {
 		struct sfptpd_pps_module_config *config = instance->config;
 		int gen = sfptpd_clock_get_device_generation(instance->clock);
@@ -2018,6 +2018,7 @@ static void pps_on_timer(void *user_context, unsigned int id)
 		if (gen != instance->clock_device_generation) {
 			instance->clock_device_generation = gen;
 
+			/* Re-apply pin config */
 			rc = sfptpd_clock_pps_configure(instance->clock, config->pin, config->channel, config->function);
 			if (rc != 0) {
 				ERROR("pps %s: failed to configure %s pin %d to %s channel %d, %s\n",
@@ -2028,6 +2029,13 @@ static void pps_on_timer(void *user_context, unsigned int id)
 				SYNC_MODULE_ALARM_SET(instance->alarms, NO_INTERFACE);
 			} else {
 				SYNC_MODULE_ALARM_CLEAR(instance->alarms, NO_INTERFACE);
+			}
+
+			/* Add new fd to epoll set. */
+			instance->poll_fd = sfptpd_clock_pps_get_fd(instance->clock);
+			if (instance->poll_fd != -1) {
+				pps_drain_events(pps, instance);
+				rc = sfptpd_thread_user_fd_add(instance->poll_fd, true, false);
 			}
 
 			/* Unsubscribe to clock feed if dead. */
