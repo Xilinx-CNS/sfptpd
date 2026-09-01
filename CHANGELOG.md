@@ -13,6 +13,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - New time-limited and sticky ntp-settling state avoids source selection
   flapping after fallback to chrony. Configure with `settling_timeout`,
   default 5 minutes. (SWPTP-427)
+- Clock locking enhancements. (SWPTP-1165)
+  - Individually lock PHC clocks with flock.
+  - Support mutual exclusion between sfptpd instances by locking a set
+    of 'unique clock id bits', normally fixed to '0000'. This allows multiple
+    instances of sfptpd to partition the available clocks between themselves
+    in different time domains when `lock off` is specified. Useful for
+    elaborate test scenarios.
 - Chrony integration improvements
   - significant change to how chrony offsets are handled - see fixes,
     which introduce some new controllable options to avoid using
@@ -23,6 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - add chrony clock control enable for when initially disabled. (SWPTP-1614)
   - fix to report the chrony offset actually used in stats. (SWPTP-1616)
   - understand non-NTP chrony peers. (SWPTP-1618)
+- Add `sfptpdctl block_clock` command for testing. (SWPTP-1623)
 - Add `--cpu` option to affinitise all or some threads. (SWPTP-1626)
 - Retry hybrid mode (unicast delay requests) on change of master. (SWPTP-1653)
 
@@ -37,6 +45,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Issue SWPTP-1592
+  - Track PPS pin and function configuration independently.
+  - Allow X4 PPS-OUT to be enabled.
+  - Update tstool to show and control PPS pins and functions.
 - Issue SWPTP-1611
   - Use chrony 'tracking offset' instead of NTP peer offset as measure
   - Mirror chrony's method for determining the validity of its offset
@@ -64,9 +76,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Avoid excessive selection churn by quantising source accuracy.
 - Issue SWPTP-1670:
   - chrony: require configurable number of samples after ref id change.
-    (default: `discontinuity_debounce 1`.)
+    (default: `min_ignored_samples_after_new_ref 1`.)
   - pps: gate acceptance of time of day sample on its own accuracy & status,
     with new coarse-time-of-day alarm.
+- Issue SWPTP-1676:
+  - Fix determination of SW vs HW timestamping and convergence threshold.
 
 ## [3.9.0.1007] - 2025-11-07
 
