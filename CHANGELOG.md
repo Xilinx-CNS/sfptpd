@@ -33,6 +33,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Add `sfptpdctl block_clock` command for testing. (SWPTP-1623)
 - Add `--cpu` option to affinitise all or some threads. (SWPTP-1626)
 - Retry hybrid mode (unicast delay requests) on change of master. (SWPTP-1653)
+- Allow ntp key to be retrieved from ntpd config. (SWPTP-1681)
 
 ### Removed
 
@@ -79,6 +80,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     (default: `min_ignored_samples_after_new_ref 1`.)
   - pps: gate acceptance of time of day sample on its own accuracy & status,
     with new coarse-time-of-day alarm.
+- Issue SWPTP-1673:
+  - re-apply PPS configuration to NIC on hotplug.
 - Issue SWPTP-1676:
   - Fix determination of SW vs HW timestamping and convergence threshold.
 
