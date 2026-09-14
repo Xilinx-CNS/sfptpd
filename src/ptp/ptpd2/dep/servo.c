@@ -501,6 +501,14 @@ void servo_control(ptp_servo_t *servo,
 		sfptpd_pid_filter_reset(&servo->pid_filter);
 	}
 
+	/* On gaining clock control, set the frequency to the clock's current
+	 * frequency correction so we start from the value already known-good
+	 * for this PHC. */
+	if (((servo->ctrl_flags & SYNC_MODULE_CLOCK_CTRL) == 0) &&
+	    ((ctrl_flags & SYNC_MODULE_CLOCK_CTRL) != 0)) {
+		servo_reset_freq_adjustment(servo);
+	}
+
 	/* If timestamp processing is being disabled, reset the whole servo. */
 	if (((servo->ctrl_flags & SYNC_MODULE_TIMESTAMP_PROCESSING) != 0) &&
 	    ((ctrl_flags & SYNC_MODULE_TIMESTAMP_PROCESSING) == 0)) {

@@ -2185,6 +2185,16 @@ static void pps_on_control(pps_module_t *pps,
 		sfptpd_pid_filter_reset(&instance->pid_filter);
 	}
 
+	/* On gaining clock control, set the base frequency to the clock's current
+	 * frequency correction and reset the PID filter so we start from the value
+	 * already known-good for this PHC. */
+	if (((instance->ctrl_flags & SYNC_MODULE_CLOCK_CTRL) == 0) &&
+	    ((ctrl_flags & SYNC_MODULE_CLOCK_CTRL) != 0)) {
+		instance->freq_adjust_base = sfptpd_clock_get_freq_correction(instance->clock);
+		instance->freq_adjust_ppb = instance->freq_adjust_base;
+		sfptpd_pid_filter_reset(&instance->pid_filter);
+	}
+
 	/* If timestamp processing is being disabled, reset the whole servo. */
 	if (((instance->ctrl_flags & SYNC_MODULE_TIMESTAMP_PROCESSING) != 0) &&
 	    ((ctrl_flags & SYNC_MODULE_TIMESTAMP_PROCESSING) == 0)) {
