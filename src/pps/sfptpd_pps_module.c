@@ -179,6 +179,11 @@ struct sfptpd_pps_instance {
 	 * update if required. */
 	bool servo_active;
 
+	/* Boolean indicating that the one-shot step-on-first-lock opportunity
+	 * has been consumed. For PPS, "first lock" is the first update once
+	 * time-of-day has been applied. */
+	bool first_lock_on_tod;
+
 	/* Calculated PPS period */
 	long double pps_period_ns;
 
@@ -910,6 +915,7 @@ static void pps_servo_update(pps_module_t *pps,
 	sfptpd_time_t diff_ns, mean;
 	struct sfptpd_config_general *general_config;
 	enum sfptpd_clock_ctrl clock_ctrl;
+	bool tod_applied;
 	struct sfptpd_timespec diff = { 0 };
 	struct sfptpd_timespec tod_offset = pps->time_of_day.status.offset_from_master;
 	sfptpd_accuracy_t tod_accuracy =
@@ -923,7 +929,8 @@ static void pps_servo_update(pps_module_t *pps,
 	clock_ctrl = general_config->clocks.control;
 
 	/* Gate ToD on accuracy */
-	if (tod_accuracy < tod_required_accuracy) {
+	tod_applied = (tod_accuracy < tod_required_accuracy);
+	if (tod_applied) {
 
 		/* The seconds is the time of day rounded to the nearest second */
 		diff.sec = tod_offset.sec;
@@ -953,7 +960,10 @@ static void pps_servo_update(pps_module_t *pps,
 	 * and slave clocks is larger than the step threshold then step the
 	 * clock */
 	if ((clock_ctrl == SFPTPD_CLOCK_CTRL_SLEW_AND_STEP) ||
-	    ((clock_ctrl == SFPTPD_CLOCK_CTRL_STEP_AT_STARTUP) && !instance->servo_active) ||
+	    ((clock_ctrl == SFPTPD_CLOCK_CTRL_STEP_AT_STARTUP ||
+	      clock_ctrl == SFPTPD_CLOCK_CTRL_STEP_ON_FIRST_LOCK) && !instance->servo_active) ||
+	    ((clock_ctrl == SFPTPD_CLOCK_CTRL_STEP_ON_FIRST_LOCK) &&
+	     !instance->first_lock_on_tod && tod_applied) ||
 	    ((clock_ctrl == SFPTPD_CLOCK_CTRL_STEP_FORWARD) && (diff_ns < 0))) {
 		if ((diff_ns <= -PPS_CLOCK_STEP_THRESHOLD) ||
 		    (diff_ns >= PPS_CLOCK_STEP_THRESHOLD)) {
@@ -964,6 +974,8 @@ static void pps_servo_update(pps_module_t *pps,
 				/* Mark the servo as active */
 				instance->counters.clock_steps++;
 				instance->servo_active = true;
+				if (tod_applied)
+					instance->first_lock_on_tod = true;
 			}
 
 			return;
@@ -1003,6 +1015,8 @@ static void pps_servo_update(pps_module_t *pps,
 
 		/* Mark the pps servo as active */
 		instance->servo_active = true;
+		if (tod_applied)
+			instance->first_lock_on_tod = true;
 	}
 }
 
