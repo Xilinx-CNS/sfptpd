@@ -640,6 +640,7 @@ int sfptpd_read_int_from_fd(int fd, long long *answer)
 		B_HEX,
 		B_AUTO,
 		B_PREFIX,
+		B_SIGN,
 	} base = B_AUTO;
 	long long num = 0, prev;
 	bool negative = false;
@@ -654,14 +655,16 @@ int sfptpd_read_int_from_fd(int fd, long long *answer)
 			prev = num;
 			if (isspace(c))
 				break;
-			else if (base == B_AUTO) {
-				if (c == '-')
+			else if (base == B_AUTO || base == B_SIGN) {
+				if (c == '-' && base != B_SIGN) {
 					negative = !negative;
-				else if (c == '0')
+					base = B_SIGN;
+					continue;
+				} else if (c == '0') {
 					base = B_PREFIX;
-				else if (isdigit(c))
+				} else if (isdigit(c)) {
 					base = B_DEC;
-				else
+				} else
 					return EINVAL;
 			} else if (base == B_PREFIX) {
 				if (c == 'x' || c == 'X') {
