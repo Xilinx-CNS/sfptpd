@@ -1684,9 +1684,12 @@ static void pps_on_pps_event(pps_module_t *pps,
 			instance->pps_period_ns = sfptpd_time_timespec_to_float_ns(&period);
 
 			/* If we have a period then apply a notch filter to
-			 * detect and eliminate bad PPS pulses */
+			 * detect and eliminate bad PPS pulses. The local clock
+			 * could be being slewed, so correct the measured period
+			 * by the frequency adjustment we last applied (ppb ==
+			 * ns of shift over the one second PPS interval). */
 			if (sfptpd_notch_filter_update(&instance->notch_filter,
-						       instance->pps_period_ns) != 0) {
+						       instance->pps_period_ns - instance->freq_adjust_ppb) != 0) {
 				WARNING("pps %s: bad signal- pps period = %Lf\n",
 					SFPTPD_CONFIG_GET_NAME(instance->config), 
 					instance->pps_period_ns);
