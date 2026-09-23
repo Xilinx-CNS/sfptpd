@@ -2516,9 +2516,6 @@ static int pps_start_instance(pps_module_t *pps,
 	pps_state_machine_reset(pps, instance);
 	pps_servo_reset(pps, instance);
 
-	/* Reset PPS statistics */
-	sfptpd_stats_reset_pps_statistics(sfptpd_clock_get_primary_interface(instance->clock));
-
 	/* Handle function */
 	switch (instance->config->function) {
 	case SFPTPD_PPS_FUNC_PPS_IN:
