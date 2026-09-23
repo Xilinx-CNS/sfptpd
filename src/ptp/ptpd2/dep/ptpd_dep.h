@@ -229,6 +229,13 @@ static inline bool sfptpd_ts_is_ticket_valid(const struct sfptpd_ts_ticket ticke
 	return ticket.slot != TS_CACHE_SIZE;
 }
 
+static inline bool sfptpd_ts_ticket_matches(struct sfptpd_ts_ticket a, struct sfptpd_ts_ticket b)
+{
+	return (sfptpd_ts_is_ticket_valid(a) &&
+		sfptpd_ts_is_ticket_valid(b) &&
+		a.slot == b.slot && a.seq == b.seq);
+}
+
 static const struct sfptpd_ts_ticket TS_NULL_TICKET = {
 	.slot = TS_CACHE_SIZE,
 	.seq = 0,

@@ -980,6 +980,7 @@ struct ptpd_port_context {
 	struct sfptpd_timespec delay_correction_field;
 
 	Boolean sentPDelayReq;
+	UInteger16 sentPDelayRespSequenceId;
 	UInteger16 sentPDelayReqSequenceId;
 	UInteger16 sentDelayReqSequenceId;
 	UInteger16 sentSyncSequenceId;
@@ -996,10 +997,6 @@ struct ptpd_port_context {
 		bool rx_msg_pending:1;
 	} delay_state;
 
-	struct sfptpd_ts_ticket sync_ticket;
-	struct sfptpd_ts_ticket delayreq_ticket;
-	struct sfptpd_ts_ticket pdelayreq_ticket;
-	struct sfptpd_ts_ticket pdelayresp_ticket;
 	struct sfptpd_ts_ticket monsync_ticket;
 
 	/* how many DelayResps we've failed to receive in a row */

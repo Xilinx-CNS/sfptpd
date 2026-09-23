@@ -132,10 +132,6 @@ void initData(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 	ptpClock->delayMechanism = rtOpts->delayMechanism;
 	ptpClock->logMinPdelayReqInterval = rtOpts->minPdelayReqInterval;
 
-	ptpClock->sync_ticket = TS_NULL_TICKET;
-	ptpClock->delayreq_ticket = TS_NULL_TICKET;
-	ptpClock->pdelayreq_ticket = TS_NULL_TICKET;
-	ptpClock->pdelayresp_ticket = TS_NULL_TICKET;
 	ptpClock->monsync_ticket = TS_NULL_TICKET;
 
 	/*

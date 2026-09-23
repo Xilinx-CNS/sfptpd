@@ -978,6 +978,16 @@ netInitMulticast(struct ptpd_transport * transport,  InterfaceOpts * ifOpts)
 	return TRUE;
 }
 
+static void netPurgePortFromTsCache(PtpClock *port)
+{
+	struct sfptpd_ts_cache *ts_cache = &port->interface->ts_cache;
+	TS_CACHE_FOREACH(ts_cache, slot) {
+		if (ts_cache->packet[slot].user.port == port)
+			/* Remove from cache */
+			ts_cache->free_bitmap |= (1 << ts_cache_bit(slot));
+	}
+}
+
 Boolean
 netInitPort(PtpClock *ptpClock, RunTimeOpts *rtOpts)
 {
@@ -986,6 +996,8 @@ netInitPort(PtpClock *ptpClock, RunTimeOpts *rtOpts)
 		.ai_family = rtOpts->ifOpts->transportAF,
 	};
 	struct addrinfo *result;
+
+	netPurgePortFromTsCache(ptpClock);
 
 	ptpClock->unicastAddrLen = 0;
 	if (rtOpts->unicastAddress[0] != '\0') {

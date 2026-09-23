@@ -95,14 +95,15 @@ static void handleMessage(RunTimeOpts *rtOpts, PtpClock *ptpClock,
 			  ssize_t safe_length,
 			  struct sfptpd_timespec *timestamp, Boolean timestampValid,
 			  UInteger32 rxPhysIfindex);
-static void processSyncFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock, const UInteger16 sequenceId);
-static void processDelayReqFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock);
-static void processPDelayReqFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock);
-static void processPDelayRespFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock, const UInteger16 sequenceId);
+static void processSyncFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock, UInteger16 sequenceId);
+static void processDelayReqFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock, UInteger16 sequenceId);
+static void processPDelayReqFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock, UInteger16 sequenceId);
+static void processPDelayRespFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock, UInteger16 sequenceId);
 static void issueDelayRespWithMonitoring(struct sfptpd_timespec *time, MsgHeader *header, RunTimeOpts *rtOpts, PtpClock *ptpClock);
 static void issueSyncForMonitoring(RunTimeOpts*, PtpClock*, UInteger16 sequenceId);
 static void issueFollowupForMonitoring(const struct sfptpd_timespec*, RunTimeOpts*, PtpClock*, const UInteger16);
-static void processMonitoringSyncFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock, const UInteger16 sequenceId);
+static void processMonitoringSyncFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpts, PtpClock *ptpClock,
+					  UInteger16 sequenceId, struct sfptpd_ts_ticket ts_ticket);
 static void updateSlaveComms(const RunTimeOpts *rtOpts, PtpClock *ptpClock);
 static void
 processTxTimestamp(PtpInterface *interface,
@@ -1518,10 +1519,7 @@ processTxTimestamp(PtpInterface *interface,
 		   struct sfptpd_ts_ticket ts_ticket,
 		   struct sfptpd_timespec timestamp)
 {
-	struct sfptpd_ts_ticket check_ticket;
 	PtpClock *ptpClock = ts_user.port;
-	uint16_t check_seq;
-	bool match = true;
 	char desc[48];
 
 	assert(ptpClock);
@@ -1533,51 +1531,6 @@ processTxTimestamp(PtpInterface *interface,
 
 	formatTsPkt(&ts_user, desc);
 
-	switch (ts_user.type) {
-	case TS_SYNC:
-		check_ticket = ptpClock->sync_ticket;
-		check_seq = ptpClock->sentSyncSequenceId;
-		break;
-	case TS_DELAY_REQ:
-		check_ticket = ptpClock->delayreq_ticket;
-		check_seq = ptpClock->sentDelayReqSequenceId;
-		break;
-	case TS_PDELAY_REQ:
-		check_ticket = ptpClock->pdelayreq_ticket;
-		check_seq = ptpClock->sentPDelayReqSequenceId;
-		break;
-	case TS_PDELAY_RESP:
-		check_ticket = ptpClock->pdelayresp_ticket;
-		/* Non-stateful; alway succeed; answer sender */
-		check_seq = ts_user.seq_id;
-		break;
-	case TS_MONITORING_SYNC:
-		check_ticket = ptpClock->monsync_ticket;
-		/* Non-stateful; alway succeed; answer sender */
-		check_seq = ts_user.seq_id;
-		break;
-	default:
-		match = false;
-		check_ticket.slot = TS_CACHE_SIZE;
-		check_ticket.seq = 0;
-		check_seq = 0;
-	}
-
-	if (match)
-		match = (ts_ticket.slot == check_ticket.slot &&
-			 ts_ticket.seq == check_ticket.seq &&
-			 ts_user.seq_id == check_seq);
-
-	if (!match) {
-		WARNING("ptp: discarding non-matching %s timestamp"
-			"(ts %" PRIu32 ", slot %d, seq %" PRIu16 ") != "
-			"(%" PRIu32 ",%d,%" PRIu16 ")\n",
-			desc,
-			ts_ticket.seq, ts_ticket.slot, ts_user.seq_id,
-			check_ticket.seq, check_ticket.slot, check_seq);
-		return;
-	}
-
 	SYNC_MODULE_ALARM_CLEAR(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
 
 	/* Apply UTC offset to convert timestamp to TAI if appropriate. */
@@ -1587,27 +1540,22 @@ processTxTimestamp(PtpInterface *interface,
 	case TS_SYNC:
 		processSyncFromSelf(&timestamp, &ptpClock->rtOpts, ptpClock,
 				    ts_user.seq_id);
-		ptpClock->sync_ticket = TS_NULL_TICKET;
 		break;
 	case TS_DELAY_REQ:
 		processDelayReqFromSelf(&timestamp, &ptpClock->rtOpts,
-					ptpClock);
-		ptpClock->delayreq_ticket = TS_NULL_TICKET;
+					ptpClock, ts_user.seq_id);
 		break;
 	case TS_PDELAY_REQ:
 		processPDelayReqFromSelf(&timestamp, &ptpClock->rtOpts,
-					 ptpClock);
-		ptpClock->pdelayreq_ticket = TS_NULL_TICKET;
+					 ptpClock, ts_user.seq_id);
 		break;
 	case TS_PDELAY_RESP:
 		processPDelayRespFromSelf(&timestamp, &ptpClock->rtOpts,
 					  ptpClock, ts_user.seq_id);
-		ptpClock->pdelayresp_ticket = TS_NULL_TICKET;
 		break;
 	case TS_MONITORING_SYNC:
 		processMonitoringSyncFromSelf(&timestamp, &ptpClock->rtOpts, ptpClock,
-					      ts_user.seq_id);
-		ptpClock->monsync_ticket = TS_NULL_TICKET;
+					      ts_user.seq_id, ts_ticket);
 		break;
 	}
 }
@@ -2076,9 +2024,19 @@ processSyncFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts,
 
 static void
 processMonitoringSyncFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts,
-			      PtpClock *ptpClock, const UInteger16 sequenceId)
+			      PtpClock *ptpClock, UInteger16 sequenceId,
+			      struct sfptpd_ts_ticket ts_ticket)
 {
 	struct sfptpd_timespec timestamp;
+
+	if (!sfptpd_ts_ticket_matches(ts_ticket, ptpClock->monsync_ticket)) {
+		WARNING("ptp %s: ignoring tx timestamp for out-of-date monitoring sync %d\n",
+		rtOpts->name, sequenceId);
+		/* We lack the state to follow up monitoring syncs when timestamps
+		   received out of order. */
+		return;
+	}
+	ptpClock->monsync_ticket = TS_NULL_TICKET;
 
 	/* Add latency */
 	sfptpd_time_add(&timestamp, time, &rtOpts->outboundLatency);
@@ -2313,8 +2271,16 @@ handleDelayReq(const MsgHeader *header, ssize_t length,
 
 
 static void
-processDelayReqFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts, PtpClock *ptpClock)
+processDelayReqFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts, PtpClock *ptpClock,
+                        UInteger16 sequenceId)
 {
+	if (sequenceId != ptpClock->sentDelayReqSequenceId) {
+		WARNING("ptp %s: ignoring tx timestamp for out-of-date Delay_Req %d\n",
+			rtOpts->name, sequenceId);
+		/* We lack the state to complete a stale measurement */
+		return;
+	}
+
 	struct sfptpd_msg_pkt *delay_resp = &ptpClock->msg_cache.packet[PTPD_MSG_DELAY_RESP];
 
 	/* Provide the new measurements to any egress event monitors. */
@@ -2578,8 +2544,16 @@ handlePDelayReq(MsgHeader *header, ssize_t length,
 
 
 static void
-processPDelayReqFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts, PtpClock *ptpClock)
+processPDelayReqFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts, PtpClock *ptpClock,
+			 UInteger16 sequenceId)
 {
+	if (sequenceId != ptpClock->sentPDelayReqSequenceId) {
+		WARNING("ptp %s: ignoring tx timestamp for out-of-date PDelay_Req %d\n",
+			rtOpts->name, sequenceId);
+		/* We lack the state to complete a stale measurement */
+		return;
+	}
+
 	ptpClock->waitingForPDelayResp = true;
 	ptpClock->waitingForPDelayRespFollow = false;
 
@@ -2741,6 +2715,13 @@ processPDelayRespFromSelf(const struct sfptpd_timespec *tint, RunTimeOpts *rtOpt
 			  PtpClock *ptpClock, UInteger16 sequenceId)
 {
 	struct sfptpd_timespec timestamp;
+
+	if (sequenceId != ptpClock->sentPDelayRespSequenceId) {
+		WARNING("ptp %s: ignoring tx timestamp for out-of-date PDelay_Resp %d\n",
+			rtOpts->name, sequenceId);
+		/* We lack the state to advance a stale measurement */
+		return;
+	}
 
 	/* Provide the new measurements to any egress event monitors. */
 	egressEventMonitor(ptpClock, rtOpts, PTPD_MSG_PDELAY_RESP, tint);
@@ -3434,9 +3415,7 @@ issueSync(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 					    ptpClock->msgObuf,
 					    PTPD_SYNC_LENGTH,
 					    getTrailerLength(ptpClock));
-		if (sfptpd_ts_is_ticket_valid(ticket)) {
-			ptpClock->sync_ticket = ticket;
-		} else {
+		if (!sfptpd_ts_is_ticket_valid(ticket)) {
 			WARNING("ptp %s: did not get tx timestamp ticket for Sync msg\n", rtOpts->name);
 			SYNC_MODULE_ALARM_SET(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
 			ptpClock->counters.txPktNoTimestamp++;
@@ -3595,9 +3574,7 @@ issueDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 					    ptpClock->msgObuf,
 					    PTPD_DELAY_REQ_LENGTH,
 					    getTrailerLength(ptpClock));
-		if (sfptpd_ts_is_ticket_valid(ticket)) {
-			ptpClock->delayreq_ticket = ticket;
-		} else {
+		if (!sfptpd_ts_is_ticket_valid(ticket)) {
 			WARNING("ptp %s: did not get tx timestamp ticket for Delay_Request msg\n", rtOpts->name);
 			SYNC_MODULE_ALARM_SET(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
 			ptpClock->counters.txPktNoTimestamp++;
@@ -3655,9 +3632,7 @@ issuePDelayReq(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 					    ptpClock->msgObuf,
 					    PTPD_PDELAY_REQ_LENGTH,
 					    getTrailerLength(ptpClock));
-		if (sfptpd_ts_is_ticket_valid(ticket)) {
-			ptpClock->pdelayreq_ticket = ticket;
-		} else {
+		if (!sfptpd_ts_is_ticket_valid(ticket)) {
 			WARNING("ptp %s: did not get tx timestamp ticket for Peer_Delay_Request msg\n", rtOpts->name);
 			SYNC_MODULE_ALARM_SET(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
 			ptpClock->counters.txPktNoTimestamp++;
@@ -3693,6 +3668,9 @@ issuePDelayResp(struct sfptpd_timespec *time, MsgHeader *header,
 	struct sfptpd_ts_ticket ticket;
 	int rc;
 
+	/* Stash seq id so we can match up tx timestamp reliably for follow-up */
+	ptpClock->sentPDelayRespSequenceId = ts_user.seq_id;
+
 	/* Test Function: Suppress Delay Response messsages */
 	if (rtOpts->test.no_delay_resps)
 		return;
@@ -3724,9 +3702,7 @@ issuePDelayResp(struct sfptpd_timespec *time, MsgHeader *header,
 					    ptpClock->msgObuf,
 					    PTPD_PDELAY_RESP_LENGTH,
 					    getTrailerLength(ptpClock));
-		if (sfptpd_ts_is_ticket_valid(ticket)) {
-			ptpClock->pdelayresp_ticket = ticket;
-		} else {
+		if (!sfptpd_ts_is_ticket_valid(ticket)) {
 			WARNING("ptp %s: did not get tx timestamp ticket for Peer_Delay_Response msg\n", rtOpts->name);
 			SYNC_MODULE_ALARM_SET(ptpClock->portAlarms, NO_TX_TIMESTAMPS);
 			ptpClock->counters.txPktNoTimestamp++;
