@@ -2169,6 +2169,7 @@ static int interface_sysfs_stats_reset(struct sfptpd_interface *interface)
 	const ssize_t len = strlen(reset);
 	int fd;
 	int rc;
+	int ret = 0;
 
 	assert(interface);
 
@@ -2176,10 +2177,14 @@ static int interface_sysfs_stats_reset(struct sfptpd_interface *interface)
 	if (fd == -1)
 		return errno;
 
-	while ((rc = write(fd, reset, len) == -1 && errno == EINTR));
+	while ((rc = write(fd, reset, len)) == -1 && errno == EINTR);
+	if (rc == -1)
+		ret = errno;
+	else if (rc < len)
+		ret = EIO;
 
 	close(fd);
-	return rc < len ? errno : 0;
+	return ret;
 }
 
 int sfptpd_interface_driver_stats_reset(struct sfptpd_interface *interface)
