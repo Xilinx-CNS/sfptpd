@@ -238,10 +238,16 @@ static inline int ts_cache_bit(int slot)
 	return TS_CACHE_SIZE - slot - 1;
 }
 
+/* Get the mask for a cache slot */
+static inline unsigned int ts_cache_mask(int slot)
+{
+	return (1u << ts_cache_bit(slot));
+}
+
 /* Move the iterator to the next pending slot */
 static inline void ts_cache_iterator_next(ts_cache_iterator_t *iterator)
 {
-	*iterator &= ~(1 << ts_cache_bit(ts_cache_iterator_slot(*iterator)));
+	*iterator &= ~ts_cache_mask(ts_cache_iterator_slot(*iterator));
 }
 
 /* Convenience macro for iterating over the cache. 'slot' is an lvalue. */
@@ -984,7 +990,7 @@ static void netPurgePortFromTsCache(PtpClock *port)
 	TS_CACHE_FOREACH(ts_cache, slot) {
 		if (ts_cache->packet[slot].user.port == port)
 			/* Remove from cache */
-			ts_cache->free_bitmap |= (1 << ts_cache_bit(slot));
+			ts_cache->free_bitmap |= ts_cache_mask(slot);
 	}
 }
 
@@ -1167,7 +1173,7 @@ struct sfptpd_ts_ticket netMatchPacketToTsCache(struct sfptpd_ts_cache *ts_cache
 				*user = pkt->user;
 
 			/* Remove from cache */
-			ts_cache->free_bitmap |= (1 << ts_cache_bit(slot));
+			ts_cache->free_bitmap |= ts_cache_mask(slot);
 
 			/* Record latest satisfied request to help manage the
 			 * no-tx-timestamps alarm. */
@@ -2312,7 +2318,7 @@ struct sfptpd_ts_ticket netExpectTimestamp(struct sfptpd_ts_cache *cache,
 	pkt->seq = cache->seq++;
 	pkt->has_caused_alarm = false;
 	sfclock_gettime(CLOCK_MONOTONIC, &pkt->sent_monotime);
-	cache->free_bitmap &= ~(1 << bit);
+	cache->free_bitmap &= ~(1u << bit);
 	cache->stats_periodic.total++;
 	cache->stats_adhoc.total++;
 
