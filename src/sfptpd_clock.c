@@ -57,6 +57,14 @@
 #define ADJ_SETOFFSET 0x0100
 #endif
 
+/* Error bounds reported to the kernel via `ADJ_MAXERROR`/`ADJ_ESTERROR` for the
+ * system clock when `rtc_adjust` is enabled. The kernel increments maxerror by
+ * MAXFREQ (500ppm, i.e. 500us/s) every second and sets `STA_UNSYNC` when it
+ * exceeds `NTP_PHASE_LIMIT` (16s). Clearing `STA_UNSYNC` without also resetting
+ * maxerror therefore only clears the flag until the next second boundary. */
+#define SFPTPD_KERNEL_MAXERROR_SYNC_US    1000L      /* 1ms: well below the limit */
+#define SFPTPD_KERNEL_MAXERROR_UNSYNC_US  16000000L  /* NTP_PHASE_LIMIT */
+
 
 /****************************************************************************
  * Clock strata levels
@@ -203,6 +211,13 @@ struct sfptpd_clock_system {
 
 	/* Master copy of kernel status flags */
 	int kernel_status;
+
+	/* Maximum error bound to report to the kernel (microseconds). The
+	 * kernel ages its own maxerror by 500us every second and re-asserts
+	 * STA_UNSYNC once it reaches 16s, so to keep the clock reported as
+	 * synchronised we must write ADJ_MAXERROR alongside ADJ_STATUS each
+	 * time we adjust the clock, not just clear the flag. */
+	long kernel_maxerror;
 
 	/* fd of posix lock */
 	int lock_fd;
@@ -770,6 +785,7 @@ static int new_system_clock(struct sfptpd_config_general *config,
 	new->u.system.min_tick = -100000.0 / new->u.system.tick_freq_hz;
 	new->u.system.max_tick = 100000.0 / new->u.system.tick_freq_hz;
 	new->u.system.kernel_status = STA_UNSYNC;
+	new->u.system.kernel_maxerror = SFPTPD_KERNEL_MAXERROR_UNSYNC_US;
 	new->u.system.adj_method = config->clocks.adj_method;
 
 	/* Set a nominal value for the NIC clock accuracy and maximum frequency
@@ -2002,8 +2018,10 @@ int sfptpd_clock_adjust_time(struct sfptpd_clock *clock, struct sfptpd_timespec 
 
 	if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM &&
 	    clock->cfg_rtc_adjust) {
-		t.modes |= ADJ_STATUS;
+		t.modes |= ADJ_STATUS | ADJ_MAXERROR | ADJ_ESTERROR;
 		t.status = clock->u.system.kernel_status;
+		t.maxerror = clock->u.system.kernel_maxerror;
+		t.esterror = clock->u.system.kernel_maxerror;
 	}
 
 	rc = clock_adjtime(clock->posix_id, &t);
@@ -2117,8 +2135,10 @@ int sfptpd_clock_adjust_frequency(struct sfptpd_clock *clock, long double freq_a
 			freq = -system->max_freq_adj;
 
 		if (clock->cfg_rtc_adjust) {
-			t.modes |= ADJ_STATUS;
+			t.modes |= ADJ_STATUS | ADJ_MAXERROR | ADJ_ESTERROR;
 			t.status = clock->u.system.kernel_status;
+			t.maxerror = clock->u.system.kernel_maxerror;
+			t.esterror = clock->u.system.kernel_maxerror;
 		}
 	}
 
@@ -2230,8 +2250,10 @@ int sfptpd_clock_schedule_leap_second(enum sfptpd_leap_second_type type)
 	}
 
 	/* Write the adjtimex flags */
-	t.modes = ADJ_STATUS;
+	t.modes = ADJ_STATUS | ADJ_MAXERROR | ADJ_ESTERROR;
 	t.status = clock->u.system.kernel_status;
+	t.maxerror = clock->u.system.kernel_maxerror;
+	t.esterror = clock->u.system.kernel_maxerror;
 	rc = adjtimex(&t);
 	if (rc < 0) {
 		ERROR("couldn't set/clear adjtimex status, %s\n", strerror(errno));
@@ -2472,10 +2494,19 @@ int sfptpd_clock_set_sync_status(struct sfptpd_clock *clock, bool in_sync,
 
 	if (clock->type == SFPTPD_CLOCK_TYPE_SYSTEM &&
 	    clock->cfg_rtc_adjust) {
-		if (in_sync)
+		/* Update the master copy of the kernel flags and error bound.
+		 * These are pushed to the kernel on the next clock adjustment.
+		 * The bound is deliberately conservative: the kernel only needs
+		 * it to stay below its 16s limit between our updates, and
+		 * anything in the ms range is far above the real error of
+		 * a PTP-disciplined clock. */
+		if (in_sync) {
 			clock->u.system.kernel_status &= ~STA_UNSYNC;
-		else
+			clock->u.system.kernel_maxerror = SFPTPD_KERNEL_MAXERROR_SYNC_US;
+		} else {
 			clock->u.system.kernel_status |= STA_UNSYNC;
+			clock->u.system.kernel_maxerror = SFPTPD_KERNEL_MAXERROR_UNSYNC_US;
+		}
 		goto finish;
 	}
 

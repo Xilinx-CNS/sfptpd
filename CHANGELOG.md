@@ -46,6 +46,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Report a maximum error bound to the kernel (`ADJ_MAXERROR`/`ADJ_ESTERROR`)
+  whenever the system clock's status flags are written with `rtc_adjust`
+  enabled. Previously only `STA_UNSYNC` was cleared; because the kernel ages
+  its own `maxerror` by 500us/s and re-asserts `STA_UNSYNC` once it reaches
+  16s, the flag was set again at every second boundary. This left
+  `timedatectl` reporting "System clock synchronized: no", suppressed the
+  kernel's periodic RTC write-back that `rtc_adjust` is meant to enable, and
+  made `adjtimex()`-based monitoring (e.g. node_exporter's
+  `node_timex_sync_status`) flicker between synced and unsynced depending on
+  sample timing.
 - Issue SWPTP-1592
   - Track PPS pin and function configuration independently.
   - Allow X4 PPS-OUT to be enabled.
