@@ -156,7 +156,7 @@ The following major changes are provided in v3.10.x:
 - Major improvements to chronyd integration and time-of-day handling for PPS.
 
 - The PPS pin control capability introduced in v3.9.0 has been matured and
-  fixes PPS-out control for X4.
+  fixes PPS-out control for X4. Also added example config files.
 
 - Various PPS fixes including for hotplug scenarios.
 

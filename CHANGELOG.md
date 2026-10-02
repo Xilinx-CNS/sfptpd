@@ -34,6 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Add `--cpu` option to affinitise all or some threads. (SWPTP-1626)
 - Retry hybrid mode (unicast delay requests) on change of master. (SWPTP-1653)
 - Allow ntp key to be retrieved from ntpd config. (SWPTP-1681)
+- Added example config files for PPS on X4542. (SWPTP-1680)
 
 ### Removed
 
