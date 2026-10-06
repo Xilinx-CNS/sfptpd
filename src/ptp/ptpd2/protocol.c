@@ -2014,6 +2014,12 @@ processSyncFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts,
 {
 	struct sfptpd_timespec timestamp;
 
+	if (sequenceId != ptpClock->sentSyncSequenceId) {
+		WARNING("ptp %s: processed late tx timestamp for Sync %d\n",
+			rtOpts->name, sequenceId);
+		ptpClock->counters.txPktNoTimestamp++;
+	}
+
 	/* Add latency */
 	sfptpd_time_add(&timestamp, time, &rtOpts->outboundLatency);
 
@@ -2277,6 +2283,7 @@ processDelayReqFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts,
 	if (sequenceId != ptpClock->sentDelayReqSequenceId) {
 		WARNING("ptp %s: ignoring tx timestamp for out-of-date Delay_Req %d\n",
 			rtOpts->name, sequenceId);
+		ptpClock->counters.txPktNoTimestamp++;
 		/* We lack the state to complete a stale measurement */
 		return;
 	}
@@ -2550,6 +2557,7 @@ processPDelayReqFromSelf(const struct sfptpd_timespec *time, RunTimeOpts *rtOpts
 	if (sequenceId != ptpClock->sentPDelayReqSequenceId) {
 		WARNING("ptp %s: ignoring tx timestamp for out-of-date PDelay_Req %d\n",
 			rtOpts->name, sequenceId);
+		ptpClock->counters.txPktNoTimestamp++;
 		/* We lack the state to complete a stale measurement */
 		return;
 	}
