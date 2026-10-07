@@ -243,7 +243,7 @@ float sfptpd_stats_std_dev_get(struct sfptpd_stats_std_dev *std_dev,
 
 	if (mean != NULL)
 		*mean = m;
-	return sqrtf(sd_sqr < 0 ? 0 : sd_sqr);
+	return sqrtf(sd_sqr < 0.0 ? 0.0 : sd_sqr);
 }
 
 
@@ -540,7 +540,7 @@ static void stats_range_history_write_data(struct sfptpd_stats_item *item,
 			stat->parent.decimal_places, mean,
 			stat->parent.decimal_places, entry->min,
 			stat->parent.decimal_places, entry->max,
-			stat->parent.decimal_places, sqrtf(sd_sqr < 0 ? 0 : sd_sqr),
+			stat->parent.decimal_places, sqrtf(sd_sqr < 0.0 ? 0.0 : sd_sqr),
 			entry->num_samples, start, end,
 			min_time_str, max_time_str,
 			entry->qualified ? "yes" : "no");
@@ -599,7 +599,7 @@ static void stats_range_history_write_json_data(
 			stat->parent.decimal_places, mean,
 			stat->parent.decimal_places, entry->min,
 			stat->parent.decimal_places, entry->max,
-			stat->parent.decimal_places, sqrtf(sd_sqr < 0 ? 0 : sd_sqr));
+			stat->parent.decimal_places, sqrtf(sd_sqr < 0.0 ? 0.0 : sd_sqr));
 
 	fprintf(stream, ",\"start-time\":\"%s\"", start);
 
