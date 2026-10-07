@@ -412,8 +412,8 @@ void sfptpd_stats_std_dev_remove_sample(struct sfptpd_stats_std_dev *std_dev,
  * @param mean Pointer to returned mean. Can be null if mean not required
  * @return Standard deviation
  */
-long double sfptpd_stats_std_dev_get(struct sfptpd_stats_std_dev *std_dev,
-				     long double *mean);
+float sfptpd_stats_std_dev_get(struct sfptpd_stats_std_dev *std_dev,
+			       long double *mean);
 
 
 /** Get the PPS statistics
