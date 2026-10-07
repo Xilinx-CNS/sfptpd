@@ -106,7 +106,7 @@ static const struct sfptpd_stats_item_ops stats_range_ops;
 static const struct sfptpd_stats_item_ops stats_count_ops;
 
 static const char *stats_range_format_string = "%-16s %22s %22s %22s %22s %14s %24s %24s %24s %24s %4s\n";
-static const char *stats_range_format_data   = "%-16s %22.*Lf %22.*Lf %22.*Lf %22.*Lf %14d %24s %24s %24s %24s %4s\n";
+static const char *stats_range_format_data   = "%-16s %22.*Lf %22.*Lf %22.*Lf %22.*f %14d %24s %24s %24s %24s %4s\n";
 
 static const char *stats_count_format_string = "%-16s %14s %14s %24s %24s\n";
 static const char *stats_count_format_data   = "%-16s %14d %14d %24s %24s\n";
@@ -227,8 +227,8 @@ void sfptpd_stats_std_dev_remove_sample(struct sfptpd_stats_std_dev *std_dev,
 	std_dev->sum_data_squared -= (sample * sample);
 }
 
-long double sfptpd_stats_std_dev_get(struct sfptpd_stats_std_dev *std_dev,
-				     long double *mean)
+float sfptpd_stats_std_dev_get(struct sfptpd_stats_std_dev *std_dev,
+			       long double *mean)
 {
 	long double m, sd_sqr;
 
@@ -243,7 +243,7 @@ long double sfptpd_stats_std_dev_get(struct sfptpd_stats_std_dev *std_dev,
 
 	if (mean != NULL)
 		*mean = m;
-	return sqrtl(sd_sqr);
+	return sqrtf(sd_sqr < 0 ? 0 : sd_sqr);
 }
 
 
@@ -540,7 +540,7 @@ static void stats_range_history_write_data(struct sfptpd_stats_item *item,
 			stat->parent.decimal_places, mean,
 			stat->parent.decimal_places, entry->min,
 			stat->parent.decimal_places, entry->max,
-			stat->parent.decimal_places, sqrtl(sd_sqr),
+			stat->parent.decimal_places, sqrtf(sd_sqr < 0 ? 0 : sd_sqr),
 			entry->num_samples, start, end,
 			min_time_str, max_time_str,
 			entry->qualified ? "yes" : "no");
@@ -595,11 +595,11 @@ static void stats_range_history_write_json_data(
 				- (mean * mean);
 
 	fprintf(stream,
-			",\"mean\":%.*Lf,\"min\":%.*Lf,\"max\":%.*Lf,\"std-dev\":%.*Lf",
+			",\"mean\":%.*Lf,\"min\":%.*Lf,\"max\":%.*Lf,\"std-dev\":%.*f",
 			stat->parent.decimal_places, mean,
 			stat->parent.decimal_places, entry->min,
 			stat->parent.decimal_places, entry->max,
-			stat->parent.decimal_places, sqrtl(sd_sqr));
+			stat->parent.decimal_places, sqrtf(sd_sqr < 0 ? 0 : sd_sqr));
 
 	fprintf(stream, ",\"start-time\":\"%s\"", start);
 
