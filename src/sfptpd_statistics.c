@@ -594,6 +594,16 @@ static void stats_range_history_write_json_data(
 	long double sd_sqr = (entry->total_squares / entry->num_samples)
 				- (mean * mean);
 
+	/* DIAGNOSTIC (temporary): a non-positive radicand makes sqrtl() emit nan,
+	 * which breaks the JSON. Log the raw accumulators so the cause can be
+	 * determined from real values rather than inferred. */
+	if (!(sd_sqr > 0.0L))
+		WARNING("stats-diag: %s %s[%d] n=%lu total=%.6Lf total_squares=%.6Lf "
+			"mean=%.6Lf sd_sqr=%.6Le min=%.6Lf max=%.6Lf\n",
+			item->name, period_name, -index, entry->num_samples,
+			entry->total, entry->total_squares, mean, sd_sqr,
+			entry->min, entry->max);
+
 	fprintf(stream,
 			",\"mean\":%.*Lf,\"min\":%.*Lf,\"max\":%.*Lf,\"std-dev\":%.*Lf",
 			stat->parent.decimal_places, mean,
