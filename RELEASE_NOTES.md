@@ -38,7 +38,8 @@ The daemon contained in this package supports the following adapters:
   which can be mitigated by listing clocks explicitly.
 
 The latest versions of drivers and firmware for AMD adapters are available
-under the Linux category at: <https://www.xilinx.com/download/drivers>
+under the Linux category at:
+<https://www.amd.com/en/support/ethernet-adapters/solarflare.html>
 
 
 Linux distribution support
@@ -48,12 +49,12 @@ This package is supported on:
 
 - Red Hat Enterprise Linux 7.9
 - Red Hat Enterprise Linux 8.1 - 8.10
-- Red Hat Enterprise Linux 9.0 - 9.8
+- Red Hat Enterprise Linux 9.1 - 9.8
 - Red Hat Enterprise Linux 10.0 - 10.2
 - Canonical Ubuntu Server LTS 22.04, 24.04, 26.04
 - Debian 12 "Bookworm"
 - Debian 13 "Trixie"
-- Linux kernels 3.0 - 7.1
+- Linux kernels 3.0 - 7.2
 
 Other and older platforms and non-amd64 architectures may be compatible with
 sfptpd but are not supported by AMD. Please raise issues and patches for
@@ -145,26 +146,22 @@ Advanced notice of possible future changes
   unicast signalling, not multicast. Unicast signalling is recommended.)
 
 
-Summary of major changes since v3.8.x
+Summary of major changes since v3.9.x
 -------------------------------------
 
 For a full list of changes, see the changelog.
 
-The following major changes are provided in v3.9.x:
+The following major changes are provided in v3.10.x:
 
-- JSON or OpenMetrics stats exported over TCP or Unix socket. (SWPTP-1000)
-- tstool utility provided to perform diagnostic operations on NIC clocks.
-- System clock adjustment fidelity improved when the standard system clock
-  frequency needs correcting by more than 500000ppb (0.05%). (SWPTP-1066)
+- Major improvements to chronyd integration and time-of-day handling for PPS.
 
-A new package type is supplied for RHEL 8, as with RHEL 7 already, while the
-generic RPM package is suitable for RHEL 9 and later OSs.
+- The PPS pin control capability introduced in v3.9.0 has been matured and
+  fixes PPS-out control for X4.
 
-The daemon is now started as a non-root user except with the legacy packages
-for RHEL 7 & 8. The privileged helper provides access to resources where
-needed, with the exception of chronyd integration via a custom control script.
-If a custom chrony control script is used then the `-p -u sfptpd` options
-should be removed from the systemd unit or equivalent.
+- Various PPS fixes including for hotplug scenarios.
+
+- The built-in receiver for PTP event monitoring messages (`remote_monitor`)
+  has been removed in favour of the 'sfptpmon' script introduced in v3.7.0.
 
 
 Copyright

@@ -46,6 +46,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Issue SWPTP-653
+  - Stop manipulating closed fds in epoll set, causing spurious warnings.
 - Issue SWPTP-1592
   - Track PPS pin and function configuration independently.
   - Allow X4 PPS-OUT to be enabled.
@@ -86,6 +88,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - re-apply PPS configuration to NIC on hotplug.
 - Issue SWPTP-1676:
   - Fix determination of SW vs HW timestamping and convergence threshold.
+- Issue SWPTP-1687:
+  - Extend step-on-first-lock clock control option to work for PPS, taking
+    effect only when ToD is stable.
+- Issue SWPTP-1691:
+  - Carry forward existing clock freq-adj into PPS sync instances.
 
 ## [3.9.0.1007] - 2025-11-07
 
