@@ -6,7 +6,7 @@
 
 
 /** Version string */
-#define SFPTPD_VERSION_TEXT  "3.10.0.1000"
+#define SFPTPD_VERSION_TEXT  "3.11.0.1000"
 
 
 #endif /* _SFPTPD_VERSION_H */
