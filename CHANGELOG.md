@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 (c) Copyright 2012-2026 Advanced Micro Devices, Inc.
 
-## Unreleased
+## [3.10.0.1000] - Unreleased
 
 ### Added
 
@@ -94,6 +94,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     effect only when ToD is stable.
 - Issue SWPTP-1691:
   - Carry forward existing clock freq-adj into PPS sync instances.
+- Issue SWPTP-1695:
+  - If Syncs are sent before the transmit timestamp for an earlier sync is
+    recovered, send both the earlier and later FollowUp messages when possible.
 
 ## [3.9.0.1007] - 2025-11-07
 
