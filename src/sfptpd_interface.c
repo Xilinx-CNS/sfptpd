@@ -548,12 +548,10 @@ static bool interface_check_suitability(const struct sfptpd_link *link,
 	}
 
 	/* Finally, get the vendor and device ID to determine if it is
-	 * a Solarflare device or not and other static properties */
-	if (sfptpd_read_int_from_fileat(sysfs_dir, "vendor", &vendor_id)) {
-		WARNING("interface %s: couldn't read sysfs vendor ID\n", name);
-	} else if (sfptpd_read_int_from_fileat(sysfs_dir, "device", &device_id)) {
-		WARNING("interface %s: couldn't read sysfs device ID\n", name);
-	}
+	 * a Solarflare device or not and other static properties.
+	 * Ignore errors; sentinel is sufficient and diagnostic value nil. */
+	if (!sfptpd_read_int_from_fileat(sysfs_dir, "vendor", &vendor_id))
+		sfptpd_read_int_from_fileat(sysfs_dir, "device", &device_id);
 
 	if (vendor_id == SFPTPD_SOLARFLARE_PCI_VENDOR_ID) {
 		*class = SFPTPD_INTERFACE_SFC;
@@ -819,7 +817,7 @@ static void interface_driver_stats_init(struct sfptpd_interface *interface)
 
 	rc = sfptpd_interface_ioctl(interface, SIOCETHTOOL, gstrings);
 	if (rc != 0) {
-		TRACE_L3("interface %s: failed to obtain ethtool stat strings, %s\n",
+		TRACE_L4("interface %s: does not yield us ethtool stat strings, %s\n",
 			 interface->name, strerror(errno));
 		interface->n_stats = 0;
 	}
@@ -2132,7 +2130,7 @@ int sfptpd_interface_driver_stats_read(struct sfptpd_interface *interface,
 
 		rc = sfptpd_interface_ioctl(interface, SIOCETHTOOL, estats);
 		if (rc != 0) {
-			TRACE_L3("interface %s: failed to obtain ethtool stats, %s\n",
+			TRACE_L4("interface %s: does not yield us ethtool stats, %s\n",
 				 interface->name, strerror(errno));
 			return errno;
 		}
