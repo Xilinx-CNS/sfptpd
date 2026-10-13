@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 (c) Copyright 2012-2026 Advanced Micro Devices, Inc.
 
-## [3.10.0.1000] - Unreleased
+## [3.10.0.1001] - Unreleased
 
 ### Added
 
