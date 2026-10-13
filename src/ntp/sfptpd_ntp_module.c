@@ -790,8 +790,8 @@ int ntp_configure_ntpd(ntp_module_t *ntp)
 	rc = sfptpd_ntpclient_create(&(ntp->client),
 				     config->key_id, config->key_value);
 	if (rc == ENOPROTOOPT) {
-		WARNING("ntp: cannot communicate with NTP daemon. NTP daemon "
-			"assumed not running\n");
+		INFO("ntp: cannot communicate with NTP daemon. NTP daemon "
+		     "assumed not running\n");
 		return 0;
 	} else if (rc != 0) {
 		CRITICAL("ntp: failed to create ntpd client, %s\n",
