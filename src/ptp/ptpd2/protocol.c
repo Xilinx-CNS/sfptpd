@@ -654,10 +654,14 @@ doTimerTick(RunTimeOpts *rtOpts, PtpClock *ptpClock)
 		 *   - Time to send new delayReq  (miss of delayResp is not monitored explicitelly)
 		 */
 		if (timerExpired(ANNOUNCE_RECEIPT_TIMER, ptpClock->itimer)) {
-			WARNING("ptp %s: failed to receive Announce within %0.3Lf seconds\n",
-				rtOpts->name,
-				(ptpClock->announceReceiptTimeout * powl(2,ptpClock->logAnnounceInterval)));
+			float interval = ptpClock->announceReceiptTimeout * powf(2, ptpClock->logAnnounceInterval);
 			ptpClock->counters.announceTimeouts++;
+			if (ptpClock->rtOpts.slaveOnly)
+				WARNING("ptp %s: did not receive Announce within %0.3f seconds\n",
+					rtOpts->name, interval);
+			else
+				INFO("ptp %s: did not receive Announce within %0.3f seconds\n",
+				     rtOpts->name, interval);
 
 			if (!ptpClock->slaveOnly &&
 			    ptpClock->clockQuality.clockClass != SLAVE_ONLY_CLOCK_CLASS) {
