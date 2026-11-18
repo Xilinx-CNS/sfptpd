@@ -779,25 +779,27 @@ static int sfptpd_metrics_send(struct query_state *q, bool peek)
 				family->name, metrics.rt_stats.lost_samples);
 
 		family = sfptpd_metric_families + OM_F_M_TIME;
-		if (family_enabled(family))
+		if (family_enabled(family)) {
 			write_exemplar_family(stream, family, NULL, "");
-		for (j = 0; j < num_latest; j++) {
-			entry = latest[j];
-			if ((family->conditional & ~metrics.config->flags && entry->has_m_time) == 0)
-				fprintf(stream, "%s%s{sync=\"%s\"} " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
-					prefix, family->name, entry->instance_name,
-					SFPTPD_ARGS_SSFTIMESPEC_NS(entry->time_master));
+			for (j = 0; j < num_latest; j++) {
+				entry = latest[j];
+				if (entry->has_m_time)
+					fprintf(stream, "%s%s{sync=\"%s\"} " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
+						prefix, family->name, entry->instance_name,
+						SFPTPD_ARGS_SSFTIMESPEC_NS(entry->time_master));
+			}
 		}
 
 		family = sfptpd_metric_families + OM_F_S_TIME;
-		if (family_enabled(family))
+		if (family_enabled(family)) {
 			write_exemplar_family(stream, family, NULL, "");
-		for (j = 0; j < num_latest; j++) {
-			entry = latest[j];
-			if ((family->conditional & ~metrics.config->flags && entry->has_s_time) == 0)
-				fprintf(stream, "%s%s{sync=\"%s\"} " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
-					prefix, family->name, entry->instance_name,
-					SFPTPD_ARGS_SSFTIMESPEC_NS(entry->time_slave));
+			for (j = 0; j < num_latest; j++) {
+				entry = latest[j];
+				if (entry->has_s_time)
+					fprintf(stream, "%s%s{sync=\"%s\"} " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
+						prefix, family->name, entry->instance_name,
+						SFPTPD_ARGS_SSFTIMESPEC_NS(entry->time_slave));
+			}
 		}
 
 		family = sfptpd_metric_families + OM_F_SERVO;
