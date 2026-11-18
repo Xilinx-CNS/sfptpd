@@ -196,8 +196,6 @@ struct metrics_state {
 	bool initialised;
 	struct listener *listeners;
 	char *path;
-	char *exemplars;
-	size_t exemplars_len;
 	struct query_state query[MAX_QUERIES];
 	bitfield_t active_queries;
 };
@@ -622,40 +620,21 @@ static void write_exemplar_family(FILE *stream,
 			family->help, help ? help : "");
 }
 
-static int write_exemplars(void)
+static bool family_enabled(const struct openmetrics_family *family)
 {
-	size_t buf_sz = 0;
-	char *buf = NULL;
-	FILE *stream;
-	int rc;
-	unsigned int m;
+	return (family->conditional & ~metrics.config->flags) == 0;
+}
 
-	stream = open_memstream(&buf, &buf_sz);
-	if (stream == NULL) {
-		CRITICAL("metrics: could not prepare exemplars, %s", strerror(rc = errno));
-		return rc;
-	}
+/* Return the i'th entry in the buffer, counting from the oldest (0) to the
+ * newest (len - 1). */
+static struct sfptpd_sync_instance_rt_stats_entry *rt_stats_entry(struct rt_stats_buf *stats,
+								  int i)
+{
+	int idx = stats->wr_ptr - stats->len + i;
 
-	/* Write exemplars */
-	for (m = 0; m < NUM_METRIC_FAMILIES; m++) {
-		const struct openmetrics_family *family = sfptpd_metric_families + m;
-
-		if (!(family->conditional & ~metrics.config->flags))
-			write_exemplar_family(stream, family, NULL, "");
-	}
-	for (m = 0; m < NUM_INSTANCE_METRICS; m++) {
-		const struct instance_scope_metric *metric = sfptpd_instance_metrics + m;
-		const struct openmetrics_family *family = sfptpd_metric_families + metric->family;
-
-		if (!(family->conditional & ~metrics.config->flags))
-			write_exemplar_family(stream, family, "_snapshot", " (snapshot)");
-	}
-
-	fclose(stream);
-	assert(buf && buf_sz > 0);
-	metrics.exemplars = buf;
-	metrics.exemplars_len = buf_sz;
-	return 0;
+	if (idx < 0)
+		idx += stats->sz;
+	return stats->entries + idx;
 }
 
 static int sfptpd_metrics_send(struct query_state *q, bool peek)
@@ -666,33 +645,62 @@ static int sfptpd_metrics_send(struct query_state *q, bool peek)
 	struct rt_stats_buf *stats = &metrics.rt_stats;
 	char alarm_str[SYNC_MODULE_ALARM_ALL_TEXT_MAX];
 	const char *prefix = metrics.config->family_prefix;
+	struct sfptpd_sync_instance_rt_stats_entry **latest = NULL;
+	struct sfptpd_sync_instance_rt_stats_entry *entry;
+	const struct openmetrics_family *family;
+	sfptpd_sync_module_alarms_t abit;
 	struct http *h = &q->http;
+	int num_latest = 0;
 	size_t buf_sz = 0;
 	char *buf = NULL;
 	int count = 0;
 	FILE *stream;
 	int rc = 0;
 	unsigned int m;
+	int i, j;
 
 	if (h->method == HTTP_METHOD_GET) {
-		stream = open_memstream(&buf, &buf_sz);
-		if (stream == NULL) {
-			http_abort(q, "open_memstream");
-			return errno;
+		/* Find the latest entry for each sync instance in the
+		 * buffer. Entries from all instances share the buffer so
+		 * the newest entry overall only describes one of them. */
+		latest = malloc((stats->len ? stats->len : 1) * sizeof *latest);
+		if (latest == NULL) {
+			rc = errno;
+			http_abort(q, "allocating snapshot");
+			return rc;
+		}
+		for (i = stats->len - 1; i >= 0; i--) {
+			entry = rt_stats_entry(stats, i);
+			for (j = 0; j < num_latest; j++)
+				if (strcmp(latest[j]->instance_name, entry->instance_name) == 0)
+					break;
+			if (j == num_latest)
+				latest[num_latest++] = entry;
 		}
 
+		stream = open_memstream(&buf, &buf_sz);
+		if (stream == NULL) {
+			rc = errno;
+			http_abort(q, "open_memstream");
+			free(latest);
+			return rc;
+		}
+
+		/* Each family's metadata is written immediately before
+		 * its samples and all the samples for one family are
+		 * written together, as OpenMetrics requires. */
+
 		/* Write snapshot that the ingestor will timestamp */
-		if (stats->len) {
-			struct sfptpd_sync_instance_rt_stats_entry *entry = stats->entries + stats->wr_ptr - 1;
-			if (entry < stats->entries)
-				entry += stats->sz;
+		for (m = 0; m < NUM_INSTANCE_METRICS; m++) {
+			const struct instance_scope_metric *metric = sfptpd_instance_metrics + m;
 
-			for (m = 0; m < NUM_INSTANCE_METRICS; m++) {
-				const struct instance_scope_metric *metric = sfptpd_instance_metrics + m;
-				const struct openmetrics_family *family = sfptpd_metric_families + metric->family;
-
-				if ((family->conditional & ~metrics.config->flags) == 0 &&
-				    (entry->stat_present & (1 << metric->key)))
+			family = sfptpd_metric_families + metric->family;
+			if (!family_enabled(family))
+				continue;
+			write_exemplar_family(stream, family, "_snapshot", " (snapshot)");
+			for (j = 0; j < num_latest; j++) {
+				entry = latest[j];
+				if (entry->stat_present & (1 << metric->key))
 					fprintf(stream, "%s%s_snapshot%s%s{sync=\"%s\"} %.12Lf\n",
 						prefix, family->name,
 						family->unit ? "_" : "",
@@ -700,11 +708,13 @@ static int sfptpd_metrics_send(struct query_state *q, bool peek)
 						entry->instance_name,
 						metric_float_value(entry, metric->key));
 			}
+		}
 
-			const struct openmetrics_family *family = sfptpd_metric_families + OM_F_ALARM;
-			sfptpd_sync_module_alarms_t abit;
-
-			if ((family->conditional & ~metrics.config->flags) == 0) {
+		family = sfptpd_metric_families + OM_F_ALARM;
+		if (family_enabled(family)) {
+			write_exemplar_family(stream, family, NULL, "");
+			for (j = 0; j < num_latest; j++) {
+				entry = latest[j];
 				for (abit = 1; abit != SYNC_MODULE_ALARM_MAX; abit <<= 1) {
 					sfptpd_sync_module_alarms_text(abit, alarm_str, sizeof alarm_str);
 					fprintf(stream, "%s%s{sync=\"%s\",%s=\"%s\"} %c\n", prefix,
@@ -713,52 +723,89 @@ static int sfptpd_metrics_send(struct query_state *q, bool peek)
 						entry->alarms & abit ? '1' : '0');
 				}
 			}
+		}
 
-			family = sfptpd_metric_families + OM_F_ALARMTXT;
+		family = sfptpd_metric_families + OM_F_ALARMTXT;
+		write_exemplar_family(stream, family, NULL, "");
+		for (j = 0; j < num_latest; j++) {
+			entry = latest[j];
 			sfptpd_sync_module_alarms_text(entry->alarms, alarm_str, sizeof alarm_str);
 			fprintf(stream, "%s%s{sync=\"%s\",alarms=\"%s\"} 1\n", prefix,
 				family->name, entry->instance_name,
 				alarm_str);
+		}
 
-			family = sfptpd_metric_families + OM_F_ALARMS;
+		family = sfptpd_metric_families + OM_F_ALARMS;
+		write_exemplar_family(stream, family, NULL, "");
+		for (j = 0; j < num_latest; j++) {
+			entry = latest[j];
 			fprintf(stream, "%s%s{sync=\"%s\"} %d\n", prefix,
 				family->name, entry->instance_name,
 				__builtin_popcount(entry->alarms));
+		}
 
-			family = sfptpd_metric_families + OM_F_IN_SYNC;
+		family = sfptpd_metric_families + OM_F_IN_SYNC;
+		write_exemplar_family(stream, family, NULL, "");
+		for (j = 0; j < num_latest; j++) {
+			entry = latest[j];
 			fprintf(stream, "%s%s{sync=\"%s\"} %d\n", prefix,
 				family->name, entry->instance_name, entry->is_in_sync);
+		}
 
-			family = sfptpd_metric_families + OM_F_IS_DISC;
+		family = sfptpd_metric_families + OM_F_IS_DISC;
+		write_exemplar_family(stream, family, NULL, "");
+		for (j = 0; j < num_latest; j++) {
+			entry = latest[j];
 			fprintf(stream, "%s%s{sync=\"%s\"} %d\n", prefix,
 				family->name, entry->instance_name, entry->is_disciplining);
+		}
 
-			family = sfptpd_metric_families + OM_F_LOG_TIME;
+		family = sfptpd_metric_families + OM_F_LOG_TIME;
+		write_exemplar_family(stream, family, NULL, "");
+		for (j = 0; j < num_latest; j++) {
+			entry = latest[j];
 			fprintf(stream, "%s%s%s%s{sync=\"%s\"} " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
 				prefix, family->name,
 				family->unit ? "_" : "",
 				family->unit ? metric_unit_str(family->unit) : "",
 				entry->instance_name,
 				SFPTPD_ARGS_SSFTIMESPEC_NS(entry->log_time));
+		}
 
-			family = sfptpd_metric_families + OM_F_LOST_RT;
+		family = sfptpd_metric_families + OM_F_LOST_RT;
+		write_exemplar_family(stream, family, NULL, "");
+		if (stats->len)
 			fprintf(stream, "%s%s %" PRId64 "\n", prefix,
 				family->name, metrics.rt_stats.lost_samples);
 
-			family = sfptpd_metric_families + OM_F_M_TIME;
-			if ((family->conditional & ~metrics.config->flags && entry->has_m_time) == 0)
-				fprintf(stream, "%s%s{sync=\"%s\"} " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
-					prefix, family->name, entry->instance_name,
-					SFPTPD_ARGS_SSFTIMESPEC_NS(entry->time_master));
+		family = sfptpd_metric_families + OM_F_M_TIME;
+		if (family_enabled(family)) {
+			write_exemplar_family(stream, family, NULL, "");
+			for (j = 0; j < num_latest; j++) {
+				entry = latest[j];
+				if (entry->has_m_time)
+					fprintf(stream, "%s%s{sync=\"%s\"} " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
+						prefix, family->name, entry->instance_name,
+						SFPTPD_ARGS_SSFTIMESPEC_NS(entry->time_master));
+			}
+		}
 
-			family = sfptpd_metric_families + OM_F_S_TIME;
-			if ((family->conditional & ~metrics.config->flags && entry->has_s_time) == 0)
-				fprintf(stream, "%s%s{sync=\"%s\"} " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
-					prefix, family->name, entry->instance_name,
-					SFPTPD_ARGS_SSFTIMESPEC_NS(entry->time_slave));
+		family = sfptpd_metric_families + OM_F_S_TIME;
+		if (family_enabled(family)) {
+			write_exemplar_family(stream, family, NULL, "");
+			for (j = 0; j < num_latest; j++) {
+				entry = latest[j];
+				if (entry->has_s_time)
+					fprintf(stream, "%s%s{sync=\"%s\"} " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
+						prefix, family->name, entry->instance_name,
+						SFPTPD_ARGS_SSFTIMESPEC_NS(entry->time_slave));
+			}
+		}
 
-
-			family = sfptpd_metric_families + OM_F_SERVO;
+		family = sfptpd_metric_families + OM_F_SERVO;
+		write_exemplar_family(stream, family, NULL, "");
+		for (j = 0; j < num_latest; j++) {
+			entry = latest[j];
 			fprintf(stream, "%s%s_info{sync=\"%s\",clock=\"%s\",desc=\"%s%s%s%s%s%s%s%s%s\"} 1\n",
 				prefix, family->name, entry->instance_name,
 				sfptpd_clock_get_short_name(entry->clock_slave),
@@ -774,20 +821,21 @@ static int sfptpd_metrics_send(struct query_state *q, bool peek)
 				);
 		}
 
-		/* Write exposition of RT stats with our timestamp */
-		for (count = 0; count < stats->len; count++) {
-			struct sfptpd_sync_instance_rt_stats_entry *entry;
+		/* Write exposition of RT stats with our timestamp, grouped
+		 * by instance and in time order within each instance */
+		for (m = 0; m < NUM_INSTANCE_METRICS; m++) {
+			const struct instance_scope_metric *metric = sfptpd_instance_metrics + m;
 
-			entry = stats->entries + stats->wr_ptr - stats->len + count;
-			if (entry < stats->entries)
-				entry += stats->sz;
-
-			for (m = 0; m < NUM_INSTANCE_METRICS; m++) {
-				const struct instance_scope_metric *metric = sfptpd_instance_metrics + m;
-				const struct openmetrics_family *family = sfptpd_metric_families + metric->family;
-
-				if ((family->conditional & ~metrics.config->flags) == 0 &&
-				    entry->stat_present & (1 << metric->key))
+			family = sfptpd_metric_families + metric->family;
+			if (!family_enabled(family))
+				continue;
+			write_exemplar_family(stream, family, NULL, "");
+			for (j = 0; j < num_latest; j++) {
+				for (i = 0; i < stats->len; i++) {
+					entry = rt_stats_entry(stats, i);
+					if (strcmp(entry->instance_name, latest[j]->instance_name) != 0 ||
+					    !(entry->stat_present & (1 << metric->key)))
+						continue;
 					fprintf(stream, "%s%s%s%s{sync=\"%s\"} %.12Lf " SFPTPD_FMT_SSFTIMESPEC_NS "\n",
 						prefix, family->name,
 						family->unit ? "_" : "",
@@ -795,8 +843,10 @@ static int sfptpd_metrics_send(struct query_state *q, bool peek)
 						entry->instance_name,
 						metric_float_value(entry, metric->key),
 						SFPTPD_ARGS_SSFTIMESPEC_NS(entry->log_time));
+				}
 			}
 		}
+		count = stats->len;
 
 		/* End OpenMetrics */
 		fprintf(stream, "# EOF\n");
@@ -813,8 +863,7 @@ static int sfptpd_metrics_send(struct query_state *q, bool peek)
 	}
 
 	if (h->method == HTTP_METHOD_GET &&
-	    ((rc = http_add_chunk(h, false, metrics.exemplars, metrics.exemplars_len)) ||
-	     (rc = http_add_chunk(h, true, buf, buf_sz)))) {
+	    (rc = http_add_chunk(h, true, buf, buf_sz))) {
 		http_abort(q, "adding body");
 		goto finish;
 	}
@@ -833,6 +882,7 @@ static int sfptpd_metrics_send(struct query_state *q, bool peek)
 		 count);
 	h->response_code = 200;
 finish:
+	free(latest);
 	free(buf);
 	return rc;
 }
@@ -1429,16 +1479,11 @@ void sfptpd_metrics_destroy(void)
 		metrics.active_queries = 0;
 	}
 
-	if (metrics.exemplars)
-		free(metrics.exemplars);
-
 	if (metrics.rt_stats.entries)
 		free(metrics.rt_stats.entries);
 
 	metrics.initialised = false;
 	metrics.rt_stats.entries = NULL;
-	metrics.exemplars = NULL;
-	metrics.exemplars_len = 0;
 }
 
 int sfptpd_metrics_init(void)
@@ -1705,10 +1750,6 @@ int sfptpd_metrics_listener_open(struct sfptpd_config *app_config)
 
 	general_config = sfptpd_general_config_get(app_config);
 	metrics.config = &general_config->openmetrics;
-
-	rc = write_exemplars();
-	if (rc != 0)
-		return errno;
 
 	if (metrics.rt_stats.entries == NULL) {
 		metrics.rt_stats.sz = metrics.config->rt_stats_buf;
